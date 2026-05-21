@@ -122,6 +122,17 @@ const useStyles = makeStyles({
     gap: tokens.spacingHorizontalS,
     alignItems: "center",
   },
+  andDivider: {
+    display: "flex",
+    alignItems: "center",
+    gap: tokens.spacingHorizontalS,
+    paddingLeft: tokens.spacingHorizontalXS,
+  },
+  andDividerLine: {
+    flex: "1 1 auto",
+    height: "1px",
+    backgroundColor: tokens.colorNeutralStroke2,
+  },
   inlineRow: {
     display: "flex",
     flexWrap: "wrap",
@@ -870,7 +881,21 @@ export function QueriesView() {
                 ) : (
                   <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                     {spec.filters.map((f, idx) => (
-                      <div key={idx} className={styles.fieldRow}>
+                      <div key={idx} style={{ display: "contents" }}>
+                        {idx > 0 && (
+                          <div
+                            className={styles.andDivider}
+                            aria-label="and"
+                            title="Filters are combined with AND"
+                          >
+                            <div className={styles.andDividerLine} />
+                            <Badge appearance="outline" size="small">
+                              AND
+                            </Badge>
+                            <div className={styles.andDividerLine} />
+                          </div>
+                        )}
+                        <div className={styles.fieldRow}>
                         <Combobox
                           placeholder="Field path (e.g. properties.displayName)"
                           value={friendlyFilterField(f.field)}
@@ -946,12 +971,22 @@ export function QueriesView() {
                           aria-label="Remove filter"
                           onClick={() => removeFilter(idx)}
                         />
+                        </div>
                       </div>
                     ))}
                     <Text className={styles.helper}>
                       Tip: <code>true</code>/<code>false</code> and numbers are sent unquoted;
                       everything else is quoted as a string.
                     </Text>
+                    {spec.filters.length > 1 && (
+                      <Text className={styles.helper}>
+                        Rows are combined with <strong>AND</strong> — all must match.
+                        For <strong>OR</strong> within a single field use{" "}
+                        <code>in (comma-sep)</code> (or <code>has any token</code> for
+                        connector / operation). Cross-field <code>OR</code> isn't
+                        supported in Basic; use the Advanced tab.
+                      </Text>
+                    )}
                     {spec.filters.some((f) => isSentinelField(f.field)) && (
                       <Text className={styles.helper}>
                         <strong>Connector / Operation</strong> fields scan across
