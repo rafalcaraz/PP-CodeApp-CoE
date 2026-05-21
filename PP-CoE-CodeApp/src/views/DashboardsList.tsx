@@ -15,15 +15,24 @@ import {
   DialogBody,
   DialogContent,
   DialogActions,
+  Menu,
+  MenuTrigger,
+  MenuPopover,
+  MenuList,
+  MenuItem,
+  SplitButton,
+  type MenuButtonProps,
 } from "@fluentui/react-components";
 import { AddRegular } from "@fluentui/react-icons";
 import { useNavigate } from "react-router-dom";
 import {
   createDashboard,
+  createDashboardFromTemplate,
   deleteDashboard,
   listDashboards,
   type Dashboard,
 } from "../data/dashboards";
+import { DASHBOARD_TEMPLATES, getDashboardTemplate } from "../data/dashboardTemplates";
 
 const useStyles = makeStyles({
   root: {
@@ -113,6 +122,14 @@ export function DashboardsList() {
     navigate(`/dashboards/${d.id}`);
   };
 
+  const handleCreateFromTemplate = (templateId: string) => {
+    const tpl = getDashboardTemplate(templateId);
+    if (!tpl) return;
+    const d = createDashboardFromTemplate(tpl.name, tpl.description, tpl.build());
+    refresh();
+    navigate(`/dashboards/${d.id}`);
+  };
+
   const handleDelete = (id: string, name: string) => {
     if (!window.confirm(`Delete dashboard "${name}"? This can't be undone.`)) return;
     deleteDashboard(id);
@@ -133,13 +150,38 @@ export function DashboardsList() {
       </div>
 
       <div className={styles.toolbar}>
-        <Button
-          appearance="primary"
-          icon={<AddRegular />}
-          onClick={() => setNewOpen(true)}
-        >
-          New dashboard
-        </Button>
+        <Menu positioning="below-start">
+          <MenuTrigger disableButtonEnhancement>
+            {(triggerProps: MenuButtonProps) => (
+              <SplitButton
+                menuButton={triggerProps}
+                primaryActionButton={{
+                  onClick: () => setNewOpen(true),
+                }}
+                appearance="primary"
+                icon={<AddRegular />}
+              >
+                New dashboard
+              </SplitButton>
+            )}
+          </MenuTrigger>
+          <MenuPopover>
+            <MenuList>
+              <MenuItem onClick={() => setNewOpen(true)}>
+                Blank dashboard
+              </MenuItem>
+              <Divider />
+              {DASHBOARD_TEMPLATES.map((tpl) => (
+                <MenuItem
+                  key={tpl.id}
+                  onClick={() => handleCreateFromTemplate(tpl.id)}
+                >
+                  From template: {tpl.name}
+                </MenuItem>
+              ))}
+            </MenuList>
+          </MenuPopover>
+        </Menu>
       </div>
 
       <div className={styles.grid}>

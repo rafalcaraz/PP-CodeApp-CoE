@@ -271,9 +271,17 @@ export function EnvironmentsList() {
               dismiss={null}
             />
             <Text className={styles.count}>
-              {query
-                ? `${filteredRows.length} matching, showing ${rows.length} of ${totalRecords || rows.length}`
-                : `Showing ${rows.length} of ${totalRecords || rows.length}`}
+              {(() => {
+                // The connector's totalRecords for QueryResources is approximate
+                // and can be stale (we've seen 500 of 731 → 1000 of 731). Trust
+                // rows.length as a floor and treat skipToken as the authoritative
+                // "more exists" signal.
+                const total = Math.max(totalRecords, rows.length);
+                const totalLabel = skipToken ? `${total.toLocaleString()}+` : total.toLocaleString();
+                return query
+                  ? `${filteredRows.length.toLocaleString()} matching, showing ${rows.length.toLocaleString()} of ${totalLabel}`
+                  : `Showing ${rows.length.toLocaleString()} of ${totalLabel}`;
+              })()}
             </Text>
             <Button
               size="small"
@@ -292,9 +300,7 @@ export function EnvironmentsList() {
                 onClick={exportAll}
                 disabled={loadingMore}
               >
-                {loadingMore
-                  ? "Fetching all…"
-                  : `Export all (${(totalRecords || rows.length).toLocaleString()})`}
+                {loadingMore ? "Fetching all…" : "Export all"}
               </Button>
             )}
           </div>
@@ -345,7 +351,7 @@ export function EnvironmentsList() {
                     Load more
                   </Button>
                   <Button appearance="subtle" onClick={loadAll}>
-                    Load all remaining ({Math.max((totalRecords || 0) - rows.length, 0)})
+                    Load all remaining
                   </Button>
                 </>
               )}

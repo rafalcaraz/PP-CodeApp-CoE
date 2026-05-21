@@ -203,7 +203,6 @@ function ReadyView({
           {row.authentication && (
             <Badge appearance="outline">{row.authentication}</Badge>
           )}
-          {row.publishState && <Badge appearance="outline">{row.publishState}</Badge>}
           {row.createdIn && (
             <Badge appearance="outline">Created in {row.createdIn}</Badge>
           )}
@@ -308,12 +307,9 @@ function ReadyView({
             <Meta label="Schema name">{row.schemaName || "—"}</Meta>
             <Meta label="Entra app ID">{row.entraAppId || "—"}</Meta>
             <Meta label="Title ID">{row.titleId || "—"}</Meta>
-            <Meta label="Publish state">{row.publishState || "—"}</Meta>
             <Meta label="Last published">{formatDate(row.lastPublishedAt)}</Meta>
             <Meta label="Created on">{formatDate(row.createdAt)}</Meta>
             <Meta label="Created by">{row.createdBy || "—"}</Meta>
-            <Meta label="Last modified">{formatDate(row.lastModifiedAt)}</Meta>
-            <Meta label="Last modified by">{row.lastModifiedBy || "—"}</Meta>
             <Meta label="Tenant ID">{row.tenantId || "—"}</Meta>
             <Meta label="ID">{row.id}</Meta>
           </div>

@@ -99,19 +99,9 @@ export function AgentsList() {
         renderCell: (row) => row.ownerDisplayName || row.ownerId || "—",
       }),
       createTableColumn<AgentRow>({
-        columnId: "publishState",
-        renderHeaderCell: () => "Publish state",
-        renderCell: (row) =>
-          row.publishState ? (
-            <Badge appearance="outline">{row.publishState}</Badge>
-          ) : (
-            "—"
-          ),
-      }),
-      createTableColumn<AgentRow>({
-        columnId: "lastModifiedAt",
-        renderHeaderCell: () => "Modified",
-        renderCell: (row) => formatDate(row.lastModifiedAt),
+        columnId: "lastPublishedAt",
+        renderHeaderCell: () => "Last published",
+        renderCell: (row) => formatDate(row.lastPublishedAt),
       }),
     ],
     [navigate]

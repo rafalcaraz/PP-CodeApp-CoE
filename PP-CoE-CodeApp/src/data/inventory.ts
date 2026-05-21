@@ -99,18 +99,158 @@ function formatError(err: unknown): string {
   return String(err);
 }
 
-async function runQuery(
-  clauses: Clause[],
-  options?: ResourceQueryRequestOptions
-): Promise<DataResult<{ items: ResourceItem[]; totalRecords: number; skipToken?: string }>> {
-  const body: ResourceQueryRequest = {
-    TableName: TABLE,
-    Clauses: clauses,
-    Options: { Top: 500, Skip: 0, SkipToken: "", ...options },
-  };
+// ---------------------------------------------------------------------------
+// Throttling: concurrency limiter + TTL cache + 429 retry. Wraps every call
+// to the underlying admin connector so high-tile-count dashboards stop
+// blowing past the per-tenant rate limit (24 parallel KPI fetches → 429).
+//
+// All three pieces live at the `runQuery` boundary so they apply uniformly
+// to KPI tiles, table tiles, chart aggregates, time-series, dashboard
+// templates, and any future caller — no per-call opt-in needed.
+// ---------------------------------------------------------------------------
 
+/** Max concurrent in-flight requests to QueryResources. Anything above
+ *  this is queued in FIFO order. Sized to stay well under the connector's
+ *  default ~6 req/s/tenant limit while still draining a 24-tile dashboard
+ *  in ~6 serial waves of 4. */
+const MAX_CONCURRENT_QUERIES = 4;
+
+/** Default TTL for the in-memory query cache. Inventory data changes on
+ *  human-edit timescales, so 60s is comfortably under "noticeably stale"
+ *  while killing per-navigation re-fetches. Errors are never cached.
+ *  Individual callers may pass a longer TTL via `RunQueryOpts.cacheTtlMs`. */
+const QUERY_CACHE_TTL_MS = 60_000;
+
+/** Suggested TTL for expensive aggregate/dashboard queries. They run in
+ *  batches of 20+, the underlying data changes on minutes-to-hours
+ *  timescales, and users have a Refresh button to bust on demand. */
+export const DASHBOARD_CACHE_TTL_MS = 5 * 60_000;
+
+/** Cap on cache entries. Prevents unbounded growth in long sessions with
+ *  many distinct queries (each Top/Skip/SkipToken combination is a
+ *  distinct key). Oldest entry evicted on overflow (insertion-order LRU). */
+const QUERY_CACHE_MAX_ENTRIES = 200;
+
+/** Per-call knobs. Today: cache TTL override + cache bypass. Plumbed
+ *  through `runRawQuery` / `runAggregateCount` / `runTimeSeriesAggregate`
+ *  so dashboard tiles and any other "expensive aggregate" caller can opt
+ *  into longer warmth without affecting list/detail freshness. */
+export interface RunQueryOpts {
+  /** Override the default cache TTL. Useful for expensive aggregates. */
+  cacheTtlMs?: number;
+  /** Skip the cache lookup and refetch. The fresh result is still cached
+   *  using `cacheTtlMs` (or the default) for subsequent reads. */
+  forceFresh?: boolean;
+}
+
+let __runQueryInFlight = 0;
+const __runQueryWaiters: Array<() => void> = [];
+
+function __acquireQuerySlot(): Promise<void> {
+  return new Promise<void>((resolve) => {
+    const tryAcquire = () => {
+      if (__runQueryInFlight < MAX_CONCURRENT_QUERIES) {
+        __runQueryInFlight++;
+        resolve();
+      } else {
+        __runQueryWaiters.push(tryAcquire);
+      }
+    };
+    tryAcquire();
+  });
+}
+
+function __releaseQuerySlot(): void {
+  __runQueryInFlight--;
+  const next = __runQueryWaiters.shift();
+  if (next) next();
+}
+
+type RunQueryResult = DataResult<{
+  items: ResourceItem[];
+  totalRecords: number;
+  skipToken?: string;
+}>;
+
+interface CacheEntry {
+  value: RunQueryResult;
+  expiresAt: number;
+}
+
+const __runQueryCache = new Map<string, CacheEntry>();
+
+function __cacheGet(key: string): RunQueryResult | undefined {
+  const entry = __runQueryCache.get(key);
+  if (!entry) return undefined;
+  if (entry.expiresAt < Date.now()) {
+    __runQueryCache.delete(key);
+    return undefined;
+  }
+  return entry.value;
+}
+
+function __cacheSet(key: string, value: RunQueryResult, ttlMs: number): void {
+  // Insertion-order LRU: if at cap, evict the oldest key first. Setting
+  // an existing key would already refresh insertion order, so handle
+  // overflow only when we're adding a brand-new key.
+  if (!__runQueryCache.has(key) && __runQueryCache.size >= QUERY_CACHE_MAX_ENTRIES) {
+    const oldest = __runQueryCache.keys().next().value;
+    if (oldest !== undefined) __runQueryCache.delete(oldest);
+  }
+  __runQueryCache.set(key, {
+    value,
+    expiresAt: Date.now() + ttlMs,
+  });
+}
+
+/** Clear the in-memory query cache. Wire this to a UI "Refresh" action
+ *  when the user explicitly wants to bypass cached results (e.g. after
+ *  a change they made in the Power Platform admin center). Also clears
+ *  the cached environment-id → display-name map. */
+export function invalidateInventoryCache(): void {
+  __runQueryCache.clear();
+  __envNameMap = null;
+  __envNameMapExpiresAt = 0;
+}
+
+/** Best-effort 429 detection. The runtime surfaces rate limits as either a
+ *  thrown object with `status === 429`, or a `result.error` whose message
+ *  embeds the status code / "rate limit" / "throttle". */
+function __isRateLimit(err: unknown): boolean {
+  if (!err) return false;
+  if (typeof err === "object") {
+    const e = err as Record<string, unknown>;
+    if (typeof e.status === "number" && e.status === 429) return true;
+    const msg =
+      typeof e.message === "string"
+        ? e.message
+        : typeof e === "string"
+          ? e
+          : "";
+    if (msg && /(\b429\b|rate ?limit|throttle|too many requests)/i.test(msg)) {
+      return true;
+    }
+  }
+  if (typeof err === "string") {
+    return /(\b429\b|rate ?limit|throttle|too many requests)/i.test(err);
+  }
+  return false;
+}
+
+function __sleep(ms: number): Promise<void> {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+/** Single shot at the underlying connector. Separated from the throttling
+ *  layer so the retry loop in `runQuery` can call it twice cleanly. */
+async function __invokeQueryOnce(
+  body: ResourceQueryRequest
+): Promise<RunQueryResult> {
   try {
-    const result = await PowerPlatformforAdminsV2Service.QueryResources(API_VERSION, body);
+    const result = await PowerPlatformforAdminsV2Service.QueryResources(
+      API_VERSION,
+      body
+    );
     if (!result.success) {
       return { ok: false, error: formatError(result.error) };
     }
@@ -124,6 +264,45 @@ async function runQuery(
     };
   } catch (err) {
     return { ok: false, error: formatError(err) };
+  }
+}
+
+async function runQuery(
+  clauses: Clause[],
+  options?: ResourceQueryRequestOptions,
+  cacheOpts?: RunQueryOpts
+): Promise<RunQueryResult> {
+  const body: ResourceQueryRequest = {
+    TableName: TABLE,
+    Clauses: clauses,
+    Options: { Top: 500, Skip: 0, SkipToken: "", ...options },
+  };
+
+  const ttlMs = cacheOpts?.cacheTtlMs ?? QUERY_CACHE_TTL_MS;
+  const cacheKey = JSON.stringify(body);
+  if (!cacheOpts?.forceFresh) {
+    const cached = __cacheGet(cacheKey);
+    if (cached) return cached;
+  }
+
+  await __acquireQuerySlot();
+  try {
+    let result = await __invokeQueryOnce(body);
+
+    // One retry on 429. The connector's per-tenant limit recovers quickly,
+    // so a short jittered backoff is enough to clear transient throttling.
+    if (!result.ok && __isRateLimit(result.error)) {
+      await __sleep(500 + Math.random() * 500);
+      result = await __invokeQueryOnce(body);
+    }
+
+    // Cache successes only — never cache an error, or every retry would
+    // get the same stale failure for the full TTL.
+    if (result.ok) __cacheSet(cacheKey, result, ttlMs);
+
+    return result;
+  } finally {
+    __releaseQuerySlot();
   }
 }
 
@@ -335,10 +514,11 @@ export interface AgentRow {
   ownerDisplayName: string;
   createdAt: string;
   createdBy: string;
-  lastModifiedAt: string;
-  lastModifiedBy: string;
+  // Note: the inventory API does NOT return `lastModifiedAt`,
+  // `lastModifiedBy`, `publishState`, or `state` for
+  // `microsoft.copilotstudio/agents` (verified against real payloads).
+  // `lastPublishedAt` is the only lifecycle timestamp we get for agents.
   lastPublishedAt: string;
-  publishState: string;
   region: string;
   tenantId: string;
   // Identity / wiring
@@ -632,6 +812,67 @@ export async function listEnvironments(): Promise<DataResult<EnvironmentRow[]>> 
   const res = await runQueryAllPages(clauses);
   if (!res.ok) return res;
   return { ok: true, data: res.data.map(toEnvironmentRow) };
+}
+
+// ---------------------------------------------------------------------------
+// Environment-id → display-name resolver.
+//
+// The Copilot Studio agent payload only carries `environmentId` (a GUID)
+// in its properties — there's no `environmentName` like Apps/Flows have.
+// Resolve GUIDs to friendly names on the client by caching the env list
+// and looking up by id. Environment list is small (tens to low hundreds
+// per tenant) and changes rarely → 5-minute freshness is comfortable,
+// and concurrent callers share one in-flight promise.
+// ---------------------------------------------------------------------------
+
+const ENV_NAME_MAP_TTL_MS = 5 * 60_000;
+let __envNameMap: Map<string, string> | null = null;
+let __envNameMapExpiresAt = 0;
+let __envNameMapPromise: Promise<Map<string, string>> | null = null;
+
+async function loadEnvNameMap(): Promise<Map<string, string>> {
+  const res = await listEnvironments();
+  const map = new Map<string, string>();
+  if (res.ok) {
+    for (const env of res.data) {
+      if (env.id && env.displayName) map.set(env.id, env.displayName);
+    }
+  }
+  return map;
+}
+
+/** Returns a cached id → displayName map for environments. Concurrent
+ *  callers within the same fetch window share one in-flight request. */
+export async function getEnvironmentNameMap(): Promise<Map<string, string>> {
+  if (__envNameMap && Date.now() < __envNameMapExpiresAt) return __envNameMap;
+  if (__envNameMapPromise) return __envNameMapPromise;
+  __envNameMapPromise = (async () => {
+    try {
+      const map = await loadEnvNameMap();
+      __envNameMap = map;
+      __envNameMapExpiresAt = Date.now() + ENV_NAME_MAP_TTL_MS;
+      return map;
+    } finally {
+      __envNameMapPromise = null;
+    }
+  })();
+  return __envNameMapPromise;
+}
+
+/** Mutates rows in place to backfill `environmentName` from the cached
+ *  env map when the resource payload didn't include one (e.g. agents).
+ *  No-op on rows that already have a name. */
+async function backfillEnvironmentNames<T extends { environmentId?: string; environmentName?: string }>(
+  rows: T[]
+): Promise<void> {
+  if (!rows.some((r) => r.environmentId && !r.environmentName)) return;
+  const map = await getEnvironmentNameMap();
+  for (const row of rows) {
+    if (row.environmentId && !row.environmentName) {
+      const name = map.get(row.environmentId);
+      if (name) row.environmentName = name;
+    }
+  }
 }
 
 /** Streaming variant — fires `onPage` per page so the UI can render rows
@@ -979,11 +1220,7 @@ function toAgentRow(item: ResourceItem): AgentRow {
     ownerDisplayName: ownerDisplayName(item),
     createdAt: propStr(item, "createdAt"),
     createdBy: propStr(item, "createdBy") || propNestedStr(item, "createdBy", "displayName"),
-    lastModifiedAt: propStr(item, "lastModifiedAt"),
-    lastModifiedBy:
-      propStr(item, "lastModifiedBy") || propNestedStr(item, "lastModifiedBy", "displayName"),
     lastPublishedAt: propStr(item, "lastPublishedAt"),
-    publishState: propStr(item, "publishState") || propStr(item, "state"),
     region: item.location ?? "",
     tenantId: (raw.tenantId as string) ?? "",
     // Identity / wiring
@@ -1159,13 +1396,18 @@ export async function listAgentsPage(
     typeList: [ResourceType.CopilotStudioAgent],
     environmentId: filters.environmentId,
     nameContains: filters.nameContains,
+    // Agents don't carry `lastModifiedAt`; use `lastPublishedAt` so the
+    // default sort actually means something. Falls back to nulls last in KQL.
+    orderField: "tostring(properties.lastPublishedAt)",
   });
   const res = await runQuery(clauses, { Top: pageSize, Skip: 0, SkipToken: skipToken ?? "" });
   if (!res.ok) return res;
+  const rows = res.data.items.map(toAgentRow);
+  await backfillEnvironmentNames(rows);
   return {
     ok: true,
     data: {
-      rows: res.data.items.map(toAgentRow),
+      rows,
       skipToken: res.data.skipToken,
       totalRecords: res.data.totalRecords,
     },
@@ -1181,7 +1423,10 @@ export async function getAgent(agentId: string): Promise<DataResult<{ row: Agent
   const res = await runQuery(clauses, { Top: 1, Skip: 0, SkipToken: "" });
   if (!res.ok) return res;
   const item = res.data.items[0];
-  return { ok: true, data: item ? { row: toAgentRow(item), raw: item } : null };
+  if (!item) return { ok: true, data: null };
+  const row = toAgentRow(item);
+  await backfillEnvironmentNames([row]);
+  return { ok: true, data: { row, raw: item } };
 }
 
 // ---------------------------------------------------------------------------
@@ -1392,15 +1637,20 @@ export function buildClausesFromSpec(spec: QuerySpec): Clause[] {
  *  internal `runQuery`, exposed for the Queries view. */
 export async function runRawQuery(
   clauses: Clause[],
-  options?: { Top?: number; Skip?: number; SkipToken?: string }
+  options?: { Top?: number; Skip?: number; SkipToken?: string },
+  cacheOpts?: RunQueryOpts
 ): Promise<
   DataResult<{ items: ResourceItem[]; totalRecords: number; skipToken?: string }>
 > {
-  return runQuery(clauses, {
-    Top: options?.Top ?? 100,
-    Skip: options?.Skip ?? 0,
-    SkipToken: options?.SkipToken ?? "",
-  });
+  return runQuery(
+    clauses,
+    {
+      Top: options?.Top ?? 100,
+      Skip: options?.Skip ?? 0,
+      SkipToken: options?.SkipToken ?? "",
+    },
+    cacheOpts
+  );
 }
 
 /** Curated starter queries. Each populates the builder; the user can tweak
@@ -1579,7 +1829,8 @@ export function resourceTypeShort(t: ResourceTypeValue): string {
 export async function runAggregateCount(
   spec: QuerySpec,
   groupBy: string,
-  opts: { topN?: number } = {}
+  opts: { topN?: number } = {},
+  cacheOpts?: RunQueryOpts
 ): Promise<DataResult<{ name: string; value: number }[]>> {
   if (!groupBy.trim()) {
     return { ok: true, data: [] };
@@ -1619,7 +1870,7 @@ export async function runAggregateCount(
     clauses.push(take(opts.topN));
   }
 
-  const res = await runQuery(clauses, { Top: 500, Skip: 0, SkipToken: "" });
+  const res = await runQuery(clauses, { Top: 500, Skip: 0, SkipToken: "" }, cacheOpts);
   if (!res.ok) return res;
 
   return {
@@ -1660,7 +1911,8 @@ export async function runTimeSeriesAggregate(
   spec: QuerySpec,
   dateField: string,
   bucket: "day" | "week" | "month",
-  lookbackDays: number
+  lookbackDays: number,
+  cacheOpts?: RunQueryOpts
 ): Promise<DataResult<{ date: string; value: number }[]>> {
   const field = dateField.trim();
   if (!field) {
@@ -1701,7 +1953,7 @@ export async function runTimeSeriesAggregate(
   clauses.push(summarize("count", "resourceCount", [alias]));
   clauses.push(orderBy({ [alias]: "asc" }));
 
-  const res = await runQuery(clauses, { Top: 500, Skip: 0, SkipToken: "" });
+  const res = await runQuery(clauses, { Top: 500, Skip: 0, SkipToken: "" }, cacheOpts);
   if (!res.ok) return res;
 
   return {

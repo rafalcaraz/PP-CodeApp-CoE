@@ -10,7 +10,7 @@ import {
   Button,
   Switch,
 } from "@fluentui/react-components";
-import { AddRegular } from "@fluentui/react-icons";
+import { AddRegular, ArrowClockwiseRegular } from "@fluentui/react-icons";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   deleteTile,
@@ -21,6 +21,7 @@ import {
   type Dashboard,
   type DashboardTile,
 } from "../data/dashboards";
+import { invalidateInventoryCache } from "../data/inventory";
 import { ErrorPane, LoadingPane } from "../components/Status";
 import { TileView } from "../components/TileView";
 import { TileEditorDialog } from "../components/TileEditorDialog";
@@ -85,6 +86,14 @@ export function DashboardDetail() {
   const [editMode, setEditMode] = useState(false);
   const [editorOpen, setEditorOpen] = useState(false);
   const [editingTile, setEditingTile] = useState<DashboardTile | null>(null);
+  /** Bumped by the Refresh button to bypass the inventory cache and
+   *  retrigger every tile's data fetch. */
+  const [refreshKey, setRefreshKey] = useState(0);
+
+  const handleRefreshAll = () => {
+    invalidateInventoryCache();
+    setRefreshKey((k) => k + 1);
+  };
 
   useEffect(() => {
     if (!dashboardId) return;
@@ -183,6 +192,9 @@ export function DashboardDetail() {
           )}
         </div>
         <div className={styles.controls}>
+          <Button icon={<ArrowClockwiseRegular />} onClick={handleRefreshAll}>
+            Refresh
+          </Button>
           <Switch
             checked={editMode}
             onChange={(_e, data) => setEditMode(data.checked)}
@@ -217,6 +229,7 @@ export function DashboardDetail() {
                 onEdit={() => openEditTile(tile)}
                 onDelete={() => handleDeleteTile(tile.id, tile.title)}
                 onDuplicate={() => handleDuplicateTile(tile)}
+                refreshKey={refreshKey}
               />
             </div>
           ))}

@@ -177,9 +177,14 @@ export function ResourceListPage<T>({
   };
 
   const renderCount = () => {
-    const total = totalRecords || rows.length;
+    // The connector's totalRecords for QueryResources is approximate and
+    // can be stale (we've seen 500 of 731 → 1000 of 731). Trust rows.length
+    // as a floor and treat skipToken as the authoritative "more exists"
+    // signal so we never undercount what the user can see.
+    const total = Math.max(totalRecords, rows.length);
+    const totalLabel = skipToken ? `${total.toLocaleString()}+` : total.toLocaleString();
     if (countLabel) return countLabel(rows.length, total);
-    return `Showing ${rows.length.toLocaleString()} of ${total.toLocaleString()}`;
+    return `Showing ${rows.length.toLocaleString()} of ${totalLabel}`;
   };
 
   const [exporting, setExporting] = useState(false);
@@ -242,9 +247,7 @@ export function ResourceListPage<T>({
                     onClick={exportAll}
                     disabled={exporting}
                   >
-                    {exporting
-                      ? "Fetching all…"
-                      : `Export all (${(totalRecords || rows.length).toLocaleString()})`}
+                    {exporting ? "Fetching all…" : "Export all"}
                   </Button>
                 )}
               </>
@@ -301,8 +304,7 @@ export function ResourceListPage<T>({
                     Load more
                   </Button>
                   <Button appearance="subtle" onClick={loadAll}>
-                    Load all remaining (
-                    {Math.max((totalRecords || 0) - rows.length, 0).toLocaleString()})
+                    Load all remaining
                   </Button>
                 </>
               )}
