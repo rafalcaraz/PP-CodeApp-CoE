@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   makeStyles,
+  mergeClasses,
   tokens,
   Text,
   Card,
@@ -12,8 +13,6 @@ import {
   MenuPopover,
   MenuList,
   MenuItem,
-  Divider,
-  Badge,
 } from "@fluentui/react-components";
 import { MoreHorizontalRegular } from "@fluentui/react-icons";
 import {
@@ -23,6 +22,8 @@ import {
   ResponsiveContainer,
   BarChart,
   Bar,
+  LineChart,
+  Line,
   XAxis,
   YAxis,
   Tooltip,
@@ -34,9 +35,10 @@ import {
   friendlyConnectorName,
   runAggregateCount,
   runRawQuery,
+  runTimeSeriesAggregate,
   shortResourceType,
 } from "../data/inventory";
-import type { DashboardTile } from "../data/dashboards";
+import type { DashboardTile, TileTableColumn } from "../data/dashboards";
 
 const useStyles = makeStyles({
   root: {
@@ -51,12 +53,14 @@ const useStyles = makeStyles({
     display: "flex",
     flexDirection: "column",
     minHeight: 0,
+    borderTop: `1px solid ${tokens.colorNeutralStroke2}`,
   },
   kpi: {
     display: "flex",
     flexDirection: "column",
     alignItems: "center",
     justifyContent: "center",
+    textAlign: "center",
     flex: 1,
     gap: tokens.spacingVerticalXS,
   },
@@ -64,14 +68,15 @@ const useStyles = makeStyles({
     fontSize: "56px",
     fontWeight: tokens.fontWeightSemibold,
     lineHeight: 1,
+    textAlign: "center",
   },
   kpiLabel: {
     color: tokens.colorNeutralForeground3,
     fontSize: tokens.fontSizeBase300,
+    textAlign: "center",
   },
   chartHost: {
-    flex: 1,
-    minHeight: "200px",
+    width: "100%",
   },
   tableWrap: {
     flex: 1,
@@ -139,6 +144,8 @@ interface TileViewProps {
   onEdit?: () => void;
   onDelete?: () => void;
   onDuplicate?: () => void;
+  /** Optional className merged onto the Card root — used by the editor preview. */
+  className?: string;
 }
 
 interface QueryState {
@@ -149,12 +156,52 @@ interface QueryState {
   total: number;
   /** Pre-aggregated buckets — populated for bar/pie tiles. */
   chart: ChartDatum[];
+  /** Time-series buckets — populated for line tiles. */
+  series: SeriesDatum[];
   error: string;
 }
 
 interface ChartDatum {
   name: string;
   value: number;
+}
+
+interface SeriesDatum {
+  /** ISO datetime string for the bucket start. */
+  date: string;
+  /** Human-friendly label for the X axis tick. */
+  label: string;
+  value: number;
+}
+
+/** Humanize a dotted field path into a column header. e.g.
+ *  "properties.lastModifiedAt" → "Last modified at". */
+function humanizeField(field: string): string {
+  const tail = field.split(".").pop() || field;
+  const spaced = tail
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .replace(/[_-]+/g, " ")
+    .trim();
+  return spaced.charAt(0).toUpperCase() + spaced.slice(1);
+}
+
+/** Default columns when a table tile doesn't specify any. */
+const DEFAULT_TABLE_COLUMNS: TileTableColumn[] = [
+  { field: "properties.displayName", header: "Display name" },
+  { field: "type", header: "Type" },
+  { field: "properties.environmentId", header: "Environment" },
+];
+
+/** Format a bucket date for the line chart X axis label, picking
+ *  granularity to match the bucket size. */
+function formatBucketLabel(iso: string, bucket: "day" | "week" | "month"): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  if (bucket === "month") {
+    return d.toLocaleDateString(undefined, { month: "short", year: "2-digit" });
+  }
+  return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
 /** Read a dotted-path string from an inventory item. */
@@ -199,13 +246,14 @@ function collapseOther(rows: ChartDatum[], maxCategories?: number): ChartDatum[]
   return [...head, { name: "Other", value: other }];
 }
 
-export function TileView({ tile, editable, onEdit, onDelete, onDuplicate }: TileViewProps) {
+export function TileView({ tile, editable, onEdit, onDelete, onDuplicate, className }: TileViewProps) {
   const styles = useStyles();
   const [state, setState] = useState<QueryState>({
     phase: "loading",
     items: [],
     total: 0,
     chart: [],
+    series: [],
     error: "",
   });
 
@@ -213,15 +261,17 @@ export function TileView({ tile, editable, onEdit, onDelete, onDuplicate }: Tile
 
   useEffect(() => {
     let cancelled = false;
+    const setError = (error: string) =>
+      setState({ phase: "error", items: [], total: 0, chart: [], series: [], error });
     (async () => {
-      setState({ phase: "loading", items: [], total: 0, chart: [], error: "" });
+      setState({ phase: "loading", items: [], total: 0, chart: [], series: [], error: "" });
 
       if (tile.viz.type === "kpi") {
         // KPI only needs totalRecords — fetch just one row.
         const res = await runRawQuery(buildClausesFromSpec(tile.spec), { Top: 1 });
         if (cancelled) return;
         if (!res.ok) {
-          setState({ phase: "error", items: [], total: 0, chart: [], error: res.error });
+          setError(res.error);
           return;
         }
         setState({
@@ -229,6 +279,7 @@ export function TileView({ tile, editable, onEdit, onDelete, onDuplicate }: Tile
           items: [],
           total: res.data.totalRecords,
           chart: [],
+          series: [],
           error: "",
         });
         return;
@@ -239,7 +290,7 @@ export function TileView({ tile, editable, onEdit, onDelete, onDuplicate }: Tile
         const res = await runRawQuery(buildClausesFromSpec(tile.spec), { Top: rows });
         if (cancelled) return;
         if (!res.ok) {
-          setState({ phase: "error", items: [], total: 0, chart: [], error: res.error });
+          setError(res.error);
           return;
         }
         setState({
@@ -247,6 +298,44 @@ export function TileView({ tile, editable, onEdit, onDelete, onDuplicate }: Tile
           items: res.data.items as Array<Record<string, unknown>>,
           total: res.data.totalRecords,
           chart: [],
+          series: [],
+          error: "",
+        });
+        return;
+      }
+
+      if (tile.viz.type === "line") {
+        const field = tile.viz.dateField?.trim() ?? "";
+        if (!field) {
+          setState({
+            phase: "ready",
+            items: [],
+            total: 0,
+            chart: [],
+            series: [],
+            error: "",
+          });
+          return;
+        }
+        const bucket = tile.viz.bucket ?? "week";
+        const lookback = Math.max(1, Math.floor(tile.viz.lookbackDays ?? 90));
+        const res = await runTimeSeriesAggregate(tile.spec, field, bucket, lookback);
+        if (cancelled) return;
+        if (!res.ok) {
+          setError(res.error);
+          return;
+        }
+        const series: SeriesDatum[] = res.data.map((d) => ({
+          date: d.date,
+          label: formatBucketLabel(d.date, bucket),
+          value: d.value,
+        }));
+        setState({
+          phase: "ready",
+          items: [],
+          total: series.reduce((s, r) => s + r.value, 0),
+          chart: [],
+          series,
           error: "",
         });
         return;
@@ -259,6 +348,7 @@ export function TileView({ tile, editable, onEdit, onDelete, onDuplicate }: Tile
           items: [],
           total: 0,
           chart: [],
+          series: [],
           error: "",
         });
         return;
@@ -266,7 +356,7 @@ export function TileView({ tile, editable, onEdit, onDelete, onDuplicate }: Tile
       const res = await runAggregateCount(tile.spec, tile.viz.groupBy);
       if (cancelled) return;
       if (!res.ok) {
-        setState({ phase: "error", items: [], total: 0, chart: [], error: res.error });
+        setError(res.error);
         return;
       }
       const labeled = res.data.map((d) => ({
@@ -278,6 +368,7 @@ export function TileView({ tile, editable, onEdit, onDelete, onDuplicate }: Tile
         items: [],
         total: labeled.reduce((s, r) => s + r.value, 0),
         chart: collapseOther(labeled, tile.viz.maxCategories),
+        series: [],
         error: "",
       });
     })();
@@ -285,10 +376,19 @@ export function TileView({ tile, editable, onEdit, onDelete, onDuplicate }: Tile
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [specKey, tile.viz.type, tile.viz.groupBy, tile.viz.maxCategories, tile.viz.tableRows]);
+  }, [
+    specKey,
+    tile.viz.type,
+    tile.viz.groupBy,
+    tile.viz.maxCategories,
+    tile.viz.tableRows,
+    tile.viz.dateField,
+    tile.viz.bucket,
+    tile.viz.lookbackDays,
+  ]);
 
   return (
-    <Card className={styles.root}>
+    <Card className={mergeClasses(styles.root, className)}>
       <CardHeader
         header={<Text weight="semibold">{tile.title}</Text>}
         description={
@@ -318,7 +418,6 @@ export function TileView({ tile, editable, onEdit, onDelete, onDuplicate }: Tile
           ) : undefined
         }
       />
-      <Divider />
       <div className={styles.body}>
         {state.phase === "loading" && (
           <div className={styles.centerSpinner}>
@@ -343,9 +442,6 @@ function TileBody({ tile, state }: { tile: DashboardTile; state: QueryState }) {
       <div className={styles.kpi}>
         <Text className={styles.kpiValue}>{state.total.toLocaleString()}</Text>
         <Text className={styles.kpiLabel}>{viz.kpiLabel || "Total"}</Text>
-        <Badge appearance="outline" size="small">
-          tenant-wide
-        </Badge>
       </div>
     );
   }
@@ -353,29 +449,37 @@ function TileBody({ tile, state }: { tile: DashboardTile; state: QueryState }) {
   if (viz.type === "table") {
     const rows = state.items.slice(0, viz.tableRows ?? 10);
     if (rows.length === 0) return <div className={styles.empty}>No items.</div>;
+    const columns =
+      viz.tableColumns && viz.tableColumns.length > 0 ? viz.tableColumns : DEFAULT_TABLE_COLUMNS;
     return (
       <div className={styles.tableWrap}>
         <table className={styles.table}>
           <thead>
             <tr>
-              <th className={styles.th}>Display name</th>
-              <th className={styles.th}>Type</th>
-              <th className={styles.th}>Environment</th>
+              {columns.map((col, i) => (
+                <th key={i} className={styles.th}>
+                  {col.header?.trim() || humanizeField(col.field)}
+                </th>
+              ))}
             </tr>
           </thead>
           <tbody>
             {rows.map((it, idx) => (
               <tr key={idx}>
-                <td className={styles.td}>
-                  {toCellString(readPath(it, "properties.displayName")) ||
-                    toCellString(readPath(it, "name"))}
-                </td>
-                <td className={styles.td}>
-                  {toCellString(readPath(it, "type"))}
-                </td>
-                <td className={styles.td}>
-                  {toCellString(readPath(it, "properties.environmentId"))}
-                </td>
+                {columns.map((col, i) => {
+                  // For the display name column, fall back to "name" if the
+                  // primary path is empty — matches the previous hard-coded
+                  // behavior so existing dashboards don't regress.
+                  let value = toCellString(readPath(it, col.field));
+                  if (!value && col.field === "properties.displayName") {
+                    value = toCellString(readPath(it, "name"));
+                  }
+                  return (
+                    <td key={i} className={styles.td}>
+                      {value}
+                    </td>
+                  );
+                })}
               </tr>
             ))}
           </tbody>
@@ -385,6 +489,55 @@ function TileBody({ tile, state }: { tile: DashboardTile; state: QueryState }) {
             Showing {rows.length} of {state.total.toLocaleString()}
           </Text>
         )}
+      </div>
+    );
+  }
+
+  // Line chart — uses server-side time-series aggregate
+  if (viz.type === "line") {
+    if (!viz.dateField) {
+      return (
+        <div className={styles.empty}>
+          Set a Date field on this tile to chart it.
+        </div>
+      );
+    }
+    const series = state.series;
+    if (series.length === 0) {
+      return (
+        <div className={styles.empty}>
+          No data in the last {viz.lookbackDays ?? 90} days.
+        </div>
+      );
+    }
+    return (
+      <div className={styles.chartHost}>
+        <ResponsiveContainer width="100%" height={280}>
+          <LineChart data={series} margin={{ top: 8, right: 16, bottom: 24, left: 8 }}>
+            <CartesianGrid strokeDasharray="3 3" />
+            <XAxis
+              dataKey="label"
+              tick={{ fontSize: 11 }}
+              interval="preserveStartEnd"
+              minTickGap={20}
+            />
+            <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
+            <Tooltip
+              formatter={(value) => {
+                const n = typeof value === "number" ? value : Number(value) || 0;
+                return [n.toLocaleString(), "Count"];
+              }}
+            />
+            <Line
+              type="monotone"
+              dataKey="value"
+              stroke={PALETTE[0]}
+              strokeWidth={2}
+              dot={{ r: 3 }}
+              activeDot={{ r: 5 }}
+            />
+          </LineChart>
+        </ResponsiveContainer>
       </div>
     );
   }
@@ -409,19 +562,20 @@ function TileBody({ tile, state }: { tile: DashboardTile; state: QueryState }) {
     const LABEL_THRESHOLD = 0.05;
     return (
       <div className={styles.chartHost}>
-        <ResponsiveContainer width="100%" height="100%">
-          <PieChart>
+        <ResponsiveContainer width="100%" height={280}>
+          <PieChart margin={{ top: 8, right: 8, bottom: 8, left: 8 }}>
             <Pie
               data={data}
               dataKey="value"
               nameKey="name"
-              outerRadius="75%"
+              cx="40%"
+              cy="50%"
+              outerRadius="70%"
               labelLine={false}
-              label={(props: { name?: string | number; value?: string | number }) => {
+              label={(props: { value?: string | number }) => {
                 const v = Number(props.value) || 0;
                 if (v / total < LABEL_THRESHOLD) return "";
-                const pct = Math.round((v / total) * 100);
-                return `${props.name ?? ""} · ${pct}%`;
+                return `${Math.round((v / total) * 100)}%`;
               }}
             >
               {data.map((_, idx) => (
@@ -452,13 +606,24 @@ function TileBody({ tile, state }: { tile: DashboardTile; state: QueryState }) {
   // Bar
   return (
     <div className={styles.chartHost}>
-      <ResponsiveContainer width="100%" height="100%">
-        <BarChart data={data} margin={{ top: 8, right: 8, bottom: 24, left: 8 }}>
+      <ResponsiveContainer width="100%" height={280}>
+        <BarChart
+          data={data}
+          margin={{ top: 8, right: 16, bottom: 24, left: 8 }}
+          barCategoryGap="20%"
+        >
           <CartesianGrid strokeDasharray="3 3" />
-          <XAxis dataKey="name" tick={{ fontSize: 11 }} interval={0} angle={-20} textAnchor="end" />
+          <XAxis
+            dataKey="name"
+            tick={{ fontSize: 11 }}
+            interval={0}
+            angle={-20}
+            textAnchor="end"
+            padding={{ left: 16, right: 16 }}
+          />
           <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
           <Tooltip />
-          <Bar dataKey="value">
+          <Bar dataKey="value" maxBarSize={64}>
             {data.map((_, idx) => (
               <Cell key={idx} fill={PALETTE[idx % PALETTE.length]} />
             ))}

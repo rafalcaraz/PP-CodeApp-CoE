@@ -1202,7 +1202,8 @@ export type QueryFilterOp =
   | "contains"
   | "startswith"
   | "endswith"
-  | "in~";
+  | "in~"
+  | "lastNdays";
 
 export interface QueryFilter {
   field: string;
@@ -1267,6 +1268,17 @@ export function buildClausesFromSpec(spec: QuerySpec): Clause[] {
   for (const f of spec.filters) {
     const field = f.field.trim();
     if (!field) continue;
+
+    // "in last N days" is special: emit a raw KQL `ago(Nd)` expression on the
+    // right-hand side instead of a quoted string. We bypass quoteSmart for
+    // this op so the connector forwards it as-is.
+    if (f.op === "lastNdays") {
+      const n = Math.max(1, Math.floor(Number(f.value) || 0));
+      if (!n) continue;
+      clauses.push(where(field, ">", [`ago(${n}d)`]));
+      continue;
+    }
+
     const vals = formatFilterValues(f.value, f.op);
     if (vals.length === 0) continue;
     clauses.push(where(field, f.op, vals));
@@ -1527,6 +1539,95 @@ export async function runAggregateCount(
           ? "(empty)"
           : String(rawName);
       return { name, value };
+    }),
+  };
+}
+
+/** Date fields that show up as suggestions for line-chart tiles. */
+export const DATE_FIELD_SUGGESTIONS: string[] = [
+  "properties.createdAt",
+  "properties.lastModifiedAt",
+];
+
+/** Server-side time-series aggregate for trend (line chart) tiles.
+ *
+ *  Builds: where(spec.types) → where(spec.filters) → where(dateField > ago(Nd))
+ *          → extend bucket = startof{day|week|month}(dateField)
+ *          → summarize count() by bucket → orderby bucket asc.
+ *
+ *  Returns one row per bucket present in the lookback window, oldest first.
+ *  Empty buckets (no resources in that period) are NOT filled — the renderer
+ *  can choose to draw a continuous line by interpolating missing buckets if
+ *  desired.
+ */
+export async function runTimeSeriesAggregate(
+  spec: QuerySpec,
+  dateField: string,
+  bucket: "day" | "week" | "month",
+  lookbackDays: number
+): Promise<DataResult<{ date: string; value: number }[]>> {
+  const field = dateField.trim();
+  if (!field) {
+    return { ok: true, data: [] };
+  }
+  const lookback = Math.max(1, Math.floor(lookbackDays || 90));
+
+  const clauses: Clause[] = [];
+
+  if (spec.resourceTypes.length === 1) {
+    clauses.push(where("type", "==", [`'${spec.resourceTypes[0]}'`]));
+  } else if (spec.resourceTypes.length > 1) {
+    clauses.push(
+      where(
+        "type",
+        "in~",
+        spec.resourceTypes.map((t) => `'${t}'`)
+      )
+    );
+  }
+
+  for (const f of spec.filters) {
+    const fld = f.field.trim();
+    if (!fld) continue;
+    if (f.op === "lastNdays") {
+      const n = Math.max(1, Math.floor(Number(f.value) || 0));
+      if (!n) continue;
+      clauses.push(where(fld, ">", [`ago(${n}d)`]));
+      continue;
+    }
+    const vals = formatFilterValues(f.value, f.op);
+    if (vals.length === 0) continue;
+    clauses.push(where(fld, f.op, vals));
+  }
+
+  // Lookback filter on the date field (raw KQL expression, not quoted).
+  clauses.push(where(field, ">", [`ago(${lookback}d)`]));
+
+  // Compute the bucket alias. startofday/week/month coerce to datetime first.
+  const bucketFn =
+    bucket === "day" ? "startofday" : bucket === "month" ? "startofmonth" : "startofweek";
+  const alias = "t_bucket";
+  clauses.push(extend(alias, `${bucketFn}(todatetime(${field}))`));
+
+  clauses.push(summarize("count", "resourceCount", [alias]));
+  clauses.push(orderBy({ [alias]: "asc" }));
+
+  const res = await runQuery(clauses, { Top: 500, Skip: 0, SkipToken: "" });
+  if (!res.ok) return res;
+
+  return {
+    ok: true,
+    data: res.data.items.map((item) => {
+      const raw = item as unknown as Record<string, unknown>;
+      const props = (item.properties ?? {}) as Record<string, unknown>;
+      const rawDate = raw[alias] ?? props[alias];
+      const cv = raw.resourceCount ?? props.resourceCount ?? 0;
+      const value = typeof cv === "number" ? cv : Number(cv) || 0;
+      const date =
+        rawDate === undefined || rawDate === null || rawDate === ""
+          ? ""
+          : String(rawDate);
+      return { date, value };
     }),
   };
 }
