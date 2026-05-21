@@ -54,7 +54,7 @@ jobs:
           & $pac solution export --name ${{ inputs.solution_name }} --path "${{ github.workspace }}\${{ inputs.solution_name }}_v${{ steps.solutionversion.outputs.version }}_managed.zip" --managed --environment ${{ secrets.PAC_ENVIRONMENT_ID }}
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: v${{ steps.solutionversion.outputs.version }}
           name: PP CoE Code App v${{ steps.solutionversion.outputs.version }}
