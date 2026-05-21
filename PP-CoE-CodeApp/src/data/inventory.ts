@@ -415,7 +415,7 @@ function ownerDisplayName(item: ResourceItem): string {
 
 /** A small lookup of common Power Platform connectors to friendly names.
  *  Anything not in the table falls through to a slug-prettifier. */
-const KNOWN_CONNECTORS: Record<string, string> = {
+export const KNOWN_CONNECTORS: Record<string, string> = {
   shared_office365: "Office 365 Outlook",
   shared_office365users: "Office 365 Users",
   shared_office365groups: "Office 365 Groups",
@@ -1203,6 +1203,8 @@ export type QueryFilterOp =
   | "startswith"
   | "endswith"
   | "in~"
+  | "has"
+  | "has_any"
   | "lastNdays";
 
 export interface QueryFilter {
@@ -1226,6 +1228,42 @@ export interface QueryTemplate {
   spec: QuerySpec;
 }
 
+// ---------------------------------------------------------------------------
+// Sentinel field paths for "smart" filters.
+//
+// Inventory declares connector usage in three different shapes (see
+// docs/inventory-schema-samples.md):
+//   - canvas / cloud-flow / agent: properties.powerPlatformConnectors[].connectorId
+//   - app-builder apps:            properties.connectors[].connectorId   (ARM path)
+//   - cloud-flow trigger:          properties.trigger.connectorId
+//
+// Each is an array of objects (or a nested object). Naïve `==` won't work;
+// `mv-expand` isn't in the Clause builder; so the helper below extends a
+// flattened string column once per query and emits a tokenised `has`
+// against it. That single clause covers all four locations.
+// ---------------------------------------------------------------------------
+
+/** Sentinel field path that triggers the "any-location connector" filter. */
+export const CONNECTOR_FIELD = "__connector";
+/** Sentinel field path that triggers the "any-location operation" filter. */
+export const OPERATION_FIELD = "__operation";
+/** Name of the synthesised KQL column the sentinel filters search against. */
+const CONNECTOR_BAG_FIELD = "__connectorBag";
+
+/** True if `field` is one of the smart-filter sentinels above. */
+export function isSentinelField(field: string): boolean {
+  return field === CONNECTOR_FIELD || field === OPERATION_FIELD;
+}
+
+/** Friendly label for sentinel field paths; passes other values through. */
+export function friendlyFilterField(field: string): string {
+  if (field === CONNECTOR_FIELD)
+    return "Connector (any location)";
+  if (field === OPERATION_FIELD)
+    return "Operation (any location)";
+  return field;
+}
+
 /** Smart value formatter:
  *  - `true` / `false` → KQL bool literal (unquoted).
  *  - Numeric strings → number literal (unquoted).
@@ -1239,7 +1277,7 @@ function quoteSmart(v: string): string {
 }
 
 function formatFilterValues(value: string, op: QueryFilterOp): string[] {
-  if (op === "in~") {
+  if (op === "in~" || op === "has_any") {
     return value
       .split(",")
       .map((s) => quoteSmart(s))
@@ -1247,6 +1285,66 @@ function formatFilterValues(value: string, op: QueryFilterOp): string[] {
   }
   const q = quoteSmart(value);
   return q ? [q] : [];
+}
+
+/** Translate a single user-facing filter into 0..2 connector clauses.
+ *  Sentinel fields (CONNECTOR_FIELD / OPERATION_FIELD) expand into an
+ *  `extend` shim plus a `has` against the synthesised string column; we
+ *  emit the shim at most once per query by tracking `emittedExtends`.
+ *
+ *  Operator translation for sentinel fields:
+ *    `==`  → `has`     (tokenised; respects word boundaries)
+ *    `!=`  → `!has`
+ *    `in~` → `has_any` (value is split on commas)
+ *  Anything else (`contains`, `startswith`, `endswith`, `has`, `has_any`)
+ *  passes through unchanged.
+ */
+function translateFilter(
+  f: QueryFilter,
+  emittedExtends: Set<string>
+): Clause[] {
+  const field = f.field.trim();
+  if (!field) return [];
+
+  // "in last N days" is special: emit a raw KQL `ago(Nd)` on the right side.
+  if (f.op === "lastNdays") {
+    const n = Math.max(1, Math.floor(Number(f.value) || 0));
+    if (!n) return [];
+    return [where(field, ">", [`ago(${n}d)`])];
+  }
+
+  if (isSentinelField(field)) {
+    const vals = formatFilterValues(f.value, f.op);
+    if (vals.length === 0) return [];
+
+    const op =
+      f.op === "==" ? "has" :
+      f.op === "!=" ? "!has" :
+      f.op === "in~" ? "has_any" :
+      f.op;
+
+    const out: Clause[] = [];
+    if (!emittedExtends.has(CONNECTOR_BAG_FIELD)) {
+      emittedExtends.add(CONNECTOR_BAG_FIELD);
+      out.push(
+        extend(
+          CONNECTOR_BAG_FIELD,
+          // Concatenate every place connector / op IDs can live so a single
+          // `has` finds them whether the resource is a canvas app, flow,
+          // agent, or app-builder app.
+          "strcat(tostring(properties.powerPlatformConnectors),'|'," +
+            "tostring(properties.connectors),'|'," +
+            "tostring(properties.trigger))"
+        )
+      );
+    }
+    out.push(where(CONNECTOR_BAG_FIELD, op, vals));
+    return out;
+  }
+
+  const vals = formatFilterValues(f.value, f.op);
+  if (vals.length === 0) return [];
+  return [where(field, f.op, vals)];
 }
 
 /** Translate a user-facing QuerySpec into the connector's `Clauses[]` shape. */
@@ -1265,23 +1363,11 @@ export function buildClausesFromSpec(spec: QuerySpec): Clause[] {
     );
   }
 
+  const emittedExtends = new Set<string>();
   for (const f of spec.filters) {
-    const field = f.field.trim();
-    if (!field) continue;
-
-    // "in last N days" is special: emit a raw KQL `ago(Nd)` expression on the
-    // right-hand side instead of a quoted string. We bypass quoteSmart for
-    // this op so the connector forwards it as-is.
-    if (f.op === "lastNdays") {
-      const n = Math.max(1, Math.floor(Number(f.value) || 0));
-      if (!n) continue;
-      clauses.push(where(field, ">", [`ago(${n}d)`]));
-      continue;
+    for (const c of translateFilter(f, emittedExtends)) {
+      clauses.push(c);
     }
-
-    const vals = formatFilterValues(f.value, f.op);
-    if (vals.length === 0) continue;
-    clauses.push(where(field, f.op, vals));
   }
 
   if (spec.orderField.trim()) {
@@ -1400,8 +1486,16 @@ export const QUERY_TEMPLATES: QueryTemplate[] = [
 ];
 
 /** Common field paths shown as suggestions in the field combobox. Users can
- *  still type any path freely (e.g. `properties.subType`). */
+ *  still type any path freely (e.g. `properties.subType`).
+ *
+ *  The first two entries (`CONNECTOR_FIELD`, `OPERATION_FIELD`) are sentinels
+ *  that the clause builder expands into a cross-shape `has` filter — see
+ *  `translateFilter`. The trailing `properties.powerPlatformConnectors` /
+ *  `properties.connectors` paths are exposed as escape hatches for power
+ *  users who want to write the raw clause themselves with `has` / `contains`. */
 export const COMMON_FIELD_SUGGESTIONS: string[] = [
+  CONNECTOR_FIELD,
+  OPERATION_FIELD,
   "type",
   "name",
   "location",
@@ -1424,6 +1518,9 @@ export const COMMON_FIELD_SUGGESTIONS: string[] = [
   "properties.environmentType",
   "properties.environmentGroup",
   "properties.environmentGroupId",
+  "properties.powerPlatformConnectors",
+  "properties.connectors",
+  "properties.trigger.connectorId",
 ];
 
 /** All resource types, useful for the multi-select. */
@@ -1501,12 +1598,11 @@ export async function runAggregateCount(
     );
   }
 
+  const emittedAggExtends = new Set<string>();
   for (const f of spec.filters) {
-    const field = f.field.trim();
-    if (!field) continue;
-    const vals = formatFilterValues(f.value, f.op);
-    if (vals.length === 0) continue;
-    clauses.push(where(field, f.op, vals));
+    for (const c of translateFilter(f, emittedAggExtends)) {
+      clauses.push(c);
+    }
   }
 
   // For dynamic `properties.*` group keys, extend to a flat alias.
@@ -1586,18 +1682,11 @@ export async function runTimeSeriesAggregate(
     );
   }
 
+  const emittedTrendExtends = new Set<string>();
   for (const f of spec.filters) {
-    const fld = f.field.trim();
-    if (!fld) continue;
-    if (f.op === "lastNdays") {
-      const n = Math.max(1, Math.floor(Number(f.value) || 0));
-      if (!n) continue;
-      clauses.push(where(fld, ">", [`ago(${n}d)`]));
-      continue;
+    for (const c of translateFilter(f, emittedTrendExtends)) {
+      clauses.push(c);
     }
-    const vals = formatFilterValues(f.value, f.op);
-    if (vals.length === 0) continue;
-    clauses.push(where(fld, f.op, vals));
   }
 
   // Lookback filter on the date field (raw KQL expression, not quoted).

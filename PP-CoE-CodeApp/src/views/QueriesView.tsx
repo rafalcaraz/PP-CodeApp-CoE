@@ -42,9 +42,15 @@ import {
 import {
   ALL_RESOURCE_TYPES,
   COMMON_FIELD_SUGGESTIONS,
+  CONNECTOR_FIELD,
+  KNOWN_CONNECTORS,
+  OPERATION_FIELD,
   QUERY_TEMPLATES,
   ResourceType,
   buildClausesFromSpec,
+  friendlyConnectorName,
+  friendlyFilterField,
+  isSentinelField,
   resourceTypeShort,
   runRawQuery,
   type QueryFilter,
@@ -252,11 +258,17 @@ const OPERATORS: { value: QueryFilterOp; label: string }[] = [
   { value: "startswith", label: "starts with" },
   { value: "endswith", label: "ends with" },
   { value: "in~", label: "in (comma-sep)" },
+  { value: "has", label: "has token" },
+  { value: "has_any", label: "has any token (comma-sep)" },
   { value: ">", label: ">" },
   { value: ">=", label: ">=" },
   { value: "<", label: "<" },
   { value: "<=", label: "<=" },
 ];
+
+/** Connector ID suggestions used by the value Combobox when the user has
+ *  selected the CONNECTOR_FIELD sentinel as the filter field. */
+const KNOWN_CONNECTOR_IDS = Object.keys(KNOWN_CONNECTORS).sort();
 
 const ORDER_FIELD_SUGGESTIONS = [
   "properties.lastModifiedAt",
@@ -861,7 +873,7 @@ export function QueriesView() {
                       <div key={idx} className={styles.fieldRow}>
                         <Combobox
                           placeholder="Field path (e.g. properties.displayName)"
-                          value={f.field}
+                          value={friendlyFilterField(f.field)}
                           freeform
                           onChange={(e) =>
                             updateFilter(idx, { field: (e.target as HTMLInputElement).value })
@@ -871,8 +883,8 @@ export function QueriesView() {
                           }
                         >
                           {COMMON_FIELD_SUGGESTIONS.map((s) => (
-                            <Option key={s} value={s} text={s}>
-                              {s}
+                            <Option key={s} value={s} text={friendlyFilterField(s)}>
+                              {friendlyFilterField(s)}
                             </Option>
                           ))}
                         </Combobox>
@@ -889,15 +901,45 @@ export function QueriesView() {
                             </Option>
                           ))}
                         </Dropdown>
-                        <Input
-                          placeholder={
-                            f.op === "in~" ? "value1, value2, value3" : "Value"
-                          }
-                          value={f.value}
-                          onChange={(_e, data: InputOnChangeData) =>
-                            updateFilter(idx, { value: data.value })
-                          }
-                        />
+                        {f.field === CONNECTOR_FIELD ? (
+                          <Combobox
+                            placeholder="e.g. shared_office365"
+                            value={f.value}
+                            freeform
+                            onChange={(e) =>
+                              updateFilter(idx, {
+                                value: (e.target as HTMLInputElement).value,
+                              })
+                            }
+                            onOptionSelect={(_e, data) =>
+                              updateFilter(idx, { value: data.optionValue ?? "" })
+                            }
+                          >
+                            {KNOWN_CONNECTOR_IDS.map((id) => (
+                              <Option
+                                key={id}
+                                value={id}
+                                text={`${id} — ${friendlyConnectorName(id)}`}
+                              >
+                                {`${id} — ${friendlyConnectorName(id)}`}
+                              </Option>
+                            ))}
+                          </Combobox>
+                        ) : (
+                          <Input
+                            placeholder={
+                              f.field === OPERATION_FIELD
+                                ? "e.g. SearchUserV2"
+                                : f.op === "in~" || f.op === "has_any"
+                                ? "value1, value2, value3"
+                                : "Value"
+                            }
+                            value={f.value}
+                            onChange={(_e, data: InputOnChangeData) =>
+                              updateFilter(idx, { value: data.value })
+                            }
+                          />
+                        )}
                         <Button
                           icon={<DeleteRegular />}
                           appearance="subtle"
@@ -910,6 +952,15 @@ export function QueriesView() {
                       Tip: <code>true</code>/<code>false</code> and numbers are sent unquoted;
                       everything else is quoted as a string.
                     </Text>
+                    {spec.filters.some((f) => isSentinelField(f.field)) && (
+                      <Text className={styles.helper}>
+                        <strong>Connector / Operation</strong> fields scan across
+                        canvas, flow, agent, and app-builder schemas in one tokenised{" "}
+                        <code>has</code> — so <code>==</code> finds{" "}
+                        <code>shared_office365</code> without also matching{" "}
+                        <code>shared_office365users</code>.
+                      </Text>
+                    )}
                   </div>
                 )}
               </div>
