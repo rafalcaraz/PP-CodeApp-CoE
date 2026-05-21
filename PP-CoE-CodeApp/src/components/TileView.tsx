@@ -72,9 +72,9 @@ const useStyles = makeStyles({
     textAlign: "center",
   },
   chartHost: {
-    flex: 1,
-    minHeight: "220px",
     width: "100%",
+    height: "280px",
+    flexShrink: 0,
   },
   tableWrap: {
     flex: 1,
