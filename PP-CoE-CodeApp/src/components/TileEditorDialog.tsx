@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   makeStyles,
   tokens,
@@ -8,6 +8,7 @@ import {
   Option,
   Combobox,
   Button,
+  Badge,
   Dialog,
   DialogSurface,
   DialogTitle,
@@ -17,7 +18,13 @@ import {
   Divider,
   type InputOnChangeData,
 } from "@fluentui/react-components";
-import { AddRegular, ArrowDownRegular, ArrowUpRegular, DeleteRegular } from "@fluentui/react-icons";
+import {
+  AddRegular,
+  ArrowDownRegular,
+  ArrowUpRegular,
+  DeleteRegular,
+  DismissRegular,
+} from "@fluentui/react-icons";
 import {
   ALL_RESOURCE_TYPES,
   COMMON_FIELD_SUGGESTIONS,
@@ -28,6 +35,7 @@ import {
   type ResourceTypeValue,
 } from "../data/inventory";
 import type { DashboardTile, TileTableColumn, TileTimeBucket, TileVizType } from "../data/dashboards";
+import { listSavedQueries, type SavedQuery } from "../data/savedQueries";
 import { TileView } from "./TileView";
 
 const useStyles = makeStyles({
@@ -108,6 +116,36 @@ const useStyles = makeStyles({
     flexDirection: "column",
     gap: tokens.spacingVerticalS,
   },
+  loaderRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: tokens.spacingHorizontalS,
+    flexWrap: "wrap",
+  },
+  rawNotice: {
+    display: "flex",
+    alignItems: "center",
+    gap: tokens.spacingHorizontalS,
+    padding: `${tokens.spacingVerticalS} ${tokens.spacingHorizontalM}`,
+    backgroundColor: tokens.colorNeutralBackground2,
+    borderRadius: tokens.borderRadiusMedium,
+    flexWrap: "wrap",
+  },
+  rawNoticeText: {
+    flex: "1 1 auto",
+    color: tokens.colorNeutralForeground2,
+    fontSize: tokens.fontSizeBase200,
+  },
+  rawJson: {
+    fontFamily: "Consolas, 'Courier New', monospace",
+    fontSize: tokens.fontSizeBase200,
+    backgroundColor: tokens.colorNeutralBackground2,
+    padding: tokens.spacingHorizontalM,
+    borderRadius: tokens.borderRadiusMedium,
+    overflow: "auto",
+    maxHeight: "200px",
+    whiteSpace: "pre",
+  },
 });
 
 const OPERATORS: { value: QueryFilterOp; label: string }[] = [
@@ -168,6 +206,24 @@ export function TileEditorDialog({ open, initialTile, onClose, onSave }: TileEdi
   // The parent passes a fresh `initialTile` each open.
   if (open && tile.id !== initialTile.id) setTile(initialTile);
 
+  // Snapshot of saved queries taken when the dialog opens. We don't poll —
+  // the user can't add/delete saved queries from inside this dialog, so a
+  // single read per open keeps the picker stable.
+  const savedQueries = useMemo<SavedQuery[]>(
+    () => (open ? listSavedQueries() : []),
+    [open]
+  );
+
+  const linkedSaved = useMemo(
+    () =>
+      tile.savedQueryId
+        ? savedQueries.find((q) => q.id === tile.savedQueryId) ?? null
+        : null,
+    [savedQueries, tile.savedQueryId]
+  );
+
+  const isRaw = tile.source === "raw";
+
   // Debounced copy of `tile` used by the live preview so we don't fire a
   // fresh inventory query on every keystroke. ~400ms feels responsive but
   // still cheap.
@@ -182,6 +238,46 @@ export function TileEditorDialog({ open, initialTile, onClose, onSave }: TileEdi
 
   const setViz = (patch: Partial<DashboardTile["viz"]>) =>
     setTile((prev) => ({ ...prev, viz: { ...prev.viz, ...patch } }));
+
+  const applySavedQuery = (q: SavedQuery) => {
+    if (q.source === "builder" && q.spec) {
+      // Basic saved query: prefill the visual builder. No persistent linkage —
+      // the user can edit freely from here. We DO record `savedQueryId` so
+      // the picker shows the source as a hint until they change it.
+      setTile((prev) => ({
+        ...prev,
+        spec: q.spec!,
+        source: "builder",
+        clauses: undefined,
+        savedQueryId: q.id,
+      }));
+    } else {
+      // Advanced saved query: switch to raw mode. The visual builder hides;
+      // only KPI and Table viz types remain valid. Force the viz if needed.
+      const nextVizType: TileVizType =
+        tile.viz.type === "kpi" || tile.viz.type === "table"
+          ? tile.viz.type
+          : "kpi";
+      setTile((prev) => ({
+        ...prev,
+        source: "raw",
+        clauses: q.clauses,
+        savedQueryId: q.id,
+        viz: { ...prev.viz, type: nextVizType },
+      }));
+    }
+  };
+
+  const disconnectSaved = () => {
+    // Return to manual builder mode. Keep whatever spec is currently in state
+    // (in case the user already edited it) but drop the raw clauses.
+    setTile((prev) => ({
+      ...prev,
+      source: "builder",
+      clauses: undefined,
+      savedQueryId: undefined,
+    }));
+  };
 
   const updateFilter = (idx: number, patch: Partial<QueryFilter>) => {
     setTile((prev) => ({
@@ -240,6 +336,9 @@ export function TileEditorDialog({ open, initialTile, onClose, onSave }: TileEdi
       : tile.spec.resourceTypes.map(resourceTypeShort).join(", ");
 
   const vizMeta = VIZ_TYPES.find((v) => v.value === tile.viz.type);
+  const availableVizTypes = isRaw
+    ? VIZ_TYPES.filter((v) => v.value === "kpi" || v.value === "table")
+    : VIZ_TYPES;
 
   return (
     <Dialog open={open} onOpenChange={(_e, data) => !data.open && onClose()}>
@@ -260,6 +359,62 @@ export function TileEditorDialog({ open, initialTile, onClose, onSave }: TileEdi
                   }
                 />
               </div>
+
+              <div className={styles.row}>
+                <Text className={styles.label}>Start from</Text>
+                <Dropdown
+                  style={{ flex: 1, minWidth: 280 }}
+                  placeholder={
+                    savedQueries.length === 0
+                      ? "No saved queries — build below"
+                      : "Build from scratch — or pick a saved query"
+                  }
+                  disabled={savedQueries.length === 0}
+                  value={linkedSaved?.name ?? ""}
+                  selectedOptions={linkedSaved ? [linkedSaved.id] : []}
+                  onOptionSelect={(_e, data) => {
+                    const id = data.optionValue;
+                    if (!id) return;
+                    const q = savedQueries.find((s) => s.id === id);
+                    if (q) applySavedQuery(q);
+                  }}
+                >
+                  {savedQueries.map((q) => (
+                    <Option key={q.id} value={q.id} text={q.name}>
+                      {q.name}
+                      <span className={styles.helper}>
+                        {" · "}
+                        {q.source === "raw" ? "Advanced" : "Basic"}
+                      </span>
+                    </Option>
+                  ))}
+                </Dropdown>
+                {linkedSaved && (
+                  <Button
+                    size="small"
+                    appearance="subtle"
+                    icon={<DismissRegular />}
+                    onClick={disconnectSaved}
+                  >
+                    Disconnect
+                  </Button>
+                )}
+              </div>
+
+              {isRaw && (
+                <div className={styles.rawNotice}>
+                  <Badge appearance="filled" color="important" size="small">
+                    Advanced query
+                  </Badge>
+                  <Text className={styles.rawNoticeText}>
+                    This tile runs hand-written clauses from{" "}
+                    <strong>{linkedSaved?.name ?? "a saved query"}</strong>.
+                    The visual builder is hidden and only KPI / Table viz
+                    types are available. Click <strong>Disconnect</strong> to
+                    return to the visual builder.
+                  </Text>
+                </div>
+              )}
 
               <div className={styles.row}>
                 <Text className={styles.label}>Size</Text>
@@ -299,7 +454,7 @@ export function TileEditorDialog({ open, initialTile, onClose, onSave }: TileEdi
                     setViz({ type: (data.optionValue as TileVizType) ?? "kpi" })
                   }
                 >
-                  {VIZ_TYPES.map((v) => (
+                  {availableVizTypes.map((v) => (
                     <Option key={v.value} value={v.value} text={v.label}>
                       {v.label}
                     </Option>
@@ -502,6 +657,8 @@ export function TileEditorDialog({ open, initialTile, onClose, onSave }: TileEdi
 
               <Divider />
 
+              {!isRaw && (
+                <>
               <div className={styles.row}>
                 <Text className={styles.label}>Resource types</Text>
                 <Dropdown
@@ -637,6 +794,20 @@ export function TileEditorDialog({ open, initialTile, onClose, onSave }: TileEdi
                   <Option value="desc" text="Descending">Descending</Option>
                 </Dropdown>
               </div>
+                </>
+              )}
+
+              {isRaw && (
+                <div className={styles.row}>
+                  <Text className={styles.label}>Clauses</Text>
+                  <pre
+                    className={styles.rawJson}
+                    style={{ flex: 1, minWidth: 280 }}
+                  >
+                    {JSON.stringify(tile.clauses ?? [], null, 2)}
+                  </pre>
+                </div>
+              )}
 
               <div className={styles.row}>
                 <Text className={styles.label}>Page size</Text>
