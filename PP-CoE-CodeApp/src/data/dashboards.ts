@@ -47,13 +47,16 @@ export interface TileViz {
   lookbackDays?: number;
 }
 
+/** Display footprint hint for the auto-flow grid. */
+export type TileSize = "xs" | "small" | "medium" | "large";
+
 export interface DashboardTile {
   id: string;
   title: string;
   spec: QuerySpec;
   viz: TileViz;
   /** Display footprint hint for the auto-flow grid. */
-  size?: "xs" | "small" | "medium" | "large";
+  size?: TileSize;
   /** Where the tile's query came from. Defaults to "builder" (visual spec).
    *  When "raw", the tile runs `clauses` directly instead of `spec`. Only
    *  KPI and Table viz types support "raw" — chart viz types inject their
@@ -286,6 +289,29 @@ export function createDashboard(name: string, description = ""): Dashboard {
     createdAt: nowIso(),
     updatedAt: nowIso(),
     tiles: [],
+  };
+  writeStore([d, ...items]);
+  return d;
+}
+
+/** Create a new dashboard pre-populated from a template's tile builder.
+ *  Caller is responsible for getting the template's tiles via its `build()`
+ *  function and passing them in — that keeps this function decoupled from
+ *  the template module (avoids a cycle). */
+export function createDashboardFromTemplate(
+  name: string,
+  description: string,
+  tiles: DashboardTile[]
+): Dashboard {
+  const items = readStore();
+  const ts = nowIso();
+  const d: Dashboard = {
+    id: genId("d"),
+    name,
+    description,
+    createdAt: ts,
+    updatedAt: ts,
+    tiles,
   };
   writeStore([d, ...items]);
   return d;

@@ -32,6 +32,7 @@ import {
 } from "recharts";
 import {
   buildClausesFromSpec,
+  DASHBOARD_CACHE_TTL_MS,
   friendlyConnectorName,
   runAggregateCount,
   runRawQuery,
@@ -146,6 +147,9 @@ interface TileViewProps {
   onDuplicate?: () => void;
   /** Optional className merged onto the Card root — used by the editor preview. */
   className?: string;
+  /** Bumping this triggers a refetch that bypasses the inventory cache.
+   *  The dashboard's "Refresh" button increments this. */
+  refreshKey?: number;
 }
 
 interface QueryState {
@@ -246,7 +250,7 @@ function collapseOther(rows: ChartDatum[], maxCategories?: number): ChartDatum[]
   return [...head, { name: "Other", value: other }];
 }
 
-export function TileView({ tile, editable, onEdit, onDelete, onDuplicate, className }: TileViewProps) {
+export function TileView({ tile, editable, onEdit, onDelete, onDuplicate, className, refreshKey }: TileViewProps) {
   const styles = useStyles();
   const [state, setState] = useState<QueryState>({
     phase: "loading",
@@ -262,6 +266,14 @@ export function TileView({ tile, editable, onEdit, onDelete, onDuplicate, classN
 
   useEffect(() => {
     let cancelled = false;
+    // Dashboard tiles are expensive aggregates that change on minutes-to-
+    // hours timescales — bump cache TTL to 5min. When the user clicks
+    // "Refresh" on the dashboard (refreshKey > 0), bypass the cache once
+    // to repopulate it with fresh data.
+    const cacheOpts = {
+      cacheTtlMs: DASHBOARD_CACHE_TTL_MS,
+      forceFresh: (refreshKey ?? 0) > 0,
+    };
     const setError = (error: string) =>
       setState({ phase: "error", items: [], total: 0, chart: [], series: [], error });
     (async () => {
@@ -272,7 +284,7 @@ export function TileView({ tile, editable, onEdit, onDelete, onDuplicate, classN
       if (tile.viz.type === "kpi") {
         // KPI only needs totalRecords — fetch just one row.
         const clauses = isRaw ? tile.clauses! : buildClausesFromSpec(tile.spec);
-        const res = await runRawQuery(clauses, { Top: 1 });
+        const res = await runRawQuery(clauses, { Top: 1 }, cacheOpts);
         if (cancelled) return;
         if (!res.ok) {
           setError(res.error);
@@ -292,7 +304,7 @@ export function TileView({ tile, editable, onEdit, onDelete, onDuplicate, classN
       if (tile.viz.type === "table") {
         const rows = Math.max(1, Math.min(50, tile.viz.tableRows ?? 10));
         const clauses = isRaw ? tile.clauses! : buildClausesFromSpec(tile.spec);
-        const res = await runRawQuery(clauses, { Top: rows });
+        const res = await runRawQuery(clauses, { Top: rows }, cacheOpts);
         if (cancelled) return;
         if (!res.ok) {
           setError(res.error);
@@ -336,7 +348,7 @@ export function TileView({ tile, editable, onEdit, onDelete, onDuplicate, classN
         }
         const bucket = tile.viz.bucket ?? "week";
         const lookback = Math.max(1, Math.floor(tile.viz.lookbackDays ?? 90));
-        const res = await runTimeSeriesAggregate(tile.spec, field, bucket, lookback);
+        const res = await runTimeSeriesAggregate(tile.spec, field, bucket, lookback, cacheOpts);
         if (cancelled) return;
         if (!res.ok) {
           setError(res.error);
@@ -370,7 +382,7 @@ export function TileView({ tile, editable, onEdit, onDelete, onDuplicate, classN
         });
         return;
       }
-      const res = await runAggregateCount(tile.spec, tile.viz.groupBy);
+      const res = await runAggregateCount(tile.spec, tile.viz.groupBy, {}, cacheOpts);
       if (cancelled) return;
       if (!res.ok) {
         setError(res.error);
@@ -404,6 +416,7 @@ export function TileView({ tile, editable, onEdit, onDelete, onDuplicate, classN
     tile.viz.dateField,
     tile.viz.bucket,
     tile.viz.lookbackDays,
+    refreshKey,
   ]);
 
   return (

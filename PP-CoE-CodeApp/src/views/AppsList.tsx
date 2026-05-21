@@ -75,7 +75,7 @@ export function AppsList() {
   );
 
   const fetchPage = useCallback(
-    (skipToken?: string) => listAppsPage(filters, skipToken),
+    (skipToken?: string, skip?: number) => listAppsPage(filters, skipToken, 500, skip ?? 0),
     [filters]
   );
 
