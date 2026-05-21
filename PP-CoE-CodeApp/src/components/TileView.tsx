@@ -13,7 +13,6 @@ import {
   MenuList,
   MenuItem,
   Divider,
-  Badge,
 } from "@fluentui/react-components";
 import { MoreHorizontalRegular } from "@fluentui/react-icons";
 import {
@@ -57,6 +56,7 @@ const useStyles = makeStyles({
     flexDirection: "column",
     alignItems: "center",
     justifyContent: "center",
+    textAlign: "center",
     flex: 1,
     gap: tokens.spacingVerticalXS,
   },
@@ -64,14 +64,17 @@ const useStyles = makeStyles({
     fontSize: "56px",
     fontWeight: tokens.fontWeightSemibold,
     lineHeight: 1,
+    textAlign: "center",
   },
   kpiLabel: {
     color: tokens.colorNeutralForeground3,
     fontSize: tokens.fontSizeBase300,
+    textAlign: "center",
   },
   chartHost: {
     flex: 1,
-    minHeight: "200px",
+    minHeight: "220px",
+    width: "100%",
   },
   tableWrap: {
     flex: 1,
@@ -343,9 +346,6 @@ function TileBody({ tile, state }: { tile: DashboardTile; state: QueryState }) {
       <div className={styles.kpi}>
         <Text className={styles.kpiValue}>{state.total.toLocaleString()}</Text>
         <Text className={styles.kpiLabel}>{viz.kpiLabel || "Total"}</Text>
-        <Badge appearance="outline" size="small">
-          tenant-wide
-        </Badge>
       </div>
     );
   }
@@ -415,7 +415,9 @@ function TileBody({ tile, state }: { tile: DashboardTile; state: QueryState }) {
               data={data}
               dataKey="value"
               nameKey="name"
-              outerRadius="75%"
+              cx="30%"
+              cy="50%"
+              outerRadius="80%"
               labelLine={false}
               label={(props: { name?: string | number; value?: string | number }) => {
                 const v = Number(props.value) || 0;
@@ -453,12 +455,23 @@ function TileBody({ tile, state }: { tile: DashboardTile; state: QueryState }) {
   return (
     <div className={styles.chartHost}>
       <ResponsiveContainer width="100%" height="100%">
-        <BarChart data={data} margin={{ top: 8, right: 8, bottom: 24, left: 8 }}>
+        <BarChart
+          data={data}
+          margin={{ top: 8, right: 16, bottom: 24, left: 8 }}
+          barCategoryGap="20%"
+        >
           <CartesianGrid strokeDasharray="3 3" />
-          <XAxis dataKey="name" tick={{ fontSize: 11 }} interval={0} angle={-20} textAnchor="end" />
+          <XAxis
+            dataKey="name"
+            tick={{ fontSize: 11 }}
+            interval={0}
+            angle={-20}
+            textAnchor="end"
+            padding={{ left: 16, right: 16 }}
+          />
           <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
           <Tooltip />
-          <Bar dataKey="value">
+          <Bar dataKey="value" maxBarSize={64}>
             {data.map((_, idx) => (
               <Cell key={idx} fill={PALETTE[idx % PALETTE.length]} />
             ))}
