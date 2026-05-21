@@ -35,6 +35,7 @@ import {
   type ResourceRow,
 } from "../data/inventory";
 import { EmptyPane, ErrorPane, LoadingPane } from "../components/Status";
+import { PortalActionsBar } from "../components/PortalActions";
 
 const useStyles = makeStyles({
   root: {
@@ -221,6 +222,13 @@ export function EnvironmentDetail() {
 
       {env.kind === "ready" && env.data && (
         <>
+          <PortalActionsBar
+            context={{
+              entityKind: "environment",
+              entityId: env.data.id,
+              environmentId: env.data.id,
+            }}
+          />
           <div className={styles.headerBlock}>
             <Text size={600} weight="semibold">
               {env.data.displayName || env.data.id}

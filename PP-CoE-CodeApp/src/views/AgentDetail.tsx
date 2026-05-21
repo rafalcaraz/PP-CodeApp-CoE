@@ -23,6 +23,7 @@ import {
 import { ErrorPane, LoadingPane } from "../components/Status";
 import { ConnectorsCard } from "../components/ConnectorsCard";
 import { RawJsonAccordion } from "../components/RawJsonAccordion";
+import { PortalActionsBar } from "../components/PortalActions";
 
 const useStyles = makeStyles({
   root: {
@@ -184,6 +185,13 @@ function ReadyView({
   const styles = useStyles();
   return (
     <>
+      <PortalActionsBar
+        context={{
+          entityKind: "agent",
+          entityId: row.id,
+          environmentId: row.environmentId,
+        }}
+      />
       <div className={styles.header}>
         <Text size={700} weight="semibold">
           {row.displayName || row.id}
