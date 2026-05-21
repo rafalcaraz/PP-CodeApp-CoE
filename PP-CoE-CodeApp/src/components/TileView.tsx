@@ -73,8 +73,6 @@ const useStyles = makeStyles({
   },
   chartHost: {
     width: "100%",
-    height: "280px",
-    flexShrink: 0,
   },
   tableWrap: {
     flex: 1,
@@ -409,7 +407,7 @@ function TileBody({ tile, state }: { tile: DashboardTile; state: QueryState }) {
     const LABEL_THRESHOLD = 0.05;
     return (
       <div className={styles.chartHost}>
-        <ResponsiveContainer width="100%" height="100%">
+        <ResponsiveContainer width="100%" height={280}>
           <PieChart>
             <Pie
               data={data}
@@ -454,7 +452,7 @@ function TileBody({ tile, state }: { tile: DashboardTile; state: QueryState }) {
   // Bar
   return (
     <div className={styles.chartHost}>
-      <ResponsiveContainer width="100%" height="100%">
+      <ResponsiveContainer width="100%" height={280}>
         <BarChart
           data={data}
           margin={{ top: 8, right: 16, bottom: 24, left: 8 }}
