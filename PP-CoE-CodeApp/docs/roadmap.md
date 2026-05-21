@@ -185,14 +185,12 @@ Use the same `DataResult<T>` discriminated union we already have in
 - **Connector inventory rollup** — top-level view that fans out across all
   apps/flows/agents and rolls up which connectors are most used, which
   envs use SQL, etc. The data is already in our existing detail-row
-  payload (`row.connectors`).
-- **Server-side `where contains` on connectorId** — let a user filter the
-  Apps list to "apps using shared_office365". Needs validation that
-  `where properties.powerPlatformConnectors contains 'shared_office365'`
-  actually works against a nested array — may need an `extend`/`mv-expand`
-  trick.
-- **Operation-level audit** — find every app that uses
-  `shared_sql / ExecuteStoredProcedure`. Same trick as above.
+  payload (`row.connectors`). The server-side primitive now exists
+  (see the connector sentinel filter shipped in the Queries view) —
+  `runAggregateCount` could group by the connector bag with a custom
+  `extend`/`mv-expand` shim, though `mv-expand` isn't in the Clause
+  builder today so a flattened-string `summarize` is the path of least
+  resistance.
 - **Bundle splitting** — see the **Bundle optimization** section below for the full plan.
 - **Lazy route loading** — covered in the **Bundle optimization** section.
 - **Env picker → Combobox with typeahead** — the current Dropdown shows

@@ -42,9 +42,15 @@ import {
 import {
   ALL_RESOURCE_TYPES,
   COMMON_FIELD_SUGGESTIONS,
+  CONNECTOR_FIELD,
+  KNOWN_CONNECTORS,
+  OPERATION_FIELD,
   QUERY_TEMPLATES,
   ResourceType,
   buildClausesFromSpec,
+  friendlyConnectorName,
+  friendlyFilterField,
+  isSentinelField,
   resourceTypeShort,
   runRawQuery,
   type QueryFilter,
@@ -115,6 +121,17 @@ const useStyles = makeStyles({
     gridTemplateColumns: "minmax(220px, 2fr) 150px minmax(220px, 2fr) auto",
     gap: tokens.spacingHorizontalS,
     alignItems: "center",
+  },
+  andDivider: {
+    display: "flex",
+    alignItems: "center",
+    gap: tokens.spacingHorizontalS,
+    paddingLeft: tokens.spacingHorizontalXS,
+  },
+  andDividerLine: {
+    flex: "1 1 auto",
+    height: "1px",
+    backgroundColor: tokens.colorNeutralStroke2,
   },
   inlineRow: {
     display: "flex",
@@ -252,11 +269,17 @@ const OPERATORS: { value: QueryFilterOp; label: string }[] = [
   { value: "startswith", label: "starts with" },
   { value: "endswith", label: "ends with" },
   { value: "in~", label: "in (comma-sep)" },
+  { value: "has", label: "has token" },
+  { value: "has_any", label: "has any token (comma-sep)" },
   { value: ">", label: ">" },
   { value: ">=", label: ">=" },
   { value: "<", label: "<" },
   { value: "<=", label: "<=" },
 ];
+
+/** Connector ID suggestions used by the value Combobox when the user has
+ *  selected the CONNECTOR_FIELD sentinel as the filter field. */
+const KNOWN_CONNECTOR_IDS = Object.keys(KNOWN_CONNECTORS).sort();
 
 const ORDER_FIELD_SUGGESTIONS = [
   "properties.lastModifiedAt",
@@ -858,10 +881,24 @@ export function QueriesView() {
                 ) : (
                   <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                     {spec.filters.map((f, idx) => (
-                      <div key={idx} className={styles.fieldRow}>
+                      <div key={idx} style={{ display: "contents" }}>
+                        {idx > 0 && (
+                          <div
+                            className={styles.andDivider}
+                            aria-label="and"
+                            title="Filters are combined with AND"
+                          >
+                            <div className={styles.andDividerLine} />
+                            <Badge appearance="outline" size="small">
+                              AND
+                            </Badge>
+                            <div className={styles.andDividerLine} />
+                          </div>
+                        )}
+                        <div className={styles.fieldRow}>
                         <Combobox
                           placeholder="Field path (e.g. properties.displayName)"
-                          value={f.field}
+                          value={friendlyFilterField(f.field)}
                           freeform
                           onChange={(e) =>
                             updateFilter(idx, { field: (e.target as HTMLInputElement).value })
@@ -871,8 +908,8 @@ export function QueriesView() {
                           }
                         >
                           {COMMON_FIELD_SUGGESTIONS.map((s) => (
-                            <Option key={s} value={s} text={s}>
-                              {s}
+                            <Option key={s} value={s} text={friendlyFilterField(s)}>
+                              {friendlyFilterField(s)}
                             </Option>
                           ))}
                         </Combobox>
@@ -889,27 +926,76 @@ export function QueriesView() {
                             </Option>
                           ))}
                         </Dropdown>
-                        <Input
-                          placeholder={
-                            f.op === "in~" ? "value1, value2, value3" : "Value"
-                          }
-                          value={f.value}
-                          onChange={(_e, data: InputOnChangeData) =>
-                            updateFilter(idx, { value: data.value })
-                          }
-                        />
+                        {f.field === CONNECTOR_FIELD ? (
+                          <Combobox
+                            placeholder="e.g. shared_office365"
+                            value={f.value}
+                            freeform
+                            onChange={(e) =>
+                              updateFilter(idx, {
+                                value: (e.target as HTMLInputElement).value,
+                              })
+                            }
+                            onOptionSelect={(_e, data) =>
+                              updateFilter(idx, { value: data.optionValue ?? "" })
+                            }
+                          >
+                            {KNOWN_CONNECTOR_IDS.map((id) => (
+                              <Option
+                                key={id}
+                                value={id}
+                                text={`${id} — ${friendlyConnectorName(id)}`}
+                              >
+                                {`${id} — ${friendlyConnectorName(id)}`}
+                              </Option>
+                            ))}
+                          </Combobox>
+                        ) : (
+                          <Input
+                            placeholder={
+                              f.field === OPERATION_FIELD
+                                ? "e.g. SearchUserV2"
+                                : f.op === "in~" || f.op === "has_any"
+                                ? "value1, value2, value3"
+                                : "Value"
+                            }
+                            value={f.value}
+                            onChange={(_e, data: InputOnChangeData) =>
+                              updateFilter(idx, { value: data.value })
+                            }
+                          />
+                        )}
                         <Button
                           icon={<DeleteRegular />}
                           appearance="subtle"
                           aria-label="Remove filter"
                           onClick={() => removeFilter(idx)}
                         />
+                        </div>
                       </div>
                     ))}
                     <Text className={styles.helper}>
                       Tip: <code>true</code>/<code>false</code> and numbers are sent unquoted;
                       everything else is quoted as a string.
                     </Text>
+                    {spec.filters.length > 1 && (
+                      <Text className={styles.helper}>
+                        Rows are combined with <strong>AND</strong> — all must match.
+                        For <strong>OR</strong> within a single field use{" "}
+                        <code>in (comma-sep)</code> (or <code>has any token</code> for
+                        connector / operation). Cross-field <code>OR</code> isn't
+                        supported in Basic; use the Advanced tab.
+                      </Text>
+                    )}
+                    {spec.filters.some((f) => isSentinelField(f.field)) && (
+                      <Text className={styles.helper}>
+                        <strong>Connector / Operation</strong> fields scan across
+                        canvas, flow, agent, and app-builder schemas in one tokenised{" "}
+                        <code>has</code> — so <code>==</code> finds{" "}
+                        <code>shared_office365</code> without also matching{" "}
+                        <code>shared_office365users</code>.
+                      </Text>
+                    )}
                   </div>
                 )}
               </div>

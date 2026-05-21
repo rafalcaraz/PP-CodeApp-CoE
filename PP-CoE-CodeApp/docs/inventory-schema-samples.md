@@ -79,6 +79,15 @@ Captured while building the data layer. Don't relearn these the hard way:
    `PowerDataRuntimeHttpError = { message, status, requestId, innerError }`
    where `innerError` is a stringified JSON of the ARG
    `{code, message, details[]}` payload. See `formatError()` in `inventory.ts`.
+7. **Filtering on connector usage needs `has`, not `==`.** The connectors
+   array is dynamic, so `where properties.powerPlatformConnectors == 'x'`
+   fails. Use `has` (tokenised) or `contains` (substring). The Queries
+   view exposes a `__connector` sentinel field (see `translateFilter` in
+   `inventory.ts`) that emits an `extend` shim concatenating the three
+   shapes (`properties.powerPlatformConnectors`, `properties.connectors`,
+   `properties.trigger`) into a single string column, then a single `has`
+   against it — covers canvas/flow/agent/app-builder in one clause without
+   needing `mv-expand` (which isn't in the Clause whitelist).
 
 ---
 
