@@ -12,7 +12,6 @@ import {
   MenuPopover,
   MenuList,
   MenuItem,
-  Divider,
 } from "@fluentui/react-components";
 import { MoreHorizontalRegular } from "@fluentui/react-icons";
 import {
@@ -50,6 +49,7 @@ const useStyles = makeStyles({
     display: "flex",
     flexDirection: "column",
     minHeight: 0,
+    borderTop: `1px solid ${tokens.colorNeutralStroke2}`,
   },
   kpi: {
     display: "flex",
@@ -319,7 +319,6 @@ export function TileView({ tile, editable, onEdit, onDelete, onDuplicate }: Tile
           ) : undefined
         }
       />
-      <Divider />
       <div className={styles.body}>
         {state.phase === "loading" && (
           <div className={styles.centerSpinner}>
