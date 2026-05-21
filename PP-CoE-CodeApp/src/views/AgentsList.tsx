@@ -53,7 +53,7 @@ export function AgentsList() {
   );
 
   const fetchPage = useCallback(
-    (skipToken?: string) => listAgentsPage(filters, skipToken),
+    (skipToken?: string, skip?: number) => listAgentsPage(filters, skipToken, 500, skip ?? 0),
     [filters]
   );
 

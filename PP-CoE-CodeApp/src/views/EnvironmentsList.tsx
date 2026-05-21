@@ -132,7 +132,7 @@ export function EnvironmentsList() {
   const loadMore = async () => {
     if (!skipToken || loadingMore) return;
     setLoadingMore(true);
-    const res = await listEnvironmentsPage(skipToken);
+    const res = await listEnvironmentsPage(skipToken, 500, rows.length);
     setLoadingMore(false);
     if (!res.ok) {
       setErrorMsg(res.error);
@@ -147,19 +147,25 @@ export function EnvironmentsList() {
     if (!skipToken || loadingMore) return;
     setLoadingMore(true);
     let token: string | undefined = skipToken;
+    let loaded = rows.length;
     let safety = 50;
+    const collected: EnvironmentRow[] = [];
     while (token && safety-- > 0) {
-      const res = await listEnvironmentsPage(token);
+      const res = await listEnvironmentsPage(token, 500, loaded + collected.length);
       if (!res.ok) {
         setErrorMsg(res.error);
         break;
       }
-      setRows((prev) => prev.concat(res.data.rows));
+      collected.push(...res.data.rows);
       token = res.data.skipToken;
       if (res.data.totalRecords) setTotalRecords(res.data.totalRecords);
+      if (res.data.rows.length === 0) break;
     }
+    if (collected.length > 0) setRows((prev) => prev.concat(collected));
     setSkipToken(token);
     setLoadingMore(false);
+    loaded += collected.length;
+    void loaded;
   };
 
   const exportLoaded = () => {
@@ -174,13 +180,14 @@ export function EnvironmentsList() {
     let token: string | undefined = skipToken;
     let safety = 200;
     while (token && safety-- > 0) {
-      const res = await listEnvironmentsPage(token);
+      const res = await listEnvironmentsPage(token, 500, all.length);
       if (!res.ok) {
         setErrorMsg(res.error);
         break;
       }
       for (const r of res.data.rows) all.push(r);
       token = res.data.skipToken;
+      if (res.data.rows.length === 0) break;
     }
     setRows(all);
     setSkipToken(token);

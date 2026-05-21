@@ -111,7 +111,7 @@ export function FlowsList() {
   );
 
   const fetchPage = useCallback(
-    (skipToken?: string) => listFlowsPage(filters, skipToken),
+    (skipToken?: string, skip?: number) => listFlowsPage(filters, skipToken, 500, skip ?? 0),
     [filters]
   );
 

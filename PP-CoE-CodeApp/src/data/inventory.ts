@@ -892,17 +892,25 @@ export async function listEnvironmentsStreaming(
   );
 }
 
-/** A single page of environments — first call passes no skipToken,
- *  subsequent calls pass the token returned in the previous response. */
+/** A single page of environments. Pass the previous response's `skipToken`
+ *  to continue paging. We also send `Skip` as a safety net: some connector
+ *  paths in this tenant don't honor `SkipToken` reliably for the Environment
+ *  table and silently re-return page 1, so the explicit offset keeps paging
+ *  advancing even when the cursor is ignored. */
 export async function listEnvironmentsPage(
   skipToken?: string,
-  pageSize = 500
+  pageSize = 500,
+  skip = 0
 ): Promise<DataResult<{ rows: EnvironmentRow[]; skipToken?: string; totalRecords: number }>> {
   const clauses: Clause[] = [
     where("type", "==", [`'${ResourceType.Environment}'`]),
     orderBy({ "tostring(properties.displayName)": "asc" }),
   ];
-  const res = await runQuery(clauses, { Top: pageSize, Skip: 0, SkipToken: skipToken ?? "" });
+  const res = await runQuery(clauses, {
+    Top: pageSize,
+    Skip: skip,
+    SkipToken: skipToken ?? "",
+  });
   if (!res.ok) return res;
   return {
     ok: true,
@@ -1303,11 +1311,14 @@ function buildListClauses(opts: {
   return clauses;
 }
 
-/** A single page of apps under the given filters. */
+/** A single page of apps under the given filters. Pass `skip` = number of
+ *  rows already loaded as a safety net for connectors that don't honor
+ *  `SkipToken` reliably (we've seen page 1 silently re-returned otherwise). */
 export async function listAppsPage(
   filters: AppFilters,
   skipToken?: string,
-  pageSize = 500
+  pageSize = 500,
+  skip = 0
 ): Promise<DataResult<{ rows: AppRow[]; skipToken?: string; totalRecords: number }>> {
   const typeList = filters.types && filters.types.length > 0 ? filters.types : ALL_APP_TYPES;
   const clauses = buildListClauses({
@@ -1315,7 +1326,7 @@ export async function listAppsPage(
     environmentId: filters.environmentId,
     nameContains: filters.nameContains,
   });
-  const res = await runQuery(clauses, { Top: pageSize, Skip: 0, SkipToken: skipToken ?? "" });
+  const res = await runQuery(clauses, { Top: pageSize, Skip: skip, SkipToken: skipToken ?? "" });
   if (!res.ok) return res;
   return {
     ok: true,
@@ -1339,11 +1350,14 @@ export async function getApp(appId: string): Promise<DataResult<{ row: AppRow; r
   return { ok: true, data: item ? { row: toAppRow(item), raw: item } : null };
 }
 
-/** A single page of flows under the given filters. */
+/** A single page of flows under the given filters. Pass `skip` = number of
+ *  rows already loaded as a safety net for connectors that don't honor
+ *  `SkipToken` reliably. */
 export async function listFlowsPage(
   filters: FlowFilters,
   skipToken?: string,
-  pageSize = 500
+  pageSize = 500,
+  skip = 0
 ): Promise<DataResult<{ rows: FlowRow[]; skipToken?: string; totalRecords: number }>> {
   const typeList = filters.types && filters.types.length > 0 ? filters.types : ALL_FLOW_TYPES;
   const extraWhere: Clause[] = [];
@@ -1362,7 +1376,7 @@ export async function listFlowsPage(
     nameContains: filters.nameContains,
     extraWhere,
   });
-  const res = await runQuery(clauses, { Top: pageSize, Skip: 0, SkipToken: skipToken ?? "" });
+  const res = await runQuery(clauses, { Top: pageSize, Skip: skip, SkipToken: skipToken ?? "" });
   if (!res.ok) return res;
   return {
     ok: true,
@@ -1386,11 +1400,14 @@ export async function getFlow(flowId: string): Promise<DataResult<{ row: FlowRow
   return { ok: true, data: item ? { row: toFlowRow(item), raw: item } : null };
 }
 
-/** A single page of Copilot Studio agents under the given filters. */
+/** A single page of Copilot Studio agents under the given filters. Pass
+ *  `skip` = number of rows already loaded so paging keeps advancing even
+ *  when the connector ignores `SkipToken`. */
 export async function listAgentsPage(
   filters: AgentFilters,
   skipToken?: string,
-  pageSize = 500
+  pageSize = 500,
+  skip = 0
 ): Promise<DataResult<{ rows: AgentRow[]; skipToken?: string; totalRecords: number }>> {
   const clauses = buildListClauses({
     typeList: [ResourceType.CopilotStudioAgent],
@@ -1400,7 +1417,7 @@ export async function listAgentsPage(
     // default sort actually means something. Falls back to nulls last in KQL.
     orderField: "tostring(properties.lastPublishedAt)",
   });
-  const res = await runQuery(clauses, { Top: pageSize, Skip: 0, SkipToken: skipToken ?? "" });
+  const res = await runQuery(clauses, { Top: pageSize, Skip: skip, SkipToken: skipToken ?? "" });
   if (!res.ok) return res;
   const rows = res.data.items.map(toAgentRow);
   await backfillEnvironmentNames(rows);

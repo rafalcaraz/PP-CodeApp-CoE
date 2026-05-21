@@ -74,8 +74,11 @@ export interface ResourceListPageProps<T> {
   /** Stable serialization of current filter state. The shell refetches
    *  page 1 whenever this value changes. */
   filterKey: string;
-  /** Returns one page. Called by the shell. `skipToken` undefined for page 1. */
-  fetchPage: (skipToken?: string) => Promise<DataResult<ResourcePage<T>>>;
+  /** Returns one page. Called by the shell. `skipToken` undefined for page 1.
+   *  `skip` is the number of rows already loaded — pass it through to the
+   *  connector as the `Skip` offset so paging keeps advancing on connectors
+   *  that don't honor `SkipToken` reliably. */
+  fetchPage: (skipToken?: string, skip?: number) => Promise<DataResult<ResourcePage<T>>>;
   filterControls: ReactNode;
   columns: TableColumnDefinition<T>[];
   getRowId: (row: T) => string;
@@ -126,7 +129,7 @@ export function ResourceListPage<T>({
       setSkipToken(undefined);
       setTotalRecords(0);
       setErrorMsg("");
-      const res = await fetchRef.current(undefined);
+      const res = await fetchRef.current(undefined, 0);
       if (cancelled) return;
       if (!res.ok) {
         setErrorMsg(res.error);
@@ -146,7 +149,7 @@ export function ResourceListPage<T>({
   const loadMore = async () => {
     if (!skipToken || loadingMore) return;
     setLoadingMore(true);
-    const res = await fetchRef.current(skipToken);
+    const res = await fetchRef.current(skipToken, rows.length);
     setLoadingMore(false);
     if (!res.ok) {
       setErrorMsg(res.error);
@@ -162,16 +165,19 @@ export function ResourceListPage<T>({
     setLoadingMore(true);
     let token: string | undefined = skipToken;
     let safety = 100;
+    const collected: T[] = [];
     while (token && safety-- > 0) {
-      const res = await fetchRef.current(token);
+      const res = await fetchRef.current(token, rows.length + collected.length);
       if (!res.ok) {
         setErrorMsg(res.error);
         break;
       }
-      setRows((prev) => prev.concat(res.data.rows));
+      collected.push(...res.data.rows);
       token = res.data.skipToken;
       if (res.data.totalRecords) setTotalRecords(res.data.totalRecords);
+      if (res.data.rows.length === 0) break;
     }
+    if (collected.length > 0) setRows((prev) => prev.concat(collected));
     setSkipToken(token);
     setLoadingMore(false);
   };
@@ -202,13 +208,14 @@ export function ResourceListPage<T>({
     let token: string | undefined = skipToken;
     let safety = 200;
     while (token && safety-- > 0) {
-      const res = await fetchRef.current(token);
+      const res = await fetchRef.current(token, all.length);
       if (!res.ok) {
         setErrorMsg(res.error);
         break;
       }
       for (const r of res.data.rows) all.push(r);
       token = res.data.skipToken;
+      if (res.data.rows.length === 0) break;
     }
     setExporting(false);
     downloadCsv(`${stem}-all`, rowsToCsv(all));
