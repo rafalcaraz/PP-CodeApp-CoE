@@ -10,7 +10,18 @@
 
 import { ResourceType, type QuerySpec, type ResourceTypeValue } from "./inventory";
 
-export type TileVizType = "kpi" | "table" | "bar" | "pie";
+export type TileVizType = "kpi" | "table" | "bar" | "pie" | "line";
+
+/** A table column definition for table-viz tiles. */
+export interface TileTableColumn {
+  /** Dotted field path read off each item. e.g. "properties.displayName". */
+  field: string;
+  /** Optional header label. Falls back to a humanized version of `field`. */
+  header?: string;
+}
+
+/** Time bucket size for line-chart tiles. */
+export type TileTimeBucket = "day" | "week" | "month";
 
 export interface TileViz {
   type: TileVizType;
@@ -21,8 +32,18 @@ export interface TileViz {
   kpiLabel?: string;
   /** For table viz: max rows to display. Defaults to 10. */
   tableRows?: number;
+  /** For table viz: ordered list of columns to render. If unset, the renderer
+   *  falls back to a sensible default (display name, type, environment). */
+  tableColumns?: TileTableColumn[];
   /** Optional: cap categories shown in charts (others bucketed as "Other"). */
   maxCategories?: number;
+  /** For line viz: date field to bucket on X axis.
+   *  e.g. "properties.createdAt", "properties.lastModifiedAt". */
+  dateField?: string;
+  /** For line viz: time bucket size. Defaults to "week". */
+  bucket?: TileTimeBucket;
+  /** For line viz: lookback window in days from today. Defaults to 90. */
+  lookbackDays?: number;
 }
 
 export interface DashboardTile {
@@ -197,6 +218,30 @@ function sampleDashboard(): Dashboard {
         viz: { type: "bar", groupBy: "properties.model", maxCategories: 12 },
         spec: {
           resourceTypes: [ResourceType.CopilotStudioAgent],
+          filters: [],
+          orderField: "",
+          orderDirection: "desc",
+          limit: 500,
+        },
+      },
+      // ── Trend (line chart) ─────────────────────────────────────────────
+      {
+        id: genId("t"),
+        title: "Apps created — last 90 days",
+        size: "large",
+        viz: {
+          type: "line",
+          dateField: "properties.createdAt",
+          bucket: "week",
+          lookbackDays: 90,
+        },
+        spec: {
+          resourceTypes: [
+            ResourceType.CanvasApp,
+            ResourceType.ModelDrivenApp,
+            ResourceType.CodeApp,
+            ResourceType.AppBuilderApp,
+          ],
           filters: [],
           orderField: "",
           orderDirection: "desc",

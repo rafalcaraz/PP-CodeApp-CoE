@@ -17,16 +17,17 @@ import {
   Divider,
   type InputOnChangeData,
 } from "@fluentui/react-components";
-import { AddRegular, DeleteRegular } from "@fluentui/react-icons";
+import { AddRegular, ArrowDownRegular, ArrowUpRegular, DeleteRegular } from "@fluentui/react-icons";
 import {
   ALL_RESOURCE_TYPES,
   COMMON_FIELD_SUGGESTIONS,
+  DATE_FIELD_SUGGESTIONS,
   resourceTypeShort,
   type QueryFilter,
   type QueryFilterOp,
   type ResourceTypeValue,
 } from "../data/inventory";
-import type { DashboardTile, TileVizType } from "../data/dashboards";
+import type { DashboardTile, TileTableColumn, TileTimeBucket, TileVizType } from "../data/dashboards";
 import { TileView } from "./TileView";
 
 const useStyles = makeStyles({
@@ -92,6 +93,12 @@ const useStyles = makeStyles({
     gap: tokens.spacingHorizontalS,
     alignItems: "center",
   },
+  columnRow: {
+    display: "grid",
+    gridTemplateColumns: "minmax(180px, 2fr) minmax(140px, 1fr) auto auto auto",
+    gap: tokens.spacingHorizontalS,
+    alignItems: "center",
+  },
   helper: {
     color: tokens.colorNeutralForeground3,
     fontSize: tokens.fontSizeBase200,
@@ -114,6 +121,7 @@ const OPERATORS: { value: QueryFilterOp; label: string }[] = [
   { value: ">=", label: ">=" },
   { value: "<", label: "<" },
   { value: "<=", label: "<=" },
+  { value: "lastNdays", label: "in last (days)" },
 ];
 
 const VIZ_TYPES: { value: TileVizType; label: string; hint: string }[] = [
@@ -121,7 +129,21 @@ const VIZ_TYPES: { value: TileVizType; label: string; hint: string }[] = [
   { value: "table", label: "Table", hint: "Top N rows from the query." },
   { value: "bar", label: "Bar chart", hint: "Grouped counts by a chosen field." },
   { value: "pie", label: "Pie chart", hint: "Distribution by a chosen field." },
+  { value: "line", label: "Line chart", hint: "Trend over time — counts bucketed by day/week/month." },
 ];
+
+const BUCKET_OPTIONS: { value: TileTimeBucket; label: string }[] = [
+  { value: "day", label: "Day" },
+  { value: "week", label: "Week" },
+  { value: "month", label: "Month" },
+];
+
+/** Heuristic: filter values for these field paths are dates, so render a small
+ *  hint near the value input. */
+function isDateField(field: string): boolean {
+  const f = field.trim().toLowerCase();
+  return f.endsWith("at") || f.endsWith("date") || f.endsWith("on");
+}
 
 const ORDER_FIELD_SUGGESTIONS = [
   "properties.lastModifiedAt",
@@ -188,6 +210,29 @@ export function TileEditorDialog({ open, initialTile, onClose, onSave }: TileEdi
         filters: prev.spec.filters.filter((_, i) => i !== idx),
       },
     }));
+
+  // ── Table column helpers ─────────────────────────────────────────────────
+  const tableColumns: TileTableColumn[] = tile.viz.tableColumns ?? [];
+
+  const setTableColumns = (cols: TileTableColumn[]) =>
+    setViz({ tableColumns: cols });
+
+  const addTableColumn = () =>
+    setTableColumns([...tableColumns, { field: "", header: "" }]);
+
+  const updateTableColumn = (idx: number, patch: Partial<TileTableColumn>) =>
+    setTableColumns(tableColumns.map((c, i) => (i === idx ? { ...c, ...patch } : c)));
+
+  const removeTableColumn = (idx: number) =>
+    setTableColumns(tableColumns.filter((_, i) => i !== idx));
+
+  const moveTableColumn = (idx: number, dir: -1 | 1) => {
+    const j = idx + dir;
+    if (j < 0 || j >= tableColumns.length) return;
+    const next = tableColumns.slice();
+    [next[idx], next[j]] = [next[j], next[idx]];
+    setTableColumns(next);
+  };
 
   const typeText =
     tile.spec.resourceTypes.length === 0
@@ -318,19 +363,141 @@ export function TileEditorDialog({ open, initialTile, onClose, onSave }: TileEdi
               )}
 
               {tile.viz.type === "table" && (
-                <div className={styles.row}>
-                  <Text className={styles.label}>Rows shown</Text>
-                  <Input
-                    type="number"
-                    style={{ width: 100 }}
-                    value={String(tile.viz.tableRows ?? 10)}
-                    onChange={(_e, data) =>
-                      setViz({
-                        tableRows: Math.max(1, Math.min(50, Number(data.value) || 10)),
-                      })
-                    }
-                  />
-                </div>
+                <>
+                  <div className={styles.row}>
+                    <Text className={styles.label}>Rows shown</Text>
+                    <Input
+                      type="number"
+                      style={{ width: 100 }}
+                      value={String(tile.viz.tableRows ?? 10)}
+                      onChange={(_e, data) =>
+                        setViz({
+                          tableRows: Math.max(1, Math.min(50, Number(data.value) || 10)),
+                        })
+                      }
+                    />
+                  </div>
+                  <div className={styles.section}>
+                    <div className={styles.row}>
+                      <Text className={styles.label}>Columns</Text>
+                      <Button
+                        icon={<AddRegular />}
+                        appearance="subtle"
+                        size="small"
+                        onClick={addTableColumn}
+                      >
+                        Add column
+                      </Button>
+                      <Text className={styles.helper}>
+                        Leave empty to use defaults (Display name, Type, Environment).
+                      </Text>
+                    </div>
+                    {tableColumns.map((col, idx) => (
+                      <div key={idx} className={styles.columnRow}>
+                        <Combobox
+                          placeholder="Field (e.g. properties.displayName)"
+                          value={col.field}
+                          freeform
+                          onChange={(e) =>
+                            updateTableColumn(idx, {
+                              field: (e.target as HTMLInputElement).value,
+                            })
+                          }
+                          onOptionSelect={(_e, data) =>
+                            updateTableColumn(idx, { field: data.optionValue ?? "" })
+                          }
+                        >
+                          {COMMON_FIELD_SUGGESTIONS.map((s) => (
+                            <Option key={s} value={s} text={s}>
+                              {s}
+                            </Option>
+                          ))}
+                        </Combobox>
+                        <Input
+                          placeholder="Header (optional)"
+                          value={col.header ?? ""}
+                          onChange={(_e, data: InputOnChangeData) =>
+                            updateTableColumn(idx, { header: data.value })
+                          }
+                        />
+                        <Button
+                          icon={<ArrowUpRegular />}
+                          appearance="subtle"
+                          aria-label="Move up"
+                          disabled={idx === 0}
+                          onClick={() => moveTableColumn(idx, -1)}
+                        />
+                        <Button
+                          icon={<ArrowDownRegular />}
+                          appearance="subtle"
+                          aria-label="Move down"
+                          disabled={idx === tableColumns.length - 1}
+                          onClick={() => moveTableColumn(idx, 1)}
+                        />
+                        <Button
+                          icon={<DeleteRegular />}
+                          appearance="subtle"
+                          aria-label="Remove column"
+                          onClick={() => removeTableColumn(idx)}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+
+              {tile.viz.type === "line" && (
+                <>
+                  <div className={styles.row}>
+                    <Text className={styles.label}>Date field</Text>
+                    <Combobox
+                      style={{ flex: 1, minWidth: 280 }}
+                      placeholder="e.g. properties.createdAt"
+                      value={tile.viz.dateField ?? ""}
+                      freeform
+                      onChange={(e) =>
+                        setViz({ dateField: (e.target as HTMLInputElement).value })
+                      }
+                      onOptionSelect={(_e, data) => setViz({ dateField: data.optionValue ?? "" })}
+                    >
+                      {DATE_FIELD_SUGGESTIONS.map((s) => (
+                        <Option key={s} value={s} text={s}>
+                          {s}
+                        </Option>
+                      ))}
+                    </Combobox>
+                  </div>
+                  <div className={styles.row}>
+                    <Text className={styles.label}>Bucket</Text>
+                    <Dropdown
+                      value={
+                        BUCKET_OPTIONS.find((b) => b.value === (tile.viz.bucket ?? "week"))?.label ??
+                        "Week"
+                      }
+                      selectedOptions={[tile.viz.bucket ?? "week"]}
+                      onOptionSelect={(_e, data) =>
+                        setViz({ bucket: (data.optionValue as TileTimeBucket) ?? "week" })
+                      }
+                    >
+                      {BUCKET_OPTIONS.map((b) => (
+                        <Option key={b.value} value={b.value} text={b.label}>
+                          {b.label}
+                        </Option>
+                      ))}
+                    </Dropdown>
+                    <Text className={styles.label}>Lookback (days)</Text>
+                    <Input
+                      type="number"
+                      style={{ width: 100 }}
+                      value={String(tile.viz.lookbackDays ?? 90)}
+                      onChange={(_e, data) =>
+                        setViz({
+                          lookbackDays: Math.max(1, Math.min(3650, Number(data.value) || 90)),
+                        })
+                      }
+                    />
+                  </div>
+                </>
               )}
 
               <Divider />
@@ -402,7 +569,16 @@ export function TileEditorDialog({ open, initialTile, onClose, onSave }: TileEdi
                       ))}
                     </Dropdown>
                     <Input
-                      placeholder={f.op === "in~" ? "v1, v2, v3" : "Value"}
+                      type={f.op === "lastNdays" ? "number" : "text"}
+                      placeholder={
+                        f.op === "in~"
+                          ? "v1, v2, v3"
+                          : f.op === "lastNdays"
+                          ? "30"
+                          : isDateField(f.field)
+                          ? "YYYY-MM-DD"
+                          : "Value"
+                      }
                       value={f.value}
                       onChange={(_e, data: InputOnChangeData) =>
                         updateFilter(idx, { value: data.value })
@@ -418,6 +594,14 @@ export function TileEditorDialog({ open, initialTile, onClose, onSave }: TileEdi
                 ))}
                 {tile.spec.filters.length === 0 && (
                   <Text className={styles.helper}>No filters.</Text>
+                )}
+                {tile.spec.filters.some(
+                  (f) => isDateField(f.field) && f.op !== "lastNdays" && f.op !== "in~"
+                ) && (
+                  <Text className={styles.helper}>
+                    Tip: date filters accept ISO dates like <code>2024-01-01</code>. For relative
+                    windows, use the <strong>in last (days)</strong> operator.
+                  </Text>
                 )}
               </div>
 
