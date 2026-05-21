@@ -258,6 +258,7 @@ export function TileView({ tile, editable, onEdit, onDelete, onDuplicate, classN
   });
 
   const specKey = useMemo(() => JSON.stringify(tile.spec), [tile.spec]);
+  const clausesKey = useMemo(() => JSON.stringify(tile.clauses ?? []), [tile.clauses]);
 
   useEffect(() => {
     let cancelled = false;
@@ -266,9 +267,12 @@ export function TileView({ tile, editable, onEdit, onDelete, onDuplicate, classN
     (async () => {
       setState({ phase: "loading", items: [], total: 0, chart: [], series: [], error: "" });
 
+      const isRaw = tile.source === "raw" && Array.isArray(tile.clauses);
+
       if (tile.viz.type === "kpi") {
         // KPI only needs totalRecords — fetch just one row.
-        const res = await runRawQuery(buildClausesFromSpec(tile.spec), { Top: 1 });
+        const clauses = isRaw ? tile.clauses! : buildClausesFromSpec(tile.spec);
+        const res = await runRawQuery(clauses, { Top: 1 });
         if (cancelled) return;
         if (!res.ok) {
           setError(res.error);
@@ -287,7 +291,8 @@ export function TileView({ tile, editable, onEdit, onDelete, onDuplicate, classN
 
       if (tile.viz.type === "table") {
         const rows = Math.max(1, Math.min(50, tile.viz.tableRows ?? 10));
-        const res = await runRawQuery(buildClausesFromSpec(tile.spec), { Top: rows });
+        const clauses = isRaw ? tile.clauses! : buildClausesFromSpec(tile.spec);
+        const res = await runRawQuery(clauses, { Top: rows });
         if (cancelled) return;
         if (!res.ok) {
           setError(res.error);
@@ -301,6 +306,18 @@ export function TileView({ tile, editable, onEdit, onDelete, onDuplicate, classN
           series: [],
           error: "",
         });
+        return;
+      }
+
+      // Chart viz types — bar/pie/line — need server-side aggregation
+      // injected on top of the spec. That's incompatible with raw clauses
+      // (the user's hand-written payload may already aggregate, or use
+      // shapes our chart code doesn't understand). Fail fast with a hint
+      // rather than emit a bad KQL query.
+      if (isRaw) {
+        setError(
+          "Advanced (raw clauses) queries don't support chart visualizations yet. Switch this tile to a KPI or Table, or load a Basic saved query instead."
+        );
         return;
       }
 
@@ -378,6 +395,8 @@ export function TileView({ tile, editable, onEdit, onDelete, onDuplicate, classN
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     specKey,
+    clausesKey,
+    tile.source,
     tile.viz.type,
     tile.viz.groupBy,
     tile.viz.maxCategories,

@@ -11,11 +11,37 @@ or update it here.
 
 ## Saved queries in a Dataverse table
 
-> **User goal.** The Queries playground (`src/views/QueriesView.tsx`) already
-> lets users assemble custom queries from a `QuerySpec`. Today the spec lives
-> only in component state — close the tab and it's gone. Persist saved
-> queries to a Dataverse table so users can come back to favorites, share
-> them across the org, and not re-recreate the wheel.
+> **User goal.** The Queries playground (`src/views/QueriesView.tsx`) now
+> persists saved queries to **localStorage** (see `src/data/savedQueries.ts`)
+> and supports a paste-clauses lane for sharing complex queries by copy/paste.
+> The next evolution is moving the store from localStorage to **Dataverse**
+> so favorites survive browser wipes, follow the user across machines, and
+> can be shared org-wide without manual JSON ferrying.
+
+### What already shipped (localStorage tier)
+
+- `src/data/savedQueries.ts` — `SavedQuery` type, CRUD wrappers, storage
+  key `ppcoe.savedQueries.v1`. Stores both `spec` (when source = builder)
+  and `clauses` (always) so the durable contract is preserved even if the
+  builder shape evolves.
+- Queries view: a "Saved queries" card above Templates, a Basic/Advanced
+  tab toggle in the Builder (Advanced = a live-parsed clauses textarea),
+  Save / Edit / Delete actions, and a "Source: Basic / Advanced" badge.
+- **Tile editor** (`src/components/TileEditorDialog.tsx`): a "Start from"
+  picker lists every saved query. Picking a **Basic** saved query prefills
+  the visual builder (still fully editable). Picking an **Advanced** saved
+  query switches the tile into raw-clauses mode — Resource types / Filters
+  / Sort hide, only KPI and Table viz types remain available, and the
+  clauses JSON is shown read-only. `DashboardTile.source` / `clauses` /
+  `savedQueryId` carry the raw payload through to render time;
+  `TileView.tsx` runs raw tiles directly via `runRawQuery`.
+- Sharing today = copy JSON out, paste JSON in. No backend, no link
+  shortener, no auth surface — but also no discovery or org-wide sharing.
+
+Moving to Dataverse keeps every public function in `savedQueries.ts`
+intact at the call site; only the storage implementation swaps. Tiles
+that reference a saved query via `savedQueryId` will need a small
+migration to point at Dataverse row IDs.
 
 ### Prerequisites the user will set up
 

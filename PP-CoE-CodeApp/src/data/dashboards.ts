@@ -9,6 +9,7 @@
  */
 
 import { ResourceType, type QuerySpec, type ResourceTypeValue } from "./inventory";
+import type { Clause } from "../generated/models/PowerPlatformforAdminsV2Model";
 
 export type TileVizType = "kpi" | "table" | "bar" | "pie" | "line";
 
@@ -53,6 +54,16 @@ export interface DashboardTile {
   viz: TileViz;
   /** Display footprint hint for the auto-flow grid. */
   size?: "xs" | "small" | "medium" | "large";
+  /** Where the tile's query came from. Defaults to "builder" (visual spec).
+   *  When "raw", the tile runs `clauses` directly instead of `spec`. Only
+   *  KPI and Table viz types support "raw" — chart viz types inject their
+   *  own KQL on top of the spec and would conflict with hand-written clauses. */
+  source?: "builder" | "raw";
+  /** Present iff `source === "raw"`. The connector contract this tile runs. */
+  clauses?: Clause[];
+  /** Bookkeeping: the ID of the saved query that seeded this tile. Used to
+   *  render a "Loaded from …" label in the editor; not used at render time. */
+  savedQueryId?: string;
 }
 
 export interface Dashboard {
