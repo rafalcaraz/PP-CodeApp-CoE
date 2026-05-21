@@ -9,6 +9,16 @@
   "buildEntryPoint": "index.html",
   "localAppUrl": "http://localhost:3000",
   "logoPath": "Default",
-  "connectionReferences": {},
+  "connectionReferences": {
+    "aaedf328-30da-4325-8925-c2d33cce2d38": {
+      "id": "/providers/Microsoft.PowerApps/apis/shared_powerplatformadminv2",
+      "displayName": "Power Platform for Admins V2",
+      "dataSources": [
+        "powerplatformadminv2"
+      ],
+      "authenticationType": "oauth2-auth",
+      "dataSets": {}
+    }
+  },
   "databaseReferences": {}
 }
