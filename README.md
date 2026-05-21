@@ -26,6 +26,11 @@ PP-CodeApp-CoE/
 - **[Roadmap](./PP-CoE-CodeApp/docs/roadmap.md)** — parking lot for ideas
   not yet built (saved queries in Dataverse, connector inventory rollups,
   bundle splitting, etc.). Each entry has enough context to start from cold.
+- **[Portal actions engine](./PP-CoE-CodeApp/docs/portal-actions.md)** —
+  the registry-driven command-bar strip at the top of each detail page
+  (Open in Copilot Studio, PPAC, Power Apps maker, Power Automate maker,
+  Manage MCS credits, …). Read this before adding a new portal button or
+  wiring the bar onto another detail page.
 
 ## Releases
 
