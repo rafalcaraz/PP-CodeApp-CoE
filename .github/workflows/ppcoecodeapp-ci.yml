@@ -1,0 +1,51 @@
+name: PPCoECodeApp CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'PP-CoE-CodeApp/**'
+      - '.github/workflows/ppcoecodeapp-ci.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'PP-CoE-CodeApp/**'
+      - '.github/workflows/ppcoecodeapp-ci.yml'
+
+# Cancel in-progress runs when a new commit is pushed to the same branch
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: PP-CoE-CodeApp
+
+jobs:
+  build:
+    name: Lint, type-check, build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: PP-CoE-CodeApp/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Type-check
+        run: npx tsc --noEmit
+
+      - name: Build
+        run: npm run build
