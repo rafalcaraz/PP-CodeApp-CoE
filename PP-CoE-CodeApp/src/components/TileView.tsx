@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   makeStyles,
+  mergeClasses,
   tokens,
   Text,
   Card,
@@ -140,6 +141,8 @@ interface TileViewProps {
   onEdit?: () => void;
   onDelete?: () => void;
   onDuplicate?: () => void;
+  /** Optional className merged onto the Card root — used by the editor preview. */
+  className?: string;
 }
 
 interface QueryState {
@@ -200,7 +203,7 @@ function collapseOther(rows: ChartDatum[], maxCategories?: number): ChartDatum[]
   return [...head, { name: "Other", value: other }];
 }
 
-export function TileView({ tile, editable, onEdit, onDelete, onDuplicate }: TileViewProps) {
+export function TileView({ tile, editable, onEdit, onDelete, onDuplicate, className }: TileViewProps) {
   const styles = useStyles();
   const [state, setState] = useState<QueryState>({
     phase: "loading",
@@ -289,7 +292,7 @@ export function TileView({ tile, editable, onEdit, onDelete, onDuplicate }: Tile
   }, [specKey, tile.viz.type, tile.viz.groupBy, tile.viz.maxCategories, tile.viz.tableRows]);
 
   return (
-    <Card className={styles.root}>
+    <Card className={mergeClasses(styles.root, className)}>
       <CardHeader
         header={<Text weight="semibold">{tile.title}</Text>}
         description={

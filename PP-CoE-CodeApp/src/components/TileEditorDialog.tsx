@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   makeStyles,
   tokens,
@@ -27,8 +27,48 @@ import {
   type ResourceTypeValue,
 } from "../data/inventory";
 import type { DashboardTile, TileVizType } from "../data/dashboards";
+import { TileView } from "./TileView";
 
 const useStyles = makeStyles({
+  surface: {
+    maxWidth: "1100px",
+    width: "calc(100vw - 48px)",
+  },
+  layout: {
+    display: "flex",
+    gap: tokens.spacingHorizontalXL,
+    alignItems: "flex-start",
+    flexWrap: "wrap",
+  },
+  formCol: {
+    flex: "1 1 480px",
+    minWidth: 0,
+  },
+  previewCol: {
+    flex: "0 1 380px",
+    minWidth: "320px",
+    position: "sticky",
+    top: 0,
+    display: "flex",
+    flexDirection: "column",
+    gap: tokens.spacingVerticalS,
+  },
+  previewHeader: {
+    display: "flex",
+    flexDirection: "column",
+    gap: tokens.spacingVerticalXXS,
+  },
+  previewHost: {
+    height: "360px",
+    width: "100%",
+    display: "flex",
+    "> .fui-Card": {
+      flex: "1 1 auto",
+      width: "100%",
+      minWidth: 0,
+      height: "100%",
+    },
+  },
   form: {
     display: "flex",
     flexDirection: "column",
@@ -106,6 +146,15 @@ export function TileEditorDialog({ open, initialTile, onClose, onSave }: TileEdi
   // The parent passes a fresh `initialTile` each open.
   if (open && tile.id !== initialTile.id) setTile(initialTile);
 
+  // Debounced copy of `tile` used by the live preview so we don't fire a
+  // fresh inventory query on every keystroke. ~400ms feels responsive but
+  // still cheap.
+  const [previewTile, setPreviewTile] = useState<DashboardTile>(tile);
+  useEffect(() => {
+    const handle = window.setTimeout(() => setPreviewTile(tile), 400);
+    return () => window.clearTimeout(handle);
+  }, [tile]);
+
   const setSpec = (patch: Partial<DashboardTile["spec"]>) =>
     setTile((prev) => ({ ...prev, spec: { ...prev.spec, ...patch } }));
 
@@ -149,11 +198,13 @@ export function TileEditorDialog({ open, initialTile, onClose, onSave }: TileEdi
 
   return (
     <Dialog open={open} onOpenChange={(_e, data) => !data.open && onClose()}>
-      <DialogSurface style={{ maxWidth: 720 }}>
+      <DialogSurface className={styles.surface}>
         <DialogBody>
           <DialogTitle>{initialTile.title === "New tile" ? "Add tile" : "Edit tile"}</DialogTitle>
           <DialogContent>
-            <div className={styles.form}>
+            <div className={styles.layout}>
+              <div className={styles.formCol}>
+                <div className={styles.form}>
               <div className={styles.row}>
                 <Text className={styles.label}>Title</Text>
                 <Input
@@ -418,6 +469,20 @@ export function TileEditorDialog({ open, initialTile, onClose, onSave }: TileEdi
                 <Text className={styles.helper}>
                   KPI tiles ignore this — they always fetch 1 row + use the total count.
                 </Text>
+              </div>
+                </div>
+              </div>
+
+              <div className={styles.previewCol}>
+                <div className={styles.previewHeader}>
+                  <Text weight="semibold">Preview</Text>
+                  <Text className={styles.helper}>
+                    Live preview — queries your tenant inventory. Updates ~400ms after edits.
+                  </Text>
+                </div>
+                <div className={styles.previewHost}>
+                  <TileView tile={previewTile} editable={false} />
+                </div>
               </div>
             </div>
           </DialogContent>
