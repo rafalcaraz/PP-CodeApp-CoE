@@ -1,0 +1,14 @@
+# Compiled Code App bundles drift on every `npx power-apps push` (and on every
+# `node scripts/pack-solution.mjs`). We track the metadata stub (.meta.xml) but
+# ignore the bundle output — the live bundles are sourced from the app's
+# `PP-CoE-CodeApp/dist/` via push or via pack-solution, not from git.
+src/CanvasApps/*_CodeAppPackages/
+
+# Packed solution exports (zip artifacts of `pac solution pack`).
+*.zip
+
+# Build output of `node scripts/pack-solution.mjs`.
+out/
+
+# Temp scratch dir for `node scripts/pull-solution.mjs` exports.
+.tmp-pull/
