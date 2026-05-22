@@ -75,6 +75,9 @@ const Comparator = lazy(() =>
 const Impact = lazy(() =>
   import("./views/Impact").then((m) => ({ default: m.Impact }))
 );
+const ZonesView = lazy(() =>
+  import("./views/ZonesView").then((m) => ({ default: m.ZonesView }))
+);
 
 const useStyles = makeStyles({
   app: {
@@ -132,6 +135,7 @@ function AppShell() {
               <Route path="/security/comparator" element={<Comparator />} />
               <Route path="/security/dlp-impact" element={<Impact />} />
               <Route path="/security/impact" element={<Impact />} />
+              <Route path="/zones" element={<ZonesView />} />
               <Route path="*" element={<HomeRedirect />} />
             </Routes>
           </Suspense>

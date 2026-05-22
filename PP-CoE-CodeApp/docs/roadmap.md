@@ -308,6 +308,32 @@ uses (grep `api-version` in `inventory.ts` to confirm).
 > tiers, 4-stage ALM model, 9 maturity dimensions, agent risk axes, and
 > verbatim Microsoft quotes for each. Don't lose that brief.
 
+### ✅ Shipped — Zones v1 (drag-and-drop org layer)
+
+The first concrete chunk of this section is live behind the `zones`
+feature flag. Lives at `/zones`, takes the form of a Kanban-style board
+where each column is a user-defined Zone (color + emoji + optional
+sections), and env-group "chips" can be dragged between Zones / sections
+/ the implicit "🪐 Unassigned" column.
+
+- Data: `src/data/zones.ts` (`ppcoe.zones.v1` + `ppcoe.zoneAssignments.v1`).
+- Hook: `src/hooks/useZones.ts` (cross-tab + same-tab sync via storage event).
+- View: `src/views/ZonesView.tsx` + `src/views/zones/*` (DnD via `@dnd-kit/core`).
+- Flag: `zones` (off by default — flip in Settings).
+
+**What this MVP does NOT do yet** (each is its own follow-up below):
+- Tier assignment per Zone (Normal / Medium / High) → blocks Drift Detector.
+- Shape presets (ALM / Geo / Functional preconfigured sections) → deferred
+  until usage patterns reveal whether they're worth it.
+- Any per-zone metrics rollup → that's the Zone Health Card feature.
+- Dataverse persistence → same migration path as saved queries.
+- Multi-resource membership (apps, agents, solutions in a Zone) → Zones
+  contain env groups only, by design.
+
+The "Ungrouped Environment Radar" feature listed further down is now
+effectively free: the Unassigned column in the Zones board displays
+exactly those env groups, with badges for managed status to follow.
+
 ### Foundational facts we can rely on
 
 - **`QueryResources` returns `parentGroupId` on environment rows.**
