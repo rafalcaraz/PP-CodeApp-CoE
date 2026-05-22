@@ -292,7 +292,7 @@ function ReadyView({ row, raw, envs, counts, envColumns }: ReadyViewProps) {
       </Card>
 
       {/* 4. Resource roll-up */}
-      <Card className={styles.colFull}>
+      <Card className={styles.colHalf}>
         <CardHeader
           header={<Text weight="semibold">Resource roll-up</Text>}
           description={
@@ -339,7 +339,7 @@ function ReadyView({ row, raw, envs, counts, envColumns }: ReadyViewProps) {
           unified rules grid. See `docs/admin-payload-samples.md` and
           `docs/admin-connector-inventory.md`. */}
       <SupplementalAdminCard
-        className={styles.colFull}
+        className={styles.colHalf}
         title="Governance rules — all rules effective on this group"
         buttonLabel="View all rules"
         loadingLabel="Loading rules from both governance models…"
