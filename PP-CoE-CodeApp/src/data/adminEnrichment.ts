@@ -26,8 +26,13 @@
 
 import { PowerPlatformforAdminsV2Service } from "../generated";
 import type {
+  EnvironmentGroup,
   EnvironmentResponse,
+  MgGovODataResponse,
+  Policy,
   PowerApp,
+  RoleAssignmentResponse,
+  RuleAssignmentsResponse,
 } from "../generated/models/PowerPlatformforAdminsV2Model";
 import type { DataResult } from "./inventory";
 
@@ -155,6 +160,201 @@ export async function getAppAdminDetails(
     }
     const data = result.data ?? {};
     return { ok: true, data: { data, raw: data } };
+  } catch (err) {
+    return { ok: false, error: formatError(err) };
+  }
+}
+
+// ─── Environment group enrichments ────────────────────────────────────────
+// All four functions below back the four supplemental cards on
+// `views/EnvironmentGroupDetail.tsx`. They share the same on-demand
+// rule as the env / app enrichments above.
+
+/** Result of `getEnvironmentGroupDetails`. */
+export interface EnvironmentGroupAdminDetails {
+  data: EnvironmentGroup;
+  raw: unknown;
+}
+
+/** Result of `getEnvironmentGroupRoleAssignments`. */
+export interface EnvironmentGroupRoleAssignmentsResult {
+  data: RoleAssignmentResponse;
+  raw: unknown;
+}
+
+/** Result of `getEnvironmentGroupRulesets` (Model A). The connector op
+ *  is named `GetRuleSet` but returns a `value[]` collection of
+ *  `RuleSetDto`s, so this typed result preserves the array. */
+export interface EnvironmentGroupRulesetsResult {
+  data: MgGovODataResponse;
+  raw: unknown;
+}
+
+/** Result of `getEnvironmentGroupEffectivePolicies` (Model B).
+ *
+ *  The connector has no direct "list policies effective on this env
+ *  group" wrap, so this helper fans out internally:
+ *
+ *  1. `ListRuleAssignmentsByEnvironmentGroupId(groupId, true)` to find
+ *     which policy ids apply.
+ *  2. `GetRuleBasedPolicyByID(policyId)` per unique policy id, in
+ *     parallel.
+ *
+ *  Result carries both halves so callers can render assignments
+ *  alongside policy bodies (e.g. show `ruleSetCount` from the
+ *  assignment next to the policy name). Any per-policy fetch errors
+ *  are stashed in `policyErrors` keyed by policy id; the overall
+ *  result is still `ok: true` as long as the assignment list itself
+ *  succeeded. */
+export interface EnvironmentGroupEffectivePoliciesResult {
+  assignments: RuleAssignmentsResponse;
+  policies: Policy[];
+  policyErrors: Record<string, string>;
+  raw: {
+    assignments: unknown;
+    policies: Record<string, unknown>;
+  };
+}
+
+/** Fetch the admin-scope basics for a single env group. Backed by
+ *  `GetEnvironmentGroup`. */
+export async function getEnvironmentGroupDetails(
+  groupId: string
+): Promise<DataResult<EnvironmentGroupAdminDetails>> {
+  if (!groupId) return { ok: false, error: "Environment group ID is required." };
+  try {
+    const result = await PowerPlatformforAdminsV2Service.GetEnvironmentGroup(
+      groupId,
+      API_VERSION
+    );
+    if (!result.success) {
+      return { ok: false, error: formatError(result.error) };
+    }
+    const data = result.data ?? {};
+    return { ok: true, data: { data, raw: data } };
+  } catch (err) {
+    return { ok: false, error: formatError(err) };
+  }
+}
+
+/** Fetch the role assignments on an env group. Backed by
+ *  `ListEnvironmentGroupRoleAssignments`. */
+export async function getEnvironmentGroupRoleAssignments(
+  groupId: string
+): Promise<DataResult<EnvironmentGroupRoleAssignmentsResult>> {
+  if (!groupId) return { ok: false, error: "Environment group ID is required." };
+  try {
+    const result = await PowerPlatformforAdminsV2Service.ListEnvironmentGroupRoleAssignments(
+      groupId,
+      API_VERSION
+    );
+    if (!result.success) {
+      return { ok: false, error: formatError(result.error) };
+    }
+    const data = result.data ?? {};
+    return { ok: true, data: { data, raw: data } };
+  } catch (err) {
+    return { ok: false, error: formatError(err) };
+  }
+}
+
+/** Fetch the **Model A** (`parameters`-bucket) rulesets for an env
+ *  group. Backed by `GetRuleSet` — note the connector's parameter
+ *  shape: `(environmentId, groupId)`. The underlying REST URL
+ *  (`/governance/environmentGroups/{groupId}/ruleSets`) is group-scoped
+ *  only, so we pass the group id in both positions on first attempt.
+ *  See `docs/admin-payload-samples.md` for the actual payload shape. */
+export async function getEnvironmentGroupRulesets(
+  groupId: string
+): Promise<DataResult<EnvironmentGroupRulesetsResult>> {
+  if (!groupId) return { ok: false, error: "Environment group ID is required." };
+  try {
+    // First attempt: pass groupId for both `environmentId` and `groupId`.
+    // If the connector rejects this we'll learn from the error message
+    // and tighten the call signature in a follow-up.
+    const result = await PowerPlatformforAdminsV2Service.GetRuleSet(
+      groupId,
+      groupId,
+      API_VERSION
+    );
+    if (!result.success) {
+      return { ok: false, error: formatError(result.error) };
+    }
+    const data = result.data ?? {};
+    return { ok: true, data: { data, raw: data } };
+  } catch (err) {
+    return { ok: false, error: formatError(err) };
+  }
+}
+
+/** Fetch the **Model B** rule-based policies effective on an env group.
+ *  No direct connector wrap exists; this fans out internally (see
+ *  `EnvironmentGroupEffectivePoliciesResult` doc). */
+export async function getEnvironmentGroupEffectivePolicies(
+  groupId: string
+): Promise<DataResult<EnvironmentGroupEffectivePoliciesResult>> {
+  if (!groupId) return { ok: false, error: "Environment group ID is required." };
+  try {
+    const assignmentsResult =
+      await PowerPlatformforAdminsV2Service.ListRuleAssignmentsByEnvironmentGroupId(
+        groupId,
+        true,
+        API_VERSION
+      );
+    if (!assignmentsResult.success) {
+      return { ok: false, error: formatError(assignmentsResult.error) };
+    }
+    const assignments: RuleAssignmentsResponse = assignmentsResult.data ?? {};
+    const policyIds = Array.from(
+      new Set(
+        (assignments.value ?? [])
+          .map((a) => a.policyId)
+          .filter((id): id is string => !!id)
+      )
+    );
+
+    // Parallel per-policy fetch. Few policies per group in practice (1–3
+    // is typical for the env-group governance surface), so we're not
+    // pulling out the inventory throttle limiter for this. If a tenant
+    // shows up with dozens of policies on one group we'll revisit.
+    const policyResults = await Promise.all(
+      policyIds.map(async (id) => {
+        try {
+          const r = await PowerPlatformforAdminsV2Service.GetRuleBasedPolicyByID(
+            id,
+            API_VERSION
+          );
+          if (!r.success) {
+            return { id, ok: false as const, error: formatError(r.error) };
+          }
+          return { id, ok: true as const, data: r.data ?? ({} as Policy) };
+        } catch (err) {
+          return { id, ok: false as const, error: formatError(err) };
+        }
+      })
+    );
+
+    const policies: Policy[] = [];
+    const policyErrors: Record<string, string> = {};
+    const rawPolicies: Record<string, unknown> = {};
+    for (const r of policyResults) {
+      if (r.ok) {
+        policies.push(r.data);
+        rawPolicies[r.id] = r.data;
+      } else {
+        policyErrors[r.id] = r.error;
+      }
+    }
+
+    return {
+      ok: true,
+      data: {
+        assignments,
+        policies,
+        policyErrors,
+        raw: { assignments, policies: rawPolicies },
+      },
+    };
   } catch (err) {
     return { ok: false, error: formatError(err) };
   }
