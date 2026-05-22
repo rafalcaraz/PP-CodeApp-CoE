@@ -28,6 +28,10 @@ import type {
   PolicyV2,
   ResourceArray_PolicyV2,
 } from "../generated/models/PowerPlatformforAdminsModel";
+import type {
+  Policy,
+} from "../generated/models/PowerPlatformforAdminsV2Model";
+import { getEnvironmentGroupEffectivePolicies } from "./adminEnrichment";
 import type { DataResult } from "./inventory";
 
 /** Best-effort error normalization. Mirrors the helper in
@@ -230,4 +234,181 @@ export async function getApplicableDlpPolicies(
     (a.policy.displayName || "").localeCompare(b.policy.displayName || "")
   );
   return { ok: true, data: rows };
+}
+
+// ---------------------------------------------------------------------------
+// Application Control Policy (ACP) detection on an environment group
+// ---------------------------------------------------------------------------
+
+/** Rule id for the "Advanced connector policies" rule that, when
+ *  present on an env group, signals ACPs are configured. See
+ *  `docs/governance-rules-catalog.md` → `ConnectorManagement`. The
+ *  rule's `inputs.AllowedConnectorList[]` carries the per-connector
+ *  config. */
+const ACP_RULE_ID_KNOWN = "ConnectorManagement";
+
+/** Heuristic rule id for the "Advanced connector policies only"
+ *  preview rule that signals ACP-only mode (DLPs are ignored on this
+ *  group). The exact id is **not yet confirmed** — `governance-rules-catalog.md`
+ *  speculates it may be a sibling rule with this name or a flag inside
+ *  `ConnectorManagement.inputs`. We check both:
+ *
+ *  - a sibling rule whose id matches a small regex of likely names, AND
+ *  - any boolean flag inside `ConnectorManagement.inputs` whose key
+ *    looks like an "only / exclusive / override DLP" toggle.
+ *
+ *  When we see `ConnectorManagement` present but no ACP-only signal,
+ *  we leave `acp.only = false`. If we ever confirm the real schema we
+ *  just tighten this code; everything downstream stays the same. */
+const ACP_ONLY_RULE_ID_PATTERN =
+  /^(?:advanced)?connectorpolicies?only|^onlyconnectorpolicies?$/i;
+const ACP_ONLY_INPUT_FLAG_PATTERN =
+  /^(?:isonlymode|onlymode|exclusivemode|isexclusive|overridedlp|disabledlp)$/i;
+
+/** Summary of how ACPs apply to an environment group. */
+export interface EnvironmentGroupAcpStatus {
+  /** At least one `ConnectorManagement` rule is configured on the
+   *  group's effective policies. */
+  configured: boolean;
+  /** ACPs override DLPs (a.k.a. "Advanced connector policies only").
+   *  Best-effort — see the comment on `ACP_ONLY_RULE_ID_PATTERN`. */
+  only: boolean;
+  /** Total connectors listed across every `ConnectorManagement` rule's
+   *  `AllowedConnectorList`. Useful for one-line summaries. */
+  allowedConnectorCount: number;
+  /** Distinct rule ids encountered across all effective policies.
+   *  Surfaced for debugging / future renderer wiring. */
+  ruleIds: string[];
+  /** Raw policies behind the summary, for callers that want to render
+   *  the full ACP details inline (e.g. a future "Open ACP rules" pane). */
+  policies: Policy[];
+}
+
+/** Scan one rule's `inputs` for an "ACP-only" boolean flag. */
+function inputsImplyAcpOnly(inputs: unknown): boolean {
+  if (!inputs || typeof inputs !== "object") return false;
+  for (const [k, v] of Object.entries(inputs as Record<string, unknown>)) {
+    if (v === true && ACP_ONLY_INPUT_FLAG_PATTERN.test(k)) return true;
+  }
+  return false;
+}
+
+/** Flatten + summarize the rule surface of an env group's effective
+ *  policies into the `EnvironmentGroupAcpStatus` shape above.
+ *
+ *  Pure / side-effect-free so it's trivial to test against captured
+ *  payloads — pass in the already-fetched `Policy[]` and assert on the
+ *  returned summary. */
+export function summarizeAcpStatus(
+  policies: Policy[]
+): EnvironmentGroupAcpStatus {
+  let configured = false;
+  let only = false;
+  let allowedConnectorCount = 0;
+  const ruleIds = new Set<string>();
+
+  for (const p of policies) {
+    for (const rule of p.ruleSets ?? []) {
+      const id = rule.id ?? "";
+      if (id) ruleIds.add(id);
+      if (id === ACP_RULE_ID_KNOWN) {
+        configured = true;
+        const inputs = (rule.inputs ?? {}) as Record<string, unknown>;
+        const list = inputs.AllowedConnectorList;
+        if (Array.isArray(list)) allowedConnectorCount += list.length;
+        if (inputsImplyAcpOnly(inputs)) only = true;
+      } else if (ACP_ONLY_RULE_ID_PATTERN.test(id)) {
+        // Sibling rule whose id matches one of our best-guess names.
+        // Treat presence as a positive ACP-only signal regardless of
+        // its `inputs` (we don't know that schema yet).
+        only = true;
+      }
+    }
+  }
+
+  return {
+    configured,
+    only,
+    allowedConnectorCount,
+    ruleIds: Array.from(ruleIds).sort(),
+    policies,
+  };
+}
+
+/** Light wrapper that fetches the group's effective policies and runs
+ *  the summary. Returns `null` when the env-group id is empty. */
+export async function getEnvironmentGroupAcpStatus(
+  groupId: string
+): Promise<DataResult<EnvironmentGroupAcpStatus>> {
+  if (!groupId) {
+    return { ok: false, error: "Environment group id is required." };
+  }
+  const res = await getEnvironmentGroupEffectivePolicies(groupId);
+  if (!res.ok) return { ok: false, error: res.error };
+  return { ok: true, data: summarizeAcpStatus(res.data.policies) };
+}
+
+// ---------------------------------------------------------------------------
+// Composite: DLP coverage + (when applicable) env-group ACP status
+// ---------------------------------------------------------------------------
+
+/** Combined output of "what governs this environment?" — both DLP
+ *  scoping and (when relevant) the parent env-group's ACP posture.
+ *
+ *  `acp` is `null` whenever it would be uninformative:
+ *    - the env isn't managed (no env group can apply ACPs to it), or
+ *    - the env isn't in a group at all.
+ *
+ *  When `acp` is non-null but the call failed, it carries `{ error }`
+ *  so the UI can surface a partial result rather than hiding the DLP
+ *  coverage entirely. */
+export interface DlpAndAcpStatus {
+  coverage: DlpPolicyCoverage[];
+  acp:
+    | EnvironmentGroupAcpStatus
+    | { error: string }
+    | null;
+}
+
+/** Minimal env shape this helper needs — kept loose so any
+ *  `EnvironmentRow`-ish object can be passed without coupling to the
+ *  inventory module's full row. */
+export interface DlpAndAcpEnvInput {
+  id: string;
+  isManaged: boolean;
+  environmentGroupId: string;
+}
+
+/**
+ * Fetch DLP coverage and ACP status in parallel.
+ *
+ * - DLP coverage always runs (it's the primary question).
+ * - ACP status only runs when the env is **managed AND in a group**;
+ *   otherwise `acp` is `null`. ACPs only exist as a feature of
+ *   Managed Environments and are enforced through env groups, so
+ *   asking the group rules API for any other env shape is wasted IO.
+ *
+ * Errors in the ACP half are demoted to `{ error }` inside `acp` so
+ * the user still sees DLP coverage. Errors in the DLP half propagate
+ * to the outer `DataResult`.
+ */
+export async function getEnvironmentDlpAndAcpStatus(
+  env: DlpAndAcpEnvInput
+): Promise<DataResult<DlpAndAcpStatus>> {
+  const shouldCheckAcp = Boolean(env.isManaged && env.environmentGroupId);
+  const [coverage, acp] = await Promise.all([
+    getApplicableDlpPolicies(env.id),
+    shouldCheckAcp
+      ? getEnvironmentGroupAcpStatus(env.environmentGroupId)
+      : Promise.resolve(null as null),
+  ]);
+  if (!coverage.ok) return { ok: false, error: coverage.error };
+  let acpField: DlpAndAcpStatus["acp"] = null;
+  if (acp) {
+    acpField = acp.ok ? acp.data : { error: acp.error };
+  }
+  return {
+    ok: true,
+    data: { coverage: coverage.data, acp: acpField },
+  };
 }

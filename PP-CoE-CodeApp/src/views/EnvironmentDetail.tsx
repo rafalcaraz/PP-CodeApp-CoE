@@ -43,9 +43,10 @@ import {
   type EnvironmentAdminDetails,
 } from "../data/adminEnrichment";
 import {
-  getApplicableDlpPolicies,
-  type DlpPolicyCoverage,
+  getEnvironmentDlpAndAcpStatus,
+  type DlpAndAcpStatus,
   type DlpScopeMatchReason,
+  type EnvironmentGroupAcpStatus,
 } from "../data/dlpPolicies";
 import { EmptyPane, ErrorPane, LoadingPane } from "../components/Status";
 import { PortalActionsBar } from "../components/PortalActions";
@@ -398,17 +399,27 @@ function ReadyView({
       {/* 3c. DLP policy coverage — supplemental, on-demand.
           Same shell as Admin details so the UX (idle → load → list /
           error) is identical. The helper fetches every policy in the
-          tenant then filters client-side, so it's gated behind the
-          button to avoid drumming `ListPoliciesV2` on every page nav. */}
+          tenant then filters client-side, plus — when the env is both
+          managed AND in an environment group — calls the env-group
+          rule API in parallel to detect Application Control Policy
+          (ACP) configuration and the "advanced connector policies
+          only" override. All gated behind the button to avoid drumming
+          `ListPoliciesV2` on every page nav. */}
       <SupplementalAdminCard
         className={styles.colFull}
         title="DLP policy coverage (supplemental)"
-        description="Tenant DLP policies that target this environment, by scope rule (AllEnvironments / OnlyEnvironments / ExceptEnvironments / SingleEnvironment). Fetched on demand from the Power Platform for Admins connector — never auto-loaded."
-        helpText={<>Click to call <code>ListPoliciesV2</code> and filter to this environment.</>}
+        description="Tenant DLP policies that target this environment, plus — when applicable — the Application Control Policy (ACP) posture from the parent environment group. Fetched on demand from the Power Platform for Admins connector — never auto-loaded."
+        helpText={<>Click to call <code>ListPoliciesV2</code> and (for managed envs in a group) the env-group rule API.</>}
         buttonLabel="Load DLP policy coverage"
         loadingLabel="Loading DLP policies…"
-        loadFn={() => getApplicableDlpPolicies(row.id)}
-        renderReady={(rows) => <DlpCoverageBody rows={rows} env={row} />}
+        loadFn={() =>
+          getEnvironmentDlpAndAcpStatus({
+            id: row.id,
+            isManaged: row.isManaged,
+            environmentGroupId: row.environmentGroupId,
+          })
+        }
+        renderReady={(status) => <DlpCoverageBody status={status} env={row} />}
       />
 
       {/* 4. Resource roll-up */}
@@ -589,46 +600,76 @@ function AdminDetailsBody({ details }: { details: EnvironmentAdminDetails }) {
 }
 
 // ── DlpCoverageBody ────────────────────────────────────────────────────────
-// Renders the list of DLP policies currently applicable to this
-// environment (one row per policy). The match reason is shown as a
-// colored badge so it's immediately obvious why each one applies:
-// "All envs" / "Included" / "Not excluded".
+// Renders the combined DLP coverage + ACP posture for an environment.
 //
-// Empty-state is context-aware. "No DLPs target this env" means very
-// different things depending on whether the environment is managed
-// and/or in an environment group:
+// The matrix the component handles is documented in the planning doc;
+// short version:
 //
-//   - Not managed:        wide open (no DLP + no ACPs available) — error.
-//   - Managed, no group:  no DLP + no group means no ACPs either — error.
-//   - Managed, in group:  no DLP, but ACPs *might* be configured on the
-//                         group. We don't auto-check the group's rules
-//                         yet — that's a follow-up (similar wiring to
-//                         the existing env-group rule renderers).
-//                         Surface a warning + link to the group so the
-//                         user can verify.
+//                                  empty DLPs                  with DLPs
+//   not managed                    error: wide open            (rare; render DLPs)
+//   managed, no group              error: no DLP + no ACPs     (rare; render DLPs)
+//   managed, in group, no ACP      error: no DLP + no ACP      DLP list (no banner)
+//   managed, in group, ACP cfg     success: ACP applies        DLP + info "both apply"
+//   managed, in group, ACP only    success: ACP applies        DLP + warn "ignored"
+//
+// ACP-only mode is best-effort detected — see `summarizeAcpStatus` in
+// `data/dlpPolicies.ts`. When it lands on a real tenant we'll confirm
+// the exact rule shape; for now the UI is honest about the heuristic.
 function DlpCoverageBody({
-  rows,
+  status,
   env,
 }: {
-  rows: DlpPolicyCoverage[];
+  status: DlpAndAcpStatus;
   env: EnvironmentRow;
 }) {
   const styles = useDetailStyles();
   const dlpStyles = useDlpCoverageStyles();
   const navigate = useNavigate();
 
-  if (rows.length === 0) {
+  const { coverage, acp } = status;
+  const acpData = acp && "configured" in acp ? acp : null;
+  const acpError = acp && "error" in acp ? acp.error : null;
+
+  if (coverage.length === 0) {
     return (
-      <NoDlpCoverageWarning env={env} onNavigate={navigate} />
+      <NoDlpCoverageWarning
+        env={env}
+        acp={acpData}
+        acpError={acpError}
+        onNavigate={navigate}
+      />
     );
   }
+
   return (
     <div className={dlpStyles.list}>
+      {/* When DLPs DO match and the env-group has ACPs in play, surface
+          the interaction at the top of the list so users don't read the
+          DLP table and assume it's the whole story. */}
+      {acpData?.configured && (
+        <AcpInteractionBanner
+          acp={acpData}
+          groupId={env.environmentGroupId}
+          groupName={env.environmentGroup}
+          onNavigate={navigate}
+        />
+      )}
+      {acpError && (
+        <MessageBar intent="warning">
+          <MessageBarBody>
+            <MessageBarTitle>Couldn't check ACP status on the environment group</MessageBarTitle>
+            DLP coverage below is accurate, but we couldn't load the
+            environment group's rule set to check whether Application
+            Control Policies might override it. {acpError}
+          </MessageBarBody>
+        </MessageBar>
+      )}
+
       <Text size={200} className={dlpStyles.subtle}>
-        {rows.length} polic{rows.length === 1 ? "y" : "ies"} applies to this
+        {coverage.length} polic{coverage.length === 1 ? "y" : "ies"} applies to this
         environment.
       </Text>
-      {rows.map(({ policy, reason }) => (
+      {coverage.map(({ policy, reason }) => (
         <Card
           key={policy.name}
           className={dlpStyles.row}
@@ -658,6 +699,11 @@ function DlpCoverageBody({
             >
               Default: {policy.defaultConnectorsClassification || "—"}
             </Badge>
+            {acpData?.only && (
+              <Badge appearance="filled" color="warning" size="small">
+                Overridden by ACP-only mode
+              </Badge>
+            )}
           </div>
           <div className={dlpStyles.rowMeta}>
             <span className={styles.mono}>{policy.name}</span>
@@ -671,16 +717,80 @@ function DlpCoverageBody({
   );
 }
 
+/** Banner shown above the DLP list when the env-group has ACPs
+ *  configured. Two variants depending on whether ACPs *override* DLPs
+ *  ("AdvancedConnectorPoliciesOnly") or just stack with them ("most
+ *  restrictive wins"). */
+function AcpInteractionBanner({
+  acp,
+  groupId,
+  groupName,
+  onNavigate,
+}: {
+  acp: EnvironmentGroupAcpStatus;
+  groupId: string;
+  groupName: string;
+  onNavigate: ReturnType<typeof useNavigate>;
+}) {
+  const groupLink = (
+    <Link onClick={() => onNavigate(`/environment-groups/${encodeURIComponent(groupId)}`)}>
+      {groupName || groupId}
+    </Link>
+  );
+  if (acp.only) {
+    return (
+      <MessageBar intent="warning">
+        <MessageBarBody>
+          <MessageBarTitle>DLP policies below are overridden by ACP-only mode</MessageBarTitle>
+          {groupLink} has Application Control Policies configured with the
+          "Advanced connector policies only" toggle. While the DLP policies
+          listed here technically target this environment, governance is
+          enforced exclusively by the group's ACP rules ({acp.allowedConnectorCount}
+          {" "}allowed connector{acp.allowedConnectorCount === 1 ? "" : "s"}).
+          Review the ACP allow-list on the group to understand what makers
+          can actually use here.
+        </MessageBarBody>
+      </MessageBar>
+    );
+  }
+  return (
+    <MessageBar intent="info">
+      <MessageBarBody>
+        <MessageBarTitle>Both DLP and ACP apply — most restrictive wins</MessageBarTitle>
+        The DLP policies below target this environment, and {groupLink} also
+        has Application Control Policies configured ({acp.allowedConnectorCount}
+        {" "}allowed connector{acp.allowedConnectorCount === 1 ? "" : "s"}).
+        Effective access is the intersection: a connector is usable only when
+        permitted by every applicable policy and listed in the ACP allow-list.
+      </MessageBarBody>
+    </MessageBar>
+  );
+}
+
 /** Empty-state warning that varies by Managed-Environment + env-group
- *  membership. See `DlpCoverageBody` for the decision table. */
+ *  membership + ACP posture. See `DlpCoverageBody` for the decision
+ *  table. */
 function NoDlpCoverageWarning({
   env,
+  acp,
+  acpError,
   onNavigate,
 }: {
   env: EnvironmentRow;
+  acp: EnvironmentGroupAcpStatus | null;
+  acpError: string | null;
   onNavigate: ReturnType<typeof useNavigate>;
 }) {
   const inGroup = Boolean(env.environmentGroupId);
+  const groupLink = inGroup ? (
+    <Link
+      onClick={() =>
+        onNavigate(`/environment-groups/${encodeURIComponent(env.environmentGroupId)}`)
+      }
+    >
+      {env.environmentGroup || env.environmentGroupId}
+    </Link>
+  ) : null;
 
   if (!env.isManaged) {
     return (
@@ -714,27 +824,50 @@ function NoDlpCoverageWarning({
     );
   }
 
-  // Managed + in group. ACPs may or may not be configured on the group
-  // itself; we don't auto-detect that yet (see TODO above).
+  // Managed + in group. We now know whether the group has ACPs.
+  if (acp?.configured) {
+    return (
+      <MessageBar intent="success">
+        <MessageBarBody>
+          <MessageBarTitle>
+            No DLP coverage, but ACPs apply via {groupLink}
+            {acp.only && " (ACP-only mode)"}
+          </MessageBarTitle>
+          No tenant DLP policy targets this environment directly, but its
+          environment group has{" "}
+          <strong>
+            {acp.allowedConnectorCount} allowed connector
+            {acp.allowedConnectorCount === 1 ? "" : "s"}
+          </strong>{" "}
+          configured via Application Control Policies. Makers in this
+          environment can only use connectors on that allow-list.
+          {acp.only && (
+            <>
+              {" "}This group is configured in <strong>"Advanced connector
+              policies only"</strong> mode — even if a DLP policy were
+              scoped here later, it would be overridden by the ACPs.
+            </>
+          )}
+        </MessageBarBody>
+      </MessageBar>
+    );
+  }
+
+  // Managed + in group, but the group has no ACPs (or we couldn't tell).
   return (
-    <MessageBar intent="warning">
+    <MessageBar intent="error">
       <MessageBarBody>
-        <MessageBarTitle>No DLP coverage — relying on environment-group ACPs</MessageBarTitle>
-        No tenant DLP policy targets this environment directly. Because it is
-        a member of{" "}
-        <Link
-          onClick={() =>
-            onNavigate(
-              `/environment-groups/${encodeURIComponent(env.environmentGroupId)}`
-            )
-          }
-        >
-          {env.environmentGroup || env.environmentGroupId}
-        </Link>
-        , governance may still be enforced via the group's Application Control
-        Policies (ACPs). Verify the group has the expected ACP rules
-        configured. (Auto-detection of ACP coverage from the group's rule set
-        is on the roadmap.)
+        <MessageBarTitle>No DLP coverage and no ACPs on the environment group</MessageBarTitle>
+        No tenant DLP policy targets this environment, and {groupLink} does
+        not have any Application Control Policy rules configured either.
+        Either scope a DLP policy to include this environment, or add ACP
+        rules to the environment group.
+        {acpError && (
+          <>
+            {" "}(Note: we couldn't load the group's rules — <em>{acpError}</em> —
+            so the ACP check above may be incomplete.)
+          </>
+        )}
       </MessageBarBody>
     </MessageBar>
   );
