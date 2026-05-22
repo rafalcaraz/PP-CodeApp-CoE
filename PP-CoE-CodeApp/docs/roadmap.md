@@ -1312,3 +1312,86 @@ npm run build
 - Dynamic-import of recharts at the tile level (instead of route level).
   Route-level is simpler and just as effective.
 
+---
+
+## DLP Comparator — V2 scope expansion
+
+> **Status as of last session.** V1 shipped in `src/views/DlpComparator.tsx`
+> + `src/data/dlpDiff.ts`. It compares two `PolicyV2` objects across
+> *scope*, *default classification*, and *connector bucket placement*
+> (Business / Non-business / Blocked), with a search box, "show only
+> differences" toggle, and a disclaimer MessageBar at the top calling out
+> what's not yet covered.
+
+### What V1 does NOT cover (in priority order)
+
+1. **Custom connectors.** `PolicyV2.connectorGroups[].connectors[]`
+   includes any connector the policy explicitly classifies, but the
+   surface is the same shape regardless of first-party vs custom. The
+   raw payload from `ListPoliciesV2` already returns custom connectors
+   with their custom resource id (`/providers/.../apis/shared_<env>_<name>`).
+   The diff already renders them — but we should add visual affordance
+   (badge, separate sub-section) so users can tell first-party from
+   custom at a glance, and surface a "custom connectors only" filter.
+2. **Connector-specific blocked actions.** Per-connector action-level
+   blocks (e.g. "SharePoint > Delete file is blocked even though
+   SharePoint is in Non-business") are **not** in the `PolicyV2`
+   payload at all. They live on a different connector endpoint — the
+   policy detail endpoint that returns per-action `connectorActionConfigurations`.
+   We need to issue a follow-up call per policy and weave the results
+   into the comparator. Investigation needed: which connector exposes
+   it, and what the auth/version story looks like.
+3. **Endpoint configurations.** Same story as blocked actions —
+   endpoint allow/deny URL patterns are a separate per-policy endpoint
+   not returned by `ListPoliciesV2` / `GetPolicyV2`. Should diff as
+   "URL pattern added / removed / modified" rows.
+
+### Scope-section enrichment (smaller, cosmetic)
+
+The scope card today shows environment **name** and **id** for each
+environment in the policy's `environments[]`. It doesn't yet:
+
+- Resolve environment names against the inventory cache (the connector
+  returns the env display name in `name`, but if the policy was authored
+  in PPAC and the env was later renamed, the cached name may drift —
+  reconcile against `listEnvironmentsPage` from `inventory.ts` and show
+  the **current** display name with a tooltip showing the policy-time
+  name if different).
+- Provide a **search/filter** on long environment lists. Big tenants
+  may have hundreds of envs in an `ExceptEnvironments` scope — needs the
+  same `SearchBox` treatment we just added to the connector table.
+- Group "in both", "only in A", "only in B" into sub-sections with
+  collapsible headers so the diff is scannable at scale.
+- Link each environment row to the existing `/environments/:envId`
+  detail page (one click to drill into what's running in it).
+
+### Where to wire it in
+
+- New per-policy enrichment helper next to `getDlpPolicy` in
+  `src/data/dlpPolicies.ts` for whatever endpoint returns blocked
+  actions + endpoint configs. Mirror the wrapper pattern: typed
+  `DataResult<T>`, normalized errors. Schema sample should land in
+  `docs/admin-payload-samples.md` once captured from a live tenant.
+- Extend `DlpDiffResult` in `src/data/dlpDiff.ts` with two new
+  branches: `blockedActions: BlockedActionDiff[]` and
+  `endpointConfigs: EndpointConfigDiff[]`. Keep diff logic pure
+  (no React) so DLP Analysis can reuse it.
+- Add two new sections to `DlpComparator.tsx` below the connector
+  table. Same look-and-feel: KPI tile in the summary row, soft-warning
+  row backgrounds for diffs, "show only differences" toggle.
+- Remove the corresponding bullet(s) from the disclaimer MessageBar
+  as each is implemented. When the disclaimer is empty, delete it.
+
+### Open questions
+
+- Do we want to fetch the supplementary endpoint **lazily** on first
+  expand of those sections, or up-front when both policies are picked?
+  Per-record enrichment style (see `src/data/adminEnrichment.ts`) would
+  be a behind-a-button click; auto-fetch on selection matches the
+  existing one-shot UX of the comparator. Lean auto-fetch unless the
+  call is noticeably slow.
+- Custom connectors: should the diff visually separate them, or just
+  badge them inline? The badge approach keeps the unified table; the
+  split approach is two tables (first-party, custom) and easier to
+  scan when one side has many customs and the other has none.
+
