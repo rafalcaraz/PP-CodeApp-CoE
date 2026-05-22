@@ -31,6 +31,24 @@ PP-CodeApp-CoE/
   (Open in Copilot Studio, PPAC, Power Apps maker, Power Automate maker,
   Manage MCS credits, …). Read this before adding a new portal button or
   wiring the bar onto another detail page.
+- **[Admin connector inventory](./PP-CoE-CodeApp/docs/admin-connector-inventory.md)** —
+  parking lot of read-only Power Platform / PowerApps / Power Automate
+  admin-connector operations we *could* surface as **supplemental,
+  on-demand** enrichments (never part of the bulk inventory load). Read
+  this before adding a "Load admin details" / "Fetch role assignments" /
+  capacity-style button.
+- **[Admin payload samples](./PP-CoE-CodeApp/docs/admin-payload-samples.md)** —
+  real, redacted payloads captured from a live tenant for the
+  admin-connector enrichments. Sibling to `inventory-schema-samples.md`
+  but for the per-record `Get_*` / `List_*` calls. Includes the critical
+  "two governance models for env groups" caveat (legacy ruleset
+  parameters vs. new rule-based-policy `ruleSets`).
+- **[Governance rules catalog](./PP-CoE-CodeApp/docs/governance-rules-catalog.md)** —
+  the full schema reference for every known env-group rule (Model A
+  parameter buckets and Model B rule-based policies). Lists PPAC
+  display names, input schemas, value domains, and which rules have
+  typed renderers vs. fall through to raw JSON. Read this before
+  adding a new rule renderer to `src/components/ruleRenderers/`.
 
 ## Releases
 

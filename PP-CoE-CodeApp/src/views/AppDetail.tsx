@@ -13,6 +13,11 @@ import {
 } from "@fluentui/react-components";
 import { useNavigate, useParams } from "react-router-dom";
 import { getApp, shortResourceType, type AppRow } from "../data/inventory";
+import {
+  getAppAdminDetails,
+  isAppAdminDetailsSupported,
+  type AppAdminDetails,
+} from "../data/adminEnrichment";
 import { ErrorPane, LoadingPane } from "../components/Status";
 import { ConnectorsCard } from "../components/ConnectorsCard";
 import { RawJsonAccordion } from "../components/RawJsonAccordion";
@@ -24,6 +29,7 @@ import {
   DateWithRelative,
   IdentifiersAccordion,
   Meta,
+  SupplementalAdminCard,
   useDetailStyles,
 } from "../components/detail";
 
@@ -116,6 +122,7 @@ function ReadyView({
   const ownerLabel = row.ownerDisplayName || row.ownerId;
   const entityKind = resourceTypeToEntityKind(row.type);
   const hasConfig = !!(row.appType || row.subType || row.logicalName || row.appModuleId);
+  const adminSupported = isAppAdminDetailsSupported(row.type);
 
   return (
     <>
@@ -263,6 +270,20 @@ function ReadyView({
         </div>
       </Card>
 
+      {/* 5b. Admin details — supplemental, on-demand. Only meaningful
+          for canvas/code/app-builder apps; model-driven apps live in
+          Dataverse and have no equivalent on this connector. */}
+      {adminSupported && (
+        <SupplementalAdminCard
+          className={styles.colFull}
+          title="Admin details (supplemental)"
+          description="Live admin-scope fields not in the inventory graph (version, launch URL, document URI, device targeting, …). Fetched on demand from the Power Platform for Admins V2 connector — never auto-loaded."
+          helpText={<>Click to call <code>Get_AdminApp</code> for this app.</>}
+          loadFn={() => getAppAdminDetails(row.environmentId, row.id)}
+          renderReady={(details) => <AdminDetailsBody details={details} mono={styles.mono} />}
+        />
+      )}
+
       {/* 6. Identifiers — collapsed */}
       <IdentifiersAccordion
         className={styles.colFull}
@@ -280,6 +301,60 @@ function ReadyView({
       <div className={styles.colFull}>
         <RawJsonAccordion data={raw} />
       </div>
+    </>
+  );
+}
+
+// ── AdminDetailsBody ───────────────────────────────────────────────────────
+// Renders the `PowerApp` payload from the supplemental `Get_AdminApp`
+// call. Surfaces only fields *not* already shown by the inventory-derived
+// cards above (skips owner, createdBy, lastModifiedBy, shared counts,
+// isFeatured, bypassConsent — those are all in the inventory row). The
+// raw payload sits inside the same card so anything the meta grid omits
+// is one click away.
+function AdminDetailsBody({
+  details,
+  mono,
+}: {
+  details: AppAdminDetails;
+  mono: string;
+}) {
+  const styles = useDetailStyles();
+  const props = details.data.properties ?? {};
+  const tags = details.data.tags ?? {};
+  const documentUri = props.appUris?.documentUri?.value;
+  return (
+    <>
+      <div className={styles.metaGrid}>
+        <Meta label="App version">{props.appVersion || "—"}</Meta>
+        <Meta label="Description">{props.description || "—"}</Meta>
+        <Meta label="Hero app">{props.isHeroApp ? "Yes" : "No"}</Meta>
+        <Meta label="Launch URL">
+          {props.appOpenUri ? (
+            <Link href={props.appOpenUri} target="_blank" rel="noopener noreferrer">
+              Open in Power Apps
+            </Link>
+          ) : (
+            "—"
+          )}
+        </Meta>
+        <Meta label="Document URI">
+          {documentUri ? <span className={mono}>{documentUri}</span> : "—"}
+        </Meta>
+        <Meta label="Primary form factor">{tags.primaryFormFactor || "—"}</Meta>
+        <Meta label="Supports portrait">{tags.supportsPortrait || "—"}</Meta>
+        <Meta label="Supports landscape">{tags.supportsLandscape || "—"}</Meta>
+        <Meta label="Device capabilities">{tags.deviceCapabilities || "—"}</Meta>
+        <Meta label="Primary device size">
+          {tags.primaryDeviceWidth || tags.primaryDeviceHeight
+            ? `${tags.primaryDeviceWidth ?? "?"} × ${tags.primaryDeviceHeight ?? "?"}`
+            : "—"}
+        </Meta>
+        <Meta label="Siena version">{tags.sienaVersion || "—"}</Meta>
+        <Meta label="Publisher version">{tags.publisherVersion || "—"}</Meta>
+        <Meta label="Minimum API version">{tags.minimumRequiredApiVersion || "—"}</Meta>
+      </div>
+      <RawJsonAccordion data={details.raw} title="Raw admin payload" />
     </>
   );
 }

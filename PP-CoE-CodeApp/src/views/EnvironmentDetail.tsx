@@ -35,6 +35,10 @@ import {
   type ResourceCountRow,
   type ResourceRow,
 } from "../data/inventory";
+import {
+  getEnvironmentAdminDetails,
+  type EnvironmentAdminDetails,
+} from "../data/adminEnrichment";
 import { EmptyPane, ErrorPane, LoadingPane } from "../components/Status";
 import { PortalActionsBar } from "../components/PortalActions";
 import { RawJsonAccordion } from "../components/RawJsonAccordion";
@@ -42,6 +46,7 @@ import {
   DateWithRelative,
   IdentifiersAccordion,
   Meta,
+  SupplementalAdminCard,
   formatDate,
   useDetailStyles,
 } from "../components/detail";
@@ -267,6 +272,7 @@ function ReadyView({
 }: ReadyViewProps) {
   const styles = useDetailStyles();
   const page = usePageStyles();
+
   return (
     <>
       <div className={styles.colFull}>
@@ -370,6 +376,16 @@ function ReadyView({
           </div>
         </div>
       </Card>
+
+      {/* 3b. Admin details — supplemental, on-demand */}
+      <SupplementalAdminCard
+        className={styles.colFull}
+        title="Admin details (supplemental)"
+        description="Live admin-scope fields not in the inventory graph (state, version, URL, retention, …). Fetched on demand from the Power Platform for Admins V2 connector — never auto-loaded."
+        helpText={<>Click to call <code>GetEnvironmentByIdForUser</code> for this environment.</>}
+        loadFn={() => getEnvironmentAdminDetails(row.id)}
+        renderReady={(details) => <AdminDetailsBody details={details} />}
+      />
 
       {/* 4. Resource roll-up */}
       <Card className={styles.colFull}>
@@ -495,6 +511,55 @@ function ReadyView({
       <div className={styles.colFull}>
         <RawJsonAccordion data={raw} />
       </div>
+    </>
+  );
+}
+
+// ── AdminDetailsBody ───────────────────────────────────────────────────────
+// Renders the `EnvironmentResponse` payload from the supplemental
+// `GetEnvironmentByIdForUser` call. Only surfaces fields *not* already
+// shown by the inventory-derived cards above (no id/displayName/tenantId/
+// type/createdDateTime/environmentGroupId duplication). Includes the raw
+// payload inside the same card so the user can inspect anything the
+// generated model doesn't enumerate.
+function AdminDetailsBody({ details }: { details: EnvironmentAdminDetails }) {
+  const styles = useDetailStyles();
+  const d = details.data;
+  const retention = d.retentionDetails;
+  return (
+    <>
+      <div className={styles.metaGridTwo}>
+        <Meta label="State">{d.state || "—"}</Meta>
+        <Meta label="Admin mode">{d.adminMode || "—"}</Meta>
+        <Meta label="Background operations">{d.backgroundOperationsState || "—"}</Meta>
+        <Meta label="Protection level">{d.protectionLevel || "—"}</Meta>
+        <Meta label="Version">{d.version || "—"}</Meta>
+        <Meta label="Domain name">
+          {d.domainName ? <span className={styles.mono}>{d.domainName}</span> : "—"}
+        </Meta>
+        <Meta label="URL">
+          {d.url ? (
+            <Link href={d.url} target="_blank" rel="noopener noreferrer">
+              {d.url}
+            </Link>
+          ) : (
+            "—"
+          )}
+        </Meta>
+        <Meta label="Azure region">{d.azureRegion || "—"}</Meta>
+        <Meta label="Geo">{d.geo || "—"}</Meta>
+        <Meta label="Dataverse ID">
+          {d.dataverseId ? <span className={styles.mono}>{d.dataverseId}</span> : "—"}
+        </Meta>
+        <Meta label="Deleted on">
+          <DateWithRelative value={d.deletedDateTime ?? ""} />
+        </Meta>
+        <Meta label="Retention period">{retention?.retentionPeriod || "—"}</Meta>
+        <Meta label="Restore available from">
+          <DateWithRelative value={retention?.availableFromDateTime ?? ""} />
+        </Meta>
+      </div>
+      <RawJsonAccordion data={details.raw} title="Raw admin payload" />
     </>
   );
 }
