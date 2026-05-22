@@ -42,7 +42,12 @@ import {
 import { EmptyPane, ErrorPane, LoadingPane } from "../components/Status";
 import { PortalActionsBar } from "../components/PortalActions";
 import { RawJsonAccordion } from "../components/RawJsonAccordion";
-import { PolicyRuleSetsAccordion, RulesetBucketsAccordion } from "../components/ruleRenderers";
+import {
+  getPolicyRuleItems,
+  getRulesetBucketItems,
+  GovernanceRulesGrid,
+  type GovernanceRuleItem,
+} from "../components/ruleRenderers";
 import {
   DateWithRelative,
   IdentifiersAccordion,
@@ -87,22 +92,6 @@ const usePageStyles = makeStyles({
   },
   // Per-policy + per-rule-set vertical lists inside the Effective
   // Policies card body.
-  policiesList: {
-    display: "flex",
-    flexDirection: "column",
-    gap: tokens.spacingVerticalL,
-  },
-  policyBlock: {
-    display: "flex",
-    flexDirection: "column",
-    gap: tokens.spacingVerticalS,
-  },
-  section: {
-    display: "flex",
-    flexDirection: "column",
-    gap: tokens.spacingVerticalS,
-    paddingTop: tokens.spacingVerticalS,
-  },
   empty: {
     color: tokens.colorNeutralForeground3,
     fontStyle: "italic",
@@ -546,108 +535,49 @@ function GovernanceRulesBody({
 }) {
   const page = usePageStyles();
 
-  // ── Top-level summary line aggregated across both models ──────────
   const policiesData = result.policies.ok ? result.policies.data : undefined;
   const rulesetsData = result.rulesets.ok ? result.rulesets.data : undefined;
 
-  const policyCount = policiesData?.policies.length ?? 0;
-  const policyRuleCount =
-    policiesData?.policies.reduce((acc, p) => acc + (p.ruleSets?.length ?? 0), 0) ?? 0;
-  const rulesetMatchCount = rulesetsData?.matching.value?.length ?? 0;
-  const rulesetBucketCount =
-    rulesetsData?.matching.value?.reduce((acc, r) => acc + (r.parameters?.length ?? 0), 0) ?? 0;
+  // ── Flatten both governance models into one unified card list ─────
+  const items: GovernanceRuleItem[] = [
+    ...(policiesData?.policies.flatMap(getPolicyRuleItems) ?? []),
+    ...(rulesetsData?.matching.value?.flatMap((rs) =>
+      getRulesetBucketItems(rs, currentGroupId),
+    ) ?? []),
+  ];
 
+  const hasPolicyErrors = Object.keys(policiesData?.policyErrors ?? {}).length > 0;
   const nothingApplies =
-    policyCount === 0 &&
-    (policiesData?.assignments.value?.length ?? 0) === 0 &&
-    rulesetMatchCount === 0;
+    items.length === 0 &&
+    result.policies.ok &&
+    result.rulesets.ok &&
+    !hasPolicyErrors;
 
   return (
     <>
-      <Text size={300}>
-        <strong>{policyCount}</strong> rule-based polic{policyCount === 1 ? "y" : "ies"} (Model B)
-        with <strong>{policyRuleCount}</strong> rule{policyRuleCount === 1 ? "" : "s"} · {" "}
-        <strong>{rulesetMatchCount}</strong> ruleset{rulesetMatchCount === 1 ? "" : "s"}
-        {" "}(Model A) with <strong>{rulesetBucketCount}</strong> bucket
-        {rulesetBucketCount === 1 ? "" : "s"}.
-      </Text>
-
-      {nothingApplies && result.policies.ok && result.rulesets.ok && (
-        <Text size={300}>No governance rules are currently applied to this group.</Text>
+      {!result.policies.ok && (
+        <ErrorPane title="Couldn't load rule-based policies" message={result.policies.error} />
       )}
+      {!result.rulesets.ok && (
+        <ErrorPane title="Couldn't load parameter rulesets" message={result.rulesets.error} />
+      )}
+      {Object.entries(policiesData?.policyErrors ?? {}).map(([policyId, message]) => (
+        <ErrorPane key={policyId} title={`Couldn't load policy ${policyId}`} message={message} />
+      ))}
 
-      {/* ── Section 1: Rule-based policies (Model B) ──────────────── */}
-      <div className={page.section}>
-        <Text size={500} weight="semibold">Rule-based policies</Text>
-        <Text size={200} className={page.description}>
-          Named, versioned policy modules.
+      {nothingApplies ? (
+        <Text size={300} className={page.empty}>
+          No governance rules are currently applied to this group.
         </Text>
-        {!result.policies.ok ? (
-          <ErrorPane title="Couldn't load rule-based policies" message={result.policies.error} />
-        ) : policiesData!.policies.length === 0 && (policiesData!.assignments.value?.length ?? 0) === 0 ? (
-          <Text size={300} className={page.empty}>
-            No rule-based policies are assigned to this group.
+      ) : items.length > 0 ? (
+        <>
+          <Text size={300}>
+            <strong>{items.length}</strong> governance rule{items.length === 1 ? "" : "s"} apply
+            to this group.
           </Text>
-        ) : (
-          <div className={page.policiesList}>
-            {policiesData!.policies.map((policy, policyIdx) => {
-              const ruleSets = policy.ruleSets ?? [];
-              return (
-                <div
-                  key={policy.id ?? policy.name ?? `policy-${policyIdx}`}
-                  className={page.policyBlock}
-                >
-                  {ruleSets.length === 0 ? (
-                    <Text size={300}>This policy has no rule sets.</Text>
-                  ) : (
-                    <PolicyRuleSetsAccordion policy={policy} />
-                  )}
-                </div>
-              );
-            })}
-            {Object.entries(policiesData!.policyErrors).map(([policyId, message]) => (
-              <ErrorPane
-                key={policyId}
-                title={`Couldn't load policy ${policyId}`}
-                message={message}
-              />
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* ── Section 2: Parameter rulesets (Model A) ───────────────── */}
-      <div className={page.section}>
-        <Text size={500} weight="semibold">Parameter rulesets</Text>
-        <Text size={200} className={page.description}>
-          Per-resource-type setting buckets.
-        </Text>
-        {!result.rulesets.ok ? (
-          <ErrorPane title="Couldn't load parameter rulesets" message={result.rulesets.error} />
-        ) : rulesetMatchCount === 0 ? (
-          <Text size={300} className={page.empty}>
-            No parameter rulesets apply to this group.{" "}
-            <Text size={200}>
-              ({rulesetsData!.totalInTenant.toLocaleString()} ruleset
-              {rulesetsData!.totalInTenant === 1 ? "" : "s"} tenant-wide.)
-            </Text>
-          </Text>
-        ) : (
-          <>
-            <Text size={200} className={page.description}>
-              {rulesetMatchCount} of {rulesetsData!.totalInTenant.toLocaleString()} tenant-wide
-              ruleset{rulesetsData!.totalInTenant === 1 ? "" : "s"} apply to this group.
-            </Text>
-            {rulesetsData!.matching.value?.map((rs, idx) => (
-              <RulesetBucketsAccordion
-                key={rs.id ?? `ruleset-${idx}`}
-                ruleset={rs}
-                currentGroupId={currentGroupId}
-              />
-            ))}
-          </>
-        )}
-      </div>
+          <GovernanceRulesGrid items={items} />
+        </>
+      ) : null}
 
       {/* ── Raw payloads (collapsed by default — friendly view is primary) ── */}
       <RawJsonAccordion

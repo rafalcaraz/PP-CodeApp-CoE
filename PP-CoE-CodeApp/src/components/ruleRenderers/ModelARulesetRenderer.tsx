@@ -1,3 +1,9 @@
+/* eslint-disable react-refresh/only-export-components -- this file
+ * exports both per-id body components and the `getRulesetBucketItems`
+ * builder consumed by the unified `<GovernanceRulesGrid>`. Splitting
+ * them across two files would just shuffle code around without making
+ * anything clearer; we accept the Fast Refresh trade-off (component
+ * state isn't preserved across HMR for this module). */
 /**
  * Friendly renderer for **Model A** (`parameters`-bucket) rulesets —
  * the legacy-shape governance data returned by `GetRuleSetListForTenant`
@@ -26,7 +32,6 @@
 import type { ReactNode } from "react";
 import {
   Badge,
-  Divider,
   Text,
   makeStyles,
   tokens,
@@ -36,69 +41,23 @@ import {
   DismissCircleFilled,
   WarningRegular,
 } from "@fluentui/react-icons";
-import { DateWithRelative } from "../detail";
+import type { GovernanceRuleItem } from "./GovernanceRuleCard";
 
 // ─── Style + small primitives ──────────────────────────────────────────────
 
 const useStyles = makeStyles({
-  rulesetWrap: {
-    display: "flex",
-    flexDirection: "column",
-    gap: tokens.spacingVerticalS,
-  },
-  rulesetHeader: {
-    display: "flex",
-    alignItems: "baseline",
-    gap: tokens.spacingHorizontalS,
-    flexWrap: "wrap",
-  },
-  rulesetMeta: {
-    color: tokens.colorNeutralForeground3,
-    fontSize: tokens.fontSizeBase200,
-  },
   mono: {
     fontFamily: "Consolas, 'Courier New', monospace",
     fontSize: tokens.fontSizeBase200,
-  },
-  bucketsList: {
-    display: "flex",
-    flexDirection: "column",
-  },
-  bucketSection: {
-    display: "flex",
-    flexDirection: "column",
-    gap: tokens.spacingVerticalXS,
-    paddingBlock: tokens.spacingVerticalM,
   },
   bucketBody: {
     display: "flex",
     flexDirection: "column",
     gap: tokens.spacingVerticalXS,
-    paddingTop: tokens.spacingVerticalXS,
-  },
-  headerRow: {
-    display: "flex",
-    width: "100%",
-    alignItems: "center",
-    gap: tokens.spacingHorizontalM,
-    minWidth: 0,
-  },
-  headerName: {
-    minWidth: 0,
-    display: "flex",
-    alignItems: "center",
-    gap: tokens.spacingHorizontalS,
-    flexWrap: "wrap",
-  },
-  headerSummary: {
-    marginLeft: "auto",
-    color: tokens.colorNeutralForeground2,
-    fontSize: tokens.fontSizeBase200,
-    textAlign: "right",
   },
   row: {
     display: "grid",
-    gridTemplateColumns: "minmax(220px, 1fr) 2fr",
+    gridTemplateColumns: "minmax(180px, 1fr) 2fr",
     gap: tokens.spacingHorizontalM,
     alignItems: "baseline",
     paddingBlock: tokens.spacingVerticalXXS,
@@ -513,91 +472,58 @@ function ParameterRow({
   );
 }
 
-/** Render one Model A `RuleSetDto` — a small header (last-modified +
- *  cross-group chip + bucket count) plus a flat sectioned list of
- *  `(type, resourceType)` buckets. Each bucket is always visible with
- *  a clean header showing the friendly name + a right-aligned status
- *  summary, then the per-setting rows below. Buckets are separated by
- *  a thin divider. */
-export function RulesetBucketsAccordion({
-  ruleset,
-  currentGroupId,
-}: {
-  ruleset: RuleSetDto;
-  /** If supplied, the renderer adds a chip noting how many *other*
-   *  env groups also receive this ruleset. */
-  currentGroupId?: string;
-}) {
-  const styles = useStyles();
+// ─── Item builder ──────────────────────────────────────────────────────────
+
+/** Flatten one Model A `RuleSetDto`'s `parameters` buckets into the
+ *  unified `GovernanceRuleItem[]` shape consumed by
+ *  `<GovernanceRulesGrid>`. Each bucket becomes one card; the optional
+ *  cross-group note ("also applies to N other groups") rides along as
+ *  a footnote on every bucket card produced by this ruleset. */
+export function getRulesetBucketItems(
+  ruleset: RuleSetDto,
+  currentGroupId?: string,
+): GovernanceRuleItem[] {
   const buckets = ruleset.parameters ?? [];
+  const rulesetKey = ruleset.id ?? "unnamed-ruleset";
   const filterValues = ruleset.environmentFilter?.values ?? [];
   const otherGroupCount = currentGroupId
     ? filterValues.filter((v) => v.id !== currentGroupId).length
     : 0;
+  const footnote =
+    otherGroupCount > 0
+      ? `Also applies to ${otherGroupCount} other group${otherGroupCount === 1 ? "" : "s"}`
+      : undefined;
+  return buckets.map((b, idx) => {
+    const bucketKey = `${b.type}/${b.resourceType}`;
+    const display = bucketDisplayName(bucketKey, b.type, b.resourceType);
+    const values = b.value ?? [];
+    const summary =
+      bucketSummary(bucketKey, values) ||
+      `${values.length} setting${values.length === 1 ? "" : "s"}`;
+    return {
+      key: `ruleset:${rulesetKey}:${bucketKey}-${idx}`,
+      title: display,
+      summary,
+      body: <BucketBody bucketKey={bucketKey} values={values} />,
+      footnote,
+    };
+  });
+}
+
+function BucketBody({ bucketKey, values }: { bucketKey: string; values: RuleValue[] }) {
+  const styles = useStyles();
+  if (values.length === 0) {
+    return (
+      <Text size={300} className={styles.empty}>
+        No values in this bucket.
+      </Text>
+    );
+  }
   return (
-    <div className={styles.rulesetWrap}>
-      <div className={styles.rulesetHeader}>
-        {ruleset.lastModified && (
-          <Text size={200} className={styles.rulesetMeta}>
-            Last modified <DateWithRelative value={ruleset.lastModified} />
-          </Text>
-        )}
-        {otherGroupCount > 0 && (
-          <Badge appearance="outline" color="informative">
-            Also applies to {otherGroupCount} other group{otherGroupCount === 1 ? "" : "s"}
-          </Badge>
-        )}
-        <Badge appearance="outline">
-          {buckets.length} bucket{buckets.length === 1 ? "" : "s"}
-        </Badge>
-      </div>
-      {buckets.length === 0 ? (
-        <Text size={300} className={styles.empty}>
-          This ruleset has no parameter buckets.
-        </Text>
-      ) : (
-        <div className={styles.bucketsList}>
-          {buckets.map((b, idx) => {
-            const bucketKey = `${b.type}/${b.resourceType}`;
-            const display = bucketDisplayName(bucketKey, b.type, b.resourceType);
-            const values = b.value ?? [];
-            const summary =
-              bucketSummary(bucketKey, values) ||
-              `${values.length} setting${values.length === 1 ? "" : "s"}`;
-            return (
-              <div key={`${bucketKey}-${idx}`}>
-                {idx > 0 && <Divider />}
-                <div className={styles.bucketSection}>
-                  <span className={styles.headerRow}>
-                    <span className={styles.headerName}>
-                      <Text weight="semibold">{display}</Text>
-                      <Badge appearance="outline">
-                        {values.length} setting{values.length === 1 ? "" : "s"}
-                      </Badge>
-                    </span>
-                    <span className={styles.headerSummary}>{summary}</span>
-                  </span>
-                  <div className={styles.bucketBody}>
-                    {values.length === 0 ? (
-                      <Text size={300} className={styles.empty}>
-                        No values in this bucket.
-                      </Text>
-                    ) : (
-                      values.map((v, vIdx) => (
-                        <ParameterRow
-                          key={v.id ?? `value-${vIdx}`}
-                          bucketKey={bucketKey}
-                          value={v}
-                        />
-                      ))
-                    )}
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
+    <div className={styles.bucketBody}>
+      {values.map((v, vIdx) => (
+        <ParameterRow key={v.id ?? `value-${vIdx}`} bucketKey={bucketKey} value={v} />
+      ))}
     </div>
   );
 }

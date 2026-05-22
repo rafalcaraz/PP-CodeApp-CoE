@@ -1,2 +1,4 @@
-export { PolicyRuleSetsAccordion } from "./RuleSetRenderer";
-export { RulesetBucketsAccordion } from "./ModelARulesetRenderer";
+export { getPolicyRuleItems } from "./RuleSetRenderer";
+export { getRulesetBucketItems } from "./ModelARulesetRenderer";
+export { GovernanceRuleCard, GovernanceRulesGrid } from "./GovernanceRuleCard";
+export type { GovernanceRuleItem } from "./GovernanceRuleCard";

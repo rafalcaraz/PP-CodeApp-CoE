@@ -1,3 +1,9 @@
+/* eslint-disable react-refresh/only-export-components -- this file
+ * exports both per-id body components and the `getPolicyRuleItems`
+ * builder consumed by the unified `<GovernanceRulesGrid>`. Splitting
+ * them across two files would just shuffle code around without making
+ * anything clearer; we accept the Fast Refresh trade-off (component
+ * state isn't preserved across HMR for this module). */
 /**
  * Friendly per-id renderers for the **Model B** rule-based-policy
  * `ruleSets[]` payloads (the named, versioned ones with structured
@@ -36,7 +42,6 @@
 import type { ReactNode } from "react";
 import {
   Badge,
-  Divider,
   Text,
   Link,
   makeStyles,
@@ -48,6 +53,7 @@ import {
 } from "@fluentui/react-icons";
 import { friendlyConnectorName } from "../../data/inventory";
 import { RawJsonAccordion } from "../RawJsonAccordion";
+import type { GovernanceRuleItem } from "./GovernanceRuleCard";
 
 // ─── Style + small primitives ──────────────────────────────────────────────
 
@@ -99,42 +105,6 @@ const useStyles = makeStyles({
   },
   iconBad: {
     color: tokens.colorPaletteRedForeground1,
-  },
-  rulesList: {
-    display: "flex",
-    flexDirection: "column",
-  },
-  ruleSection: {
-    display: "flex",
-    flexDirection: "column",
-    gap: tokens.spacingVerticalXS,
-    paddingBlock: tokens.spacingVerticalM,
-  },
-  headerRow: {
-    display: "flex",
-    width: "100%",
-    alignItems: "center",
-    gap: tokens.spacingHorizontalM,
-    minWidth: 0,
-  },
-  headerName: {
-    minWidth: 0,
-    display: "flex",
-    alignItems: "center",
-    gap: tokens.spacingHorizontalS,
-    flexWrap: "wrap",
-  },
-  headerSummary: {
-    marginLeft: "auto",
-    color: tokens.colorNeutralForeground2,
-    fontSize: tokens.fontSizeBase200,
-    textAlign: "right",
-  },
-  ruleBody: {
-    display: "flex",
-    flexDirection: "column",
-    gap: tokens.spacingVerticalS,
-    paddingTop: tokens.spacingVerticalXS,
   },
 });
 
@@ -439,56 +409,27 @@ const RULE_METADATA: Record<string, RuleMetadata> = {
   },
 };
 
-// ─── Accordion ─────────────────────────────────────────────────────────────
+// ─── Item builder ──────────────────────────────────────────────────────────
 
-/** Render a policy's `ruleSets[]` as a flat sectioned list. Each rule
- *  is always visible (no expand/collapse) with a clean header showing
- *  the friendly display name + a right-aligned status summary, then the
- *  body content below. Rules are separated by a thin divider. */
-export function PolicyRuleSetsAccordion({
-  policy,
-}: {
-  policy: Policy;
-}) {
-  const styles = useStyles();
+/** Flatten one Model B `Policy`'s `ruleSets[]` into the unified
+ *  `GovernanceRuleItem[]` shape consumed by `<GovernanceRulesGrid>`.
+ *  Each rule becomes one card; unknown rule ids surface as a card with
+ *  a warning badge + raw-inputs body. */
+export function getPolicyRuleItems(policy: Policy): GovernanceRuleItem[] {
   const ruleSets = policy.ruleSets ?? [];
-  if (ruleSets.length === 0) {
-    return (
-      <Text size={300} className={styles.emptyHint}>
-        This policy has no rule sets.
-      </Text>
-    );
-  }
-  return (
-    <div className={styles.rulesList}>
-      {ruleSets.map((rule, idx) => {
-        const id = rule.id ?? "";
-        const inputs = rule.inputs ?? {};
-        const meta = RULE_METADATA[id];
-        const displayName = meta?.displayName ?? id ?? "(unnamed rule)";
-        const summary = meta?.summary(inputs) ?? "Unknown rule — raw inputs below";
-        return (
-          <div key={`${id}-${idx}`}>
-            {idx > 0 && <Divider />}
-            <div className={styles.ruleSection}>
-              <span className={styles.headerRow}>
-                <span className={styles.headerName}>
-                  <Text weight="semibold">{displayName}</Text>
-                  {!meta && (
-                    <Badge appearance="outline" color="warning">
-                      Unknown rule id
-                    </Badge>
-                  )}
-                </span>
-                <span className={styles.headerSummary}>{summary}</span>
-              </span>
-              <div className={styles.ruleBody}>
-                {meta ? meta.render(inputs) : <UnknownRuleBody inputs={inputs} id={id} />}
-              </div>
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  );
+  const policyKey = policy.id ?? policy.name ?? "unnamed-policy";
+  return ruleSets.map((rule, idx) => {
+    const id = rule.id ?? "";
+    const inputs = rule.inputs ?? {};
+    const meta = RULE_METADATA[id];
+    const displayName = meta?.displayName ?? id ?? "(unnamed rule)";
+    const summary = meta?.summary(inputs) ?? "Unknown rule — raw inputs below";
+    return {
+      key: `policy:${policyKey}:${id}-${idx}`,
+      title: displayName,
+      summary,
+      body: meta ? meta.render(inputs) : <UnknownRuleBody inputs={inputs} id={id} />,
+      warning: meta ? undefined : "Unknown rule id",
+    };
+  });
 }
