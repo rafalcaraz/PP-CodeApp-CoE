@@ -5,8 +5,10 @@
 
 // Models
 export * as MicrosoftCopilotStudioModel from './models/MicrosoftCopilotStudioModel';
+export * as PowerPlatformforAdminsModel from './models/PowerPlatformforAdminsModel';
 export * as PowerPlatformforAdminsV2Model from './models/PowerPlatformforAdminsV2Model';
 
 // Services
 export * from './services/MicrosoftCopilotStudioService';
+export * from './services/PowerPlatformforAdminsService';
 export * from './services/PowerPlatformforAdminsV2Service';

@@ -27,6 +27,15 @@
       ],
       "authenticationType": "oauthDefault",
       "dataSets": {}
+    },
+    "2fa18c09-c5b7-4b18-aa2c-892769ffb0d8": {
+      "id": "/providers/Microsoft.PowerApps/apis/shared_powerplatformforadmins",
+      "displayName": "Power Platform for Admins",
+      "dataSources": [
+        "powerplatformforadmins"
+      ],
+      "authenticationType": "oauth2-auth",
+      "dataSets": {}
     }
   },
   "databaseReferences": {}

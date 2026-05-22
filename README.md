@@ -58,6 +58,12 @@ PP-CodeApp-CoE/
   two placeholders you need to replace (`AGENT_NAME` + the MCS
   connectionId in `power.config.json`), the user-facing toggle at
   Settings → Feature flags, and the documented troubleshooting checklist.
+- **[Connector generator fixup](./PP-CoE-CodeApp/docs/connector-generator-fixup.md)** —
+  why `src/generated/services/*.ts` sometimes ships with invalid
+  TypeScript (hyphenated `api-version` params, etc.), how the
+  `postinstall` hook in `PP-CoE-CodeApp/package.json` auto-heals it
+  via `scripts/fixup-generated-connectors.mjs`, and what to do when
+  you add a new data source.
 
 ## Releases
 
