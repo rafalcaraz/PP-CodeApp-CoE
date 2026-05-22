@@ -32,12 +32,8 @@ import {
   type ResourceCountRow,
 } from "../data/inventory";
 import {
-  getEnvironmentGroupDetails,
   getEnvironmentGroupGovernance,
-  getEnvironmentGroupRoleAssignments,
-  type EnvironmentGroupAdminDetails,
   type EnvironmentGroupGovernanceResult,
-  type EnvironmentGroupRoleAssignmentsResult,
 } from "../data/adminEnrichment";
 import { EmptyPane, ErrorPane, LoadingPane } from "../components/Status";
 import { PortalActionsBar } from "../components/PortalActions";
@@ -84,14 +80,6 @@ const usePageStyles = makeStyles({
   envsBody: {
     padding: tokens.spacingHorizontalL,
   },
-  governanceHeading: {
-    display: "flex",
-    flexDirection: "column",
-    gap: tokens.spacingVerticalXXS,
-    marginTop: tokens.spacingVerticalM,
-  },
-  // Per-policy + per-rule-set vertical lists inside the Effective
-  // Policies card body.
   empty: {
     color: tokens.colorNeutralForeground3,
     fontStyle: "italic",
@@ -346,64 +334,15 @@ function ReadyView({ row, raw, envs, counts, envColumns }: ReadyViewProps) {
         )}
       </Card>
 
-      {/* 4b. Governance / admin enrichments — supplemental, on-demand.
-          Each card fires a single read-only call to the Power Platform
-          for Admins V2 connector. Phase 1 renders a minimal meta line
-          + the raw JSON (defaultOpen) so we can validate payload shapes
-          against the connector docs before designing friendly per-id
-          renderers. See `docs/admin-payload-samples.md` for what each
-          call returns and `docs/admin-connector-inventory.md` for the
-          pattern. */}
-      <div className={`${page.governanceHeading} ${styles.colFull}`}>
-        <Text size={500} weight="semibold">
-          Governance (supplemental)
-        </Text>
-        <Text size={200} className={page.description}>
-          Read-only admin-connector calls scoped to this environment group. Each card fires
-          independently when its button is clicked.
-        </Text>
-      </div>
-
-      <SupplementalAdminCard
-        className={styles.colHalf}
-        title="Group basics"
-        description="Admin-scope detail for this env group (parent group, children, lifecycle principals)."
-        buttonLabel="Load group basics"
-        loadingLabel="Loading group basics…"
-        helpText={<>Calls <code>GetEnvironmentGroup</code>.</>}
-        loadFn={() => getEnvironmentGroupDetails(row.id)}
-        renderReady={(details) => <GroupBasicsBody details={details} mono={styles.mono} />}
-      />
-
-      <SupplementalAdminCard
-        className={styles.colHalf}
-        title="Group role assignments"
-        description="Who has admin / contributor / reader roles on this env group."
-        buttonLabel="Load role assignments"
-        loadingLabel="Loading role assignments…"
-        helpText={<>Calls <code>ListEnvironmentGroupRoleAssignments</code>.</>}
-        loadFn={() => getEnvironmentGroupRoleAssignments(row.id)}
-        renderReady={(result) => <RoleAssignmentsBody result={result} />}
-      />
-
+      {/* 4b. Governance rules — supplemental, on-demand. Single card
+          that fires both governance APIs in parallel, then renders the
+          unified rules grid. See `docs/admin-payload-samples.md` and
+          `docs/admin-connector-inventory.md`. */}
       <SupplementalAdminCard
         className={styles.colFull}
         title="Governance rules — all rules effective on this group"
-        description={
-          <>
-            Every rule active on this group from both governance APIs — the named/versioned
-            rule-based policies (Model B) and the parameter-bucket rulesets (Model A).
-          </>
-        }
         buttonLabel="View all rules"
         loadingLabel="Loading rules from both governance models…"
-        helpText={
-          <>
-            Fires <code>GetRuleSetListForTenant</code> + filter (Model A) and{" "}
-            <code>ListRuleAssignmentsByEnvironmentGroupId</code> → parallel{" "}
-            <code>GetRuleBasedPolicyByID</code> per policy id (Model B) in parallel.
-          </>
-        }
         loadFn={() => getEnvironmentGroupGovernance(row.id)}
         renderReady={(result) => <GovernanceRulesBody result={result} currentGroupId={row.id} />}
       />
@@ -473,58 +412,7 @@ function ReadyView({ row, raw, envs, counts, envColumns }: ReadyViewProps) {
 }
 
 // ─── Supplemental admin-card bodies ──────────────────────────────────────
-// Phase 1: show a brief one-line summary + the raw payload (defaultOpen)
-// so the user can validate live shapes against `admin-payload-samples.md`
-// before we design friendly per-id renderers. Each body owns its own
-// summary line — the SupplementalAdminCard shell handles padding.
-
-function GroupBasicsBody({
-  details,
-  mono,
-}: {
-  details: EnvironmentGroupAdminDetails;
-  mono: string;
-}) {
-  const styles = useDetailStyles();
-  const d = details.data;
-  const childrenCount = d.childrenGroupIds?.length ?? 0;
-  return (
-    <>
-      <div className={styles.metaGridTwo}>
-        <Meta label="Display name">{d.displayName || "—"}</Meta>
-        <Meta label="Description">{d.description || "—"}</Meta>
-        <Meta label="Parent group ID">
-          {d.parentGroupId ? <span className={mono}>{d.parentGroupId}</span> : "—"}
-        </Meta>
-        <Meta label="Child group count">{childrenCount.toLocaleString()}</Meta>
-        <Meta label="Created on">
-          <DateWithRelative value={d.createdTime ?? ""} />
-        </Meta>
-        <Meta label="Last modified">
-          <DateWithRelative value={d.lastModifiedTime ?? ""} />
-        </Meta>
-      </div>
-      <RawJsonAccordion data={details.raw} title="Raw GetEnvironmentGroup payload" defaultOpen />
-    </>
-  );
-}
-
-function RoleAssignmentsBody({ result }: { result: EnvironmentGroupRoleAssignmentsResult }) {
-  const rows = result.data.value ?? [];
-  return (
-    <>
-      <Text size={300}>
-        <strong>{rows.length}</strong> role assignment{rows.length === 1 ? "" : "s"} on this
-        group.
-      </Text>
-      <RawJsonAccordion
-        data={result.raw}
-        title="Raw ListEnvironmentGroupRoleAssignments payload"
-        defaultOpen
-      />
-    </>
-  );
-}
+// The shell handles padding; each body owns its own summary line.
 
 function GovernanceRulesBody({
   result,

@@ -36,15 +36,15 @@ export interface GovernanceRuleItem {
 const useStyles = makeStyles({
   grid: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(380px, 1fr))",
-    gap: tokens.spacingHorizontalM,
+    gridTemplateColumns: "repeat(auto-fit, minmax(360px, 1fr))",
+    gap: tokens.spacingHorizontalS,
     alignItems: "start",
   },
   card: {
     display: "flex",
     flexDirection: "column",
-    gap: tokens.spacingVerticalS,
-    padding: `${tokens.spacingVerticalM} ${tokens.spacingHorizontalM}`,
+    gap: tokens.spacingVerticalXS,
+    padding: `${tokens.spacingVerticalS} ${tokens.spacingHorizontalM}`,
     border: `1px solid ${tokens.colorNeutralStroke2}`,
     borderRadius: tokens.borderRadiusMedium,
     backgroundColor: tokens.colorNeutralBackground1,
@@ -53,14 +53,14 @@ const useStyles = makeStyles({
     display: "flex",
     width: "100%",
     alignItems: "baseline",
-    gap: tokens.spacingHorizontalM,
+    gap: tokens.spacingHorizontalS,
     minWidth: 0,
   },
   headerName: {
     minWidth: 0,
     display: "flex",
     alignItems: "center",
-    gap: tokens.spacingHorizontalS,
+    gap: tokens.spacingHorizontalXS,
     flexWrap: "wrap",
   },
   headerSummary: {
@@ -72,7 +72,7 @@ const useStyles = makeStyles({
   body: {
     display: "flex",
     flexDirection: "column",
-    gap: tokens.spacingVerticalS,
+    gap: tokens.spacingVerticalXS,
   },
   footnote: {
     color: tokens.colorNeutralForeground3,
