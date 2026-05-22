@@ -31,6 +31,12 @@ PP-CodeApp-CoE/
   (Open in Copilot Studio, PPAC, Power Apps maker, Power Automate maker,
   Manage MCS credits, …). Read this before adding a new portal button or
   wiring the bar onto another detail page.
+- **[Admin connector inventory](./PP-CoE-CodeApp/docs/admin-connector-inventory.md)** —
+  parking lot of read-only Power Platform / PowerApps / Power Automate
+  admin-connector operations we *could* surface as **supplemental,
+  on-demand** enrichments (never part of the bulk inventory load). Read
+  this before adding a "Load admin details" / "Fetch role assignments" /
+  capacity-style button.
 
 ## Releases
 

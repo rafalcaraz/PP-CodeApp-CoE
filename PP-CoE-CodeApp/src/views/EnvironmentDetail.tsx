@@ -22,6 +22,7 @@ import {
   Dropdown,
   Option,
   Link,
+  Button,
   type OptionOnSelectData,
   type SelectionEvents,
 } from "@fluentui/react-components";
@@ -35,6 +36,10 @@ import {
   type ResourceCountRow,
   type ResourceRow,
 } from "../data/inventory";
+import {
+  getEnvironmentAdminDetails,
+  type EnvironmentAdminDetails,
+} from "../data/adminEnrichment";
 import { EmptyPane, ErrorPane, LoadingPane } from "../components/Status";
 import { PortalActionsBar } from "../components/PortalActions";
 import { RawJsonAccordion } from "../components/RawJsonAccordion";
@@ -77,6 +82,30 @@ const usePageStyles = makeStyles({
     display: "flex",
     alignItems: "center",
     gap: tokens.spacingHorizontalM,
+  },
+  // ── Supplemental admin-details card ──────────────────────────────────────
+  // The idle state collapses to a centered call-to-action; the ready state
+  // expands to a meta grid + raw JSON. Spacing matches the surrounding
+  // card bodies (`useDetailStyles().cardBody`).
+  adminCta: {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "flex-start",
+    gap: tokens.spacingVerticalS,
+    padding: tokens.spacingHorizontalL,
+  },
+  adminCtaHelp: {
+    color: tokens.colorNeutralForeground3,
+  },
+  adminReady: {
+    display: "flex",
+    flexDirection: "column",
+    gap: tokens.spacingVerticalM,
+    padding: tokens.spacingHorizontalL,
+  },
+  adminRawWrap: {
+    paddingInline: tokens.spacingHorizontalL,
+    paddingBottom: tokens.spacingVerticalL,
   },
 });
 
@@ -267,6 +296,30 @@ function ReadyView({
 }: ReadyViewProps) {
   const styles = useDetailStyles();
   const page = usePageStyles();
+
+  // ── Supplemental admin enrichment ──────────────────────────────────────
+  // Lazy, click-only call to `GetEnvironmentByIdForUser` on the
+  // Power Platform for Admins V2 connector. State is component-local and
+  // resets when the user navigates to a different environment (parent
+  // unmounts ReadyView on envId change because env transitions through
+  // `loading`). See `docs/admin-connector-inventory.md` for the pattern.
+  type AdminSlot =
+    | { kind: "idle" }
+    | { kind: "loading" }
+    | { kind: "error"; message: string }
+    | { kind: "ready"; details: EnvironmentAdminDetails };
+  const [admin, setAdmin] = useState<AdminSlot>({ kind: "idle" });
+
+  const loadAdmin = async () => {
+    setAdmin({ kind: "loading" });
+    const res = await getEnvironmentAdminDetails(row.id);
+    setAdmin(
+      res.ok
+        ? { kind: "ready", details: res.data }
+        : { kind: "error", message: res.error }
+    );
+  };
+
   return (
     <>
       <div className={styles.colFull}>
@@ -369,6 +422,47 @@ function ReadyView({
             <Meta label="Created by">{row.createdBy || "—"}</Meta>
           </div>
         </div>
+      </Card>
+
+      {/* 3b. Admin details — supplemental, on-demand */}
+      <Card className={styles.colFull}>
+        <CardHeader
+          header={<Text weight="semibold">Admin details (supplemental)</Text>}
+          description={
+            <Text size={200}>
+              Live admin-scope fields not in the inventory graph (state, version, URL, retention,
+              …). Fetched on demand from the Power Platform for Admins V2 connector — never
+              auto-loaded. {admin.kind === "ready" && (
+                <Link onClick={loadAdmin}>Refresh</Link>
+              )}
+            </Text>
+          }
+        />
+        <Divider />
+        {admin.kind === "idle" && (
+          <div className={page.adminCta}>
+            <Text size={200} className={page.adminCtaHelp}>
+              Click to call <code>GetEnvironmentByIdForUser</code> for this environment.
+            </Text>
+            <Button appearance="primary" onClick={loadAdmin}>
+              Load admin details
+            </Button>
+          </div>
+        )}
+        {admin.kind === "loading" && (
+          <div className={styles.cardBody}>
+            <LoadingPane label="Loading admin details…" />
+          </div>
+        )}
+        {admin.kind === "error" && (
+          <div className={page.adminReady}>
+            <ErrorPane title="Couldn't load admin details" message={admin.message} />
+            <div>
+              <Button onClick={loadAdmin}>Retry</Button>
+            </div>
+          </div>
+        )}
+        {admin.kind === "ready" && <AdminDetailsBody details={admin.details} />}
       </Card>
 
       {/* 4. Resource roll-up */}
@@ -494,6 +588,60 @@ function ReadyView({
       {/* 7. Raw JSON */}
       <div className={styles.colFull}>
         <RawJsonAccordion data={raw} />
+      </div>
+    </>
+  );
+}
+
+// ── AdminDetailsBody ───────────────────────────────────────────────────────
+// Renders the `EnvironmentResponse` payload from the supplemental
+// `GetEnvironmentByIdForUser` call. Only surfaces fields *not* already
+// shown by the inventory-derived cards above (no id/displayName/tenantId/
+// type/createdDateTime/environmentGroupId duplication). Includes the raw
+// payload inside the same card so the user can inspect anything the
+// generated model doesn't enumerate.
+function AdminDetailsBody({ details }: { details: EnvironmentAdminDetails }) {
+  const styles = useDetailStyles();
+  const page = usePageStyles();
+  const d = details.data;
+  const retention = d.retentionDetails;
+  return (
+    <>
+      <div className={page.adminReady}>
+        <div className={styles.metaGridTwo}>
+          <Meta label="State">{d.state || "—"}</Meta>
+          <Meta label="Admin mode">{d.adminMode || "—"}</Meta>
+          <Meta label="Background operations">{d.backgroundOperationsState || "—"}</Meta>
+          <Meta label="Protection level">{d.protectionLevel || "—"}</Meta>
+          <Meta label="Version">{d.version || "—"}</Meta>
+          <Meta label="Domain name">
+            {d.domainName ? <span className={styles.mono}>{d.domainName}</span> : "—"}
+          </Meta>
+          <Meta label="URL">
+            {d.url ? (
+              <Link href={d.url} target="_blank" rel="noopener noreferrer">
+                {d.url}
+              </Link>
+            ) : (
+              "—"
+            )}
+          </Meta>
+          <Meta label="Azure region">{d.azureRegion || "—"}</Meta>
+          <Meta label="Geo">{d.geo || "—"}</Meta>
+          <Meta label="Dataverse ID">
+            {d.dataverseId ? <span className={styles.mono}>{d.dataverseId}</span> : "—"}
+          </Meta>
+          <Meta label="Deleted on">
+            <DateWithRelative value={d.deletedDateTime ?? ""} />
+          </Meta>
+          <Meta label="Retention period">{retention?.retentionPeriod || "—"}</Meta>
+          <Meta label="Restore available from">
+            <DateWithRelative value={retention?.availableFromDateTime ?? ""} />
+          </Meta>
+        </div>
+      </div>
+      <div className={page.adminRawWrap}>
+        <RawJsonAccordion data={details.raw} title="Raw admin payload" />
       </div>
     </>
   );
