@@ -10,7 +10,6 @@ import {
   SearchBox,
   Spinner,
   Switch,
-  Text,
   Tooltip,
   makeStyles,
   mergeClasses,
@@ -320,16 +319,6 @@ export function DlpComparator() {
 
   return (
     <div className={styles.root}>
-      <header className={styles.header}>
-        <Text size={700} weight="semibold">
-          DLP Comparator
-        </Text>
-        <Text className={styles.subtitle}>
-          Pick two DLP policies to see how their scope, default classification, and connector
-          buckets differ.
-        </Text>
-      </header>
-
       <MessageBar intent="info">
         <MessageBarBody>
           <MessageBarTitle>What this V1 covers</MessageBarTitle>

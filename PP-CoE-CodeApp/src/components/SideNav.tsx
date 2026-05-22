@@ -149,10 +149,10 @@ const NAV_SECTIONS: NavSection[] = [
     defaultOpen: true,
     items: [
       {
-        key: "dlp-comparator",
-        label: "DLP Comparator",
+        key: "comparator",
+        label: "Comparator",
         icon: <BranchCompareRegular />,
-        path: "/security/dlp-comparator",
+        path: "/security/comparator",
       },
       {
         key: "dlp-impact",
