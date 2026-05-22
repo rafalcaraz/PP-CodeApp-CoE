@@ -48,7 +48,7 @@ in the main inventory store.
 
 | Connector | Connection ref id | Status | Methods used today |
 | --- | --- | --- | --- |
-| **Power Platform for Admins V2** (`powerplatformadminv2`) | `aaedf328-30da-4325-8925-c2d33cce2d38` | ✅ Wired in `power.config.json` | `QueryResources` (bulk inventory via `src/data/inventory.ts`), `GetEnvironmentByIdForUser` (supplemental enrichment via `src/data/adminEnrichment.ts`) |
+| **Power Platform for Admins V2** (`powerplatformadminv2`) | `aaedf328-30da-4325-8925-c2d33cce2d38` | ✅ Wired in `power.config.json` | `QueryResources` (bulk inventory via `src/data/inventory.ts`); `GetEnvironmentByIdForUser` + `Get_AdminApp` (supplemental enrichments via `src/data/adminEnrichment.ts`) |
 | PowerApps for Admins (`shared_powerappsforadmins`) | — | ❌ Not yet added | — |
 | Power Automate for Admins (`shared_powerautomateforadmins`) | — | ❌ Not yet added | — |
 | Power Automate Management (`shared_flowmanagement`) | — | ❌ Not yet added | — |
@@ -117,12 +117,12 @@ string parameter — omitted below for brevity.
 | `ListEnvironmentRoleAssignments` | `(environmentId)` | Env admins / makers. |
 | `ListEnvironmentGroupRoleAssignments` | `(environmentGroupId)` | Group managers (also in env groups section). |
 
-### 📱 Apps — admin scope
+### 📱 Apps (admin scope)
 
 | Op | Signature | Notes |
 | --- | --- | --- |
 | `Get_AdminApps` | `(environmentId, $top?, $skiptoken?)` | Admin-scope app list in an env. |
-| `Get_AdminApp` | `(environmentId, app)` | **The original "Get App As Admin"** — owner, sharing, ASP, suspension reason, last-modified-by. |
+| `Get_AdminApp` ✅ | `(environmentId, app)` | **The original "Get App As Admin"** — owner, sharing, ASP, suspension reason, last-modified-by, launch URL, document URI, device targeting tags, Siena/publisher versions. Shipped as the "Admin details (supplemental)" card on `views/AppDetail.tsx` for canvas / code / app-builder apps (model-driven is gated out via `isAppAdminDetailsSupported`); wrapper in `src/data/adminEnrichment.ts#getAppAdminDetails`. |
 
 > **Gap.** Per-app **role assignments** (`GetAppRoleAssignmentAsAdmin`)
 > live on the separate `shared_powerappsforadmins` connector — not on
@@ -283,9 +283,15 @@ the *existing* V2 connector (no new consent), except where noted.
    wired via `src/data/adminEnrichment.ts`. First reference implementation
    of the pattern documented below.
 
-1. **`Get_AdminApp` on canvas-app / app-builder / code-app detail pages.**
-   Adds the rich admin-scope payload (owner, shared-with, ASP, suspension
-   reason). Already-wired connector. This is the original example.
+1. ✅ **Shipped — `Get_AdminApp` on app detail page.**
+   "Admin details (supplemental)" card on `views/AppDetail.tsx`. Gated
+   via `isAppAdminDetailsSupported(row.type)` so the card is hidden
+   entirely for model-driven apps (which live in Dataverse and have no
+   equivalent admin endpoint on this connector). Surfaces app version,
+   launch URL, document URI, hero/featured posture, device targeting
+   (form factor, supported orientations, capabilities, primary device
+   width/height), and Siena/publisher versions — fields the inventory
+   row doesn't carry.
 
 2. **`ListEnvironmentRoleAssignments` on environment detail page.**
    "Who are the env admins / makers right now?" — frequent operator

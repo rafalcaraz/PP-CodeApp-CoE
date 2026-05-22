@@ -904,7 +904,126 @@ Workflow is the most distinctive.
 
 ---
 
-## Other parked ideas (one-liners)
+## "Search gap" — live admin search across properties not in inventory
+
+> **User goal.** Today, search lives entirely inside the inventory graph
+> (the `PowerPlatformResources` table behind `QueryResources` in
+> `src/data/inventory.ts`). That graph projects a *curated* slice of each
+> resource's `properties` bag — the columns we read in
+> `docs/inventory-schema-samples.md`. Anything not in that projection is
+> invisible to search.
+>
+> Concrete questions admins want to answer that inventory cannot:
+>
+> - "I have the URL `https://acme-finops.crm.dynamics.com/`. Which
+>   environment is that?"
+> - "Which environment is wired to Dataverse instance ID `<guid>`?"
+> - "Which canvas apps were built from a SharePoint list form
+>   (`appType == 'SharePointForm'`)?"
+> - "Which apps have `bypassConsent == true` AND a launch URL on a
+>   specific domain?"
+> - "Find the flow whose definition triggers off a particular SQL table"
+>   (definition isn't in inventory at all).
+>
+> The shared shape: *enumerate via an admin connector, filter
+> client-side, surface matches with their record IDs so the user can
+> click through to the existing detail page.*
+
+### Why it doesn't belong on a detail page
+
+The supplemental-enrichment pattern documented in
+[`admin-connector-inventory.md`](./admin-connector-inventory.md) is
+*per-record* — one record, one click, one call. This is different:
+**one search, N calls** where N is the number of records of that kind
+in the tenant. The cost shape is multi-second to multi-minute, and the
+right home is its own dedicated surface where progress, cancellation,
+and result accumulation are first-class.
+
+### Proposed UX — `/admin/search`
+
+- New top-level route, hidden under an "Admin" section in the side nav.
+- A pick-the-search-mode dropdown (one mode per supported predicate
+  bundle, see below), a small inputs form, and a results table.
+- **Before scan starts**, show the cost estimate up front: *"This will
+  fan out across ~134 environments. Estimated 30–90 seconds. Continue?"*
+  with explicit confirm/cancel buttons.
+- During the scan: progress bar (`X of N envs scanned`), in-flight call
+  count, partial results streaming in as each call completes, a Cancel
+  button that stops the queue immediately.
+- Results table: matched record + the field that matched + a link to
+  the existing detail page.
+- Session-scoped result cache keyed on `{mode, predicate}` so the user
+  can refine the predicate against cached enumeration data without
+  re-running the fan-out.
+
+### Search modes (first cut)
+
+Map of `searchMode → enumeration primitive + per-record predicate`.
+All enumerations are read-only Get/List ops already documented in
+`admin-connector-inventory.md`.
+
+| Mode | Enumeration | Filter on | Fan-out cost |
+| --- | --- | --- | --- |
+| **Environment by URL / domain name / Dataverse ID** | `ListEnvironmentsForUser` (1 call, paginated) → optional `GetEnvironmentByIdForUser` per env if list payload doesn't carry `url` | `url`, `domainName`, `dataverseId` | 1 + N calls if drill needed (N = env count). |
+| **Canvas app by `appType` / launch URL / document URI / form factor / hero status** | iterate envs via `ListEnvironmentsForUser`, call `Get_AdminApps(envId)` per env, optionally drill `Get_AdminApp(envId, appId)` for fields only on the single-record payload | `properties.appType`, `properties.appOpenUri`, `properties.appUris.documentUri.value`, `tags.primaryFormFactor`, `properties.isHeroApp` | 1 + N + (matches × 1) — N = env count. Drill is per match, not per app. |
+| **Flow by trigger / connector / definition snippet** | `GetFlows` (tenant-wide DSR-paged) + `ListFlowActions(envId, …)` filtered by connector/parameter | trigger type, connector, parameter contains | One DSR sweep plus per-env action queries; this one is genuinely expensive — keep behind a "I know what I'm doing" affordance. |
+| **App / flow by owner** | inventory already has `ownerId` and we surface display name; this should be a saved-query template, **not** a fan-out search. Note it here so we don't accidentally build the expensive path. | — | 0 (inventory-only). |
+
+### Implementation sketch
+
+- **Where the calls go.** Extend `src/data/adminEnrichment.ts` (or
+  branch off a new `src/data/adminSearch.ts` if it grows large) with
+  small functions per enumeration primitive: `listAllEnvironments()`,
+  `listAdminAppsInEnv(envId)`, etc. Each returns `DataResult<T[]>` and
+  handles continuation tokens.
+- **Concurrency + throttling.** Reuse the slot-limiter +
+  TTL-cache + 429-retry machinery already in `src/data/inventory.ts`
+  (`__acquireQuerySlot` / `__cacheGet` / `__isRateLimit`). Best path:
+  extract those into `src/data/connectorLimiter.ts` so both inventory
+  and search share one tenant-wide rate budget — otherwise we'll
+  throttle ourselves. **Sized for admin connector limit**, not for
+  inventory's `~6 req/s` — confirm before rolling out.
+- **Cancellation.** Each enumeration takes an `AbortSignal`. The
+  outer scan installs a `new AbortController()` and the Cancel button
+  calls `.abort()`. Limiter callers `throw` on abort and the queue
+  unwinds.
+- **Result store.** Per-session `Map<searchKey, { records, scannedAt, fromCache }>`.
+  Wire the existing `invalidateInventoryCache()` to also drop these so
+  one Refresh button clears everything.
+- **Telemetry.** Once we have telemetry generally (we don't today), log
+  scan mode + record-count + duration so we can see which gaps are
+  actually used. Until then, leave hooks but no implementation.
+
+### Open questions before building
+
+1. **Side-nav placement.** Is "Admin search" a peer of Dashboards /
+   Apps / Flows? Or does it live under a new "Admin" group with the
+   capacity / rules pages from the shortlist?
+2. **Multi-tenant scope.** All current calls are tenant-implicit. Do
+   we ever want cross-tenant search? (Probably no — out of scope.)
+3. **Result actions.** Match → click → detail page is the minimum.
+   Do we want bulk actions on results (export CSV, send to a dashboard
+   tile)? Defer until users actually ask.
+4. **Auth model.** Some search paths might surface envs the caller
+   can't see in inventory (rare but possible if inventory filtering and
+   admin enumeration diverge). UI should fall back to "limited info"
+   rather than crashing the detail page.
+5. **Is there an actual API for some of these?** Worth checking:
+   PowerApps admin endpoints sometimes expose `$filter` server-side, in
+   which case a search mode collapses to one call. Look before building
+   the per-env fanout.
+
+### Why not just expand inventory's projection
+
+Tempting, but the resource-graph projection is shared across every
+QueryResources caller (KPI tiles, dashboards, lists, detail pages). Each
+extra column makes every query heavier. The right move is to keep the
+projection lean for the high-frequency paths and run fan-out enrichment
+for the rare "find by uncommon property" path.
+
+---
+
+
 
 - **Connector inventory rollup** — top-level view that fans out across all
   apps/flows/agents and rolls up which connectors are most used, which

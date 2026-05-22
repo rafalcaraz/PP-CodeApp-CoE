@@ -10,9 +10,17 @@ import {
   Badge,
   Link,
   Divider,
+  Button,
+  makeStyles,
+  tokens,
 } from "@fluentui/react-components";
 import { useNavigate, useParams } from "react-router-dom";
 import { getApp, shortResourceType, type AppRow } from "../data/inventory";
+import {
+  getAppAdminDetails,
+  isAppAdminDetailsSupported,
+  type AppAdminDetails,
+} from "../data/adminEnrichment";
 import { ErrorPane, LoadingPane } from "../components/Status";
 import { ConnectorsCard } from "../components/ConnectorsCard";
 import { RawJsonAccordion } from "../components/RawJsonAccordion";
@@ -26,6 +34,33 @@ import {
   Meta,
   useDetailStyles,
 } from "../components/detail";
+
+// Page-specific styles for the supplemental admin-details card. Mirrors
+// the equivalent block in EnvironmentDetail.tsx; once a third detail page
+// adopts the same pattern we should hoist these onto `useDetailStyles`
+// (or extract a `<SupplementalActionCard>` component).
+const usePageStyles = makeStyles({
+  adminCta: {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "flex-start",
+    gap: tokens.spacingVerticalS,
+    padding: tokens.spacingHorizontalL,
+  },
+  adminCtaHelp: {
+    color: tokens.colorNeutralForeground3,
+  },
+  adminReady: {
+    display: "flex",
+    flexDirection: "column",
+    gap: tokens.spacingVerticalM,
+    padding: tokens.spacingHorizontalL,
+  },
+  adminRawWrap: {
+    paddingInline: tokens.spacingHorizontalL,
+    paddingBottom: tokens.spacingVerticalL,
+  },
+});
 
 type State =
   | { kind: "loading" }
@@ -113,9 +148,33 @@ function ReadyView({
   navigate: ReturnType<typeof useNavigate>;
 }) {
   const styles = useDetailStyles();
+  const page = usePageStyles();
   const ownerLabel = row.ownerDisplayName || row.ownerId;
   const entityKind = resourceTypeToEntityKind(row.type);
   const hasConfig = !!(row.appType || row.subType || row.logicalName || row.appModuleId);
+  const adminSupported = isAppAdminDetailsSupported(row.type);
+
+  // ── Supplemental admin enrichment ──────────────────────────────────────
+  // Lazy, click-only call to `Get_AdminApp` on the Power Platform for
+  // Admins V2 connector. Same state-machine shape as EnvironmentDetail's
+  // supplemental card. Gated on `adminSupported` because model-driven
+  // apps don't have a classic PowerApps admin endpoint.
+  type AdminSlot =
+    | { kind: "idle" }
+    | { kind: "loading" }
+    | { kind: "error"; message: string }
+    | { kind: "ready"; details: AppAdminDetails };
+  const [admin, setAdmin] = useState<AdminSlot>({ kind: "idle" });
+
+  const loadAdmin = async () => {
+    setAdmin({ kind: "loading" });
+    const res = await getAppAdminDetails(row.environmentId, row.id);
+    setAdmin(
+      res.ok
+        ? { kind: "ready", details: res.data }
+        : { kind: "error", message: res.error }
+    );
+  };
 
   return (
     <>
@@ -263,6 +322,52 @@ function ReadyView({
         </div>
       </Card>
 
+      {/* 5b. Admin details — supplemental, on-demand. Only meaningful
+          for canvas/code/app-builder apps; model-driven apps live in
+          Dataverse and have no equivalent on this connector. */}
+      {adminSupported && (
+        <Card className={styles.colFull}>
+          <CardHeader
+            header={<Text weight="semibold">Admin details (supplemental)</Text>}
+            description={
+              <Text size={200}>
+                Live admin-scope fields not in the inventory graph (version, launch URL, document
+                URI, device targeting, …). Fetched on demand from the Power Platform for Admins
+                V2 connector — never auto-loaded.{" "}
+                {admin.kind === "ready" && <Link onClick={loadAdmin}>Refresh</Link>}
+              </Text>
+            }
+          />
+          <Divider />
+          {admin.kind === "idle" && (
+            <div className={page.adminCta}>
+              <Text size={200} className={page.adminCtaHelp}>
+                Click to call <code>Get_AdminApp</code> for this app.
+              </Text>
+              <Button appearance="primary" onClick={loadAdmin}>
+                Load admin details
+              </Button>
+            </div>
+          )}
+          {admin.kind === "loading" && (
+            <div className={styles.cardBody}>
+              <LoadingPane label="Loading admin details…" />
+            </div>
+          )}
+          {admin.kind === "error" && (
+            <div className={page.adminReady}>
+              <ErrorPane title="Couldn't load admin details" message={admin.message} />
+              <div>
+                <Button onClick={loadAdmin}>Retry</Button>
+              </div>
+            </div>
+          )}
+          {admin.kind === "ready" && (
+            <AdminDetailsBody details={admin.details} stylesMono={styles.mono} pageStyles={page} />
+          )}
+        </Card>
+      )}
+
       {/* 6. Identifiers — collapsed */}
       <IdentifiersAccordion
         className={styles.colFull}
@@ -279,6 +384,66 @@ function ReadyView({
       {/* 7. Raw JSON */}
       <div className={styles.colFull}>
         <RawJsonAccordion data={raw} />
+      </div>
+    </>
+  );
+}
+
+// ── AdminDetailsBody ───────────────────────────────────────────────────────
+// Renders the `PowerApp` payload from the supplemental `Get_AdminApp`
+// call. Surfaces only fields *not* already shown by the inventory-derived
+// cards above (skips owner, createdBy, lastModifiedBy, shared counts,
+// isFeatured, bypassConsent — those are all in the inventory row). The
+// raw payload sits inside the same card so anything the meta grid omits
+// is one click away.
+function AdminDetailsBody({
+  details,
+  stylesMono,
+  pageStyles,
+}: {
+  details: AppAdminDetails;
+  stylesMono: string;
+  pageStyles: ReturnType<typeof usePageStyles>;
+}) {
+  const styles = useDetailStyles();
+  const props = details.data.properties ?? {};
+  const tags = details.data.tags ?? {};
+  const documentUri = props.appUris?.documentUri?.value;
+  return (
+    <>
+      <div className={pageStyles.adminReady}>
+        <div className={styles.metaGrid}>
+          <Meta label="App version">{props.appVersion || "—"}</Meta>
+          <Meta label="Description">{props.description || "—"}</Meta>
+          <Meta label="Hero app">{props.isHeroApp ? "Yes" : "No"}</Meta>
+          <Meta label="Launch URL">
+            {props.appOpenUri ? (
+              <Link href={props.appOpenUri} target="_blank" rel="noopener noreferrer">
+                Open in Power Apps
+              </Link>
+            ) : (
+              "—"
+            )}
+          </Meta>
+          <Meta label="Document URI">
+            {documentUri ? <span className={stylesMono}>{documentUri}</span> : "—"}
+          </Meta>
+          <Meta label="Primary form factor">{tags.primaryFormFactor || "—"}</Meta>
+          <Meta label="Supports portrait">{tags.supportsPortrait || "—"}</Meta>
+          <Meta label="Supports landscape">{tags.supportsLandscape || "—"}</Meta>
+          <Meta label="Device capabilities">{tags.deviceCapabilities || "—"}</Meta>
+          <Meta label="Primary device size">
+            {tags.primaryDeviceWidth || tags.primaryDeviceHeight
+              ? `${tags.primaryDeviceWidth ?? "?"} × ${tags.primaryDeviceHeight ?? "?"}`
+              : "—"}
+          </Meta>
+          <Meta label="Siena version">{tags.sienaVersion || "—"}</Meta>
+          <Meta label="Publisher version">{tags.publisherVersion || "—"}</Meta>
+          <Meta label="Minimum API version">{tags.minimumRequiredApiVersion || "—"}</Meta>
+        </div>
+      </div>
+      <div className={pageStyles.adminRawWrap}>
+        <RawJsonAccordion data={details.raw} title="Raw admin payload" />
       </div>
     </>
   );

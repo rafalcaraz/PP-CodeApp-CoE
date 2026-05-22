@@ -25,7 +25,10 @@
  */
 
 import { PowerPlatformforAdminsV2Service } from "../generated";
-import type { EnvironmentResponse } from "../generated/models/PowerPlatformforAdminsV2Model";
+import type {
+  EnvironmentResponse,
+  PowerApp,
+} from "../generated/models/PowerPlatformforAdminsV2Model";
 import type { DataResult } from "./inventory";
 
 const API_VERSION = "2024-10-01";
@@ -84,6 +87,67 @@ export async function getEnvironmentAdminDetails(
   try {
     const result = await PowerPlatformforAdminsV2Service.GetEnvironmentByIdForUser(
       envId,
+      API_VERSION
+    );
+    if (!result.success) {
+      return { ok: false, error: formatError(result.error) };
+    }
+    const data = result.data ?? {};
+    return { ok: true, data: { data, raw: data } };
+  } catch (err) {
+    return { ok: false, error: formatError(err) };
+  }
+}
+
+/** Result of an app admin-details enrichment.
+ *  See `EnvironmentAdminDetails` for the rationale on the typed/raw split. */
+export interface AppAdminDetails {
+  data: PowerApp;
+  raw: unknown;
+}
+
+/** Resource types for which `Get_AdminApp` is meaningful. The classic
+ *  PowerApps admin endpoint covers canvas apps, code apps (canvas under
+ *  the hood), and the unified app-builder ("apps") surface. Model-driven
+ *  apps live in Dataverse and have no equivalent on this connector — UI
+ *  should hide the enrichment card for that type entirely. */
+const APP_ADMIN_SUPPORTED_TYPES: ReadonlySet<string> = new Set([
+  "microsoft.powerapps/canvasapps",
+  "microsoft.powerapps/codeapps",
+  "microsoft.powerapps/apps",
+]);
+
+/** Whether the given inventory resource type can be enriched by
+ *  `getAppAdminDetails`. Lets the UI gate the button without leaking the
+ *  list of supported types into every detail page. */
+export function isAppAdminDetailsSupported(resourceType: string | undefined): boolean {
+  return !!resourceType && APP_ADMIN_SUPPORTED_TYPES.has(resourceType);
+}
+
+/**
+ * Fetch the admin-scope detail payload for a single Power App.
+ *
+ * Backed by the connector's `Get_AdminApp` operation. Returns the rich
+ * `PowerApp` shape — owner principal, version, launch URI, document URI,
+ * device targeting tags, Siena/publisher versions, etc.
+ *
+ * **Scope.** Only meaningful for canvas / code / app-builder apps; see
+ * `isAppAdminDetailsSupported`. Callers should guard *before* calling so
+ * model-driven apps don't trigger a hopeless API request.
+ *
+ * **On-demand only.** Same rule as `getEnvironmentAdminDetails` —
+ * wire behind a user click, not a `useEffect`.
+ */
+export async function getAppAdminDetails(
+  environmentId: string,
+  appId: string
+): Promise<DataResult<AppAdminDetails>> {
+  if (!environmentId) return { ok: false, error: "Environment ID is required." };
+  if (!appId) return { ok: false, error: "App ID is required." };
+  try {
+    const result = await PowerPlatformforAdminsV2Service.Get_AdminApp(
+      environmentId,
+      appId,
       API_VERSION
     );
     if (!result.success) {
