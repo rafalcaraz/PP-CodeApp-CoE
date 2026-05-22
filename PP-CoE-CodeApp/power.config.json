@@ -34,7 +34,6 @@
       "dataSources": [
         "powerplatformforadmins"
       ],
-      "authenticationType": "oauth2-auth",
       "dataSets": {}
     }
   },
