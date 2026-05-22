@@ -69,8 +69,11 @@ const CopilotChatLauncher = lazy(() =>
 const SettingsView = lazy(() =>
   import("./views/SettingsView").then((m) => ({ default: m.SettingsView }))
 );
-const DlpComparator = lazy(() =>
-  import("./views/DlpComparator").then((m) => ({ default: m.DlpComparator }))
+const Comparator = lazy(() =>
+  import("./views/Comparator").then((m) => ({ default: m.Comparator }))
+);
+const Impact = lazy(() =>
+  import("./views/Impact").then((m) => ({ default: m.Impact }))
 );
 
 const useStyles = makeStyles({
@@ -125,7 +128,10 @@ function AppShell() {
               <Route path="/agents/:agentId" element={<AgentDetail />} />
               <Route path="/queries" element={<QueriesView />} />
               <Route path="/settings" element={<SettingsView />} />
-              <Route path="/security/dlp-comparator" element={<DlpComparator />} />
+              <Route path="/security/dlp-comparator" element={<Comparator />} />
+              <Route path="/security/comparator" element={<Comparator />} />
+              <Route path="/security/dlp-impact" element={<Impact />} />
+              <Route path="/security/impact" element={<Impact />} />
               <Route path="*" element={<HomeRedirect />} />
             </Routes>
           </Suspense>

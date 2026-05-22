@@ -1375,7 +1375,7 @@ environment in the policy's `environments[]`. It doesn't yet:
 - Extend `DlpDiffResult` in `src/data/dlpDiff.ts` with two new
   branches: `blockedActions: BlockedActionDiff[]` and
   `endpointConfigs: EndpointConfigDiff[]`. Keep diff logic pure
-  (no React) so DLP Analysis can reuse it.
+  (no React) so **DLP Impact** (`src/views/DlpImpact.tsx`) can reuse it.
 - Add two new sections to `DlpComparator.tsx` below the connector
   table. Same look-and-feel: KPI tile in the summary row, soft-warning
   row backgrounds for diffs, "show only differences" toggle.
@@ -1394,4 +1394,217 @@ environment in the policy's `environments[]`. It doesn't yet:
   badge them inline? The badge approach keeps the unified table; the
   split approach is two tables (first-party, custom) and easier to
   scan when one side has many customs and the other has none.
+
+---
+
+## DLP Impact — V2 enhancements
+
+> **Status as of last session.** V1 shipped in `src/views/DlpImpact.tsx`
+> + `src/data/dlpImpact.ts`. Pick a DLP policy → pick a currently
+> non-Blocked first-party connector from that policy → see every app,
+> flow, and agent in the policy's scope (`AllEnvironments` /
+> `OnlyEnvironments` / `ExceptEnvironments` / `SingleEnvironment`) that
+> currently uses the connector. KPI strip (apps / flows / agents / envs /
+> owners), flat sortable table with detail-page links, CSV export.
+> `ExceptEnvironments` is filtered client-side because the typed
+> `QueryFilterOp` union doesn't expose `!in~`; revisit if/when that
+> changes upstream.
+
+### V2 parking lot (in rough priority order)
+
+1. **Custom connectors.** V1 hides them from the picker because their
+   id shape (`/providers/.../apis/shared_<env>_<name>`) doesn't slug
+   down to `shared_<x>` cleanly and the inventory's `__connectorBag`
+   `has` filter is tokenized on the slug form. Needs either a
+   per-shape matcher or a switch from `has` to `contains` (with the
+   false-positive risk that implies). Once supported, drop the
+   `_type === "Custom"` filter in `extractNonBlockedConnectors` and the
+   warning MessageBar in the view.
+2. **Reverse mode** ("what would unblock?"). Pick a currently-Blocked
+   connector and show which apps/flows/agents *would gain capability*
+   if unblocked. Symmetric query (`__connectorBag has 'slug'` + scope),
+   but the framing flips and the warn/ok tones invert. Probably a
+   toggle on the same page rather than a new route.
+3. **Multi-connector simulation.** Select N connectors at once and see
+   the union of impact + per-connector breakdown. The KQL would use
+   `has_any` instead of `has`. Useful for "what if we tightened the
+   whole `Confidential` bucket?" scenarios.
+4. **Full classification-shift simulator.** V1 only simulates
+   `current → Blocked`. The next-level version lets the user pick a
+   connector and a *target* classification (Confidential / General /
+   Blocked) and shows two flavors of impact:
+   - Direct: which resources currently use it on the source side that
+     would break under the new bucket (only meaningful when target is
+     more restrictive — i.e. → Blocked).
+   - Cross-bucket: which resources pair the connector with another in
+     a way that would *now* violate the policy's cross-bucket rule
+     (Business + Non-business cannot share a flow). For example
+     "SharePoint Business → Non-business: 23 flows that combine SP
+     with another Business connector would break."
+   This subsumes "Cross-bucket move analysis" from earlier drafts.
+   Requires loading every connector reference on every impacted
+   resource (already in `properties.powerPlatformConnectors`) and
+   applying the policy's bucket rule client-side.
+5. **Connector-action level.** Once the DLP Comparator V2 adds blocked-
+   action data (see above), DLP Impact should let users simulate
+   blocking a *specific operation* (`OPERATION_FIELD` sentinel already
+   exists in `inventory.ts`), not just the whole connector.
+6. **Save-as-saved-query.** Hand off the underlying `QuerySpec` to
+   `views/QueriesView.tsx` so a power user can keep tweaking it. The
+   spec is already constructed in `queryDlpImpact` — exposing it would
+   be a thin `dlpImpactToQuerySpec(policy, slug)` helper.
+7. **Group by environment / by type.** V1 went with a flat sortable
+   table for speed. If users routinely want the grouped view (e.g.
+   "show me the blast radius env-by-env"), wire it as a layout toggle
+   in the toolbar — keep the underlying `DlpImpactResult` shape stable.
+8. **Result diff across runs.** "Last week 12 resources used this
+   connector; today 18." Would need lightweight persistence in
+   localStorage keyed by `policyId + connectorSlug`.
+
+### Notes for whoever picks this up
+
+- The data-layer helpers (`extractNonBlockedConnectors`,
+  `countExcludedConnectors`, `resolveDlpScope`, `queryDlpImpact`) are
+  all pure / typed and easy to unit-test in isolation if/when we add a
+  test runner. They take a `PolicyV2` directly so you don't need to
+  mock the connector layer to test them.
+- The view uses `getEnvironmentNameMap()` from `inventory.ts` to
+  resolve env ids in the scope card; the 5-minute env-map cache means
+  this is essentially free on repeat renders.
+- Connector slug `shared_sql` matches the inventory shape after
+  `normalizeConnectorId`. Don't accidentally pass the policy's raw
+  ARM-path id (`/providers/.../apis/shared_sql`) into the inventory
+  query — it will tokenize wrong and return zero hits.
+
+---
+
+## Unified Comparator + Impact (multi-subject)
+
+> **Status as of last session.** Two stand-alone DLP tools shipped:
+> `DlpComparator` (compare two `PolicyV2` policies on scope + default +
+> per-connector bucket) and `DlpImpact` (pick a policy + a connector,
+> see which resources in the policy's scope use it). The Environment
+> detail page also surfaces a DLP coverage card with ACP cross-check.
+>
+> The pattern obviously generalizes: an admin asking "what's the diff
+> between these two governance things?" or "what would change if I
+> tweaked this thing?" doesn't care whether "thing" is a DLP, an env
+> group, or an ACP rule. Today each subject would need its own page.
+> This roadmap section captures the planned unification.
+
+### The two pages, multi-subject
+
+Keep two top-level entry points but give each a **subject tab strip**.
+Picker + diff/impact content swaps per subject; the result shell (KPI
+strip + table + CSV export) is shared:
+
+| Page | Subject tabs (V1) | What changes per tab |
+| --- | --- | --- |
+| **Comparator** | `[DLP policies]` (shipped) · `[Environment groups]` · `[ACPs]` | Picker pair + diff layer. |
+| **Impact** | `[DLP]` (shipped) · `[ACPs]` | Picker A (DLP policy *or* env group) + picker B (connector). |
+
+Sidenav under Security collapses from `DLP Comparator` / `DLP Impact`
+to `Comparator` / `Impact`. The current routes
+(`/security/dlp-comparator`, `/security/dlp-impact`) become tab-aware
+(e.g. `/security/comparator?subject=dlp` or hash-based) so existing
+bookmarks survive.
+
+### Comparator — Environment groups (new)
+
+Compare every effective governance rule on two env groups:
+
+- **Model A** (`parameters` buckets) — already fetched by
+  `getEnvironmentGroupRulesets`. Diff each `(type, resourceType, id)`
+  triplet across both sides; render with the existing
+  `ModelARulesetRenderer`-style logic but in a diff mode (added /
+  removed / changed badges).
+- **Model B** (`ruleSets`) — already fetched by
+  `getEnvironmentGroupEffectivePolicies`. Diff each rule by `id`. Body
+  rendering reuses `RULE_METADATA.<id>.render` from
+  `RuleSetRenderer.tsx` wrapped in left/right cells.
+- **Environment membership** (later) — diff which envs are *in* each
+  group via `listEnvironmentsInGroup`.
+
+Pure diff layer lands in `src/data/envGroupDiff.ts` (mirrors `dlpDiff.ts`).
+
+### Comparator — ACPs (new, narrow)
+
+Focused mode that diffs only the `ConnectorManagement` rule between
+two env groups. Smaller than the full env-group diff, useful when an
+admin specifically wants to answer "what's different about the
+connector allow-list on these two groups?"
+
+V1 scope = **per-connector membership + AllowedActionsMode**:
+
+- Set diff over `AllowedConnectorList[].AllowedConnector` (normalize
+  via `normalizeConnectorSlug` from `dlpImpact.ts` — same ARM-path-to-
+  slug treatment we use everywhere).
+- For connectors present on both sides, show
+  `AllowedActionsMode` and `AllowedConnectionTypesMode` side by side.
+  Flag rows where either differs.
+- Surface `AdvancedConnectorPoliciesOnly.EnableAdvancedConnectorPoliciesOnly`
+  diff at the top (same / one-side-only / both with same value).
+
+**Deferred to V2:** per-action diff (`AllowedActions[]` set-diff per
+connector). Doable but action lists are long (50+ per connector for
+SQL) and need a dedicated drill-down UI — better as a follow-up than
+crammed into V1.
+
+### Impact — ACPs (new)
+
+Same "pick a connector, see what would lose access" framing as
+`DlpImpact`, but with an env-group entry point:
+
+- Picker A = env group that has a `ConnectorManagement` rule (call
+  `getEnvironmentGroupAcpStatus` to filter).
+- Picker B = connector slug (freeform + suggestions from the group's
+  current `AllowedConnectorList`).
+- Scope = list envs in the group via inventory
+  (`where properties.environmentGroupId == groupId`); reuse
+  `queryDlpImpact`'s `__connectorBag has_any` machinery with that
+  derived env list.
+- Result = resources in those envs using the connector — these would
+  lose access if you removed it from the ACP allow-list (or if the
+  group flipped to ACP-only mode without it).
+
+ACP impact's "before → after" framing is **removed from allow-list**,
+not "moved to Blocked" — wording in the result banner differs but
+otherwise the table is identical.
+
+### Engineering staging
+
+Don't try to land this as a single PR. Sequence:
+
+1. **Shared shell extraction** — pull the picker-pair scaffold + diff
+   summary KPI strip + diff row table out of `DlpComparator.tsx` into
+   `src/components/ComparatorShell.tsx`. `DlpComparator` becomes a
+   thin consumer. No behavior change. (Lowest risk, sets up the rest.)
+2. **Sidenav rename + tabbed routes** — rename to `Comparator` /
+   `Impact`, add the subject tab strip with only the DLP tab live.
+   Old URLs redirect to `?subject=dlp`. Still no new functionality.
+3. **Comparator: ACPs tab** — narrow scope (connector membership +
+   mode flags), reuses the shell. Easiest second subject to add.
+4. **Comparator: Environment groups tab** — full rule diff (Model A + B).
+   Heaviest single piece — own commit.
+5. **Impact: ACP tab** — env-group picker + scope derivation +
+   freeform connector entry. Reuses the result table.
+6. **Action-level diff in ACP comparator** — V2. Deferred per the user.
+
+Each stage ships independently with a working sidenav/tab state at
+every point. Don't merge stages.
+
+### Notes for whoever picks this up
+
+- The `RuleSetRenderer.tsx` registry (`RULE_METADATA`) is already the
+  right home for per-rule body renderers. The diff mode just wraps the
+  same body in a left/right cell; don't fork the renderer.
+- `getEnvironmentGroupEffectivePolicies` + `getEnvironmentGroupRulesets`
+  + `summarizeAcpStatus` already give us almost every piece of data
+  for the new subjects. The work is mostly UI + a thin diff layer.
+- For the **ACP Impact** scope, use `where("properties.environmentGroupId", "==", "'<groupId>'")`
+  against `Environment` type to enumerate envs in the group — this is
+  already how `listEnvironmentsInGroup` works. Pass those env ids
+  into the same `queryDlpImpact`-style filter with a "scope source =
+  group membership" label in the result banner.
+
 

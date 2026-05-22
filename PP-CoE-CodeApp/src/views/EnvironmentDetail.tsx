@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   makeStyles,
   tokens,
@@ -22,9 +22,15 @@ import {
   Dropdown,
   Option,
   Link,
+  Input,
+  Button,
+  MessageBar,
+  MessageBarBody,
+  MessageBarTitle,
   type OptionOnSelectData,
   type SelectionEvents,
 } from "@fluentui/react-components";
+import { ChevronDownRegular, ChevronRightRegular } from "@fluentui/react-icons";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   countResourcesByTypeForEnvironment,
@@ -39,6 +45,15 @@ import {
   getEnvironmentAdminDetails,
   type EnvironmentAdminDetails,
 } from "../data/adminEnrichment";
+import {
+  getEnvironmentDlpAndAcpStatus,
+  ppacDlpPolicyUrl,
+  ppacEnvironmentGroupUrl,
+  type DlpAndAcpStatus,
+  type DlpPolicyEvaluation,
+  type DlpScopeMatchReason,
+  type EnvironmentGroupAcpStatus,
+} from "../data/dlpPolicies";
 import { EmptyPane, ErrorPane, LoadingPane } from "../components/Status";
 import { PortalActionsBar } from "../components/PortalActions";
 import { RawJsonAccordion } from "../components/RawJsonAccordion";
@@ -83,10 +98,22 @@ const usePageStyles = makeStyles({
     alignItems: "center",
     gap: tokens.spacingHorizontalM,
   },
+  resourcesIdle: {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "flex-start",
+    gap: tokens.spacingVerticalS,
+  },
+  resourcesIdleHelp: {
+    color: tokens.colorNeutralForeground3,
+  },
+  resourcesRetry: {
+    paddingTop: tokens.spacingVerticalS,
+  },
 });
 
 interface AsyncSlot<T> {
-  kind: "loading" | "error" | "ready";
+  kind: "idle" | "loading" | "error" | "ready";
   message?: string;
   data?: T;
 }
@@ -102,7 +129,12 @@ export function EnvironmentDetail() {
     kind: "loading",
   });
   const [counts, setCounts] = useState<AsyncSlot<ResourceCountRow[]>>({ kind: "loading" });
-  const [resources, setResources] = useState<AsyncSlot<ResourceRow[]>>({ kind: "loading" });
+  // Resources can be 10k+ rows in a busy env — gate behind a button so
+  // opening an env doesn't kick off a tenant-busting fanout the user
+  // may not even want. The count card above still loads automatically
+  // (one aggregate call) and tells the user *whether* they want the
+  // full list before clicking.
+  const [resources, setResources] = useState<AsyncSlot<ResourceRow[]>>({ kind: "idle" });
   const [typeFilter, setTypeFilter] = useState<string>(ALL_TYPES_KEY);
 
   useEffect(() => {
@@ -110,13 +142,15 @@ export function EnvironmentDetail() {
     void (async () => {
       setEnv({ kind: "loading" });
       setCounts({ kind: "loading" });
-      setResources({ kind: "loading" });
+      // Resources stays idle — fired explicitly by the "Load resources"
+      // button below. Reset to idle if we switch envs in the same
+      // session so the previous env's data doesn't bleed through.
+      setResources({ kind: "idle" });
       setTypeFilter(ALL_TYPES_KEY);
 
-      const [envRes, countsRes, resourcesRes] = await Promise.all([
+      const [envRes, countsRes] = await Promise.all([
         getEnvironment(envId),
         countResourcesByTypeForEnvironment(envId),
-        listResourcesInEnvironment(envId),
       ]);
       if (cancelled) return;
 
@@ -124,15 +158,23 @@ export function EnvironmentDetail() {
       setCounts(
         countsRes.ok ? { kind: "ready", data: countsRes.data } : { kind: "error", message: countsRes.error }
       );
-      setResources(
-        resourcesRes.ok
-          ? { kind: "ready", data: resourcesRes.data }
-          : { kind: "error", message: resourcesRes.error }
-      );
     })();
     return () => {
       cancelled = true;
     };
+  }, [envId]);
+
+  // Explicit, button-driven load for the resources list. Returns a
+  // stable reference so the ReadyView can wire it to the button without
+  // tripping the no-unstable-callback lint rule.
+  const loadResources = useCallback(async () => {
+    setResources({ kind: "loading" });
+    const res = await listResourcesInEnvironment(envId);
+    setResources(
+      res.ok
+        ? { kind: "ready", data: res.data }
+        : { kind: "error", message: res.error }
+    );
   }, [envId]);
 
   const visibleResources = useMemo(() => {
@@ -231,6 +273,7 @@ export function EnvironmentDetail() {
           navigate={navigate}
           counts={counts}
           resources={resources}
+          onLoadResources={loadResources}
           visibleResources={visibleResources}
           typeFilter={typeFilter}
           typeOptions={typeOptions}
@@ -249,6 +292,7 @@ interface ReadyViewProps {
   navigate: ReturnType<typeof useNavigate>;
   counts: AsyncSlot<ResourceCountRow[]>;
   resources: AsyncSlot<ResourceRow[]>;
+  onLoadResources: () => void;
   visibleResources: ResourceRow[];
   typeFilter: string;
   typeOptions: ResourceCountRow[];
@@ -263,6 +307,7 @@ function ReadyView({
   navigate,
   counts,
   resources,
+  onLoadResources,
   visibleResources,
   typeFilter,
   typeOptions,
@@ -387,6 +432,32 @@ function ReadyView({
         renderReady={(details) => <AdminDetailsBody details={details} />}
       />
 
+      {/* 3c. DLP policy coverage — supplemental, on-demand.
+          Same shell as Admin details so the UX (idle → load → list /
+          error) is identical. The helper fetches every policy in the
+          tenant then filters client-side, plus — when the env is both
+          managed AND in an environment group — calls the env-group
+          rule API in parallel to detect Application Control Policy
+          (ACP) configuration and the "advanced connector policies
+          only" override. All gated behind the button to avoid drumming
+          `ListPoliciesV2` on every page nav. */}
+      <SupplementalAdminCard
+        className={styles.colFull}
+        title="DLP policy coverage (supplemental)"
+        description="Tenant DLP policies that target this environment, plus — when applicable — the Application Control Policy (ACP) posture from the parent environment group. Fetched on demand from the Power Platform for Admins connector — never auto-loaded."
+        helpText={<>Click to call <code>ListPoliciesV2</code> and (for managed envs in a group) the env-group rule API.</>}
+        buttonLabel="Load DLP policy coverage"
+        loadingLabel="Loading DLP policies…"
+        loadFn={() =>
+          getEnvironmentDlpAndAcpStatus({
+            id: row.id,
+            isManaged: row.isManaged,
+            environmentGroupId: row.environmentGroupId,
+          })
+        }
+        renderReady={(status) => <DlpCoverageBody status={status} env={row} />}
+      />
+
       {/* 4. Resource roll-up */}
       <Card className={styles.colFull}>
         <CardHeader
@@ -434,10 +505,22 @@ function ReadyView({
           header={
             <Text weight="semibold">
               Resources
-              {resources.kind === "ready" ? ` (${visibleResources.length})` : ""}
+              {resources.kind === "ready"
+                ? ` (${visibleResources.length})`
+                : counts.kind === "ready" && counts.data
+                  ? ` (${counts.data.reduce((sum, c) => sum + c.count, 0)})`
+                  : ""}
             </Text>
           }
-          description={<Text size={200}>Apps, flows, and agents living in this environment.</Text>}
+          description={
+            <Text size={200}>
+              Apps, flows, and agents living in this environment.
+              {resources.kind === "ready" && " "}
+              {resources.kind === "ready" && (
+                <Link onClick={onLoadResources}>Refresh</Link>
+              )}
+            </Text>
+          }
         />
         <Divider />
         <div className={page.resourcesBody}>
@@ -458,9 +541,28 @@ function ReadyView({
             </div>
           )}
 
+          {resources.kind === "idle" && (
+            <div className={page.resourcesIdle}>
+              <Text size={200} className={page.resourcesIdleHelp}>
+                The full resource list can be heavy in busy environments
+                {counts.kind === "ready" && counts.data
+                  ? ` (this one has ${counts.data.reduce((s, c) => s + c.count, 0).toLocaleString()} resource${counts.data.reduce((s, c) => s + c.count, 0) === 1 ? "" : "s"})`
+                  : ""}
+                . Click below to fetch it.
+              </Text>
+              <Button appearance="primary" onClick={onLoadResources}>
+                Load resources
+              </Button>
+            </div>
+          )}
           {resources.kind === "loading" && <LoadingPane label="Loading resources…" />}
           {resources.kind === "error" && (
-            <ErrorPane title="Couldn't load resources" message={resources.message ?? "Unknown error"} />
+            <>
+              <ErrorPane title="Couldn't load resources" message={resources.message ?? "Unknown error"} />
+              <div className={page.resourcesRetry}>
+                <Button onClick={onLoadResources}>Retry</Button>
+              </div>
+            </>
           )}
           {resources.kind === "ready" && (resources.data?.length ?? 0) === 0 && (
             <EmptyPane message="No resources found in this environment." />
@@ -562,4 +664,671 @@ function AdminDetailsBody({ details }: { details: EnvironmentAdminDetails }) {
       <RawJsonAccordion data={details.raw} title="Raw admin payload" />
     </>
   );
+}
+
+// ── DlpCoverageBody ────────────────────────────────────────────────────────
+// Renders the combined DLP coverage + ACP posture for an environment.
+//
+// The matrix the component handles is documented in the planning doc;
+// short version:
+//
+//                                  empty DLPs                  with DLPs
+//   not managed                    error: wide open            (rare; render DLPs)
+//   managed, no group              error: no DLP + no ACPs     (rare; render DLPs)
+//   managed, in group, no ACP      error: no DLP + no ACP      DLP list (no banner)
+//   managed, in group, ACP cfg     success: ACP applies        DLP + info "both apply"
+//   managed, in group, ACP only    success: ACP applies        DLP + warn "ignored"
+//
+// ACP-only mode is best-effort detected — see `summarizeAcpStatus` in
+// `data/dlpPolicies.ts`. When it lands on a real tenant we'll confirm
+// the exact rule shape; for now the UI is honest about the heuristic.
+function DlpCoverageBody({
+  status,
+  env,
+}: {
+  status: DlpAndAcpStatus;
+  env: EnvironmentRow;
+}) {
+  const styles = useDetailStyles();
+  const dlpStyles = useDlpCoverageStyles();
+  const navigate = useNavigate();
+
+  const { coverage, trace, acp } = status;
+  const acpData = acp && "configured" in acp ? acp : null;
+  const acpError = acp && "error" in acp ? acp.error : null;
+
+  if (coverage.length === 0) {
+    return (
+      <>
+        <NoDlpCoverageWarning
+          env={env}
+          acp={acpData}
+          acpError={acpError}
+          onNavigate={navigate}
+        />
+        <EvaluationTraceSection trace={trace} envId={env.id} />
+      </>
+    );
+  }
+
+  return (
+    <div className={dlpStyles.list}>
+      {/* When DLPs DO match and the env-group has ACPs in play, surface
+          the interaction at the top of the list so users don't read the
+          DLP table and assume it's the whole story. */}
+      {acpData?.configured && (
+        <AcpInteractionBanner
+          acp={acpData}
+          groupId={env.environmentGroupId}
+          groupName={env.environmentGroup}
+          onNavigate={navigate}
+        />
+      )}
+      {acpError && (
+        <MessageBar intent="warning">
+          <MessageBarBody>
+            <MessageBarTitle>Couldn't check ACP status on the environment group</MessageBarTitle>
+            DLP coverage below is accurate, but we couldn't load the
+            environment group's rule set to check whether Application
+            Control Policies might override it. {acpError}
+          </MessageBarBody>
+        </MessageBar>
+      )}
+
+      <Text size={200} className={dlpStyles.subtle}>
+        {coverage.length} polic{coverage.length === 1 ? "y" : "ies"} applies to this
+        environment.
+      </Text>
+      {coverage.map(({ policy, reason }) => (
+        <Card
+          key={policy.name}
+          className={dlpStyles.row}
+          appearance="outline"
+        >
+          <div className={dlpStyles.rowHeader}>
+            <Link
+              href={ppacDlpPolicyUrl(policy.name)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={dlpStyles.policyName}
+            >
+              {policy.displayName || policy.name}
+            </Link>
+            <Badge
+              appearance="filled"
+              color={matchReasonColor(reason)}
+              shape="rounded"
+              size="small"
+            >
+              {matchReasonLabel(reason)}
+            </Badge>
+            <Badge appearance="outline" size="small">
+              {policy.environmentType}
+            </Badge>
+            <Badge
+              appearance="tint"
+              color={defaultClassificationColor(
+                policy.defaultConnectorsClassification
+              )}
+              size="small"
+            >
+              Default: {policy.defaultConnectorsClassification || "—"}
+            </Badge>
+            {acpData?.only && (
+              <Badge appearance="filled" color="warning" size="small">
+                Overridden by ACP-only mode
+              </Badge>
+            )}
+          </div>
+          <div className={dlpStyles.rowMeta}>
+            <span className={styles.mono}>{policy.name}</span>
+            <span>
+              Modified <DateWithRelative value={policy.lastModifiedTime ?? ""} />
+            </span>
+          </div>
+        </Card>
+      ))}
+
+      <EvaluationTraceSection trace={trace} envId={env.id} />
+    </div>
+  );
+}
+
+/** Collapsible debug surface that lists every policy evaluated against
+ *  this environment — matched and unmatched — with the raw and
+ *  normalized env id lists. Lets admins answer "policy X should cover
+ *  env Y but doesn't" without instrumenting the codebase.
+ *
+ *  The same trace is also dumped to `console.info` from
+ *  `getEnvironmentDlpAndAcpStatus` so devtools sees it without
+ *  expanding the UI. */
+function EvaluationTraceSection({
+  trace,
+  envId,
+}: {
+  trace: DlpPolicyEvaluation[];
+  envId: string;
+}) {
+  const dlpStyles = useDlpCoverageStyles();
+  const [expanded, setExpanded] = useState(false);
+  const [filter, setFilter] = useState("");
+
+  const filtered = useMemo(() => {
+    const q = filter.trim().toLowerCase();
+    if (!q) return trace;
+    return trace.filter(
+      (t) =>
+        t.displayName.toLowerCase().includes(q) ||
+        t.policyId.toLowerCase().includes(q)
+    );
+  }, [trace, filter]);
+
+  const appliedCount = trace.filter((t) => t.applies).length;
+
+  if (trace.length === 0) return null;
+
+  return (
+    <section className={dlpStyles.traceSection}>
+      <button
+        type="button"
+        className={dlpStyles.traceToggle}
+        onClick={() => setExpanded((v) => !v)}
+        aria-expanded={expanded}
+      >
+        {expanded ? <ChevronDownRegular /> : <ChevronRightRegular />}
+        Show evaluation details ({trace.length} polic
+        {trace.length === 1 ? "y" : "ies"} evaluated, {appliedCount} match
+        {appliedCount === 1 ? "" : "es"})
+      </button>
+      {expanded && (
+        <div className={dlpStyles.traceBody}>
+          <Text size={200} className={dlpStyles.subtle}>
+            Comparing inventory env id <code>{envId}</code> against each
+            policy's <code>environments[]</code>. The connector returns
+            <code> id</code> as an ARM path (e.g.{" "}
+            <code>/providers/…/environments/&lt;guid&gt;</code>) and{" "}
+            <code>name</code> as the bare GUID — we prefer{" "}
+            <code>name</code> when present, otherwise we strip the path
+            prefix off <code>id</code>. The same trace is in the browser
+            console as <code>[DLP coverage] evaluation</code>.
+          </Text>
+          <Input
+            placeholder="Filter by policy name or GUID…"
+            value={filter}
+            onChange={(_e, data) => setFilter(data.value)}
+          />
+          <div className={dlpStyles.traceList}>
+            {filtered.length === 0 ? (
+              <Text size={200} className={dlpStyles.subtle}>
+                No policies match "{filter}".
+              </Text>
+            ) : (
+              filtered.map((t) => (
+                <EvaluationTraceRow key={t.policyId} entry={t} />
+              ))
+            )}
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function EvaluationTraceRow({ entry }: { entry: DlpPolicyEvaluation }) {
+  const dlpStyles = useDlpCoverageStyles();
+  const detailStyles = useDetailStyles();
+  const [open, setOpen] = useState(false);
+  const hasEnvList = entry.policyEnvIdsNormalized.length > 0;
+  const matchedSlot = entry.policyEnvIdsNormalized.indexOf(
+    entry.targetEnvIdNormalized
+  );
+  const envSummary =
+    entry.environmentType === "AllEnvironments"
+      ? "— (no env list)"
+      : hasEnvList
+        ? `${entry.policyEnvIdsNormalized.length} env${entry.policyEnvIdsNormalized.length === 1 ? "" : "s"}${matchedSlot >= 0 ? " · target present" : " · target absent"}`
+        : "(empty list)";
+
+  return (
+    <div className={dlpStyles.traceRow}>
+      <div className={dlpStyles.traceRowHead}>
+        <button
+          type="button"
+          className={dlpStyles.traceRowHeader}
+          onClick={() => setOpen((v) => !v)}
+          aria-expanded={open}
+          disabled={!hasEnvList}
+        >
+          {hasEnvList ? (
+            open ? <ChevronDownRegular /> : <ChevronRightRegular />
+          ) : (
+            <span style={{ display: "inline-block", width: 16 }} />
+          )}
+          <Badge
+            color={entry.applies ? "success" : "subtle"}
+            appearance={entry.applies ? "filled" : "outline"}
+            size="small"
+          >
+            {entry.applies ? "Applies" : "No match"}
+          </Badge>
+          <span className={dlpStyles.policyName}>{entry.displayName}</span>
+          <span className={detailStyles.mono}>{entry.policyId}</span>
+          <Badge appearance="outline" size="small">
+            {entry.environmentType}
+          </Badge>
+          <span className={dlpStyles.subtle}>
+            {envSummary} · reason: <code>{entry.reason}</code>
+          </span>
+        </button>
+        <Link
+          href={ppacDlpPolicyUrl(entry.policyId)}
+          target="_blank"
+          rel="noopener noreferrer"
+          className={dlpStyles.traceOpenLink}
+        >
+          Open in PPAC ↗
+        </Link>
+      </div>
+      {open && hasEnvList && (
+        <div className={dlpStyles.traceRowBody}>
+          <div className={dlpStyles.traceLabel}>Target env id (normalized)</div>
+          <code className={dlpStyles.traceEnvId}>
+            {entry.targetEnvIdNormalized}
+          </code>
+          <div className={dlpStyles.traceLabel}>
+            Policy env ids ({entry.policyEnvIdsNormalized.length})
+          </div>
+          <ul className={dlpStyles.traceEnvList}>
+            {entry.policyEnvIdsNormalized.map((id, i) => {
+              const raw = entry.policyEnvIdsRaw[i] ?? "";
+              const isMatch = id === entry.targetEnvIdNormalized;
+              return (
+                <li
+                  key={`${id}-${i}`}
+                  className={
+                    isMatch ? dlpStyles.traceEnvHit : dlpStyles.traceEnvMiss
+                  }
+                >
+                  <code className={dlpStyles.traceEnvId}>{id}</code>
+                  {raw !== id && (
+                    <span className={dlpStyles.subtle}>
+                      {" "}from <code>{raw}</code>
+                    </span>
+                  )}
+                  {isMatch && (
+                    <Badge color="success" size="small" appearance="tint">
+                      match
+                    </Badge>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Banner shown above the DLP list when the env-group has ACPs
+ *  configured. Two variants depending on whether ACPs *override* DLPs
+ *  ("AdvancedConnectorPoliciesOnly") or just stack with them ("most
+ *  restrictive wins"). */
+function AcpInteractionBanner({
+  acp,
+  groupId,
+  groupName,
+  onNavigate,
+}: {
+  acp: EnvironmentGroupAcpStatus;
+  groupId: string;
+  groupName: string;
+  onNavigate: ReturnType<typeof useNavigate>;
+}) {
+  const groupLink = (
+    <>
+      <Link
+        onClick={() => onNavigate(`/environment-groups/${encodeURIComponent(groupId)}`)}
+      >
+        {groupName || groupId}
+      </Link>{" "}
+      (
+      <Link
+        href={ppacEnvironmentGroupUrl(groupId)}
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        open in PPAC ↗
+      </Link>
+      )
+    </>
+  );
+  if (acp.only) {
+    return (
+      <MessageBar intent="warning">
+        <MessageBarBody>
+          <MessageBarTitle>DLP policies below are overridden by ACP-only mode</MessageBarTitle>
+          {groupLink} has Application Control Policies configured with the
+          "Advanced connector policies only" toggle. While the DLP policies
+          listed here technically target this environment, governance is
+          enforced exclusively by the group's ACP rules ({acp.allowedConnectorCount}
+          {" "}allowed connector{acp.allowedConnectorCount === 1 ? "" : "s"}).
+          Review the ACP allow-list on the group to understand what makers
+          can actually use here.
+        </MessageBarBody>
+      </MessageBar>
+    );
+  }
+  return (
+    <MessageBar intent="info">
+      <MessageBarBody>
+        <MessageBarTitle>Both DLP and ACP apply — most restrictive wins</MessageBarTitle>
+        The DLP policies below target this environment, and {groupLink} also
+        has Application Control Policies configured ({acp.allowedConnectorCount}
+        {" "}allowed connector{acp.allowedConnectorCount === 1 ? "" : "s"}).
+        Effective access is the intersection: a connector is usable only when
+        permitted by every applicable policy and listed in the ACP allow-list.
+      </MessageBarBody>
+    </MessageBar>
+  );
+}
+
+/** Empty-state warning that varies by Managed-Environment + env-group
+ *  membership + ACP posture. See `DlpCoverageBody` for the decision
+ *  table. */
+function NoDlpCoverageWarning({
+  env,
+  acp,
+  acpError,
+  onNavigate,
+}: {
+  env: EnvironmentRow;
+  acp: EnvironmentGroupAcpStatus | null;
+  acpError: string | null;
+  onNavigate: ReturnType<typeof useNavigate>;
+}) {
+  const inGroup = Boolean(env.environmentGroupId);
+  const groupLink = inGroup ? (
+    <>
+      <Link
+        onClick={() =>
+          onNavigate(`/environment-groups/${encodeURIComponent(env.environmentGroupId)}`)
+        }
+      >
+        {env.environmentGroup || env.environmentGroupId}
+      </Link>{" "}
+      (
+      <Link
+        href={ppacEnvironmentGroupUrl(env.environmentGroupId)}
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        open in PPAC ↗
+      </Link>
+      )
+    </>
+  ) : null;
+
+  if (!env.isManaged) {
+    return (
+      <MessageBar intent="error">
+        <MessageBarBody>
+          <MessageBarTitle>No DLP coverage on an unmanaged environment</MessageBarTitle>
+          No tenant DLP policy currently targets this environment, and{" "}
+          <strong>Managed Environments is not enabled</strong>. Without DLP,
+          makers in this environment can use any connector the tenant allows —
+          there is no enforcement at all. Either bring it under an existing
+          policy (or scope an existing one to include it), or enable Managed
+          Environments and place it in an environment group with the
+          appropriate Application Control Policies (ACPs).
+        </MessageBarBody>
+      </MessageBar>
+    );
+  }
+
+  if (!inGroup) {
+    return (
+      <MessageBar intent="error">
+        <MessageBarBody>
+          <MessageBarTitle>No DLP coverage and not in an environment group</MessageBarTitle>
+          No tenant DLP policy currently targets this environment, and it is
+          not a member of any environment group — so{" "}
+          <strong>no Application Control Policies (ACPs) apply either</strong>.
+          Either scope a DLP policy to include it, or add it to an environment
+          group that has the appropriate ACP rules configured.
+        </MessageBarBody>
+      </MessageBar>
+    );
+  }
+
+  // Managed + in group. We now know whether the group has ACPs.
+  if (acp?.configured) {
+    return (
+      <MessageBar intent="success">
+        <MessageBarBody>
+          <MessageBarTitle>
+            No DLP coverage, but ACPs apply via {groupLink}
+            {acp.only && " (ACP-only mode)"}
+          </MessageBarTitle>
+          No tenant DLP policy targets this environment directly, but its
+          environment group has{" "}
+          <strong>
+            {acp.allowedConnectorCount} allowed connector
+            {acp.allowedConnectorCount === 1 ? "" : "s"}
+          </strong>{" "}
+          configured via Application Control Policies. Makers in this
+          environment can only use connectors on that allow-list.
+          {acp.only && (
+            <>
+              {" "}This group is configured in <strong>"Advanced connector
+              policies only"</strong> mode — even if a DLP policy were
+              scoped here later, it would be overridden by the ACPs.
+            </>
+          )}
+        </MessageBarBody>
+      </MessageBar>
+    );
+  }
+
+  // Managed + in group, but the group has no ACPs (or we couldn't tell).
+  return (
+    <MessageBar intent="error">
+      <MessageBarBody>
+        <MessageBarTitle>No DLP coverage and no ACPs on the environment group</MessageBarTitle>
+        No tenant DLP policy targets this environment, and {groupLink} does
+        not have any Application Control Policy rules configured either.
+        Either scope a DLP policy to include this environment, or add ACP
+        rules to the environment group.
+        {acpError && (
+          <>
+            {" "}(Note: we couldn't load the group's rules — <em>{acpError}</em> —
+            so the ACP check above may be incomplete.)
+          </>
+        )}
+      </MessageBarBody>
+    </MessageBar>
+  );
+}
+
+const useDlpCoverageStyles = makeStyles({
+  list: {
+    display: "flex",
+    flexDirection: "column",
+    gap: tokens.spacingVerticalS,
+  },
+  subtle: {
+    color: tokens.colorNeutralForeground3,
+  },
+  row: {
+    padding: tokens.spacingHorizontalM,
+    display: "flex",
+    flexDirection: "column",
+    gap: tokens.spacingVerticalXS,
+  },
+  rowHeader: {
+    display: "flex",
+    flexWrap: "wrap",
+    alignItems: "center",
+    gap: tokens.spacingHorizontalS,
+  },
+  rowMeta: {
+    display: "flex",
+    flexWrap: "wrap",
+    alignItems: "center",
+    gap: tokens.spacingHorizontalL,
+    color: tokens.colorNeutralForeground3,
+    fontSize: tokens.fontSizeBase200,
+  },
+  policyName: {
+    fontWeight: tokens.fontWeightSemibold,
+  },
+  traceSection: {
+    marginTop: tokens.spacingVerticalM,
+    paddingTop: tokens.spacingVerticalS,
+    borderTop: `1px solid ${tokens.colorNeutralStroke2}`,
+    display: "flex",
+    flexDirection: "column",
+    gap: tokens.spacingVerticalS,
+  },
+  traceToggle: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: tokens.spacingHorizontalXXS,
+    background: "none",
+    border: "none",
+    padding: 0,
+    cursor: "pointer",
+    color: tokens.colorBrandForegroundLink,
+    fontSize: tokens.fontSizeBase200,
+    fontFamily: tokens.fontFamilyBase,
+    alignSelf: "flex-start",
+    ":hover": { textDecoration: "underline" },
+  },
+  traceBody: {
+    display: "flex",
+    flexDirection: "column",
+    gap: tokens.spacingVerticalS,
+    padding: tokens.spacingHorizontalM,
+    backgroundColor: tokens.colorNeutralBackground2,
+    borderRadius: tokens.borderRadiusMedium,
+    border: `1px solid ${tokens.colorNeutralStroke2}`,
+  },
+  traceList: {
+    display: "flex",
+    flexDirection: "column",
+    gap: tokens.spacingVerticalXS,
+  },
+  traceRow: {
+    border: `1px solid ${tokens.colorNeutralStroke2}`,
+    borderRadius: tokens.borderRadiusMedium,
+    backgroundColor: tokens.colorNeutralBackground1,
+  },
+  traceRowHead: {
+    display: "flex",
+    alignItems: "center",
+    gap: tokens.spacingHorizontalS,
+    paddingInlineEnd: tokens.spacingHorizontalM,
+  },
+  traceOpenLink: {
+    fontSize: tokens.fontSizeBase200,
+    whiteSpace: "nowrap",
+  },
+  traceRowHeader: {
+    flex: 1,
+    background: "none",
+    border: "none",
+    padding: tokens.spacingHorizontalS,
+    display: "flex",
+    flexWrap: "wrap",
+    alignItems: "center",
+    gap: tokens.spacingHorizontalS,
+    cursor: "pointer",
+    textAlign: "left",
+    fontFamily: tokens.fontFamilyBase,
+    fontSize: tokens.fontSizeBase200,
+    ":disabled": { cursor: "default" },
+  },
+  traceRowBody: {
+    padding: tokens.spacingHorizontalM,
+    borderTop: `1px solid ${tokens.colorNeutralStroke2}`,
+    display: "flex",
+    flexDirection: "column",
+    gap: tokens.spacingVerticalXS,
+  },
+  traceLabel: {
+    color: tokens.colorNeutralForeground3,
+    fontSize: tokens.fontSizeBase100,
+    textTransform: "uppercase",
+    letterSpacing: "0.04em",
+    fontWeight: tokens.fontWeightSemibold,
+    marginTop: tokens.spacingVerticalXS,
+  },
+  traceEnvId: {
+    fontFamily: tokens.fontFamilyMonospace,
+    fontSize: tokens.fontSizeBase200,
+  },
+  traceEnvList: {
+    margin: 0,
+    paddingInlineStart: tokens.spacingHorizontalL,
+    display: "flex",
+    flexDirection: "column",
+    gap: tokens.spacingVerticalXXS,
+  },
+  traceEnvHit: {
+    color: tokens.colorPaletteGreenForeground1,
+    display: "flex",
+    alignItems: "center",
+    gap: tokens.spacingHorizontalXS,
+    flexWrap: "wrap",
+  },
+  traceEnvMiss: {
+    color: tokens.colorNeutralForeground2,
+    display: "flex",
+    alignItems: "center",
+    gap: tokens.spacingHorizontalXS,
+    flexWrap: "wrap",
+  },
+});
+
+function matchReasonLabel(r: DlpScopeMatchReason): string {
+  switch (r) {
+    case "all":
+      return "All environments";
+    case "included":
+      return "Explicitly included";
+    case "not-excluded":
+      return "Not excluded";
+    case "none":
+      return "Does not apply";
+  }
+}
+
+function matchReasonColor(
+  r: DlpScopeMatchReason
+): "brand" | "informative" | "warning" | "subtle" {
+  switch (r) {
+    case "all":
+      return "brand";
+    case "included":
+      return "informative";
+    case "not-excluded":
+      return "warning";
+    case "none":
+      return "subtle";
+  }
+}
+
+function defaultClassificationColor(
+  v: string
+): "brand" | "success" | "danger" | "subtle" {
+  switch (v) {
+    case "Confidential":
+      return "brand";
+    case "General":
+      return "success";
+    case "Blocked":
+      return "danger";
+    default:
+      return "subtle";
+  }
 }
