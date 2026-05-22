@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   makeStyles,
   mergeClasses,
@@ -24,8 +24,10 @@ import {
   SettingsRegular,
   ShieldRegular,
   DataPieRegular,
+  GridDotsRegular,
 } from "@fluentui/react-icons";
 import { useLocation, useNavigate } from "react-router-dom";
+import { useFeatureFlag } from "../featureFlags";
 
 const useStyles = makeStyles({
   root: {
@@ -164,6 +166,23 @@ const NAV_SECTIONS: NavSection[] = [
   },
 ];
 
+// Zones section is gated by a feature flag so it can ship dark. The
+// view itself remains code-split, so when the flag is off no chunk loads.
+const ZONES_SECTION: NavSection = {
+  key: "zones",
+  label: "Zones",
+  icon: <GridDotsRegular />,
+  defaultOpen: true,
+  items: [
+    {
+      key: "zones-board",
+      label: "Zones board",
+      icon: <GridDotsRegular />,
+      path: "/zones",
+    },
+  ],
+};
+
 const COLLAPSED_STORAGE_KEY = "ppcoe.sidenav.collapsedSections";
 
 function loadCollapsedSections(): Set<string> {
@@ -189,6 +208,15 @@ export function SideNav() {
   const styles = useStyles();
   const navigate = useNavigate();
   const location = useLocation();
+  const zonesEnabled = useFeatureFlag("zones");
+
+  // Merge in the optional Zones section when the flag is on. Building
+  // the array at render time (rather than mutating a module constant)
+  // keeps the feature-flag dependency localized to this component.
+  const sections = useMemo<NavSection[]>(
+    () => (zonesEnabled ? [...NAV_SECTIONS, ZONES_SECTION] : NAV_SECTIONS),
+    [zonesEnabled],
+  );
 
   const [collapsed, setCollapsed] = useState<Set<string>>(() => {
     const stored = loadCollapsedSections();
@@ -218,7 +246,7 @@ export function SideNav() {
     });
   }, []);
 
-  const allItems = NAV_SECTIONS.flatMap((s) => s.items);
+  const allItems = sections.flatMap((s) => s.items);
   const activeKey =
     allItems.find((item) => item.path && location.pathname.startsWith(item.path))?.key ?? "home";
 
@@ -237,7 +265,7 @@ export function SideNav() {
         </Text>
         <Text className={styles.brandSubtitle}>Inventory &amp; governance</Text>
       </div>
-      {NAV_SECTIONS.map((section) => {
+      {sections.map((section) => {
         const isCollapsed = collapsed.has(section.key);
         const sectionId = `sidenav-section-${section.key}`;
         return (

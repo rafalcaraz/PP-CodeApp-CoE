@@ -7,7 +7,7 @@
 // reference a flag that doesn't exist.
 // ---------------------------------------------------------------------------
 
-export type FeatureFlagKey = "copilotStudioAssistant";
+export type FeatureFlagKey = "copilotStudioAssistant" | "zones";
 
 export interface FeatureFlagDefinition {
   key: FeatureFlagKey;
@@ -24,6 +24,19 @@ export const FEATURE_FLAGS: readonly FeatureFlagDefinition[] = [
       "Show the floating CoE Assistant chat panel that talks to a " +
       "Microsoft Copilot Studio agent. Leave this off if your " +
       "organization does not permit AI / Copilot Studio.",
+    defaultValue: false,
+  },
+  {
+    key: "zones",
+    label: "Zones (drag-and-drop env group organization)",
+    description:
+      "Adds the Zones view: a personal, drag-and-drop layer for " +
+      "grouping Microsoft environment groups into your own pillars / " +
+      "business units / sub-organizations. Microsoft does not provide " +
+      "a parent layer over environment groups (they explicitly tell " +
+      "admins to \"use naming conventions\"). Zones fills that gap " +
+      "with localStorage-backed assignments — no changes are made to " +
+      "any Microsoft data.",
     defaultValue: false,
   },
 ];
