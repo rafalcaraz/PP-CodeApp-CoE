@@ -1,3 +1,4 @@
+import { lazy, Suspense } from "react";
 import {
   FluentProvider,
   webLightTheme,
@@ -7,20 +8,60 @@ import {
 import { HashRouter, Route, Routes } from "react-router-dom";
 import { SideNav } from "./components/SideNav";
 import { TopBar } from "./components/TopBar";
-import { EnvironmentGroupsList } from "./views/EnvironmentGroupsList";
-import { EnvironmentGroupDetail } from "./views/EnvironmentGroupDetail";
-import { EnvironmentsList } from "./views/EnvironmentsList";
-import { EnvironmentDetail } from "./views/EnvironmentDetail";
-import { AppsList } from "./views/AppsList";
-import { AppDetail } from "./views/AppDetail";
-import { FlowsList } from "./views/FlowsList";
-import { FlowDetail } from "./views/FlowDetail";
-import { AgentsList } from "./views/AgentsList";
-import { AgentDetail } from "./views/AgentDetail";
-import { QueriesView } from "./views/QueriesView";
-import { DashboardsList } from "./views/DashboardsList";
-import { DashboardDetail } from "./views/DashboardDetail";
+import { LoadingPane } from "./components/Status";
 import { HomeRedirect } from "./views/HomeRedirect";
+
+// ---------------------------------------------------------------------------
+// Route-level code splitting.
+//
+// Every page is loaded lazily so the initial bundle only contains the shell
+// (Fluent provider, side nav, top bar, router, redirect logic). Each route
+// becomes its own chunk that Vite/Rollup downloads on demand the first time
+// the user navigates to it. The lazy chunks themselves are then cached by
+// the browser, so subsequent visits are instant.
+//
+// HomeRedirect stays eager — it's tiny and is the landing route, so lazy
+// loading would add a Suspense fallback flash on cold boot for no win.
+// ---------------------------------------------------------------------------
+const EnvironmentGroupsList = lazy(() =>
+  import("./views/EnvironmentGroupsList").then((m) => ({ default: m.EnvironmentGroupsList }))
+);
+const EnvironmentGroupDetail = lazy(() =>
+  import("./views/EnvironmentGroupDetail").then((m) => ({ default: m.EnvironmentGroupDetail }))
+);
+const EnvironmentsList = lazy(() =>
+  import("./views/EnvironmentsList").then((m) => ({ default: m.EnvironmentsList }))
+);
+const EnvironmentDetail = lazy(() =>
+  import("./views/EnvironmentDetail").then((m) => ({ default: m.EnvironmentDetail }))
+);
+const AppsList = lazy(() =>
+  import("./views/AppsList").then((m) => ({ default: m.AppsList }))
+);
+const AppDetail = lazy(() =>
+  import("./views/AppDetail").then((m) => ({ default: m.AppDetail }))
+);
+const FlowsList = lazy(() =>
+  import("./views/FlowsList").then((m) => ({ default: m.FlowsList }))
+);
+const FlowDetail = lazy(() =>
+  import("./views/FlowDetail").then((m) => ({ default: m.FlowDetail }))
+);
+const AgentsList = lazy(() =>
+  import("./views/AgentsList").then((m) => ({ default: m.AgentsList }))
+);
+const AgentDetail = lazy(() =>
+  import("./views/AgentDetail").then((m) => ({ default: m.AgentDetail }))
+);
+const QueriesView = lazy(() =>
+  import("./views/QueriesView").then((m) => ({ default: m.QueriesView }))
+);
+const DashboardsList = lazy(() =>
+  import("./views/DashboardsList").then((m) => ({ default: m.DashboardsList }))
+);
+const DashboardDetail = lazy(() =>
+  import("./views/DashboardDetail").then((m) => ({ default: m.DashboardDetail }))
+);
 
 const useStyles = makeStyles({
   app: {
@@ -50,27 +91,32 @@ function AppShell() {
       <div className={styles.body}>
         <SideNav />
         <main className={styles.content}>
-          <Routes>
-            <Route path="/" element={<HomeRedirect />} />
-            <Route path="/home" element={<HomeRedirect />} />
-            <Route path="/dashboards" element={<DashboardsList />} />
-            <Route path="/dashboards/:dashboardId" element={<DashboardDetail />} />
-            <Route path="/environment-groups" element={<EnvironmentGroupsList />} />
-            <Route
-              path="/environment-groups/:groupId"
-              element={<EnvironmentGroupDetail />}
-            />
-            <Route path="/environments" element={<EnvironmentsList />} />
-            <Route path="/environments/:envId" element={<EnvironmentDetail />} />
-            <Route path="/apps" element={<AppsList />} />
-            <Route path="/apps/:appId" element={<AppDetail />} />
-            <Route path="/flows" element={<FlowsList />} />
-            <Route path="/flows/:flowId" element={<FlowDetail />} />
-            <Route path="/agents" element={<AgentsList />} />
-            <Route path="/agents/:agentId" element={<AgentDetail />} />
-            <Route path="/queries" element={<QueriesView />} />
-            <Route path="*" element={<HomeRedirect />} />
-          </Routes>
+          {/* Single Suspense boundary catches every lazy route. The fallback
+              is brief (chunk sizes are small and the browser caches them) so
+              one shared spinner reads as a normal page-level loading state. */}
+          <Suspense fallback={<LoadingPane label="Loading…" />}>
+            <Routes>
+              <Route path="/" element={<HomeRedirect />} />
+              <Route path="/home" element={<HomeRedirect />} />
+              <Route path="/dashboards" element={<DashboardsList />} />
+              <Route path="/dashboards/:dashboardId" element={<DashboardDetail />} />
+              <Route path="/environment-groups" element={<EnvironmentGroupsList />} />
+              <Route
+                path="/environment-groups/:groupId"
+                element={<EnvironmentGroupDetail />}
+              />
+              <Route path="/environments" element={<EnvironmentsList />} />
+              <Route path="/environments/:envId" element={<EnvironmentDetail />} />
+              <Route path="/apps" element={<AppsList />} />
+              <Route path="/apps/:appId" element={<AppDetail />} />
+              <Route path="/flows" element={<FlowsList />} />
+              <Route path="/flows/:flowId" element={<FlowDetail />} />
+              <Route path="/agents" element={<AgentsList />} />
+              <Route path="/agents/:agentId" element={<AgentDetail />} />
+              <Route path="/queries" element={<QueriesView />} />
+              <Route path="*" element={<HomeRedirect />} />
+            </Routes>
+          </Suspense>
         </main>
       </div>
     </div>

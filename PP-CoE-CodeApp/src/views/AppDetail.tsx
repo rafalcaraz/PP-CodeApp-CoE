@@ -1,7 +1,5 @@
 import { useEffect, useState } from "react";
 import {
-  makeStyles,
-  tokens,
   Text,
   Breadcrumb,
   BreadcrumbItem,
@@ -18,55 +16,16 @@ import { getApp, shortResourceType, type AppRow } from "../data/inventory";
 import { ErrorPane, LoadingPane } from "../components/Status";
 import { ConnectorsCard } from "../components/ConnectorsCard";
 import { RawJsonAccordion } from "../components/RawJsonAccordion";
-
-const useStyles = makeStyles({
-  root: {
-    display: "flex",
-    flexDirection: "column",
-    gap: tokens.spacingVerticalL,
-  },
-  header: {
-    display: "flex",
-    flexDirection: "column",
-    gap: tokens.spacingVerticalS,
-  },
-  metaGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))",
-    gap: tokens.spacingHorizontalL,
-    rowGap: tokens.spacingVerticalM,
-  },
-  metaItem: {
-    display: "flex",
-    flexDirection: "column",
-    gap: tokens.spacingVerticalXXS,
-  },
-  metaLabel: {
-    color: tokens.colorNeutralForeground3,
-    fontSize: tokens.fontSizeBase200,
-  },
-  badgeRow: {
-    display: "flex",
-    flexWrap: "wrap",
-    gap: tokens.spacingHorizontalS,
-  },
-  rawJson: {
-    fontFamily: "Consolas, 'Courier New', monospace",
-    fontSize: tokens.fontSizeBase200,
-    backgroundColor: tokens.colorNeutralBackground2,
-    padding: tokens.spacingHorizontalM,
-    borderRadius: tokens.borderRadiusMedium,
-    overflow: "auto",
-    maxHeight: "480px",
-    whiteSpace: "pre",
-  },
-});
-
-function formatDate(value: string): string {
-  if (!value) return "—";
-  const d = new Date(value);
-  return Number.isNaN(d.getTime()) ? value : d.toLocaleString();
-}
+import {
+  PortalActionsBar,
+  resourceTypeToEntityKind,
+} from "../components/PortalActions";
+import {
+  DateWithRelative,
+  IdentifiersAccordion,
+  Meta,
+  useDetailStyles,
+} from "../components/detail";
 
 type State =
   | { kind: "loading" }
@@ -75,7 +34,7 @@ type State =
   | { kind: "missing" };
 
 export function AppDetail() {
-  const styles = useStyles();
+  const styles = useDetailStyles();
   const navigate = useNavigate();
   const { appId } = useParams<{ appId: string }>();
   const [state, setState] = useState<State>({ kind: "loading" });
@@ -104,123 +63,223 @@ export function AppDetail() {
 
   return (
     <div className={styles.root}>
-      <Breadcrumb size="medium">
-        <BreadcrumbItem>
-          <BreadcrumbButton onClick={() => navigate("/apps")}>Apps</BreadcrumbButton>
-        </BreadcrumbItem>
-        <BreadcrumbDivider />
-        <BreadcrumbItem>
-          <BreadcrumbButton current>
-            {state.kind === "ready" ? state.row.displayName || appId : appId}
-          </BreadcrumbButton>
-        </BreadcrumbItem>
-      </Breadcrumb>
+      <div className={styles.colFull}>
+        <Breadcrumb size="medium">
+          <BreadcrumbItem>
+            <BreadcrumbButton onClick={() => navigate("/apps")}>Apps</BreadcrumbButton>
+          </BreadcrumbItem>
+          <BreadcrumbDivider />
+          <BreadcrumbItem>
+            <BreadcrumbButton current>
+              {state.kind === "ready" ? state.row.displayName || appId : appId}
+            </BreadcrumbButton>
+          </BreadcrumbItem>
+        </Breadcrumb>
+      </div>
 
-      {state.kind === "loading" && <LoadingPane label="Loading app…" />}
+      {state.kind === "loading" && (
+        <div className={styles.colFull}>
+          <LoadingPane label="Loading app…" />
+        </div>
+      )}
 
       {state.kind === "error" && (
-        <ErrorPane title="Couldn't load app" message={state.message} />
+        <div className={styles.colFull}>
+          <ErrorPane title="Couldn't load app" message={state.message} />
+        </div>
       )}
 
       {state.kind === "missing" && (
-        <ErrorPane
-          title="App not found"
-          message="No app exists with this ID, or your account doesn't have visibility to it."
-        />
+        <div className={styles.colFull}>
+          <ErrorPane
+            title="App not found"
+            message="No app exists with this ID, or your account doesn't have visibility to it."
+          />
+        </div>
       )}
 
-      {state.kind === "ready" && (
-        <>
-          <div className={styles.header}>
-            <Text size={700} weight="semibold">
-              {state.row.displayName || state.row.id}
-            </Text>
-            <div className={styles.badgeRow}>
-              <Badge appearance="filled" color="brand">
-                {shortResourceType(state.row.type)}
-              </Badge>
-              {state.row.isFeatured && (
-                <Badge appearance="outline" color="success">
-                  Featured
-                </Badge>
-              )}
-              {state.row.bypassConsent && (
-                <Badge appearance="outline" color="warning">
-                  Bypass consent
-                </Badge>
-              )}
-              {state.row.isQuarantined && (
-                <Badge appearance="filled" color="danger">
-                  Quarantined
-                </Badge>
-              )}
-              {state.row.appType && (
-                <Badge appearance="outline">{state.row.appType}</Badge>
-              )}
-              {state.row.subType && (
-                <Badge appearance="outline">{state.row.subType}</Badge>
-              )}
-            </div>
-          </div>
-
-          <Card>
-            <CardHeader header={<Text weight="semibold">Details</Text>} />
-            <Divider />
-            <div style={{ padding: tokens.spacingHorizontalL }}>
-              <div className={styles.metaGrid}>
-                <Meta label="Environment">
-                  {state.row.environmentId ? (
-                    <Link
-                      onClick={() =>
-                        navigate(`/environments/${encodeURIComponent(state.row.environmentId)}`)
-                      }
-                    >
-                      {state.row.environmentName || state.row.environmentId}
-                    </Link>
-                  ) : (
-                    "—"
-                  )}
-                </Meta>
-                <Meta label="Region">{state.row.region || "—"}</Meta>
-                <Meta label="Owner">
-                  {state.row.ownerDisplayName || state.row.ownerId || "—"}
-                </Meta>
-                <Meta label="Created on">{formatDate(state.row.createdAt)}</Meta>
-                <Meta label="Created by">{state.row.createdBy || "—"}</Meta>
-                <Meta label="Last modified">{formatDate(state.row.lastModifiedAt)}</Meta>
-                <Meta label="Last modified by">{state.row.lastModifiedBy || "—"}</Meta>
-                <Meta label="Last launched">{formatDate(state.row.lastLaunchedAt)}</Meta>
-                <Meta label="Shared users">
-                  {state.row.sharedUsersCount.toLocaleString()}
-                </Meta>
-                <Meta label="Shared groups">
-                  {state.row.sharedGroupsCount.toLocaleString()}
-                </Meta>
-                <Meta label="Sub-type">{state.row.subType || "—"}</Meta>
-                <Meta label="App type">{state.row.appType || "—"}</Meta>
-                <Meta label="Logical name">{state.row.logicalName || "—"}</Meta>
-                <Meta label="App module ID">{state.row.appModuleId || "—"}</Meta>
-                <Meta label="Tenant ID">{state.row.tenantId || "—"}</Meta>
-                <Meta label="ID">{state.row.id}</Meta>
-              </div>
-            </div>
-          </Card>
-
-          <ConnectorsCard connectors={state.row.connectors} />
-
-          <RawJsonAccordion data={state.raw} />
-        </>
-      )}
+      {state.kind === "ready" && <ReadyView row={state.row} raw={state.raw} navigate={navigate} />}
     </div>
   );
 }
 
-function Meta({ label, children }: { label: string; children: React.ReactNode }) {
-  const styles = useStyles();
+function ReadyView({
+  row,
+  raw,
+  navigate,
+}: {
+  row: AppRow;
+  raw: unknown;
+  navigate: ReturnType<typeof useNavigate>;
+}) {
+  const styles = useDetailStyles();
+  const ownerLabel = row.ownerDisplayName || row.ownerId;
+  const entityKind = resourceTypeToEntityKind(row.type);
+  const hasConfig = !!(row.appType || row.subType || row.logicalName || row.appModuleId);
+
   return (
-    <div className={styles.metaItem}>
-      <Text className={styles.metaLabel}>{label}</Text>
-      <Text>{children}</Text>
-    </div>
+    <>
+      {entityKind && (
+        <div className={styles.colFull}>
+          <PortalActionsBar
+            context={{
+              entityKind,
+              entityId: row.id,
+              environmentId: row.environmentId,
+              logicalName: row.logicalName || undefined,
+              appModuleId: row.appModuleId || undefined,
+            }}
+          />
+        </div>
+      )}
+
+      {/* 1. Overview header */}
+      <div className={`${styles.header} ${styles.colFull}`}>
+        <Text size={700} weight="semibold">
+          {row.displayName || row.id}
+        </Text>
+        <div className={styles.badgeRow}>
+          <Badge appearance="filled" color="brand">
+            {shortResourceType(row.type)}
+          </Badge>
+          {row.isFeatured && (
+            <Badge appearance="outline" color="success">
+              Featured
+            </Badge>
+          )}
+          {row.bypassConsent && (
+            <Badge appearance="outline" color="warning">
+              Bypass consent
+            </Badge>
+          )}
+          {row.isQuarantined && (
+            <Badge appearance="filled" color="danger">
+              Quarantined
+            </Badge>
+          )}
+        </div>
+        <div className={styles.summaryLine}>
+          {ownerLabel && (
+            <>
+              <Text size={300}>Owned by</Text>
+              <Text size={300} weight="semibold">
+                {ownerLabel}
+              </Text>
+            </>
+          )}
+          {row.environmentId && (
+            <>
+              {ownerLabel && <span className={styles.summaryDot} aria-hidden>·</span>}
+              <Text size={300}>in</Text>
+              <Link
+                onClick={() =>
+                  navigate(`/environments/${encodeURIComponent(row.environmentId)}`)
+                }
+              >
+                {row.environmentName || row.environmentId}
+              </Link>
+            </>
+          )}
+          {row.region && (
+            <>
+              <span className={styles.summaryDot} aria-hidden>·</span>
+              <Text size={300}>{row.region}</Text>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* 2. Configuration — kind, sub-type, Dataverse refs (MDA) */}
+      {hasConfig && (
+        <Card className={styles.colFull}>
+          <CardHeader
+            header={<Text weight="semibold">Configuration</Text>}
+            description={<Text size={200}>How this app is classified and wired up.</Text>}
+          />
+          <Divider />
+          <div className={styles.cardBody}>
+            <div className={styles.metaGrid}>
+              {row.appType && <Meta label="App type">{row.appType}</Meta>}
+              {row.subType && <Meta label="Sub-type">{row.subType}</Meta>}
+              {row.logicalName && (
+                <Meta label="Logical name">
+                  <span className={styles.mono}>{row.logicalName}</span>
+                </Meta>
+              )}
+              {row.appModuleId && (
+                <Meta label="App module ID">
+                  <span className={styles.mono}>{row.appModuleId}</span>
+                </Meta>
+              )}
+            </div>
+          </div>
+        </Card>
+      )}
+
+      {/* 3. Connectors & actions */}
+      <div className={styles.colFull}>
+        <ConnectorsCard connectors={row.connectors} />
+      </div>
+
+      {/* 4. People & sharing */}
+      <Card className={styles.colHalf}>
+        <CardHeader
+          header={<Text weight="semibold">People &amp; sharing</Text>}
+          description={<Text size={200}>Who owns this app and who it's shared with.</Text>}
+        />
+        <Divider />
+        <div className={styles.cardBody}>
+          <div className={styles.metaGridTwo}>
+            <Meta label="Owner">{ownerLabel || "—"}</Meta>
+            <Meta label="Created by">{row.createdBy || "—"}</Meta>
+            <Meta label="Last modified by">{row.lastModifiedBy || "—"}</Meta>
+            <Meta label="Shared users">{row.sharedUsersCount.toLocaleString()}</Meta>
+            <Meta label="Shared groups">{row.sharedGroupsCount.toLocaleString()}</Meta>
+          </div>
+        </div>
+      </Card>
+
+      {/* 5. Lifecycle */}
+      <Card className={styles.colHalf}>
+        <CardHeader
+          header={<Text weight="semibold">Lifecycle</Text>}
+          description={
+            <Text size={200}>When this app was created, last modified, and last opened.</Text>
+          }
+        />
+        <Divider />
+        <div className={styles.cardBody}>
+          <div className={styles.metaGridTwo}>
+            <Meta label="Created on">
+              <DateWithRelative value={row.createdAt} />
+            </Meta>
+            <Meta label="Last modified">
+              <DateWithRelative value={row.lastModifiedAt} />
+            </Meta>
+            <Meta label="Last launched">
+              <DateWithRelative value={row.lastLaunchedAt} />
+            </Meta>
+          </div>
+        </div>
+      </Card>
+
+      {/* 6. Identifiers — collapsed */}
+      <IdentifiersAccordion
+        className={styles.colFull}
+        items={[
+          { label: "App ID", value: row.id },
+          ...(row.logicalName ? [{ label: "Logical name", value: row.logicalName }] : []),
+          ...(row.appModuleId ? [{ label: "App module ID", value: row.appModuleId }] : []),
+          { label: "Environment ID", value: row.environmentId },
+          { label: "Tenant ID", value: row.tenantId },
+          { label: "Resource type", value: row.type },
+        ]}
+      />
+
+      {/* 7. Raw JSON */}
+      <div className={styles.colFull}>
+        <RawJsonAccordion data={raw} />
+      </div>
+    </>
   );
 }

@@ -109,14 +109,14 @@ break-out so consumers don't need any wrapping `<div>` or extra styles.
 | ---                          | ---    |
 | `AgentDetail.tsx`            | ✅     |
 | `EnvironmentDetail.tsx`      | ✅     |
-| `AppDetail.tsx`              | ❌     |
-| `FlowDetail.tsx`             | ❌     |
-| `EnvironmentGroupDetail.tsx` | ❌     |
+| `AppDetail.tsx`              | ✅     |
+| `FlowDetail.tsx`             | ✅     |
+| `EnvironmentGroupDetail.tsx` | ✅     |
 
-The four remaining pages are mechanical replications of the agent /
-environment patterns. The registry already handles all four entity kinds
-on the app side and all three on the flow side, plus `environmentGroup`
-for PPAC.
+All five resource detail pages render the bar; the registry handles every
+entity kind they surface. `DashboardDetail.tsx` is intentionally
+out-of-scope — it's a user-editable tile dashboard, not a Power Platform
+resource view, so no external portal applies.
 
 ## Portal entries today
 

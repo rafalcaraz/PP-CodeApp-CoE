@@ -21,6 +21,7 @@ import {
   Divider,
   Dropdown,
   Option,
+  Link,
   type OptionOnSelectData,
   type SelectionEvents,
 } from "@fluentui/react-components";
@@ -36,42 +37,23 @@ import {
 } from "../data/inventory";
 import { EmptyPane, ErrorPane, LoadingPane } from "../components/Status";
 import { PortalActionsBar } from "../components/PortalActions";
+import { RawJsonAccordion } from "../components/RawJsonAccordion";
+import {
+  DateWithRelative,
+  IdentifiersAccordion,
+  Meta,
+  formatDate,
+  useDetailStyles,
+} from "../components/detail";
 
-const useStyles = makeStyles({
-  root: {
-    display: "flex",
-    flexDirection: "column",
-    gap: tokens.spacingVerticalL,
-  },
-  headerBlock: {
-    display: "flex",
-    flexDirection: "column",
-    gap: tokens.spacingVerticalXS,
-  },
-  meta: {
-    display: "flex",
-    gap: tokens.spacingHorizontalXL,
-    color: tokens.colorNeutralForeground3,
-    flexWrap: "wrap",
-    fontSize: tokens.fontSizeBase200,
-  },
-  section: {
-    display: "flex",
-    flexDirection: "column",
-    gap: tokens.spacingVerticalM,
-  },
-  sectionTitle: {
-    fontWeight: tokens.fontWeightSemibold,
-  },
-  toolbar: {
-    display: "flex",
-    alignItems: "center",
-    gap: tokens.spacingHorizontalM,
-  },
+// Environment-specific styles (stat-card grid + resources-card body) that
+// aren't shared with the simpler resource detail pages.
+const usePageStyles = makeStyles({
   statGrid: {
     display: "grid",
     gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
     gap: tokens.spacingHorizontalM,
+    padding: tokens.spacingHorizontalL,
   },
   statCard: {
     padding: tokens.spacingVerticalM,
@@ -85,13 +67,18 @@ const useStyles = makeStyles({
     color: tokens.colorNeutralForeground3,
     fontSize: tokens.fontSizeBase200,
   },
+  resourcesBody: {
+    display: "flex",
+    flexDirection: "column",
+    gap: tokens.spacingVerticalM,
+    padding: tokens.spacingHorizontalL,
+  },
+  toolbar: {
+    display: "flex",
+    alignItems: "center",
+    gap: tokens.spacingHorizontalM,
+  },
 });
-
-function formatDate(value: string): string {
-  if (!value) return "—";
-  const d = new Date(value);
-  return Number.isNaN(d.getTime()) ? value : d.toLocaleString();
-}
 
 interface AsyncSlot<T> {
   kind: "loading" | "error" | "ready";
@@ -102,11 +89,13 @@ interface AsyncSlot<T> {
 const ALL_TYPES_KEY = "__all__";
 
 export function EnvironmentDetail() {
-  const styles = useStyles();
+  const styles = useDetailStyles();
   const navigate = useNavigate();
   const { envId = "" } = useParams<{ envId: string }>();
 
-  const [env, setEnv] = useState<AsyncSlot<EnvironmentRow | null>>({ kind: "loading" });
+  const [env, setEnv] = useState<AsyncSlot<{ row: EnvironmentRow; raw: unknown } | null>>({
+    kind: "loading",
+  });
   const [counts, setCounts] = useState<AsyncSlot<ResourceCountRow[]>>({ kind: "loading" });
   const [resources, setResources] = useState<AsyncSlot<ResourceRow[]>>({ kind: "loading" });
   const [typeFilter, setTypeFilter] = useState<string>(ALL_TYPES_KEY);
@@ -196,169 +185,316 @@ export function EnvironmentDetail() {
 
   return (
     <div className={styles.root}>
-      <Breadcrumb>
-        <BreadcrumbItem>
-          <BreadcrumbButton onClick={() => navigate("/environments")}>
-            Environments
-          </BreadcrumbButton>
-        </BreadcrumbItem>
-        <BreadcrumbDivider />
-        <BreadcrumbItem>
-          <BreadcrumbButton current>
-            {env.kind === "ready" && env.data?.displayName ? env.data.displayName : envId}
-          </BreadcrumbButton>
-        </BreadcrumbItem>
-      </Breadcrumb>
+      <div className={styles.colFull}>
+        <Breadcrumb>
+          <BreadcrumbItem>
+            <BreadcrumbButton onClick={() => navigate("/environments")}>
+              Environments
+            </BreadcrumbButton>
+          </BreadcrumbItem>
+          <BreadcrumbDivider />
+          <BreadcrumbItem>
+            <BreadcrumbButton current>
+              {env.kind === "ready" && env.data?.row.displayName ? env.data.row.displayName : envId}
+            </BreadcrumbButton>
+          </BreadcrumbItem>
+        </Breadcrumb>
+      </div>
 
-      {env.kind === "loading" && <LoadingPane label="Loading environment…" />}
+      {env.kind === "loading" && (
+        <div className={styles.colFull}>
+          <LoadingPane label="Loading environment…" />
+        </div>
+      )}
 
       {env.kind === "error" && (
-        <ErrorPane title="Couldn't load environment" message={env.message ?? "Unknown error"} />
+        <div className={styles.colFull}>
+          <ErrorPane title="Couldn't load environment" message={env.message ?? "Unknown error"} />
+        </div>
       )}
 
       {env.kind === "ready" && !env.data && (
-        <EmptyPane message={`Environment "${envId}" was not found.`} />
+        <div className={styles.colFull}>
+          <EmptyPane message={`Environment "${envId}" was not found.`} />
+        </div>
       )}
 
       {env.kind === "ready" && env.data && (
-        <>
-          <PortalActionsBar
-            context={{
-              entityKind: "environment",
-              entityId: env.data.id,
-              environmentId: env.data.id,
-            }}
-          />
-          <div className={styles.headerBlock}>
-            <Text size={600} weight="semibold">
-              {env.data.displayName || env.data.id}
-            </Text>
-            <div className={styles.meta}>
-              <span>
-                <strong>Type:</strong> {env.data.environmentType || "—"}
-              </span>
-              <span>
-                <strong>Region:</strong> {env.data.region || "—"}
-              </span>
-              <span>
-                <strong>Managed:</strong> {env.data.isManaged ? "Yes" : "No"}
-              </span>
-              <span>
-                <strong>Group:</strong>{" "}
-                {env.data.environmentGroupId ? (
-                  <a
-                    href="#"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      navigate(`/environment-groups/${encodeURIComponent(env.data!.environmentGroupId)}`);
-                    }}
-                  >
-                    {env.data.environmentGroup || env.data.environmentGroupId}
-                  </a>
-                ) : (
-                  "—"
-                )}
-              </span>
-              <span>
-                <strong>Created:</strong> {formatDate(env.data.createdAt)}
-              </span>
-              <span>
-                <strong>ID:</strong> {env.data.id}
-              </span>
-            </div>
+        <ReadyView
+          row={env.data.row}
+          raw={env.data.raw}
+          navigate={navigate}
+          counts={counts}
+          resources={resources}
+          visibleResources={visibleResources}
+          typeFilter={typeFilter}
+          typeOptions={typeOptions}
+          selectedTypeText={selectedTypeText}
+          onTypeFilterSelect={onTypeFilterSelect}
+          resourceColumns={resourceColumns}
+        />
+      )}
+    </div>
+  );
+}
+
+interface ReadyViewProps {
+  row: EnvironmentRow;
+  raw: unknown;
+  navigate: ReturnType<typeof useNavigate>;
+  counts: AsyncSlot<ResourceCountRow[]>;
+  resources: AsyncSlot<ResourceRow[]>;
+  visibleResources: ResourceRow[];
+  typeFilter: string;
+  typeOptions: ResourceCountRow[];
+  selectedTypeText: string;
+  onTypeFilterSelect: (e: SelectionEvents, data: OptionOnSelectData) => void;
+  resourceColumns: TableColumnDefinition<ResourceRow>[];
+}
+
+function ReadyView({
+  row,
+  raw,
+  navigate,
+  counts,
+  resources,
+  visibleResources,
+  typeFilter,
+  typeOptions,
+  selectedTypeText,
+  onTypeFilterSelect,
+  resourceColumns,
+}: ReadyViewProps) {
+  const styles = useDetailStyles();
+  const page = usePageStyles();
+  return (
+    <>
+      <div className={styles.colFull}>
+        <PortalActionsBar
+          context={{
+            entityKind: "environment",
+            entityId: row.id,
+            environmentId: row.id,
+          }}
+        />
+      </div>
+
+      {/* 1. Overview header */}
+      <div className={`${styles.header} ${styles.colFull}`}>
+        <Text size={700} weight="semibold">
+          {row.displayName || row.id}
+        </Text>
+        <div className={styles.badgeRow}>
+          {row.environmentType && (
+            <Badge appearance="filled" color="brand">
+              {row.environmentType}
+            </Badge>
+          )}
+          {row.isManaged ? (
+            <Badge appearance="outline" color="success">
+              Managed
+            </Badge>
+          ) : (
+            <Badge appearance="outline">Standard</Badge>
+          )}
+        </div>
+        <div className={styles.summaryLine}>
+          {row.environmentGroupId ? (
+            <>
+              <Text size={300}>in group</Text>
+              <Link
+                onClick={() =>
+                  navigate(`/environment-groups/${encodeURIComponent(row.environmentGroupId)}`)
+                }
+              >
+                {row.environmentGroup || row.environmentGroupId}
+              </Link>
+            </>
+          ) : (
+            <Text size={300}>No environment group assigned</Text>
+          )}
+          {row.region && (
+            <>
+              <span className={styles.summaryDot} aria-hidden>·</span>
+              <Text size={300}>{row.region}</Text>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* 2. Details */}
+      <Card className={styles.colHalf}>
+        <CardHeader
+          header={<Text weight="semibold">Details</Text>}
+          description={<Text size={200}>Shape and management posture of this environment.</Text>}
+        />
+        <Divider />
+        <div className={styles.cardBody}>
+          <div className={styles.metaGridTwo}>
+            <Meta label="Type">{row.environmentType || "—"}</Meta>
+            <Meta label="Region">{row.region || "—"}</Meta>
+            <Meta label="Managed">{row.isManaged ? "Yes" : "No"}</Meta>
+            <Meta label="Group">
+              {row.environmentGroupId ? (
+                <Link
+                  onClick={() =>
+                    navigate(`/environment-groups/${encodeURIComponent(row.environmentGroupId)}`)
+                  }
+                >
+                  {row.environmentGroup || row.environmentGroupId}
+                </Link>
+              ) : (
+                "—"
+              )}
+            </Meta>
           </div>
+        </div>
+      </Card>
 
-          <Divider />
+      {/* 3. Lifecycle */}
+      <Card className={styles.colHalf}>
+        <CardHeader
+          header={<Text weight="semibold">Lifecycle</Text>}
+          description={<Text size={200}>When this environment was created and last modified.</Text>}
+        />
+        <Divider />
+        <div className={styles.cardBody}>
+          <div className={styles.metaGridTwo}>
+            <Meta label="Created on">
+              <DateWithRelative value={row.createdAt} />
+            </Meta>
+            <Meta label="Last modified">
+              <DateWithRelative value={row.lastModifiedAt} />
+            </Meta>
+            <Meta label="Created by">{row.createdBy || "—"}</Meta>
+          </div>
+        </div>
+      </Card>
 
-          <section className={styles.section}>
-            <Text className={styles.sectionTitle} size={500}>
-              Resource roll-up
-            </Text>
-            {counts.kind === "loading" && <LoadingPane label="Loading resource counts…" />}
-            {counts.kind === "error" && (
-              <ErrorPane title="Couldn't load resource roll-up" message={counts.message ?? "Unknown error"} />
-            )}
-            {counts.kind === "ready" && (counts.data?.length ?? 0) === 0 && (
-              <EmptyPane message="No resources found in this environment." />
-            )}
-            {counts.kind === "ready" && counts.data && counts.data.length > 0 && (
-              <div className={styles.statGrid}>
-                {counts.data.map((c) => (
-                  <Card key={c.type} className={styles.statCard} appearance="outline">
-                    <CardHeader
-                      header={<Text className={styles.statValue}>{c.count}</Text>}
-                      description={
-                        <Text className={styles.statLabel}>{friendlyResourceType(c.type)}</Text>
-                      }
-                    />
-                  </Card>
-                ))}
-              </div>
-            )}
-          </section>
+      {/* 4. Resource roll-up */}
+      <Card className={styles.colFull}>
+        <CardHeader
+          header={<Text weight="semibold">Resource roll-up</Text>}
+          description={<Text size={200}>Count of each resource type inside this environment.</Text>}
+        />
+        <Divider />
+        {counts.kind === "loading" && (
+          <div className={styles.cardBody}>
+            <LoadingPane label="Loading resource counts…" />
+          </div>
+        )}
+        {counts.kind === "error" && (
+          <div className={styles.cardBody}>
+            <ErrorPane
+              title="Couldn't load resource roll-up"
+              message={counts.message ?? "Unknown error"}
+            />
+          </div>
+        )}
+        {counts.kind === "ready" && (counts.data?.length ?? 0) === 0 && (
+          <div className={styles.cardBody}>
+            <EmptyPane message="No resources found in this environment." />
+          </div>
+        )}
+        {counts.kind === "ready" && counts.data && counts.data.length > 0 && (
+          <div className={page.statGrid}>
+            {counts.data.map((c) => (
+              <Card key={c.type} className={page.statCard} appearance="outline">
+                <CardHeader
+                  header={<Text className={page.statValue}>{c.count}</Text>}
+                  description={
+                    <Text className={page.statLabel}>{friendlyResourceType(c.type)}</Text>
+                  }
+                />
+              </Card>
+            ))}
+          </div>
+        )}
+      </Card>
 
-          <Divider />
-
-          <section className={styles.section}>
-            <Text className={styles.sectionTitle} size={500}>
+      {/* 5. Resources table */}
+      <Card className={styles.colFull}>
+        <CardHeader
+          header={
+            <Text weight="semibold">
               Resources
               {resources.kind === "ready" ? ` (${visibleResources.length})` : ""}
             </Text>
+          }
+          description={<Text size={200}>Apps, flows, and agents living in this environment.</Text>}
+        />
+        <Divider />
+        <div className={page.resourcesBody}>
+          {resources.kind === "ready" && resources.data && resources.data.length > 0 && (
+            <div className={page.toolbar}>
+              <Dropdown
+                value={selectedTypeText}
+                selectedOptions={[typeFilter]}
+                onOptionSelect={onTypeFilterSelect}
+              >
+                <Option value={ALL_TYPES_KEY}>All types</Option>
+                {typeOptions.map((t) => (
+                  <Option key={t.type} value={t.type} text={friendlyResourceType(t.type)}>
+                    {friendlyResourceType(t.type)} ({t.count})
+                  </Option>
+                ))}
+              </Dropdown>
+            </div>
+          )}
 
-            {resources.kind === "ready" && resources.data && resources.data.length > 0 && (
-              <div className={styles.toolbar}>
-                <Dropdown
-                  value={selectedTypeText}
-                  selectedOptions={[typeFilter]}
-                  onOptionSelect={onTypeFilterSelect}
-                >
-                  <Option value={ALL_TYPES_KEY}>All types</Option>
-                  {typeOptions.map((t) => (
-                    <Option key={t.type} value={t.type} text={friendlyResourceType(t.type)}>
-                      {friendlyResourceType(t.type)} ({t.count})
-                    </Option>
-                  ))}
-                </Dropdown>
-              </div>
-            )}
-
-            {resources.kind === "loading" && <LoadingPane label="Loading resources…" />}
-            {resources.kind === "error" && (
-              <ErrorPane title="Couldn't load resources" message={resources.message ?? "Unknown error"} />
-            )}
-            {resources.kind === "ready" && (resources.data?.length ?? 0) === 0 && (
-              <EmptyPane message="No resources found in this environment." />
-            )}
-            {resources.kind === "ready" && visibleResources.length === 0 && (resources.data?.length ?? 0) > 0 && (
+          {resources.kind === "loading" && <LoadingPane label="Loading resources…" />}
+          {resources.kind === "error" && (
+            <ErrorPane title="Couldn't load resources" message={resources.message ?? "Unknown error"} />
+          )}
+          {resources.kind === "ready" && (resources.data?.length ?? 0) === 0 && (
+            <EmptyPane message="No resources found in this environment." />
+          )}
+          {resources.kind === "ready" &&
+            visibleResources.length === 0 &&
+            (resources.data?.length ?? 0) > 0 && (
               <EmptyPane message={`No ${selectedTypeText.toLowerCase()} in this environment.`} />
             )}
-            {resources.kind === "ready" && visibleResources.length > 0 && (
-              <DataGrid
-                items={visibleResources}
-                columns={resourceColumns}
-                getRowId={(row) => row.id}
-                sortable={false}
-                focusMode="composite"
-              >
-                <DataGridHeader>
-                  <DataGridRow>
-                    {({ renderHeaderCell }) => (
-                      <DataGridHeaderCell>{renderHeaderCell()}</DataGridHeaderCell>
-                    )}
-                  </DataGridRow>
-                </DataGridHeader>
-                <DataGridBody<ResourceRow>>
-                  {({ item, rowId }) => (
-                    <DataGridRow<ResourceRow> key={rowId}>
-                      {({ renderCell }) => <DataGridCell>{renderCell(item)}</DataGridCell>}
-                    </DataGridRow>
+          {resources.kind === "ready" && visibleResources.length > 0 && (
+            <DataGrid
+              items={visibleResources}
+              columns={resourceColumns}
+              getRowId={(r) => r.id}
+              sortable={false}
+              focusMode="composite"
+            >
+              <DataGridHeader>
+                <DataGridRow>
+                  {({ renderHeaderCell }) => (
+                    <DataGridHeaderCell>{renderHeaderCell()}</DataGridHeaderCell>
                   )}
-                </DataGridBody>
-              </DataGrid>
-            )}
-          </section>
-        </>
-      )}
-    </div>
+                </DataGridRow>
+              </DataGridHeader>
+              <DataGridBody<ResourceRow>>
+                {({ item, rowId }) => (
+                  <DataGridRow<ResourceRow> key={rowId}>
+                    {({ renderCell }) => <DataGridCell>{renderCell(item)}</DataGridCell>}
+                  </DataGridRow>
+                )}
+              </DataGridBody>
+            </DataGrid>
+          )}
+        </div>
+      </Card>
+
+      {/* 6. Identifiers — collapsed */}
+      <IdentifiersAccordion
+        className={styles.colFull}
+        items={[
+          { label: "Environment ID", value: row.id },
+          { label: "Environment group ID", value: row.environmentGroupId },
+          { label: "Resource type", value: "microsoft.powerplatform/environments" },
+        ]}
+      />
+
+      {/* 7. Raw JSON */}
+      <div className={styles.colFull}>
+        <RawJsonAccordion data={raw} />
+      </div>
+    </>
   );
 }

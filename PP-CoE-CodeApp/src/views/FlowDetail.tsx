@@ -14,58 +14,68 @@ import {
   Divider,
 } from "@fluentui/react-components";
 import { useNavigate, useParams } from "react-router-dom";
-import { getFlow, shortResourceType, type FlowRow } from "../data/inventory";
+import {
+  getFlow,
+  shortResourceType,
+  type FlowRow,
+  type FlowTrigger,
+} from "../data/inventory";
 import { ErrorPane, LoadingPane } from "../components/Status";
 import { ConnectorsCard } from "../components/ConnectorsCard";
 import { RawJsonAccordion } from "../components/RawJsonAccordion";
+import {
+  PortalActionsBar,
+  resourceTypeToEntityKind,
+} from "../components/PortalActions";
+import {
+  DateWithRelative,
+  IdentifiersAccordion,
+  Meta,
+  useDetailStyles,
+} from "../components/detail";
 
-const useStyles = makeStyles({
-  root: {
-    display: "flex",
-    flexDirection: "column",
-    gap: tokens.spacingVerticalL,
-  },
-  header: {
-    display: "flex",
-    flexDirection: "column",
-    gap: tokens.spacingVerticalS,
-  },
-  metaGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))",
-    gap: tokens.spacingHorizontalL,
-    rowGap: tokens.spacingVerticalM,
-  },
-  metaItem: {
-    display: "flex",
-    flexDirection: "column",
-    gap: tokens.spacingVerticalXXS,
-  },
-  metaLabel: {
-    color: tokens.colorNeutralForeground3,
-    fontSize: tokens.fontSizeBase200,
-  },
-  badgeRow: {
-    display: "flex",
-    flexWrap: "wrap",
-    gap: tokens.spacingHorizontalS,
-  },
-  rawJson: {
-    fontFamily: "Consolas, 'Courier New', monospace",
-    fontSize: tokens.fontSizeBase200,
-    backgroundColor: tokens.colorNeutralBackground2,
-    padding: tokens.spacingHorizontalM,
-    borderRadius: tokens.borderRadiusMedium,
-    overflow: "auto",
-    maxHeight: "480px",
-    whiteSpace: "pre",
+const usePageStyles = makeStyles({
+  triggerSummary: {
+    color: tokens.colorNeutralForeground2,
+    marginTop: tokens.spacingVerticalS,
   },
 });
 
-function formatDate(value: string): string {
-  if (!value) return "—";
-  const d = new Date(value);
-  return Number.isNaN(d.getTime()) ? value : d.toLocaleString();
+// Human-readable one-liner describing what fires a flow, based on the trigger
+// type + operation ID. The inventory exposes mostly opaque codes here, so we
+// translate the common ones into something a CoE admin can skim.
+function describeTrigger(
+  flowTriggerType: string,
+  trigger: FlowTrigger | null
+): string {
+  const op = trigger?.operationId ?? "";
+  const tt = flowTriggerType.toLowerCase();
+
+  // Agent-invoked: cloud flow called by a Copilot Studio agent as a skill.
+  if (op === "RequestSkills") {
+    return "Invoked on demand by a Copilot Studio agent calling this flow as a skill.";
+  }
+  // Manual / button-style triggers.
+  if (op === "RequestButton" || op === "manual") {
+    return "Started manually by a user clicking the Run button.";
+  }
+  if (op === "RequestPowerAppV2" || op === "RequestPowerApp") {
+    return "Started on demand when a Power App invokes this flow.";
+  }
+
+  switch (tt) {
+    case "scheduled":
+    case "recurrence":
+      return "Runs on a recurring schedule.";
+    case "automated":
+      return "Fires automatically when an external event occurs.";
+    case "instant":
+      return "Started on demand (button, Power App, or other manual entry point).";
+    case "manual":
+      return "Started manually by a user.";
+    default:
+      return "";
+  }
 }
 
 type State =
@@ -75,7 +85,7 @@ type State =
   | { kind: "missing" };
 
 export function FlowDetail() {
-  const styles = useStyles();
+  const styles = useDetailStyles();
   const navigate = useNavigate();
   const { flowId } = useParams<{ flowId: string }>();
   const [state, setState] = useState<State>({ kind: "loading" });
@@ -104,140 +114,233 @@ export function FlowDetail() {
 
   return (
     <div className={styles.root}>
-      <Breadcrumb size="medium">
-        <BreadcrumbItem>
-          <BreadcrumbButton onClick={() => navigate("/flows")}>Flows</BreadcrumbButton>
-        </BreadcrumbItem>
-        <BreadcrumbDivider />
-        <BreadcrumbItem>
-          <BreadcrumbButton current>
-            {state.kind === "ready" ? state.row.displayName || flowId : flowId}
-          </BreadcrumbButton>
-        </BreadcrumbItem>
-      </Breadcrumb>
+      <div className={styles.colFull}>
+        <Breadcrumb size="medium">
+          <BreadcrumbItem>
+            <BreadcrumbButton onClick={() => navigate("/flows")}>Flows</BreadcrumbButton>
+          </BreadcrumbItem>
+          <BreadcrumbDivider />
+          <BreadcrumbItem>
+            <BreadcrumbButton current>
+              {state.kind === "ready" ? state.row.displayName || flowId : flowId}
+            </BreadcrumbButton>
+          </BreadcrumbItem>
+        </Breadcrumb>
+      </div>
 
-      {state.kind === "loading" && <LoadingPane label="Loading flow…" />}
+      {state.kind === "loading" && (
+        <div className={styles.colFull}>
+          <LoadingPane label="Loading flow…" />
+        </div>
+      )}
 
       {state.kind === "error" && (
-        <ErrorPane title="Couldn't load flow" message={state.message} />
+        <div className={styles.colFull}>
+          <ErrorPane title="Couldn't load flow" message={state.message} />
+        </div>
       )}
 
       {state.kind === "missing" && (
-        <ErrorPane
-          title="Flow not found"
-          message="No flow exists with this ID, or your account doesn't have visibility to it."
-        />
+        <div className={styles.colFull}>
+          <ErrorPane
+            title="Flow not found"
+            message="No flow exists with this ID, or your account doesn't have visibility to it."
+          />
+        </div>
       )}
 
-      {state.kind === "ready" && (
-        <>
-          <div className={styles.header}>
-            <Text size={700} weight="semibold">
-              {state.row.displayName || state.row.id}
-            </Text>
-            <div className={styles.badgeRow}>
-              <Badge appearance="filled" color="brand">
-                {shortResourceType(state.row.type)}
-              </Badge>
-              {state.row.status && (
-                <Badge appearance="filled" color={statusColor(state.row.status)}>
-                  {state.row.status}
-                </Badge>
-              )}
-              {state.row.flowTriggerType && (
-                <Badge appearance="outline">{state.row.flowTriggerType} trigger</Badge>
-              )}
-            </div>
-          </div>
-
-          <Card>
-            <CardHeader
-              header={<Text weight="semibold">Trigger</Text>}
-              description={<Text size={200}>What starts a run of this flow.</Text>}
-            />
-            <Divider />
-            <div style={{ padding: tokens.spacingHorizontalL }}>
-              {state.row.trigger || state.row.flowTriggerType ? (
-                <div className={styles.metaGrid}>
-                  <Meta label="Trigger type">{state.row.flowTriggerType || "—"}</Meta>
-                  <Meta label="Connector">
-                    {state.row.trigger?.connectorDisplayName ||
-                      state.row.trigger?.connectorId ||
-                      "—"}
-                  </Meta>
-                  <Meta label="Operation">
-                    {state.row.trigger?.operationDisplayName || "—"}
-                  </Meta>
-                  <Meta label="Operation ID">
-                    {state.row.trigger?.operationId || "—"}
-                  </Meta>
-                </div>
-              ) : (
-                <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
-                  No trigger metadata reported.
-                </Text>
-              )}
-            </div>
-          </Card>
-
-          <Card>
-            <CardHeader header={<Text weight="semibold">Details</Text>} />
-            <Divider />
-            <div style={{ padding: tokens.spacingHorizontalL }}>
-              <div className={styles.metaGrid}>
-                <Meta label="Environment">
-                  {state.row.environmentId ? (
-                    <Link
-                      onClick={() =>
-                        navigate(`/environments/${encodeURIComponent(state.row.environmentId)}`)
-                      }
-                    >
-                      {state.row.environmentName || state.row.environmentId}
-                    </Link>
-                  ) : (
-                    "—"
-                  )}
-                </Meta>
-                <Meta label="Region">{state.row.region || "—"}</Meta>
-                <Meta label="Owner">
-                  {state.row.ownerDisplayName || state.row.ownerId || "—"}
-                </Meta>
-                <Meta label="Status">{state.row.status || "—"}</Meta>
-                <Meta label="Created on">{formatDate(state.row.createdAt)}</Meta>
-                <Meta label="Created by">{state.row.createdBy || "—"}</Meta>
-                <Meta label="Last modified">{formatDate(state.row.lastModifiedAt)}</Meta>
-                <Meta label="Last modified by">{state.row.lastModifiedBy || "—"}</Meta>
-                <Meta label="Workflow entity ID">{state.row.workflowEntityId || "—"}</Meta>
-                <Meta label="Tenant ID">{state.row.tenantId || "—"}</Meta>
-                <Meta label="ID">{state.row.id}</Meta>
-              </div>
-            </div>
-          </Card>
-
-          <ConnectorsCard connectors={state.row.connectors} />
-
-          <RawJsonAccordion data={state.raw} />
-        </>
-      )}
+      {state.kind === "ready" && <ReadyView row={state.row} raw={state.raw} navigate={navigate} />}
     </div>
   );
 }
 
-function statusColor(status: string): "success" | "danger" | "warning" | "informative" | "subtle" {
+function ReadyView({
+  row,
+  raw,
+  navigate,
+}: {
+  row: FlowRow;
+  raw: unknown;
+  navigate: ReturnType<typeof useNavigate>;
+}) {
+  const styles = useDetailStyles();
+  const page = usePageStyles();
+  const ownerLabel = row.ownerDisplayName || row.ownerId;
+  const entityKind = resourceTypeToEntityKind(row.type);
+  const triggerSummary = describeTrigger(row.flowTriggerType, row.trigger);
+  const hasTriggerMeta = !!(row.trigger || row.flowTriggerType);
+
+  return (
+    <>
+      {entityKind && (
+        <div className={styles.colFull}>
+          <PortalActionsBar
+            context={{
+              entityKind,
+              entityId: row.id,
+              environmentId: row.environmentId,
+              workflowEntityId: row.workflowEntityId || undefined,
+            }}
+          />
+        </div>
+      )}
+
+      {/* 1. Overview header — name, type/status/trigger badges, who/where */}
+      <div className={`${styles.header} ${styles.colFull}`}>
+        <Text size={700} weight="semibold">
+          {row.displayName || row.id}
+        </Text>
+        <div className={styles.badgeRow}>
+          <Badge appearance="filled" color="brand">
+            {shortResourceType(row.type)}
+          </Badge>
+          {row.status && (
+            <Badge appearance="filled" color={statusColor(row.status)}>
+              {row.status}
+            </Badge>
+          )}
+          {row.flowTriggerType && (
+            <Badge appearance="outline">{row.flowTriggerType} trigger</Badge>
+          )}
+        </div>
+        <div className={styles.summaryLine}>
+          {ownerLabel && (
+            <>
+              <Text size={300}>Owned by</Text>
+              <Text size={300} weight="semibold">
+                {ownerLabel}
+              </Text>
+            </>
+          )}
+          {row.environmentId && (
+            <>
+              {ownerLabel && <span className={styles.summaryDot} aria-hidden>·</span>}
+              <Text size={300}>in</Text>
+              <Link
+                onClick={() =>
+                  navigate(`/environments/${encodeURIComponent(row.environmentId)}`)
+                }
+              >
+                {row.environmentName || row.environmentId}
+              </Link>
+            </>
+          )}
+          {row.region && (
+            <>
+              <span className={styles.summaryDot} aria-hidden>·</span>
+              <Text size={300}>{row.region}</Text>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* 2. Trigger — what starts a run */}
+      <Card className={styles.colFull}>
+        <CardHeader
+          header={<Text weight="semibold">Trigger</Text>}
+          description={<Text size={200}>What starts a run of this flow.</Text>}
+        />
+        <Divider />
+        <div className={styles.cardBody}>
+          {hasTriggerMeta ? (
+            <>
+              <div className={styles.metaGrid}>
+                <Meta label="Trigger type">{row.flowTriggerType || "—"}</Meta>
+                <Meta label="Connector">
+                  {row.trigger?.connectorDisplayName ||
+                    row.trigger?.connectorId ||
+                    "—"}
+                </Meta>
+                <Meta label="Operation">
+                  {row.trigger?.operationDisplayName || "—"}
+                </Meta>
+                <Meta label="Operation ID">
+                  {row.trigger?.operationId ? (
+                    <span className={styles.mono}>{row.trigger.operationId}</span>
+                  ) : (
+                    "—"
+                  )}
+                </Meta>
+              </div>
+              {triggerSummary && (
+                <Text size={200} className={page.triggerSummary}>
+                  {triggerSummary}
+                </Text>
+              )}
+            </>
+          ) : (
+            <span className={styles.empty}>No trigger metadata reported.</span>
+          )}
+        </div>
+      </Card>
+
+      {/* 3. Connectors & actions */}
+      <div className={styles.colFull}>
+        <ConnectorsCard connectors={row.connectors} />
+      </div>
+
+      {/* 4. People & ownership */}
+      <Card className={styles.colHalf}>
+        <CardHeader
+          header={<Text weight="semibold">People &amp; ownership</Text>}
+          description={<Text size={200}>Who owns this flow and last touched it.</Text>}
+        />
+        <Divider />
+        <div className={styles.cardBody}>
+          <div className={styles.metaGridTwo}>
+            <Meta label="Owner">{ownerLabel || "—"}</Meta>
+            <Meta label="Created by">{row.createdBy || "—"}</Meta>
+            <Meta label="Last modified by">{row.lastModifiedBy || "—"}</Meta>
+          </div>
+        </div>
+      </Card>
+
+      {/* 5. Lifecycle */}
+      <Card className={styles.colHalf}>
+        <CardHeader
+          header={<Text weight="semibold">Lifecycle</Text>}
+          description={<Text size={200}>When this flow was created and last modified.</Text>}
+        />
+        <Divider />
+        <div className={styles.cardBody}>
+          <div className={styles.metaGridTwo}>
+            <Meta label="Created on">
+              <DateWithRelative value={row.createdAt} />
+            </Meta>
+            <Meta label="Last modified">
+              <DateWithRelative value={row.lastModifiedAt} />
+            </Meta>
+          </div>
+        </div>
+      </Card>
+
+      {/* 6. Identifiers — collapsed */}
+      <IdentifiersAccordion
+        className={styles.colFull}
+        items={[
+          { label: "Flow ID", value: row.id },
+          { label: "Workflow entity ID", value: row.workflowEntityId },
+          { label: "Environment ID", value: row.environmentId },
+          { label: "Tenant ID", value: row.tenantId },
+          { label: "Resource type", value: row.type },
+        ]}
+      />
+
+      {/* 7. Raw JSON */}
+      <div className={styles.colFull}>
+        <RawJsonAccordion data={raw} />
+      </div>
+    </>
+  );
+}
+
+function statusColor(
+  status: string
+): "success" | "danger" | "warning" | "informative" | "subtle" {
   const s = status.toLowerCase();
   if (s === "activated" || s === "started") return "success";
   if (s === "stopped") return "danger";
   if (s === "suspended") return "warning";
   if (s === "notstarted") return "informative";
   return "subtle";
-}
-
-function Meta({ label, children }: { label: string; children: React.ReactNode }) {
-  const styles = useStyles();
-  return (
-    <div className={styles.metaItem}>
-      <Text className={styles.metaLabel}>{label}</Text>
-      <Text>{children}</Text>
-    </div>
-  );
 }

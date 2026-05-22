@@ -12,10 +12,6 @@ import {
   Badge,
   Link,
   Divider,
-  Accordion,
-  AccordionHeader,
-  AccordionItem,
-  AccordionPanel,
 } from "@fluentui/react-components";
 import { useNavigate, useParams } from "react-router-dom";
 import {
@@ -28,36 +24,16 @@ import { ErrorPane, LoadingPane } from "../components/Status";
 import { ConnectorsCard } from "../components/ConnectorsCard";
 import { RawJsonAccordion } from "../components/RawJsonAccordion";
 import { PortalActionsBar } from "../components/PortalActions";
+import {
+  DateWithRelative,
+  IdentifiersAccordion,
+  Meta,
+  useDetailStyles,
+} from "../components/detail";
 
-const useStyles = makeStyles({
-  root: {
-    display: "grid",
-    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-    gap: tokens.spacingHorizontalL,
-    rowGap: tokens.spacingVerticalL,
-    "@media (max-width: 900px)": {
-      gridTemplateColumns: "1fr",
-    },
-  },
-  colFull: {
-    gridColumn: "1 / -1",
-  },
-  colHalf: {
-    gridColumn: "span 1",
-    minWidth: 0,
-    height: "100%",
-  },
-  header: {
-    display: "flex",
-    flexDirection: "column",
-    gap: tokens.spacingVerticalS,
-  },
-  metaGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))",
-    gap: tokens.spacingHorizontalL,
-    rowGap: tokens.spacingVerticalM,
-  },
+// Agent-specific styles that aren't shared with the other detail pages
+// (channels chip strip, "tools & knowledge" stat blocks, sharing chip grid).
+const usePageStyles = makeStyles({
   metaGridTight: {
     display: "grid",
     gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
@@ -70,48 +46,16 @@ const useStyles = makeStyles({
       gridTemplateColumns: "1fr",
     },
   },
-  metaGridTwo: {
-    display: "grid",
-    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-    gap: tokens.spacingHorizontalL,
-    rowGap: tokens.spacingVerticalM,
-    "@media (max-width: 500px)": {
-      gridTemplateColumns: "1fr",
-    },
-  },
   statsTight: {
     display: "grid",
     gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
     gap: tokens.spacingHorizontalL,
     rowGap: tokens.spacingVerticalM,
   },
-  metaItem: {
-    display: "flex",
-    flexDirection: "column",
-    gap: tokens.spacingVerticalXXS,
-  },
-  metaLabel: {
-    color: tokens.colorNeutralForeground3,
-    fontSize: tokens.fontSizeBase200,
-  },
-  badgeRow: {
-    display: "flex",
-    flexWrap: "wrap",
-    gap: tokens.spacingHorizontalS,
-  },
-  cardBody: {
-    padding: tokens.spacingHorizontalL,
-  },
   chips: {
     display: "flex",
     flexWrap: "wrap",
     gap: tokens.spacingHorizontalS,
-  },
-  stats: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))",
-    gap: tokens.spacingHorizontalL,
-    rowGap: tokens.spacingVerticalM,
   },
   stat: {
     display: "flex",
@@ -137,84 +81,7 @@ const useStyles = makeStyles({
     gap: tokens.spacingVerticalXXS,
     minWidth: "180px",
   },
-  empty: {
-    color: tokens.colorNeutralForeground3,
-    fontStyle: "italic",
-    fontSize: tokens.fontSizeBase200,
-  },
-  summaryLine: {
-    color: tokens.colorNeutralForeground2,
-    display: "flex",
-    flexWrap: "wrap",
-    alignItems: "center",
-    gap: tokens.spacingHorizontalS,
-    rowGap: tokens.spacingVerticalXXS,
-  },
-  summaryDot: {
-    color: tokens.colorNeutralForeground4,
-  },
-  relative: {
-    color: tokens.colorNeutralForeground3,
-    fontSize: tokens.fontSizeBase200,
-    marginLeft: tokens.spacingHorizontalXS,
-  },
-  mono: {
-    fontFamily: "Consolas, 'Courier New', monospace",
-    fontSize: tokens.fontSizeBase200,
-    wordBreak: "break-all",
-  },
-  identifiersWrapper: {
-    border: `1px solid ${tokens.colorNeutralStroke2}`,
-    borderRadius: tokens.borderRadiusMedium,
-    backgroundColor: tokens.colorNeutralBackground1,
-  },
-  identifiersGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))",
-    gap: tokens.spacingHorizontalL,
-    rowGap: tokens.spacingVerticalM,
-    padding: tokens.spacingHorizontalM,
-  },
 });
-
-function formatDate(value: string): string {
-  if (!value) return "—";
-  const d = new Date(value);
-  return Number.isNaN(d.getTime()) ? value : d.toLocaleString();
-}
-
-function formatRelative(value: string): string {
-  if (!value) return "";
-  const d = new Date(value);
-  const ms = d.getTime();
-  if (Number.isNaN(ms)) return "";
-  const diffMs = Date.now() - ms;
-  const minute = 60_000;
-  const hour = 60 * minute;
-  const day = 24 * hour;
-  const future = diffMs < 0;
-  const abs = Math.abs(diffMs);
-  let label: string;
-  if (abs < minute) label = "just now";
-  else if (abs < hour) {
-    const n = Math.round(abs / minute);
-    label = `${n} minute${n === 1 ? "" : "s"}`;
-  } else if (abs < day) {
-    const n = Math.round(abs / hour);
-    label = `${n} hour${n === 1 ? "" : "s"}`;
-  } else if (abs < 30 * day) {
-    const n = Math.round(abs / day);
-    label = n === 1 ? "yesterday" : `${n} days`;
-  } else if (abs < 365 * day) {
-    const n = Math.round(abs / (30 * day));
-    label = `${n} month${n === 1 ? "" : "s"}`;
-  } else {
-    const n = Math.round(abs / (365 * day));
-    label = `${n} year${n === 1 ? "" : "s"}`;
-  }
-  if (label === "just now" || label === "yesterday") return label;
-  return future ? `in ${label}` : `${label} ago`;
-}
 
 type State =
   | { kind: "loading" }
@@ -223,7 +90,7 @@ type State =
   | { kind: "missing" };
 
 export function AgentDetail() {
-  const styles = useStyles();
+  const styles = useDetailStyles();
   const navigate = useNavigate();
   const { agentId } = useParams<{ agentId: string }>();
   const [state, setState] = useState<State>({ kind: "loading" });
@@ -301,7 +168,8 @@ function ReadyView({
   raw: unknown;
   navigate: ReturnType<typeof useNavigate>;
 }) {
-  const styles = useStyles();
+  const styles = useDetailStyles();
+  const page = usePageStyles();
   const ownerLabel = row.ownerDisplayName || row.ownerId;
   return (
     <>
@@ -314,7 +182,8 @@ function ReadyView({
           }}
         />
       </div>
-      {/* 1. Overview header — name, status, who/where summary */}
+
+      {/* 1. Overview header */}
       <div className={`${styles.header} ${styles.colFull}`}>
         <Text size={700} weight="semibold">
           {row.displayName || row.id}
@@ -373,7 +242,7 @@ function ReadyView({
         />
         <Divider />
         <div className={styles.cardBody}>
-          <div className={styles.metaGridTight}>
+          <div className={page.metaGridTight}>
             <Meta label="Model">{row.model || "—"}</Meta>
             <Meta label="Orchestration">{row.orchestration || "—"}</Meta>
             <Meta label="Authentication">{row.authentication || "—"}</Meta>
@@ -390,7 +259,7 @@ function ReadyView({
         </div>
       </Card>
 
-      {/* 3. Channels — where it's reachable */}
+      {/* 3. Channels */}
       <Card className={styles.colHalf}>
         <CardHeader
           header={
@@ -405,7 +274,7 @@ function ReadyView({
           {row.channels.length === 0 ? (
             <span className={styles.empty}>No channels reported.</span>
           ) : (
-            <div className={styles.chips}>
+            <div className={page.chips}>
               {row.channels.map((ch) => (
                 <Badge key={ch} appearance="tint" color="brand" size="medium">
                   {ch}
@@ -416,7 +285,7 @@ function ReadyView({
         </div>
       </Card>
 
-      {/* 4. Tools & knowledge — counts + connectors */}
+      {/* 4. Tools & knowledge */}
       <Card className={styles.colHalf}>
         <CardHeader
           header={<Text weight="semibold">Tools &amp; knowledge</Text>}
@@ -424,7 +293,7 @@ function ReadyView({
         />
         <Divider />
         <div className={styles.cardBody}>
-          <div className={styles.statsTight}>
+          <div className={page.statsTight}>
             <Stat
               label="Distinct connectors"
               value={row.distinctConnectors.toLocaleString()}
@@ -440,7 +309,7 @@ function ReadyView({
         <ConnectorsCard connectors={row.connectors} />
       </div>
 
-      {/* 5. People & sharing — who owns it, who can see it */}
+      {/* 5. People & sharing */}
       <Card className={styles.colHalf}>
         <CardHeader
           header={<Text weight="semibold">People &amp; sharing</Text>}
@@ -453,14 +322,14 @@ function ReadyView({
             <Meta label="Created by">{row.createdBy || "—"}</Meta>
           </div>
           <div style={{ height: tokens.spacingVerticalL }} />
-          <div className={styles.sharing}>
+          <div className={page.sharing}>
             <SharingBlock label="Editors" counts={row.sharedWithEditors} hideTenant />
             <SharingBlock label="Viewers" counts={row.sharedWithViewers} />
           </div>
         </div>
       </Card>
 
-      {/* 6. Lifecycle — is it fresh or stale */}
+      {/* 6. Lifecycle */}
       <Card className={styles.colHalf}>
         <CardHeader
           header={<Text weight="semibold">Lifecycle</Text>}
@@ -479,40 +348,20 @@ function ReadyView({
         </div>
       </Card>
 
-      {/* 7. Identifiers — collapsed by default */}
-      <div className={`${styles.identifiersWrapper} ${styles.colFull}`}>
-        <Accordion collapsible>
-          <AccordionItem value="ids">
-            <AccordionHeader>
-              <Text weight="semibold">Identifiers</Text>
-            </AccordionHeader>
-            <AccordionPanel>
-              <div className={styles.identifiersGrid}>
-                <Meta label="Agent ID">
-                  <span className={styles.mono}>{row.id}</span>
-                </Meta>
-                <Meta label="Schema name">
-                  <span className={styles.mono}>{row.schemaName || "—"}</span>
-                </Meta>
-                <Meta label="Environment ID">
-                  <span className={styles.mono}>{row.environmentId || "—"}</span>
-                </Meta>
-                <Meta label="Entra app ID">
-                  <span className={styles.mono}>{row.entraAppId || "—"}</span>
-                </Meta>
-                <Meta label="Title ID">
-                  <span className={styles.mono}>{row.titleId || "—"}</span>
-                </Meta>
-                <Meta label="Tenant ID">
-                  <span className={styles.mono}>{row.tenantId || "—"}</span>
-                </Meta>
-              </div>
-            </AccordionPanel>
-          </AccordionItem>
-        </Accordion>
-      </div>
+      {/* 7. Identifiers — collapsed */}
+      <IdentifiersAccordion
+        className={styles.colFull}
+        items={[
+          { label: "Agent ID", value: row.id },
+          { label: "Schema name", value: row.schemaName },
+          { label: "Environment ID", value: row.environmentId },
+          { label: "Entra app ID", value: row.entraAppId },
+          { label: "Title ID", value: row.titleId },
+          { label: "Tenant ID", value: row.tenantId },
+        ]}
+      />
 
-      {/* 8. Raw JSON — unchanged */}
+      {/* 8. Raw JSON */}
       <div className={styles.colFull}>
         <RawJsonAccordion data={raw} />
       </div>
@@ -520,34 +369,12 @@ function ReadyView({
   );
 }
 
-function DateWithRelative({ value }: { value: string }) {
-  const styles = useStyles();
-  if (!value) return <>—</>;
-  const rel = formatRelative(value);
-  return (
-    <>
-      {formatDate(value)}
-      {rel && <span className={styles.relative}>({rel})</span>}
-    </>
-  );
-}
-
-function Meta({ label, children }: { label: string; children: React.ReactNode }) {
-  const styles = useStyles();
-  return (
-    <div className={styles.metaItem}>
-      <Text className={styles.metaLabel}>{label}</Text>
-      <Text>{children}</Text>
-    </div>
-  );
-}
-
 function Stat({ label, value }: { label: string; value: string }) {
-  const styles = useStyles();
+  const page = usePageStyles();
   return (
-    <div className={styles.stat}>
-      <Text className={styles.statValue}>{value}</Text>
-      <Text className={styles.statLabel}>{label}</Text>
+    <div className={page.stat}>
+      <Text className={page.statValue}>{value}</Text>
+      <Text className={page.statLabel}>{label}</Text>
     </div>
   );
 }
@@ -561,11 +388,12 @@ function SharingBlock({
   counts: AgentSharingCounts;
   hideTenant?: boolean;
 }) {
-  const styles = useStyles();
+  const styles = useDetailStyles();
+  const page = usePageStyles();
   return (
-    <div className={styles.sharingBlock}>
+    <div className={page.sharingBlock}>
       <Text className={styles.metaLabel}>{label}</Text>
-      <div className={styles.chips}>
+      <div className={page.chips}>
         <Badge appearance="outline">
           {counts.userCount.toLocaleString()} user{counts.userCount === 1 ? "" : "s"}
         </Badge>
