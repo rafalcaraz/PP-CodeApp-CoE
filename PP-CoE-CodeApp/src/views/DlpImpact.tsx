@@ -41,6 +41,7 @@ import {
   extractHiddenConnectors,
   extractNonBlockedConnectors,
   queryDlpImpact,
+  synthesizeFreeformConnectorOption,
   type DlpConnectorOption,
   type DlpHiddenConnector,
   type DlpImpactResult,
@@ -216,14 +217,18 @@ function formatDate(value: string): string {
   return Number.isNaN(d.getTime()) ? value : d.toLocaleDateString();
 }
 
-function classificationLabel(c: "Confidential" | "General"): string {
-  return c === "Confidential" ? "Business" : "Non-business";
+function classificationLabel(c: "Confidential" | "General" | "Blocked"): string {
+  if (c === "Confidential") return "Business";
+  if (c === "General") return "Non-business";
+  return "Blocked";
 }
 
 function classificationColor(
-  c: "Confidential" | "General"
-): "brand" | "success" {
-  return c === "Confidential" ? "brand" : "success";
+  c: "Confidential" | "General" | "Blocked"
+): "brand" | "success" | "danger" {
+  if (c === "Confidential") return "brand";
+  if (c === "General") return "success";
+  return "danger";
 }
 
 function describeScopeMode(rawType: string, envCount: number): string {
@@ -329,13 +334,19 @@ export function DlpImpact() {
     () => (policy ? extractNonBlockedConnectors(policy) : []),
     [policy]
   );
-  const connectorOption = useMemo(
-    () =>
-      connectorSlug
-        ? connectorOptions.find((c) => c.id === connectorSlug)
-        : undefined,
-    [connectorSlug, connectorOptions]
-  );
+  // Resolve the selected connector. Three sources, in priority order:
+  //  1. Explicit entry in `connectorOptions` (the picker's built-in list).
+  //  2. Freeform slug the user typed that isn't in the policy's
+  //     `connectorGroups` — synthesized using the policy's default
+  //     classification so the before → after UI still works.
+  //  3. Nothing selected yet → undefined.
+  const connectorOption = useMemo(() => {
+    if (!connectorSlug) return undefined;
+    const explicit = connectorOptions.find((c) => c.id === connectorSlug);
+    if (explicit) return explicit;
+    if (!policy) return undefined;
+    return synthesizeFreeformConnectorOption(policy, connectorSlug);
+  }, [connectorSlug, connectorOptions, policy]);
 
   const hiddenConnectors = useMemo(
     () => (policy ? extractHiddenConnectors(policy) : []),
@@ -565,7 +576,16 @@ function ConnectorPicker({
 }) {
   const styles = useStyles();
   const selected = value ? options.find((c) => c.id === value) : undefined;
-  const [query, setQuery] = useState(selected?.name ?? "");
+  // When `value` is set but not in `options` (a freeform entry the
+  // parent synthesized), seed `query` with the slug so the input
+  // reads back what the user picked.
+  const [query, setQuery] = useState(selected?.name ?? value ?? "");
+
+  // Normalize the typed text to a candidate connector slug. Trim +
+  // lowercase + drop any whitespace, since slugs never contain spaces.
+  // Used to (a) show the "Use this connector ID" synthetic option when
+  // the query doesn't match the list, and (b) commit on Enter.
+  const candidateSlug = query.trim().toLowerCase().replace(/\s+/g, "");
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -578,18 +598,27 @@ function ConnectorPicker({
     );
   }, [options, query, selected]);
 
+  // Only offer the synthetic "Use this connector ID" option when the
+  // typed candidate is a plausible slug (non-empty, doesn't already
+  // match any option), and isn't already the selected value.
+  const showFreeform =
+    !disabled &&
+    candidateSlug.length > 0 &&
+    candidateSlug !== value &&
+    !options.some((c) => c.id === candidateSlug);
+
   const placeholder = disabled
     ? "Choose a policy first"
     : options.length === 0
-      ? "No non-blocked connectors in this policy"
-      : "Type to filter, or pick a connector…";
+      ? "Type a connector ID, e.g. shared_sql"
+      : "Type to filter or type any connector ID…";
   return (
     <label>
       <span className={styles.pickerLabel}>
         Connector to simulate blocking
         {defaultClassification && (
           <Tooltip
-            content={`Connectors not explicitly listed in this policy fall through to "${defaultClassification}".`}
+            content={`Connectors not explicitly listed in this policy fall through to "${defaultClassification}". Type any connector ID (e.g. shared_sql) to simulate blocking it.`}
             relationship="description"
           >
             <span
@@ -610,15 +639,32 @@ function ConnectorPicker({
         placeholder={placeholder}
         value={query}
         selectedOptions={value ? [value] : []}
-        disabled={disabled || options.length === 0}
+        disabled={disabled}
         onChange={(e) => setQuery((e.target as HTMLInputElement).value)}
         onOptionSelect={(_e: SelectionEvents, data: OptionOnSelectData) => {
           const picked = options.find((c) => c.id === data.optionValue);
           onChange(data.optionValue || undefined);
-          setQuery(picked?.name ?? "");
+          // For explicit options, show the friendly name; for freeform
+          // picks (value === candidateSlug), keep the slug they typed.
+          setQuery(picked?.name ?? data.optionValue ?? "");
         }}
       >
-        {filtered.length === 0 ? (
+        {showFreeform && (
+          <Option
+            key="__freeform"
+            value={candidateSlug}
+            text={candidateSlug}
+          >
+            <div className={styles.connectorOptionMain}>
+              <Badge appearance="outline" color="warning" size="small">
+                default = {defaultClassification ?? "?"}
+              </Badge>
+              <span>Use connector ID</span>
+              <span className={styles.connectorOptionSub}>{candidateSlug}</span>
+            </div>
+          </Option>
+        )}
+        {filtered.length === 0 && !showFreeform ? (
           <Option key="no-match" value="" disabled text="">
             No connectors match "{query}"
           </Option>

@@ -49,21 +49,39 @@ import type {
 // Connector picker
 // ---------------------------------------------------------------------------
 
-/** A single connector option for the "what would I block?" picker. */
+/** A single connector option for the "what would I block?" picker.
+ *
+ *  Two shapes:
+ *  - `source: "explicit"` — extracted from `policy.connectorGroups` by
+ *    `extractNonBlockedConnectors`. Classification is whatever bucket
+ *    the policy puts it in (Confidential or General — Blocked entries
+ *    are filtered out).
+ *  - `source: "default"` — synthesized by
+ *    `synthesizeFreeformConnectorOption` for connectors the user types
+ *    by hand that aren't explicitly listed. Classification falls
+ *    through to the policy's `defaultConnectorsClassification`
+ *    (Confidential | General | Blocked). Lets users simulate blocking
+ *    *any* connector, not just the ones the policy bothered to
+ *    mention by name. */
 export interface DlpConnectorOption {
   /** Inventory-shaped slug used by `QueryResources` (e.g. `shared_sql`). */
   id: string;
   /** Friendly label, e.g. "SQL Server". */
   name: string;
   /** Original ARM-path id from the policy
-   *  (e.g. `/providers/Microsoft.PowerApps/apis/shared_sql`). Kept for
-   *  diagnostics / tooltips. */
+   *  (e.g. `/providers/Microsoft.PowerApps/apis/shared_sql`). Empty for
+   *  freeform / default-classified entries. */
   rawId: string;
   /** Current bucket the connector lives in — drives the "before → after" UI. */
-  classification: "Confidential" | "General";
+  classification: "Confidential" | "General" | "Blocked";
   /** Connector type as reported by the policy. Today: "Microsoft" /
    *  "Custom" / sometimes empty. We exclude Custom from V1; see note. */
   type: string;
+  /** Where the classification came from:
+   *  - `"explicit"` — listed in `policy.connectorGroups`.
+   *  - `"default"` — synthesized from `policy.defaultConnectorsClassification`
+   *    because the user typed a slug that isn't explicitly listed. */
+  source: "explicit" | "default";
 }
 
 /** Strip an ARM-style `.../apis/<connectorSlug>` path down to just
@@ -119,6 +137,7 @@ export function extractNonBlockedConnectors(
         rawId: c.id,
         classification,
         type: c._type ?? "",
+        source: "explicit",
       });
     }
   }
@@ -230,6 +249,40 @@ export function extractHiddenConnectors(
     return a.name.localeCompare(b.name);
   });
   return out;
+}
+
+/**
+ * Synthesize a `DlpConnectorOption` for a connector the user typed into
+ * the picker that isn't explicitly listed in `policy.connectorGroups`.
+ *
+ * Such a connector falls through to `policy.defaultConnectorsClassification`
+ * — that becomes the option's "before" bucket, driving the before → after
+ * UI in the result view. Lets users simulate blocking *any* connector,
+ * not just the ones the policy bothered to list by name (which matters
+ * a lot for policies like `default = General` that only enumerate the
+ * Blocked exceptions).
+ *
+ * The `name` is best-effort: `friendlyConnectorName` for known slugs,
+ * the raw slug as a fallback. `rawId` is empty (the policy never
+ * mentioned it). `source` is `"default"` so the UI can label the
+ * before-bucket as `(default)` to make the inheritance clear.
+ */
+export function synthesizeFreeformConnectorOption(
+  policy: PolicyV2,
+  slug: string
+): DlpConnectorOption {
+  const cls = (policy.defaultConnectorsClassification ?? "General") as
+    | "Confidential"
+    | "General"
+    | "Blocked";
+  return {
+    id: slug,
+    name: friendlyConnectorName(slug) || slug,
+    rawId: "",
+    classification: cls,
+    type: "",
+    source: "default",
+  };
 }
 
 // ---------------------------------------------------------------------------

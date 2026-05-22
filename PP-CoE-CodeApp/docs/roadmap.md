@@ -1429,13 +1429,22 @@ environment in the policy's `environments[]`. It doesn't yet:
    the union of impact + per-connector breakdown. The KQL would use
    `has_any` instead of `has`. Useful for "what if we tightened the
    whole `Confidential` bucket?" scenarios.
-4. **Cross-bucket move analysis.** Beyond "to Blocked" — let the user
-   simulate moving a connector from Confidential to General (or vice
-   versa) and surface the flows/apps that *pair it with another
-   connector* in a way that would now violate the cross-bucket rule.
-   Requires loading both connectors on every impacted resource (already
-   in `properties.powerPlatformConnectors`) and applying the policy's
-   bucket rule client-side.
+4. **Full classification-shift simulator.** V1 only simulates
+   `current → Blocked`. The next-level version lets the user pick a
+   connector and a *target* classification (Confidential / General /
+   Blocked) and shows two flavors of impact:
+   - Direct: which resources currently use it on the source side that
+     would break under the new bucket (only meaningful when target is
+     more restrictive — i.e. → Blocked).
+   - Cross-bucket: which resources pair the connector with another in
+     a way that would *now* violate the policy's cross-bucket rule
+     (Business + Non-business cannot share a flow). For example
+     "SharePoint Business → Non-business: 23 flows that combine SP
+     with another Business connector would break."
+   This subsumes "Cross-bucket move analysis" from earlier drafts.
+   Requires loading every connector reference on every impacted
+   resource (already in `properties.powerPlatformConnectors`) and
+   applying the policy's bucket rule client-side.
 5. **Connector-action level.** Once the DLP Comparator V2 adds blocked-
    action data (see above), DLP Impact should let users simulate
    blocking a *specific operation* (`OPERATION_FIELD` sentinel already
