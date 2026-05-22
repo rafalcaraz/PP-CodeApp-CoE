@@ -37,6 +37,12 @@ PP-CodeApp-CoE/
   on-demand** enrichments (never part of the bulk inventory load). Read
   this before adding a "Load admin details" / "Fetch role assignments" /
   capacity-style button.
+- **[Admin payload samples](./PP-CoE-CodeApp/docs/admin-payload-samples.md)** —
+  real, redacted payloads captured from a live tenant for the
+  admin-connector enrichments. Sibling to `inventory-schema-samples.md`
+  but for the per-record `Get_*` / `List_*` calls. Includes the critical
+  "two governance models for env groups" caveat (legacy ruleset
+  parameters vs. new rule-based-policy `ruleSets`).
 
 ## Releases
 

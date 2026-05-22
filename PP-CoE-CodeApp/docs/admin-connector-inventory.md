@@ -97,15 +97,23 @@ string parameter — omitted below for brevity.
 
 ### 📜 Rules / rulesets / rule-based policies
 
+> ⚠️ **The word "ruleSet" means two different things on this connector** —
+> a legacy `parameters`-bag model (returned by `GetRuleSet` /
+> `GetRuleSetListForTenant`) **and** a newer named/versioned/typed-inputs
+> model (carried inside `Policy.ruleSets` for the rule-based-policy
+> endpoints). Same env group is governed by **both at once**. See
+> [`admin-payload-samples.md`](./admin-payload-samples.md) for real
+> samples of each shape and the rendering implications.
+
 | Op | Signature | Notes |
 | --- | --- | --- |
-| `GetRuleSetListForTenant` | `($select?, $filter?, $expand?, $skiptoken?, $top?)` | Every ruleset in the tenant. |
-| `GetRuleSet` | `(environmentId, groupId)` | Single ruleset detail. |
-| `ListRuleBasedPolicies` | `()` | Tenant-wide policy list. |
-| `GetRuleBasedPolicyByID` | `(policyId)` | Single policy detail. |
-| `ListRuleAssignments` | `(includeRuleSetCounts)` | Tenant-wide assignments. |
-| `ListRuleAssignmentsByEnvironmentGroupId` | `(environmentGroupId, includeRuleSetCounts)` | What rules a group has. |
-| `ListRuleAssignmentsByEnvironmentId` | `(environmentId, includeRuleSetCounts)` | What rules an env has. |
+| `GetRuleSetListForTenant` | `($select?, $filter?, $expand?, $skiptoken?, $top?)` | Every ruleset in the tenant. Model A shape. |
+| `GetRuleSet` | `(environmentId, groupId)` | Misleadingly named — returns `value: RuleSetDto[]`, not a single ruleset. Env-param semantic when targeting a group still needs verification (probably accepts empty / placeholder when scope is group-only). Model A shape. |
+| `ListRuleBasedPolicies` | `()` | Tenant-wide list of `Policy` objects (Model B). Each policy carries the full `ruleSets[]` body. |
+| `GetRuleBasedPolicyByID` | `(policyId)` | Single `Policy` detail. Model B. |
+| `ListRuleAssignments` | `(includeRuleSetCounts)` | Tenant-wide assignments (the join table: which policy applies to which resource). |
+| `ListRuleAssignmentsByEnvironmentGroupId` | `(environmentGroupId, includeRuleSetCounts)` | The closest connector wrap for "which rule-based policies apply to this env group" — returns `{policyId, resourceId, resourceType, ruleSetCount}` triples; drill `GetRuleBasedPolicyByID` per row to get bodies. |
+| `ListRuleAssignmentsByEnvironmentId` | `(environmentId, includeRuleSetCounts)` | Same, scoped to one env. |
 | `ListRuleAssignmentsByPolicyId` | `(policyId, includeRuleSetCounts)` | Where a policy is applied. |
 
 ### 🛡️ Roles & role assignments
@@ -298,10 +306,16 @@ the *existing* V2 connector (no new consent), except where noted.
    question, single call, single env id. Natural follow-up to #0 — could
    live as a second action button inside the same "Admin details" card.
 
-3. **`GetEnvironmentGroup` + `ListEnvironmentGroupRoleAssignments` +
-   `ListRuleAssignmentsByEnvironmentGroupId` on env-group detail page.**
-   Three on-demand calls behind a single "Load admin details" button →
-   complete "what does this group actually enforce" view.
+3. **Env-group "Governance" surface — `GetEnvironmentGroup` +
+   `ListEnvironmentGroupRoleAssignments` + Model A rulesets
+   (`GetRuleSet`) + Model B rule-based policies
+   (`ListRuleAssignmentsByEnvironmentGroupId` → drill
+   `GetRuleBasedPolicyByID` per match).**
+   On the env-group detail page. **Two governance models render as
+   separate sections** — see
+   [`admin-payload-samples.md`](./admin-payload-samples.md) for why
+   and what the payloads actually look like. Each section is a single
+   "Load…" button; calls fire in parallel where possible.
 
 4. **Rulesets as a new entity surface.**
    `GetRuleSetListForTenant` for a list view, `GetRuleSet` +
