@@ -528,34 +528,48 @@ export function connectorIdVariants(slug: string): string[] {
 const PAGE_CAP = 25;
 const PAGE_SIZE = 500;
 
-/**
- * Run the impact query for a single policy + connector slug. Drains
- * `skipToken` pages, applies the `ExceptEnvironments` filter
- * client-side when needed, backfills env display names, and returns a
- * sorted result with a precomputed summary.
- *
- * Errors propagate as `{ ok: false, error }` — same shape as everything
- * else in `inventory.ts`.
- */
-export async function queryDlpImpact(
-  policy: PolicyV2,
-  connectorSlug: string
-): Promise<DataResult<DlpImpactResult>> {
-  const slug = connectorSlug.trim();
+/** Input for `runImpactQuery` — the core "find resources in scope X
+ *  using connector Y" loop shared by both DLP and ACP impact paths.
+ *  Exported for the ACP impact helper in `acpImpact.ts`. */
+export interface ImpactQueryInput {
+  /** Lowercased env GUIDs. Empty + mode "all" = no env filter. */
+  envIds: string[];
+  /** Scope mode. `"all"` ignores `envIds`; `"include"` filters via
+   *  `properties.environmentId in~ (...)` server-side; `"exclude"`
+   *  filters out matching env ids client-side (used for
+   *  ExceptEnvironments DLP scope which the connector's typed filter
+   *  builder doesn't expose). */
+  mode: "all" | "include" | "exclude";
+  /** The connector slug to look for. Matched in both prefixed and
+   *  bare forms (see `connectorIdVariants`). */
+  connectorSlug: string;
+}
+
+export interface ImpactQueryOutput {
+  rows: DlpImpactRow[];
+  summary: DlpImpactSummary;
+}
+
+/** Core query loop. Shared between `queryDlpImpact` (DLP scope from a
+ *  policy) and `queryAcpImpact` (ACP scope from an env group). Returns
+ *  the resource rows + a summary; callers wrap with their own
+ *  `ranAgainst` metadata. */
+export async function runImpactQuery(
+  input: ImpactQueryInput
+): Promise<DataResult<ImpactQueryOutput>> {
+  const slug = input.connectorSlug.trim();
   if (!slug) {
     return { ok: false, error: "Connector slug is required." };
   }
 
-  const scope = resolveDlpScope(policy);
-
   // Build the QuerySpec — `buildClausesFromSpec` handles the
   // `CONNECTOR_FIELD` sentinel and the multi-type `in~` filter for us.
   const filters: QuerySpec["filters"] = [];
-  if (scope.mode === "include" && scope.envIds.length > 0) {
+  if (input.mode === "include" && input.envIds.length > 0) {
     filters.push({
       field: "properties.environmentId",
       op: "in~",
-      value: scope.envIds.join(","),
+      value: input.envIds.join(","),
     });
   }
   // `in~` on the CONNECTOR_FIELD sentinel translates to `has_any`
@@ -596,12 +610,12 @@ export async function queryDlpImpact(
     skip += res.data.items.length;
   }
 
-  // Apply ExceptEnvironments client-side. `scope.envIds` is already
-  // lowercased by `policyEnvEntryId`; lowercase the inventory side too
-  // so case-only differences don't sneak past the exclusion.
+  // Apply exclude scope client-side. `input.envIds` for exclude mode
+  // is expected to be already lowercased; lowercase the inventory side
+  // too so case-only differences don't sneak past the exclusion.
   let filtered = items;
-  if (scope.mode === "exclude" && scope.envIds.length > 0) {
-    const excluded = new Set(scope.envIds);
+  if (input.mode === "exclude" && input.envIds.length > 0) {
+    const excluded = new Set(input.envIds);
     filtered = items.filter((it) => {
       const envId = readStr(it, "environmentId").toLowerCase();
       return envId && !excluded.has(envId);
@@ -650,11 +664,38 @@ export async function queryDlpImpact(
     ownerCount: owners.size,
   };
 
+  return { ok: true, data: { rows, summary } };
+}
+
+/**
+ * Run the impact query for a single policy + connector slug. Drains
+ * `skipToken` pages, applies the `ExceptEnvironments` filter
+ * client-side when needed, backfills env display names, and returns a
+ * sorted result with a precomputed summary.
+ *
+ * Errors propagate as `{ ok: false, error }` — same shape as everything
+ * else in `inventory.ts`.
+ */
+export async function queryDlpImpact(
+  policy: PolicyV2,
+  connectorSlug: string
+): Promise<DataResult<DlpImpactResult>> {
+  const slug = connectorSlug.trim();
+  if (!slug) {
+    return { ok: false, error: "Connector slug is required." };
+  }
+  const scope = resolveDlpScope(policy);
+  const res = await runImpactQuery({
+    envIds: scope.envIds,
+    mode: scope.mode,
+    connectorSlug: slug,
+  });
+  if (!res.ok) return res;
   return {
     ok: true,
     data: {
-      rows,
-      summary,
+      rows: res.data.rows,
+      summary: res.data.summary,
       ranAgainst: {
         connectorSlug: slug,
         connectorDisplayName: friendlyConnectorName(slug),

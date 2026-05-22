@@ -72,8 +72,8 @@ const SettingsView = lazy(() =>
 const Comparator = lazy(() =>
   import("./views/Comparator").then((m) => ({ default: m.Comparator }))
 );
-const DlpImpact = lazy(() =>
-  import("./views/DlpImpact").then((m) => ({ default: m.DlpImpact }))
+const Impact = lazy(() =>
+  import("./views/Impact").then((m) => ({ default: m.Impact }))
 );
 
 const useStyles = makeStyles({
@@ -130,7 +130,8 @@ function AppShell() {
               <Route path="/settings" element={<SettingsView />} />
               <Route path="/security/dlp-comparator" element={<Comparator />} />
               <Route path="/security/comparator" element={<Comparator />} />
-              <Route path="/security/dlp-impact" element={<DlpImpact />} />
+              <Route path="/security/dlp-impact" element={<Impact />} />
+              <Route path="/security/impact" element={<Impact />} />
               <Route path="*" element={<HomeRedirect />} />
             </Routes>
           </Suspense>

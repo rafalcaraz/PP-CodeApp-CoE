@@ -379,17 +379,6 @@ export function DlpImpact() {
 
   return (
     <div className={styles.root}>
-      <header className={styles.header}>
-        <Text size={700} weight="semibold">
-          DLP Impact
-        </Text>
-        <Text className={styles.subtitle}>
-          Pick a DLP policy and one of its currently allowed connectors to see
-          which apps, flows, and agents in the policy's scope would be affected
-          if you moved that connector to <strong>Blocked</strong>.
-        </Text>
-      </header>
-
       <MessageBar intent="info">
         <MessageBarBody>
           <MessageBarTitle>What this V1 covers</MessageBarTitle>
