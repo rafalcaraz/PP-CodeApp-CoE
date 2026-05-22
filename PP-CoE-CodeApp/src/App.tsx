@@ -10,6 +10,7 @@ import { SideNav } from "./components/SideNav";
 import { TopBar } from "./components/TopBar";
 import { LoadingPane } from "./components/Status";
 import { HomeRedirect } from "./views/HomeRedirect";
+import { FeatureFlagsProvider, useFeatureFlag } from "./featureFlags";
 
 // ---------------------------------------------------------------------------
 // Route-level code splitting.
@@ -61,6 +62,12 @@ const DashboardsList = lazy(() =>
 );
 const DashboardDetail = lazy(() =>
   import("./views/DashboardDetail").then((m) => ({ default: m.DashboardDetail }))
+);
+const CopilotChatLauncher = lazy(() =>
+  import("./components/CopilotChat").then((m) => ({ default: m.CopilotChatLauncher }))
+);
+const SettingsView = lazy(() =>
+  import("./views/SettingsView").then((m) => ({ default: m.SettingsView }))
 );
 
 const useStyles = makeStyles({
@@ -114,21 +121,42 @@ function AppShell() {
               <Route path="/agents" element={<AgentsList />} />
               <Route path="/agents/:agentId" element={<AgentDetail />} />
               <Route path="/queries" element={<QueriesView />} />
+              <Route path="/settings" element={<SettingsView />} />
               <Route path="*" element={<HomeRedirect />} />
             </Routes>
           </Suspense>
         </main>
       </div>
+      {/* Global floating Copilot Studio chat launcher. Lives outside the
+          routed <main> so it persists across every route. The launcher
+          itself is lazy-loaded so the panel + service wrapper stay out of
+          the initial bundle until the user opens it.
+          Gated by the `copilotStudioAssistant` feature flag — when it's
+          off (the default), nothing renders, the lazy chunk never loads,
+          and the connector is never contacted. */}
+      <CopilotAssistantSlot />
     </div>
+  );
+}
+
+function CopilotAssistantSlot() {
+  const enabled = useFeatureFlag("copilotStudioAssistant");
+  if (!enabled) return null;
+  return (
+    <Suspense fallback={null}>
+      <CopilotChatLauncher />
+    </Suspense>
   );
 }
 
 function App() {
   return (
     <FluentProvider theme={webLightTheme}>
-      <HashRouter>
-        <AppShell />
-      </HashRouter>
+      <FeatureFlagsProvider>
+        <HashRouter>
+          <AppShell />
+        </HashRouter>
+      </FeatureFlagsProvider>
     </FluentProvider>
   );
 }

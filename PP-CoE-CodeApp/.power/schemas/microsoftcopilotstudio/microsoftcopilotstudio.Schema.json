@@ -1,0 +1,2354 @@
+{
+  "name": "shared_microsoftcopilotstudio",
+  "id": "/providers/Microsoft.PowerApps/apis/shared_microsoftcopilotstudio",
+  "type": "Microsoft.PowerApps/apis",
+  "properties": {
+    "displayName": "Microsoft Copilot Studio",
+    "iconUri": "https://static.powerapps.com/resource/ppcr/releases/v1.0.1811/1.0.1811.4738/microsoftcopilotstudio/icon.png",
+    "iconBrandColor": "",
+    "apiEnvironment": "Shared",
+    "isCustomApi": false,
+    "blobUrisAreProxied": false,
+    "connectionParameterSets": {
+      "uiDefinition": {
+        "displayName": "Authentication Type",
+        "description": "Type of authentication to be used."
+      },
+      "values": [
+        {
+          "name": "oauthDefault",
+          "uiDefinition": {
+            "displayName": "Oauth",
+            "description": "Login using Microsoft Entra ID to the Power Platform API."
+          },
+          "parameters": {
+            "token": {
+              "type": "oauthSetting",
+              "oAuthSettings": {
+                "identityProvider": "aadcertificate",
+                "clientId": "d40abeb9-eb01-4ecb-adcf-317f560a024d",
+                "clientAssertionType": "GlobalFederatedIdentityCredential",
+                "scopes": [
+                  "PowerVirtualAgents.Tokens.Read",
+                  "PowerVirtualAgents.FirstPartyBots.Invoke",
+                  "All.All.ReadWrite",
+                  "PowerVirtualAgents.Callback.Invoke"
+                ],
+                "redirectMode": "GlobalPerConnector",
+                "redirectUrl": "https://global.consent.azure-apim.net/redirect/microsoftcopilotstudio",
+                "properties": {
+                  "IsFirstParty": "True",
+                  "AzureActiveDirectoryResourceId": "https://api.powerplatform.com",
+                  "IsOnbehalfofLoginSupported": true,
+                  "FederatedIdentityCredentials": {
+                    "Issuer": "https://login.microsoftonline.com/{tenantId}/v2.0",
+                    "Subject": "/eid1/c/pub/t/{tenantId}/a/k972yLpWjkypg7DpMYfrNA/d40abeb9-eb01-4ecb-adcf-317f560a024d",
+                    "Audience": "api://AzureADTokenExchange"
+                  }
+                },
+                "customParameters": {
+                  "ResourceUri": {
+                    "value": "https://api.powerplatform.com"
+                  },
+                  "loginUri": {
+                    "value": "https://login.microsoftonline.com"
+                  },
+                  "LoginUriAAD": {
+                    "value": "https://login.microsoftonline.com"
+                  },
+                  "tenantId": {
+                    "value": "common"
+                  },
+                  "enableOnbehalfOfLogin": {
+                    "value": "false"
+                  }
+                }
+              },
+              "uiDefinition": {
+                "displayName": "Log in with Microsoft Entra ID",
+                "description": "Log in with Microsoft Entra ID",
+                "tooltip": "Provide Microsoft Entra ID Credentials",
+                "constraints": {
+                  "required": "true",
+                  "capability": [
+                    "cloud"
+                  ]
+                }
+              }
+            },
+            "token:TenantId": {
+              "type": "string",
+              "metadata": {
+                "sourceType": "AzureActiveDirectoryTenant"
+              },
+              "uiDefinition": {
+                "displayName": "Tenant",
+                "description": "The tenant ID for the Microsoft Entra ID application",
+                "constraints": {
+                  "required": "false",
+                  "hidden": "true"
+                }
+              }
+            }
+          },
+          "metadata": {
+            "allowSharing": false
+          }
+        }
+      ]
+    },
+    "connectionParameters": {
+      "token": {
+        "type": "oauthSetting",
+        "oAuthSettings": {
+          "identityProvider": "aadcertificate",
+          "clientId": "d40abeb9-eb01-4ecb-adcf-317f560a024d",
+          "clientAssertionType": "GlobalFederatedIdentityCredential",
+          "scopes": [
+            "PowerVirtualAgents.Tokens.Read",
+            "PowerVirtualAgents.FirstPartyBots.Invoke",
+            "All.All.ReadWrite",
+            "PowerVirtualAgents.Callback.Invoke"
+          ],
+          "redirectMode": "GlobalPerConnector",
+          "redirectUrl": "https://global.consent.azure-apim.net/redirect/microsoftcopilotstudio",
+          "properties": {
+            "IsFirstParty": "True",
+            "AzureActiveDirectoryResourceId": "https://api.powerplatform.com",
+            "IsOnbehalfofLoginSupported": true,
+            "FederatedIdentityCredentials": {
+              "Issuer": "https://login.microsoftonline.com/{tenantId}/v2.0",
+              "Subject": "/eid1/c/pub/t/{tenantId}/a/k972yLpWjkypg7DpMYfrNA/d40abeb9-eb01-4ecb-adcf-317f560a024d",
+              "Audience": "api://AzureADTokenExchange"
+            }
+          },
+          "customParameters": {
+            "ResourceUri": {
+              "value": "https://api.powerplatform.com"
+            },
+            "loginUri": {
+              "value": "https://login.microsoftonline.com"
+            },
+            "LoginUriAAD": {
+              "value": "https://login.microsoftonline.com"
+            },
+            "tenantId": {
+              "value": "common"
+            },
+            "enableOnbehalfOfLogin": {
+              "value": "false"
+            }
+          }
+        }
+      },
+      "token:TenantId": {
+        "type": "string",
+        "metadata": {
+          "sourceType": "AzureActiveDirectoryTenant"
+        },
+        "uiDefinition": {
+          "displayName": "Tenant",
+          "description": "The tenant ID for the Microsoft Entra ID application",
+          "constraints": {
+            "required": "false",
+            "hidden": "true"
+          }
+        }
+      }
+    },
+    "swagger": {
+      "swagger": "2.0",
+      "info": {
+        "title": "Microsoft Copilot Studio",
+        "description": "Microsoft Copilot Studio used to discover and trigger agents",
+        "version": "1.0",
+        "x-ms-api-annotation": {
+          "status": "Production"
+        },
+        "contact": {
+          "name": "Microsoft Copilot Studio",
+          "url": "https://aka.ms/copilotstudio",
+          "email": "donglei@microsoft.com"
+        }
+      },
+      "x-ms-connector-metadata": [
+        {
+          "propertyName": "Website",
+          "propertyValue": "https://aka.ms/copilotstudio"
+        },
+        {
+          "propertyName": "Privacy policy",
+          "propertyValue": "https://www.microsoft.com/en-us/privacy/privacystatement"
+        },
+        {
+          "propertyName": "Categories",
+          "propertyValue": "AI"
+        }
+      ],
+      "host": "usa002-004.azure-apihub.net",
+      "schemes": [
+        "https"
+      ],
+      "consumes": [],
+      "produces": [],
+      "paths": {
+        "/{connectionId}/powervirtualagents/dataverse-backed/authenticated/bots/{Copilot}/proactivecopilot/executeAsyncV2": {
+          "post": {
+            "responses": {
+              "201": {
+                "description": "Accepted"
+              },
+              "default": {
+                "description": "Failed",
+                "schema": {}
+              }
+            },
+            "operationId": "ExecuteCopilotAsyncV2",
+            "summary": "Execute Agent and wait",
+            "description": "Sends a prompt to the specified Agent for processing and wait to resume",
+            "parameters": [
+              {
+                "name": "connectionId",
+                "in": "path",
+                "required": true,
+                "x-ms-visibility": "internal",
+                "type": "string"
+              },
+              {
+                "name": "Copilot",
+                "in": "path",
+                "required": true,
+                "type": "string",
+                "x-ms-dynamic-list": {
+                  "operationId": "ListCopilots",
+                  "parameters": {},
+                  "itemsPath": "copilotsList",
+                  "itemValuePath": "schemaname",
+                  "itemTitlePath": "name"
+                },
+                "x-ms-dynamic-values": {
+                  "operationId": "ListCopilots",
+                  "parameters": {},
+                  "value-collection": "copilotsList",
+                  "value-path": "schemaname",
+                  "value-title": "name"
+                },
+                "x-ms-summary": "Agent",
+                "description": "Agent"
+              },
+              {
+                "name": "body",
+                "in": "body",
+                "required": true,
+                "x-ms-visibility": "important",
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "notificationUrl": {
+                      "x-ms-visibility": "internal",
+                      "type": "string",
+                      "x-ms-notification-url": true,
+                      "x-ms-summary": "Notification URL",
+                      "description": "Notification URL"
+                    },
+                    "message": {
+                      "type": "string",
+                      "description": "Message",
+                      "x-ms-summary": "Message"
+                    },
+                    "locale": {
+                      "type": "string",
+                      "description": "A BCP-47 locale name for the contents of the text field.",
+                      "x-ms-summary": "A BCP-47 locale name for the contents of the text field.",
+                      "x-ms-visibility": "advanced"
+                    },
+                    "attachments": {
+                      "type": "array",
+                      "description": "A list of attachments https://learn.microsoft.com/en-us/dotnet/api/microsoft.bot.schema.activity.attachments?view=botbuilder-dotnet-stable",
+                      "x-ms-summary": "A list of attachments https://learn.microsoft.com/en-us/dotnet/api/microsoft.bot.schema.activity.attachments?view=botbuilder-dotnet-stable",
+                      "x-ms-visibility": "advanced",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "contentType": {
+                            "type": "string"
+                          },
+                          "contentUrl": {
+                            "type": "string"
+                          },
+                          "content": {
+                            "type": "object"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "thumbnailUrl": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "required": [
+                    "notificationUrl"
+                  ]
+                },
+                "x-ms-summary": "Execute Agent body",
+                "description": "Execute Agent body"
+              },
+              {
+                "name": "x-ms-conversation-id",
+                "in": "header",
+                "description": "Provide exisiting conversation id to resume Agent execution.",
+                "required": false,
+                "x-ms-summary": "Conversation ID",
+                "x-ms-visibility": "advanced",
+                "type": "string"
+              },
+              {
+                "in": "query",
+                "name": "environmentId",
+                "required": false,
+                "description": "Optional environment ID",
+                "type": "string",
+                "x-ms-summary": "Environment ID",
+                "x-ms-visibility": "advanced"
+              }
+            ],
+            "externalDocs": {
+              "url": "https://docs.microsoft.com/connectors/microsoftcopilotstudio/#execute-agent-and-wait"
+            }
+          },
+          "x-ms-notification-content": {
+            "description": "Details for the response with which a flow continuation subscription is completed and flows waiting on that subscription are resumed",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "lastResponse": {
+                  "type": "string",
+                  "description": "The last text response in the activities list"
+                },
+                "responses": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "default": [],
+                  "description": "The list of string responses in the activities list"
+                },
+                "conversationId": {
+                  "type": "string",
+                  "description": "The conversation ID associated with the response"
+                }
+              }
+            },
+            "parameters": [
+              {
+                "name": "connectionId",
+                "in": "path",
+                "required": true,
+                "x-ms-visibility": "internal",
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "/{connectionId}/powervirtualagents/dataverse-backed/authenticated/bots/{Copilot}/proactivecopilot/executeAsync": {
+          "post": {
+            "responses": {
+              "200": {
+                "description": "default",
+                "schema": {
+                  "type": "object",
+                  "description": "The response of the Copilot as an object",
+                  "title": "Copilot response",
+                  "properties": {
+                    "responses": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      },
+                      "default": []
+                    },
+                    "conversationId": {
+                      "type": "string",
+                      "description": "The conversation ID associated with the response"
+                    },
+                    "Completed": {
+                      "type": "boolean",
+                      "description": "Instruction has been fully executed to completion"
+                    }
+                  }
+                }
+              }
+            },
+            "operationId": "ExecuteCopilotAsync",
+            "x-ms-visibility": "internal",
+            "summary": "Execute Copilot and wait for response V1",
+            "description": "Sends a prompt to the specified Copilot for processing",
+            "parameters": [
+              {
+                "name": "connectionId",
+                "in": "path",
+                "required": true,
+                "x-ms-visibility": "internal",
+                "type": "string"
+              },
+              {
+                "name": "Copilot",
+                "in": "path",
+                "required": true,
+                "type": "string",
+                "x-ms-dynamic-list": {
+                  "operationId": "ListCopilots",
+                  "parameters": {},
+                  "itemsPath": "copilotsList",
+                  "itemValuePath": "schemaname",
+                  "itemTitlePath": "name"
+                },
+                "x-ms-dynamic-values": {
+                  "operationId": "ListCopilots",
+                  "parameters": {},
+                  "value-collection": "copilotsList",
+                  "value-path": "schemaname",
+                  "value-title": "name"
+                },
+                "x-ms-summary": "Copilot Name",
+                "description": "Copilot Name"
+              },
+              {
+                "name": "body",
+                "in": "body",
+                "required": true,
+                "x-ms-visibility": "important",
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "notificationUrl": {
+                      "x-ms-visibility": "internal",
+                      "type": "string",
+                      "default": "https://notificationurlplaceholder"
+                    },
+                    "message": {
+                      "type": "string",
+                      "description": "Message"
+                    }
+                  },
+                  "required": [
+                    "notificationUrl"
+                  ]
+                },
+                "x-ms-summary": "Execute Copilot body",
+                "description": "Execute Copilot body"
+              },
+              {
+                "name": "x-ms-conversation-id",
+                "in": "header",
+                "description": "Provide exisiting conversation id to resume Copilot execution.",
+                "required": false,
+                "x-ms-summary": "Conversation ID",
+                "x-ms-visibility": "advanced",
+                "type": "string"
+              },
+              {
+                "in": "query",
+                "name": "environmentId",
+                "required": false,
+                "description": "Optional environment ID",
+                "type": "string",
+                "x-ms-summary": "Environment ID",
+                "x-ms-visibility": "internal"
+              }
+            ],
+            "externalDocs": {
+              "url": "https://docs.microsoft.com/connectors/microsoftcopilotstudio/#execute-copilot-and-wait-for-response-v1"
+            }
+          }
+        },
+        "/{connectionId}/powervirtualagents/dataverse-backed/authenticated/bots/{Copilot}/proactivecopilot/execute": {
+          "post": {
+            "responses": {
+              "200": {
+                "description": "default",
+                "schema": {
+                  "type": "object",
+                  "description": "The response of the Agent as an object",
+                  "title": "Agent response",
+                  "properties": {
+                    "ConversationId": {
+                      "type": "string",
+                      "description": "The conversation ID associated with the response"
+                    }
+                  }
+                }
+              }
+            },
+            "operationId": "ExecuteCopilot",
+            "summary": "Execute Agent",
+            "description": "Sends a prompt to the specified Agent for processing",
+            "parameters": [
+              {
+                "name": "connectionId",
+                "in": "path",
+                "required": true,
+                "x-ms-visibility": "internal",
+                "type": "string"
+              },
+              {
+                "name": "Copilot",
+                "in": "path",
+                "required": true,
+                "type": "string",
+                "x-ms-dynamic-list": {
+                  "operationId": "ListCopilots",
+                  "parameters": {},
+                  "itemsPath": "copilotsList",
+                  "itemValuePath": "schemaname",
+                  "itemTitlePath": "name"
+                },
+                "x-ms-dynamic-values": {
+                  "operationId": "ListCopilots",
+                  "parameters": {},
+                  "value-collection": "copilotsList",
+                  "value-path": "schemaname",
+                  "value-title": "name"
+                },
+                "x-ms-summary": "Agent",
+                "description": "Agent"
+              },
+              {
+                "name": "body",
+                "in": "body",
+                "required": true,
+                "x-ms-visibility": "important",
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string",
+                      "description": "Message",
+                      "x-ms-summary": "Message"
+                    },
+                    "locale": {
+                      "type": "string",
+                      "description": "A BCP-47 locale name for the contents of the text field.",
+                      "x-ms-summary": "A BCP-47 locale name for the contents of the text field.",
+                      "x-ms-visibility": "advanced"
+                    },
+                    "attachments": {
+                      "type": "array",
+                      "description": "A list of attachments https://learn.microsoft.com/en-us/dotnet/api/microsoft.bot.schema.activity.attachments?view=botbuilder-dotnet-stable",
+                      "x-ms-summary": "A list of attachments https://learn.microsoft.com/en-us/dotnet/api/microsoft.bot.schema.activity.attachments?view=botbuilder-dotnet-stable",
+                      "x-ms-visibility": "advanced",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "contentType": {
+                            "type": "string"
+                          },
+                          "contentUrl": {
+                            "type": "string"
+                          },
+                          "content": {
+                            "type": "object"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "thumbnailUrl": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "required": [
+                    "message"
+                  ]
+                }
+              },
+              {
+                "name": "x-ms-conversation-id",
+                "in": "header",
+                "description": "Provide exisiting conversation id to resume Agent execution.",
+                "required": false,
+                "x-ms-summary": "Conversation ID",
+                "x-ms-visibility": "advanced",
+                "type": "string"
+              },
+              {
+                "name": "environmentId",
+                "in": "query",
+                "required": false,
+                "description": "Optional environment ID",
+                "type": "string",
+                "x-ms-summary": "Environment ID",
+                "x-ms-visibility": "advanced"
+              }
+            ],
+            "externalDocs": {
+              "url": "https://docs.microsoft.com/connectors/microsoftcopilotstudio/#execute-agent"
+            }
+          }
+        },
+        "/{connectionId}/powervirtualagents/dataverse-backed/copilots": {
+          "get": {
+            "responses": {
+              "200": {
+                "description": "Action performed successfully",
+                "schema": {
+                  "$ref": "#/definitions/EntitiesResponse"
+                }
+              }
+            },
+            "operationId": "ListCopilots",
+            "x-ms-visibility": "internal",
+            "summary": "[Do not use]List Copilot",
+            "description": "[Do not use]List the copilots user has access to.",
+            "parameters": [
+              {
+                "name": "connectionId",
+                "in": "path",
+                "required": true,
+                "x-ms-visibility": "internal",
+                "type": "string"
+              }
+            ],
+            "externalDocs": {
+              "url": "https://docs.microsoft.com/connectors/microsoftcopilotstudio/#%5bdo-not-use%5dlist-copilot"
+            }
+          }
+        },
+        "/{connectionId}/powervirtualagents/dataverse-backed/authenticated/bots/{Copilot}/conversations/{ConversationId}": {
+          "post": {
+            "responses": {
+              "200": {
+                "description": ""
+              }
+            },
+            "operationId": "ExecuteDataverseCopilotToStart",
+            "x-ms-visibility": "internal",
+            "summary": "Execute Turn",
+            "description": "Sends a prompt to the specified Agent to start processing",
+            "parameters": [
+              {
+                "name": "connectionId",
+                "in": "path",
+                "required": true,
+                "x-ms-visibility": "internal",
+                "type": "string"
+              },
+              {
+                "name": "Copilot",
+                "in": "path",
+                "required": true,
+                "type": "string",
+                "x-ms-dynamic-list": {
+                  "operationId": "ListCopilots",
+                  "parameters": {},
+                  "itemsPath": "copilotsList",
+                  "itemValuePath": "schemaname",
+                  "itemTitlePath": "name"
+                },
+                "x-ms-dynamic-values": {
+                  "operationId": "ListCopilots",
+                  "parameters": {},
+                  "value-collection": "copilotsList",
+                  "value-path": "schemaname",
+                  "value-title": "name"
+                },
+                "x-ms-summary": "Agent",
+                "description": "Agent"
+              },
+              {
+                "name": "ConversationId",
+                "in": "path",
+                "required": true,
+                "type": "string",
+                "x-ms-summary": "Conversation ID",
+                "description": "Conversation ID"
+              },
+              {
+                "name": "body",
+                "in": "body",
+                "required": true,
+                "x-ms-visibility": "important",
+                "schema": {
+                  "type": "object",
+                  "description": "A flexible object that accepts any properties.",
+                  "additionalProperties": {
+                    "type": "object"
+                  }
+                }
+              },
+              {
+                "in": "query",
+                "name": "environmentId",
+                "required": false,
+                "description": "Optional environment ID",
+                "type": "string",
+                "x-ms-summary": "Environment ID",
+                "x-ms-visibility": "internal"
+              }
+            ],
+            "externalDocs": {
+              "url": "https://docs.microsoft.com/connectors/microsoftcopilotstudio/#execute-turn"
+            }
+          }
+        },
+        "/{connectionId}/powervirtualagents/dataverse-backed/authenticated/bots/{Copilot}/conversations/{ConversationId}/continue": {
+          "post": {
+            "responses": {
+              "200": {
+                "description": ""
+              }
+            },
+            "operationId": "ContinueExecuteDataverseCopilot",
+            "x-ms-visibility": "internal",
+            "summary": "Continue Turn",
+            "description": "Sends a prompt to the specified Agent for continue after Step 1",
+            "parameters": [
+              {
+                "name": "connectionId",
+                "in": "path",
+                "required": true,
+                "x-ms-visibility": "internal",
+                "type": "string"
+              },
+              {
+                "name": "Copilot",
+                "in": "path",
+                "required": true,
+                "type": "string",
+                "x-ms-dynamic-list": {
+                  "operationId": "ListCopilots",
+                  "parameters": {},
+                  "itemsPath": "copilotsList",
+                  "itemValuePath": "schemaname",
+                  "itemTitlePath": "name"
+                },
+                "x-ms-dynamic-values": {
+                  "operationId": "ListCopilots",
+                  "parameters": {},
+                  "value-collection": "copilotsList",
+                  "value-path": "schemaname",
+                  "value-title": "name"
+                },
+                "x-ms-summary": "Agent",
+                "description": "Agent"
+              },
+              {
+                "name": "ConversationId",
+                "in": "path",
+                "required": true,
+                "type": "string",
+                "x-ms-summary": "Conversation ID",
+                "description": "Conversation ID"
+              },
+              {
+                "name": "body",
+                "in": "body",
+                "required": true,
+                "x-ms-visibility": "important",
+                "schema": {
+                  "type": "object",
+                  "description": "A flexible object that accepts any properties.",
+                  "additionalProperties": {
+                    "type": "object"
+                  }
+                }
+              },
+              {
+                "in": "query",
+                "name": "environmentId",
+                "required": false,
+                "description": "Optional environment ID",
+                "type": "string",
+                "x-ms-summary": "Environment ID",
+                "x-ms-visibility": "internal"
+              }
+            ],
+            "externalDocs": {
+              "url": "https://docs.microsoft.com/connectors/microsoftcopilotstudio/#continue-turn"
+            }
+          }
+        },
+        "/{connectionId}/powervirtualagents/prebuilt/authenticated/bots/{Copilot}/conversations/{ConversationId}/execute/trigger/{TriggerId}": {
+          "post": {
+            "responses": {
+              "200": {
+                "description": ""
+              }
+            },
+            "operationId": "ExecuteFirstPartyCopilot",
+            "x-ms-visibility": "internal",
+            "summary": "Execute First Party Copilot",
+            "description": "Sends a prompt to the specified 1P Copilot for processing",
+            "parameters": [
+              {
+                "name": "connectionId",
+                "in": "path",
+                "required": true,
+                "x-ms-visibility": "internal",
+                "type": "string"
+              },
+              {
+                "name": "Copilot",
+                "in": "path",
+                "required": true,
+                "type": "string",
+                "description": "Copilot",
+                "x-ms-summary": "Copilot"
+              },
+              {
+                "name": "TriggerId",
+                "in": "path",
+                "required": true,
+                "type": "string",
+                "description": "Trigger ID",
+                "x-ms-summary": "Trigger ID"
+              },
+              {
+                "name": "ConversationId",
+                "in": "path",
+                "required": true,
+                "type": "string",
+                "description": "Conversation ID",
+                "x-ms-summary": "Conversation ID"
+              },
+              {
+                "name": "body",
+                "in": "body",
+                "required": true,
+                "x-ms-visibility": "important",
+                "schema": {
+                  "type": "object",
+                  "description": "A flexible object that accepts any properties.",
+                  "additionalProperties": {
+                    "type": "object"
+                  }
+                },
+                "x-ms-summary": "Execute body",
+                "description": "Execute body"
+              },
+              {
+                "in": "query",
+                "name": "environmentId",
+                "required": false,
+                "description": "Optional environment ID",
+                "type": "string",
+                "x-ms-summary": "Environment ID",
+                "x-ms-visibility": "internal"
+              }
+            ],
+            "externalDocs": {
+              "url": "https://docs.microsoft.com/connectors/microsoftcopilotstudio/#execute-first-party-copilot"
+            }
+          }
+        },
+        "/{connectionId}/powervirtualagents/prebuilt/authenticated/bots/{Copilot}/conversations/{ConversationId}": {
+          "post": {
+            "responses": {
+              "200": {
+                "description": ""
+              }
+            },
+            "operationId": "ExecuteFirstPartyCopilotToStart",
+            "x-ms-visibility": "internal",
+            "summary": "Step 1 Start Conversation for First Party Copilot",
+            "description": "Sends a prompt to the specified 1P Copilot to start processing",
+            "parameters": [
+              {
+                "name": "connectionId",
+                "in": "path",
+                "required": true,
+                "x-ms-visibility": "internal",
+                "type": "string"
+              },
+              {
+                "name": "Copilot",
+                "in": "path",
+                "required": true,
+                "type": "string",
+                "description": "Copilot",
+                "x-ms-summary": "Copilot"
+              },
+              {
+                "name": "ConversationId",
+                "in": "path",
+                "required": true,
+                "type": "string",
+                "description": "Conversation ID",
+                "x-ms-summary": "Conversation ID"
+              },
+              {
+                "name": "body",
+                "in": "body",
+                "required": true,
+                "x-ms-visibility": "important",
+                "schema": {
+                  "type": "object",
+                  "description": "A flexible object that accepts any properties.",
+                  "additionalProperties": {
+                    "type": "object"
+                  }
+                },
+                "x-ms-summary": "Execute body",
+                "description": "Execute body"
+              },
+              {
+                "in": "query",
+                "name": "environmentId",
+                "required": false,
+                "description": "Optional environment ID",
+                "type": "string",
+                "x-ms-summary": "Environment ID",
+                "x-ms-visibility": "internal"
+              }
+            ],
+            "externalDocs": {
+              "url": "https://docs.microsoft.com/connectors/microsoftcopilotstudio/#step-1-start-conversation-for-first-party-copilot"
+            }
+          }
+        },
+        "/{connectionId}/powervirtualagents/prebuilt/authenticated/bots/{Copilot}/conversations/{ConversationId}/continue": {
+          "post": {
+            "responses": {
+              "200": {
+                "description": ""
+              }
+            },
+            "operationId": "ContinueExecuteFirstPartyCopilot",
+            "x-ms-visibility": "internal",
+            "summary": "Step 2 Continue Conversation First Party Copilot",
+            "description": "Sends a prompt to the specified 1P Copilot for continue after Step 1",
+            "parameters": [
+              {
+                "name": "connectionId",
+                "in": "path",
+                "required": true,
+                "x-ms-visibility": "internal",
+                "type": "string"
+              },
+              {
+                "name": "Copilot",
+                "in": "path",
+                "required": true,
+                "type": "string",
+                "description": "Copilot",
+                "x-ms-summary": "Copilot"
+              },
+              {
+                "name": "ConversationId",
+                "in": "path",
+                "required": true,
+                "type": "string",
+                "description": "Conversation ID",
+                "x-ms-summary": "Conversation ID"
+              },
+              {
+                "name": "body",
+                "in": "body",
+                "required": true,
+                "x-ms-visibility": "important",
+                "schema": {
+                  "type": "object",
+                  "description": "A flexible object that accepts any properties.",
+                  "additionalProperties": {
+                    "type": "object"
+                  }
+                },
+                "x-ms-summary": "Execute body",
+                "description": "Execute body"
+              },
+              {
+                "in": "query",
+                "name": "environmentId",
+                "required": false,
+                "description": "Optional environment ID",
+                "type": "string",
+                "x-ms-summary": "Environment ID",
+                "x-ms-visibility": "internal"
+              }
+            ],
+            "externalDocs": {
+              "url": "https://docs.microsoft.com/connectors/microsoftcopilotstudio/#step-2-continue-conversation-first-party-copilot"
+            }
+          }
+        },
+        "/{connectionId}/powervirtualagents/bots/{Copilot}/channels/{channelId}/user-triggers/users/{userId}/triggers/{triggerId}": {
+          "post": {
+            "responses": {
+              "200": {
+                "description": ""
+              }
+            },
+            "operationId": "InvokeConnectorCallback",
+            "x-ms-visibility": "internal",
+            "summary": "InvokeConnectorCallback For Trigger",
+            "description": "Invokes Connector Callback For Trigger",
+            "parameters": [
+              {
+                "name": "connectionId",
+                "in": "path",
+                "required": true,
+                "x-ms-visibility": "internal",
+                "type": "string"
+              },
+              {
+                "name": "Copilot",
+                "in": "path",
+                "required": true,
+                "type": "string",
+                "description": "Copilot",
+                "x-ms-summary": "Copilot"
+              },
+              {
+                "name": "channelId",
+                "in": "path",
+                "required": true,
+                "type": "string",
+                "description": "Channel ID",
+                "x-ms-summary": "Channel ID"
+              },
+              {
+                "name": "userId",
+                "in": "path",
+                "required": true,
+                "type": "string",
+                "description": "User ID",
+                "x-ms-summary": "User ID"
+              },
+              {
+                "name": "triggerId",
+                "in": "path",
+                "required": true,
+                "type": "string",
+                "format": "guid",
+                "description": "Trigger ID"
+              },
+              {
+                "name": "body",
+                "in": "body",
+                "required": true,
+                "x-ms-visibility": "important",
+                "schema": {
+                  "type": "object",
+                  "description": "A flexible object that accepts any properties.",
+                  "additionalProperties": {
+                    "type": "object"
+                  }
+                },
+                "x-ms-summary": "Invoke Connector Callback body",
+                "description": "Invoke Connector Callback body"
+              },
+              {
+                "in": "query",
+                "name": "conversationId",
+                "required": false,
+                "description": "Optional Conversation ID",
+                "type": "string",
+                "x-ms-summary": "Conversation ID"
+              },
+              {
+                "in": "query",
+                "name": "environmentId",
+                "required": false,
+                "description": "Optional environment ID",
+                "type": "string",
+                "x-ms-summary": "Environment ID",
+                "x-ms-visibility": "internal"
+              }
+            ],
+            "externalDocs": {
+              "url": "https://docs.microsoft.com/connectors/microsoftcopilotstudio/#invokeconnectorcallback-for-trigger"
+            }
+          }
+        },
+        "/{connectionId}/powervirtualagents/bots/{Copilot}/triggers/{triggerId}/invoke": {
+          "post": {
+            "responses": {
+              "200": {
+                "description": ""
+              }
+            },
+            "operationId": "InvokeTrigger",
+            "x-ms-visibility": "internal",
+            "summary": "Invokes a trigger",
+            "description": "Invokes a trigger",
+            "parameters": [
+              {
+                "name": "connectionId",
+                "in": "path",
+                "required": true,
+                "x-ms-visibility": "internal",
+                "type": "string"
+              },
+              {
+                "name": "Copilot",
+                "in": "path",
+                "required": true,
+                "type": "string",
+                "x-ms-dynamic-list": {
+                  "operationId": "ListCopilots",
+                  "parameters": {},
+                  "itemsPath": "copilotsList",
+                  "itemValuePath": "schemaname",
+                  "itemTitlePath": "name"
+                },
+                "x-ms-dynamic-values": {
+                  "operationId": "ListCopilots",
+                  "parameters": {},
+                  "value-collection": "copilotsList",
+                  "value-path": "schemaname",
+                  "value-title": "name"
+                },
+                "x-ms-summary": "Copilot Name",
+                "description": "Copilot Name"
+              },
+              {
+                "name": "triggerId",
+                "in": "path",
+                "required": true,
+                "type": "string",
+                "format": "uuid",
+                "description": "Trigger ID"
+              },
+              {
+                "name": "inputs",
+                "in": "body",
+                "description": "Trigger Inputs",
+                "x-ms-summary": "Trigger Inputs",
+                "required": false,
+                "x-ms-visibility": "important",
+                "schema": {
+                  "type": "object",
+                  "description": "A flexible object that accepts any properties.",
+                  "x-ms-summary": "A flexible object that accepts any properties."
+                }
+              },
+              {
+                "in": "query",
+                "name": "conversationId",
+                "required": false,
+                "description": "Optional Conversation ID",
+                "type": "string",
+                "x-ms-summary": "Conversation ID"
+              },
+              {
+                "in": "query",
+                "name": "environmentId",
+                "required": false,
+                "description": "Optional environment ID",
+                "type": "string",
+                "x-ms-summary": "Environment ID"
+              },
+              {
+                "in": "header",
+                "name": "x-ms-cds-bot-id",
+                "required": true,
+                "description": "CDS Bot ID",
+                "type": "string",
+                "format": "uuid",
+                "x-ms-summary": "CDS Bot ID"
+              },
+              {
+                "in": "header",
+                "name": "x-ms-workflow-resourcegroup-name",
+                "required": true,
+                "description": "Trigger Group",
+                "type": "string",
+                "x-ms-summary": "Trigger Group"
+              },
+              {
+                "in": "header",
+                "name": "x-ms-workflow-name",
+                "required": true,
+                "description": "Trigger Instance Id",
+                "type": "string",
+                "x-ms-summary": "Trigger Instance Id"
+              },
+              {
+                "in": "header",
+                "name": "x-ms-trigger-connection-mode",
+                "required": true,
+                "description": "Trigger Connection Mode",
+                "type": "string",
+                "x-ms-summary": "Trigger Connection Mode"
+              },
+              {
+                "in": "header",
+                "name": "x-ms-trigger-purpose",
+                "required": true,
+                "description": "Trigger Purpose",
+                "type": "string",
+                "x-ms-summary": "Trigger Purpose"
+              },
+              {
+                "in": "header",
+                "name": "x-ms-trigger-component-schema-name",
+                "required": true,
+                "description": "Trigger Component Schema Name",
+                "type": "string",
+                "x-ms-summary": "Trigger Component Schema Name"
+              },
+              {
+                "in": "header",
+                "name": "x-ms-trigger-component-version",
+                "required": true,
+                "description": "Trigger Component Version",
+                "type": "integer",
+                "x-ms-summary": "Trigger Component Version"
+              },
+              {
+                "in": "header",
+                "name": "x-ms-trigger-bot-version",
+                "required": true,
+                "description": "Bot Version",
+                "type": "string",
+                "x-ms-summary": "Bot Version"
+              },
+              {
+                "in": "header",
+                "name": "x-ms-pva-bot-id",
+                "description": "PVA Bot ID",
+                "type": "string",
+                "format": "uuid",
+                "x-ms-summary": "PVA Bot ID"
+              }
+            ],
+            "externalDocs": {
+              "url": "https://docs.microsoft.com/connectors/microsoftcopilotstudio/#invokes-a-trigger"
+            }
+          }
+        },
+        "/{connectionId}/powervirtualagents/evaluation-test/authenticated/bots/{CdsBotId}/conversations": {
+          "post": {
+            "responses": {
+              "200": {
+                "description": ""
+              }
+            },
+            "operationId": "EvaluationTestStartNewConversation",
+            "x-ms-visibility": "internal",
+            "summary": "Maker Evaluation Start New Conversation",
+            "description": "Emits a start conversation test event to the specified Copilot",
+            "x-ms-api-annotation": {
+              "status": "Preview"
+            },
+            "parameters": [
+              {
+                "name": "connectionId",
+                "in": "path",
+                "required": true,
+                "x-ms-visibility": "internal",
+                "type": "string"
+              },
+              {
+                "name": "CdsBotId",
+                "description": "The Copilot to start a conversation with",
+                "x-ms-summary": "Copilot ID",
+                "in": "path",
+                "required": true,
+                "type": "string"
+              },
+              {
+                "name": "body",
+                "description": "Body",
+                "x-ms-summary": "Body",
+                "in": "body",
+                "required": true,
+                "x-ms-visibility": "important",
+                "schema": {
+                  "type": "object",
+                  "description": "Schema for starting a conversation event.",
+                  "x-ms-summary": "Start Conversation Event Schema",
+                  "properties": {
+                    "emitStartConversationEvent": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "locale": {
+                      "type": "string",
+                      "example": "en-US"
+                    },
+                    "makerEvaluationSnapshotInfo": {
+                      "type": "object",
+                      "description": "A flexible object that accepts any properties.",
+                      "additionalProperties": {
+                        "type": "object"
+                      }
+                    }
+                  },
+                  "required": [
+                    "emitStartConversationEvent",
+                    "locale"
+                  ]
+                }
+              },
+              {
+                "in": "query",
+                "name": "environmentId",
+                "required": false,
+                "description": "Optional environment ID",
+                "type": "string",
+                "x-ms-summary": "Environment ID",
+                "x-ms-visibility": "internal"
+              }
+            ],
+            "externalDocs": {
+              "url": "https://docs.microsoft.com/connectors/microsoftcopilotstudio/#maker-evaluation-start-new-conversation"
+            }
+          }
+        },
+        "/{connectionId}/powervirtualagents/evaluation-test/authenticated/bots/{CdsBotId}/conversations/{ConversationId}": {
+          "post": {
+            "responses": {
+              "200": {
+                "description": ""
+              }
+            },
+            "operationId": "EvaluationTestExecuteTurn",
+            "x-ms-visibility": "internal",
+            "summary": "Maker Evaluation Test Execute Turn",
+            "description": "Sends a prompt to the specified Copilot to start processing in a test conversation",
+            "x-ms-api-annotation": {
+              "status": "Preview"
+            },
+            "parameters": [
+              {
+                "name": "connectionId",
+                "in": "path",
+                "required": true,
+                "x-ms-visibility": "internal",
+                "type": "string"
+              },
+              {
+                "name": "CdsBotId",
+                "description": "The Copilot to start a conversation with",
+                "x-ms-summary": "Copilot ID",
+                "in": "path",
+                "required": true,
+                "type": "string"
+              },
+              {
+                "name": "ConversationId",
+                "description": "The conversation ID to execute the turn in",
+                "x-ms-summary": "Conversation ID",
+                "in": "path",
+                "required": true,
+                "type": "string"
+              },
+              {
+                "name": "body",
+                "description": "Body",
+                "x-ms-summary": "Body",
+                "in": "body",
+                "required": true,
+                "x-ms-visibility": "important",
+                "schema": {
+                  "type": "object",
+                  "description": "A flexible object that accepts any properties.",
+                  "additionalProperties": {
+                    "type": "object"
+                  }
+                }
+              },
+              {
+                "in": "query",
+                "name": "environmentId",
+                "required": false,
+                "description": "Optional environment ID",
+                "type": "string",
+                "x-ms-summary": "Environment ID",
+                "x-ms-visibility": "internal"
+              }
+            ],
+            "externalDocs": {
+              "url": "https://docs.microsoft.com/connectors/microsoftcopilotstudio/#maker-evaluation-test-execute-turn"
+            }
+          }
+        },
+        "/{connectionId}/powervirtualagents/evaluation-test/authenticated/bots/{CdsBotId}/conversations/{ConversationId}/continue": {
+          "post": {
+            "responses": {
+              "200": {
+                "description": ""
+              }
+            },
+            "operationId": "EvaluationTestContinueTurn",
+            "x-ms-visibility": "internal",
+            "summary": "Maker Evaluation test Continue Turn",
+            "description": "Maker Evaluation test continue turn",
+            "x-ms-api-annotation": {
+              "status": "Preview"
+            },
+            "parameters": [
+              {
+                "name": "connectionId",
+                "in": "path",
+                "required": true,
+                "x-ms-visibility": "internal",
+                "type": "string"
+              },
+              {
+                "name": "CdsBotId",
+                "description": "The Copilot to start a conversation with",
+                "x-ms-summary": "Copilot ID",
+                "in": "path",
+                "required": true,
+                "type": "string"
+              },
+              {
+                "name": "ConversationId",
+                "description": "The conversation ID to continue",
+                "x-ms-summary": "Conversation ID",
+                "in": "path",
+                "required": true,
+                "type": "string"
+              },
+              {
+                "name": "body",
+                "description": "Body",
+                "x-ms-summary": "Body",
+                "in": "body",
+                "required": true,
+                "x-ms-visibility": "important",
+                "schema": {
+                  "type": "object",
+                  "description": "A flexible object that accepts any properties.",
+                  "additionalProperties": {
+                    "type": "object"
+                  }
+                }
+              },
+              {
+                "in": "query",
+                "name": "environmentId",
+                "required": false,
+                "description": "Optional environment ID",
+                "type": "string",
+                "x-ms-summary": "Environment ID",
+                "x-ms-visibility": "internal"
+              }
+            ],
+            "externalDocs": {
+              "url": "https://docs.microsoft.com/connectors/microsoftcopilotstudio/#maker-evaluation-test-continue-turn"
+            }
+          }
+        },
+        "/{connectionId}/powervirtualagents/evaluation-test/authenticated/declarative-bots/{CdsBotId}/conversations": {
+          "post": {
+            "responses": {
+              "200": {
+                "description": ""
+              }
+            },
+            "operationId": "DeclarativeAgentEvaluationTestStartNewConversation",
+            "x-ms-visibility": "internal",
+            "summary": "Maker Declarative Agent Evaluation Start New Conversation",
+            "description": "Emits a start conversation test event to the specified Copilot",
+            "x-ms-api-annotation": {
+              "status": "Preview"
+            },
+            "parameters": [
+              {
+                "name": "connectionId",
+                "in": "path",
+                "required": true,
+                "x-ms-visibility": "internal",
+                "type": "string"
+              },
+              {
+                "name": "CdsBotId",
+                "description": "The Copilot to start a conversation with",
+                "x-ms-summary": "Copilot ID",
+                "in": "path",
+                "required": true,
+                "type": "string"
+              },
+              {
+                "name": "body",
+                "description": "Body",
+                "x-ms-summary": "Body",
+                "in": "body",
+                "required": true,
+                "x-ms-visibility": "important",
+                "schema": {
+                  "type": "object",
+                  "description": "A flexible object that accepts any properties.",
+                  "additionalProperties": {
+                    "type": "object"
+                  }
+                }
+              },
+              {
+                "in": "query",
+                "name": "environmentId",
+                "required": false,
+                "description": "Optional environment ID",
+                "type": "string",
+                "x-ms-summary": "Environment ID",
+                "x-ms-visibility": "internal"
+              }
+            ],
+            "externalDocs": {
+              "url": "https://docs.microsoft.com/connectors/microsoftcopilotstudio/#maker-declarative-agent-evaluation-start-new-conversation"
+            }
+          }
+        },
+        "/{connectionId}/powervirtualagents/evaluation-test/authenticated/declarative-bots/{CdsBotId}/conversations/{ConversationId}": {
+          "post": {
+            "responses": {
+              "200": {
+                "description": ""
+              }
+            },
+            "operationId": "DeclarativeAgentEvaluationTestExecuteTurn",
+            "x-ms-visibility": "internal",
+            "summary": "Maker Declarative Agent Evaluation Test Execute Turn",
+            "description": "Sends a prompt to the specified Copilot to start processing in a test conversation",
+            "x-ms-api-annotation": {
+              "status": "Preview"
+            },
+            "parameters": [
+              {
+                "name": "connectionId",
+                "in": "path",
+                "required": true,
+                "x-ms-visibility": "internal",
+                "type": "string"
+              },
+              {
+                "name": "CdsBotId",
+                "description": "The Copilot to start a conversation with",
+                "x-ms-summary": "Copilot ID",
+                "in": "path",
+                "required": true,
+                "type": "string"
+              },
+              {
+                "name": "ConversationId",
+                "description": "The conversation ID to execute the turn in",
+                "x-ms-summary": "Conversation ID",
+                "in": "path",
+                "required": true,
+                "type": "string"
+              },
+              {
+                "name": "body",
+                "description": "Body",
+                "x-ms-summary": "Body",
+                "in": "body",
+                "required": true,
+                "x-ms-visibility": "important",
+                "schema": {
+                  "type": "object",
+                  "description": "A flexible object that accepts any properties.",
+                  "additionalProperties": {
+                    "type": "object"
+                  }
+                }
+              },
+              {
+                "in": "query",
+                "name": "environmentId",
+                "required": false,
+                "description": "Optional environment ID",
+                "type": "string",
+                "x-ms-summary": "Environment ID",
+                "x-ms-visibility": "internal"
+              }
+            ],
+            "externalDocs": {
+              "url": "https://docs.microsoft.com/connectors/microsoftcopilotstudio/#maker-declarative-agent-evaluation-test-execute-turn"
+            }
+          }
+        },
+        "/{connectionId}/powervirtualagents/bots/{botSchemaName}/channels/{channelId}/user-connections": {
+          "post": {
+            "responses": {
+              "204": {
+                "description": ""
+              }
+            },
+            "operationId": "BindUserConnections",
+            "x-ms-visibility": "internal",
+            "summary": "Bind user connections",
+            "description": "Bind user connections to the specified botSchemaName, channel and give state id",
+            "parameters": [
+              {
+                "name": "connectionId",
+                "in": "path",
+                "required": true,
+                "x-ms-visibility": "internal",
+                "type": "string"
+              },
+              {
+                "name": "botSchemaName",
+                "in": "path",
+                "required": true,
+                "type": "string",
+                "description": "Bot Schema Name",
+                "x-ms-summary": "Bot Schema Name"
+              },
+              {
+                "name": "channelId",
+                "in": "path",
+                "required": true,
+                "type": "string",
+                "description": "Channel ID",
+                "x-ms-summary": "Channel ID"
+              },
+              {
+                "in": "query",
+                "name": "stateId",
+                "required": true,
+                "description": "State ID",
+                "type": "string",
+                "x-ms-summary": "State ID"
+              },
+              {
+                "name": "body",
+                "description": "Body",
+                "x-ms-summary": "Body",
+                "in": "body",
+                "required": true,
+                "x-ms-visibility": "important",
+                "schema": {
+                  "type": "object",
+                  "description": "A flexible object that accepts any properties.",
+                  "additionalProperties": {
+                    "type": "object"
+                  }
+                }
+              }
+            ],
+            "externalDocs": {
+              "url": "https://docs.microsoft.com/connectors/microsoftcopilotstudio/#bind-user-connections"
+            }
+          }
+        },
+        "/{connectionId}/copilotstudio/bots/{Agent}/api/makerevaluation/testsets/{TestSetId}/run": {
+          "post": {
+            "responses": {
+              "202": {
+                "description": "The status of the newly created run if request is accepted.",
+                "schema": {
+                  "$ref": "#/definitions/RunStatusResponse"
+                }
+              }
+            },
+            "operationId": "RunAgentMakerEvaluationTestSet",
+            "summary": "Evaluate Agent",
+            "description": "Evaluates an agent using a specific test set.",
+            "parameters": [
+              {
+                "name": "connectionId",
+                "in": "path",
+                "required": true,
+                "x-ms-visibility": "internal",
+                "type": "string"
+              },
+              {
+                "name": "Agent",
+                "in": "path",
+                "required": true,
+                "type": "string",
+                "x-ms-dynamic-list": {
+                  "operationId": "ListCopilots",
+                  "parameters": {},
+                  "itemsPath": "copilotsList",
+                  "itemValuePath": "id",
+                  "itemTitlePath": "name"
+                },
+                "x-ms-dynamic-values": {
+                  "operationId": "ListCopilots",
+                  "value-path": "id",
+                  "value-collection": "copilotsList",
+                  "value-title": "name"
+                },
+                "description": "select an agent from the dropdown list, or enter a custom value (the agent ID).",
+                "x-ms-summary": "Agent"
+              },
+              {
+                "name": "TestSetId",
+                "description": "Select a test set from the dropdown list, or enter a custom value (the test set ID).",
+                "x-ms-summary": "Test Set",
+                "in": "path",
+                "required": true,
+                "type": "string",
+                "x-ms-dynamic-list": {
+                  "operationId": "GetAgentMakerEvaluationTestSets",
+                  "parameters": {
+                    "Agent": {
+                      "parameterReference": "Agent"
+                    }
+                  },
+                  "itemsPath": "value",
+                  "itemValuePath": "id",
+                  "itemTitlePath": "displayName"
+                },
+                "x-ms-dynamic-values": {
+                  "operationId": "GetAgentMakerEvaluationTestSets",
+                  "value-path": "id",
+                  "value-collection": "value",
+                  "value-title": "displayName",
+                  "parameters": {
+                    "Agent": {
+                      "parameter": "Agent"
+                    }
+                  }
+                }
+              },
+              {
+                "name": "body",
+                "description": "Body",
+                "x-ms-summary": "Body",
+                "in": "body",
+                "required": false,
+                "schema": {
+                  "type": "object",
+                  "description": "Optional parameters to the run",
+                  "properties": {
+                    "mcsConnectionId": {
+                      "type": "string",
+                      "description": "Select User profile - Enter the MCS connection ID or leave empty for anonymous run.",
+                      "x-ms-summary": "The MCS connection ID.",
+                      "title": "MCS Connection ID"
+                    },
+                    "runOnPublishedBot": {
+                      "x-ms-visibility": "internal",
+                      "type": "boolean",
+                      "description": "Whether to run on the published bot or on draft version.",
+                      "title": "Should run on published agent"
+                    },
+                    "evaluationRunName": {
+                      "type": "string",
+                      "description": "Enter a name for the evaluation run or leave empty.",
+                      "title": "Evaluation run name"
+                    }
+                  }
+                }
+              },
+              {
+                "in": "query",
+                "name": "environmentId",
+                "required": false,
+                "description": "Optional environment ID.",
+                "type": "string",
+                "x-ms-summary": "Environment ID",
+                "x-ms-visibility": "internal"
+              }
+            ],
+            "externalDocs": {
+              "url": "https://docs.microsoft.com/connectors/microsoftcopilotstudio/#evaluate-agent"
+            }
+          }
+        },
+        "/{connectionId}/copilotstudio/bots/{Agent}/api/makerevaluation/testsets": {
+          "get": {
+            "responses": {
+              "200": {
+                "description": "Retrieved test sets successfully",
+                "schema": {
+                  "$ref": "#/definitions/TestSetsResponse"
+                }
+              }
+            },
+            "operationId": "GetAgentMakerEvaluationTestSets",
+            "summary": "Get Agent Test Sets",
+            "description": "Gets the test sets for an Agent.",
+            "parameters": [
+              {
+                "name": "connectionId",
+                "in": "path",
+                "required": true,
+                "x-ms-visibility": "internal",
+                "type": "string"
+              },
+              {
+                "name": "Agent",
+                "in": "path",
+                "required": true,
+                "type": "string",
+                "x-ms-dynamic-list": {
+                  "operationId": "ListCopilots",
+                  "parameters": {},
+                  "itemsPath": "copilotsList",
+                  "itemValuePath": "id",
+                  "itemTitlePath": "name"
+                },
+                "x-ms-dynamic-values": {
+                  "operationId": "ListCopilots",
+                  "value-path": "id",
+                  "value-collection": "copilotsList",
+                  "value-title": "name"
+                },
+                "description": "select an agent from the dropdown list, or enter a custom value (the agent ID).",
+                "x-ms-summary": "Agent"
+              },
+              {
+                "in": "query",
+                "name": "environmentId",
+                "required": false,
+                "description": "Optional environment ID.",
+                "type": "string",
+                "x-ms-summary": "Environment ID",
+                "x-ms-visibility": "internal"
+              }
+            ],
+            "externalDocs": {
+              "url": "https://docs.microsoft.com/connectors/microsoftcopilotstudio/#get-agent-test-sets"
+            }
+          }
+        },
+        "/{connectionId}/copilotstudio/bots/{Agent}/api/makerevaluation/testsets/{TestSetId}": {
+          "get": {
+            "responses": {
+              "200": {
+                "description": "Retrieved test set details successfully",
+                "schema": {
+                  "$ref": "#/definitions/TestSet"
+                }
+              }
+            },
+            "operationId": "GetAgentMakerEvaluationTestSetDetails",
+            "summary": "Get Agent Test Set Details",
+            "description": "Gets the details of a specific maker evaluation test set.",
+            "parameters": [
+              {
+                "name": "connectionId",
+                "in": "path",
+                "required": true,
+                "x-ms-visibility": "internal",
+                "type": "string"
+              },
+              {
+                "name": "Agent",
+                "in": "path",
+                "required": true,
+                "type": "string",
+                "x-ms-dynamic-list": {
+                  "operationId": "ListCopilots",
+                  "parameters": {},
+                  "itemsPath": "copilotsList",
+                  "itemValuePath": "id",
+                  "itemTitlePath": "name"
+                },
+                "x-ms-dynamic-values": {
+                  "operationId": "ListCopilots",
+                  "value-path": "id",
+                  "value-collection": "copilotsList",
+                  "value-title": "name"
+                },
+                "description": "select an agent from the dropdown list, or enter a custom value (the agent ID).",
+                "x-ms-summary": "Agent"
+              },
+              {
+                "name": "TestSetId",
+                "description": "Select a test set from the dropdown list, or enter a custom value (the test set ID).",
+                "x-ms-summary": "Test Set",
+                "in": "path",
+                "required": true,
+                "type": "string",
+                "x-ms-dynamic-list": {
+                  "operationId": "GetAgentMakerEvaluationTestSets",
+                  "parameters": {
+                    "Agent": {
+                      "parameterReference": "Agent"
+                    }
+                  },
+                  "itemsPath": "value",
+                  "itemValuePath": "id",
+                  "itemTitlePath": "displayName"
+                },
+                "x-ms-dynamic-values": {
+                  "operationId": "GetAgentMakerEvaluationTestSets",
+                  "value-path": "id",
+                  "value-collection": "value",
+                  "value-title": "displayName",
+                  "parameters": {
+                    "Agent": {
+                      "parameter": "Agent"
+                    }
+                  }
+                }
+              },
+              {
+                "in": "query",
+                "name": "environmentId",
+                "required": false,
+                "description": "Optional environment ID.",
+                "type": "string",
+                "x-ms-summary": "Environment ID",
+                "x-ms-visibility": "internal"
+              }
+            ],
+            "externalDocs": {
+              "url": "https://docs.microsoft.com/connectors/microsoftcopilotstudio/#get-agent-test-set-details"
+            }
+          }
+        },
+        "/{connectionId}/copilotstudio/bots/{Agent}/api/makerevaluation/testruns": {
+          "get": {
+            "responses": {
+              "200": {
+                "description": "Retrieved test runs successfully",
+                "schema": {
+                  "$ref": "#/definitions/TestRunsResponse"
+                }
+              }
+            },
+            "operationId": "GetAgentMakerEvaluationTestRuns",
+            "summary": "Get Agent Test Runs",
+            "description": "Gets maker evaluation test runs for the specified Agent.",
+            "parameters": [
+              {
+                "name": "connectionId",
+                "in": "path",
+                "required": true,
+                "x-ms-visibility": "internal",
+                "type": "string"
+              },
+              {
+                "name": "Agent",
+                "in": "path",
+                "required": true,
+                "type": "string",
+                "x-ms-dynamic-list": {
+                  "operationId": "ListCopilots",
+                  "parameters": {},
+                  "itemsPath": "copilotsList",
+                  "itemValuePath": "id",
+                  "itemTitlePath": "name"
+                },
+                "x-ms-dynamic-values": {
+                  "operationId": "ListCopilots",
+                  "value-path": "id",
+                  "value-collection": "copilotsList",
+                  "value-title": "name"
+                },
+                "description": "select an agent from the dropdown list, or enter a custom value (the agent ID).",
+                "x-ms-summary": "Agent"
+              },
+              {
+                "in": "query",
+                "name": "environmentId",
+                "required": false,
+                "description": "Optional environment ID.",
+                "type": "string",
+                "x-ms-summary": "Environment ID",
+                "x-ms-visibility": "internal"
+              }
+            ],
+            "externalDocs": {
+              "url": "https://docs.microsoft.com/connectors/microsoftcopilotstudio/#get-agent-test-runs"
+            }
+          }
+        },
+        "/{connectionId}/copilotstudio/bots/{Agent}/api/makerevaluation/testruns/{EvaluationRunId}": {
+          "get": {
+            "responses": {
+              "200": {
+                "description": "Retrieved test run details successfully",
+                "schema": {
+                  "$ref": "#/definitions/TestRun"
+                }
+              }
+            },
+            "operationId": "GetAgentMakerEvaluationTestRunDetails",
+            "summary": "Get Agent Test Run Details",
+            "description": "Gets the details of a specific maker evaluation test run.",
+            "parameters": [
+              {
+                "name": "connectionId",
+                "in": "path",
+                "required": true,
+                "x-ms-visibility": "internal",
+                "type": "string"
+              },
+              {
+                "name": "Agent",
+                "in": "path",
+                "required": true,
+                "type": "string",
+                "x-ms-dynamic-list": {
+                  "operationId": "ListCopilots",
+                  "parameters": {},
+                  "itemsPath": "copilotsList",
+                  "itemValuePath": "id",
+                  "itemTitlePath": "name"
+                },
+                "x-ms-dynamic-values": {
+                  "operationId": "ListCopilots",
+                  "value-path": "id",
+                  "value-collection": "copilotsList",
+                  "value-title": "name"
+                },
+                "description": "select an agent from the dropdown list, or enter a custom value (the agent ID).",
+                "x-ms-summary": "Agent"
+              },
+              {
+                "name": "EvaluationRunId",
+                "description": "Select evaluation run from the dropdown list, or enter a custom value (the evaluation run ID).",
+                "x-ms-summary": "Evaluation Run",
+                "in": "path",
+                "required": true,
+                "type": "string",
+                "x-ms-dynamic-list": {
+                  "operationId": "GetAgentMakerEvaluationTestRuns",
+                  "parameters": {
+                    "Agent": {
+                      "parameterReference": "Agent"
+                    }
+                  },
+                  "itemsPath": "value",
+                  "itemValuePath": "id",
+                  "itemTitlePath": "name"
+                },
+                "x-ms-dynamic-values": {
+                  "operationId": "GetAgentMakerEvaluationTestRuns",
+                  "value-path": "id",
+                  "value-collection": "value",
+                  "value-title": "name",
+                  "parameters": {
+                    "Agent": {
+                      "parameter": "Agent"
+                    }
+                  }
+                }
+              },
+              {
+                "in": "query",
+                "name": "environmentId",
+                "required": false,
+                "description": "Optional environment ID.",
+                "type": "string",
+                "x-ms-summary": "Environment ID",
+                "x-ms-visibility": "internal"
+              }
+            ],
+            "externalDocs": {
+              "url": "https://docs.microsoft.com/connectors/microsoftcopilotstudio/#get-agent-test-run-details"
+            }
+          }
+        }
+      },
+      "definitions": {
+        "ExecuteAgentJsonResponse": {
+          "type": "object",
+          "description": "Agent response",
+          "properties": {
+            "message": {
+              "type": "string",
+              "description": "Message",
+              "title": "Message"
+            }
+          }
+        },
+        "EntitiesResponse": {
+          "type": "object",
+          "properties": {
+            "entities": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/Entity"
+              }
+            },
+            "moreRecords": {
+              "type": "boolean",
+              "example": false
+            }
+          }
+        },
+        "Entity": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "example": "9f1dd7eb-7e4f-ef11-bfe3-00224802dbb1"
+            },
+            "logicalName": {
+              "type": "string",
+              "example": "bot"
+            },
+            "attributes": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/Attribute"
+              }
+            }
+          }
+        },
+        "Attribute": {
+          "type": "object",
+          "properties": {
+            "key": {
+              "type": "string",
+              "example": "botid"
+            },
+            "value": {
+              "type": "string",
+              "example": "9f1dd7eb-7e4f-ef11-bfe3-00224802dbb1"
+            }
+          }
+        },
+        "TestSetsResponse": {
+          "type": "object",
+          "properties": {
+            "value": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/TestSet"
+              }
+            }
+          }
+        },
+        "TestSet": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "example": "a75c8ea5-66b8-41e7-933b-f0a731bddb93"
+            },
+            "displayName": {
+              "type": "string",
+              "example": "Evaluation Test Set"
+            },
+            "totalTestCases": {
+              "type": "integer",
+              "example": 10
+            },
+            "description": {
+              "type": "string",
+              "example": "This is a test set for evaluating the agent's performance."
+            },
+            "auditInfo": {
+              "$ref": "#/definitions/AuditInfo"
+            },
+            "state": {
+              "type": "string",
+              "example": "Active|InActive"
+            }
+          }
+        },
+        "AuditInfo": {
+          "type": "object",
+          "properties": {
+            "createdBy": {
+              "type": "string",
+              "example": "a75c8ea5-66b8-41e7-933b-f0a731bddb93"
+            },
+            "createdTimeUtc": {
+              "type": "string",
+              "format": "date-time",
+              "example": "2023-01-01T12:00:00Z"
+            },
+            "modifiedBy": {
+              "type": "string",
+              "example": "a75c8ea5-66b8-41e7-933b-f0a731bddb93"
+            },
+            "modifiedTimeUtc": {
+              "type": "string",
+              "format": "date-time",
+              "example": "2023-01-01T12:30:00Z"
+            }
+          }
+        },
+        "TestRunsResponse": {
+          "type": "object",
+          "properties": {
+            "value": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/TestRun"
+              }
+            }
+          }
+        },
+        "TestRun": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "example": "b12c8ea5-66b8-41e7-933b-f0a731bddb94"
+            },
+            "environmentId": {
+              "type": "string",
+              "example": "d75c8ea5-66b8-41e7-933b-f0a731bddb95"
+            },
+            "cdsBotId": {
+              "type": "string",
+              "example": "e75c8ea5-66b8-41e7-933b-f0a731bddb96"
+            },
+            "ownerId": {
+              "type": "string",
+              "example": "f75c8ea5-66b8-41e7-933b-f0a731bddb97"
+            },
+            "testSetId": {
+              "type": "string",
+              "example": "a75c8ea5-66b8-41e7-933b-f0a731bddb93"
+            },
+            "state": {
+              "type": "string",
+              "example": "Unknown|Queued|InProgress|Completed|Failed|Abandoned|Cancelled|Deleted"
+            },
+            "startTime": {
+              "type": "string",
+              "format": "date-time",
+              "example": "2023-01-02T10:00:00Z"
+            },
+            "endTime": {
+              "type": "string",
+              "format": "date-time",
+              "example": "2023-01-02T10:30:00Z"
+            },
+            "name": {
+              "type": "string",
+              "example": "Agent Evaluation Run 1"
+            },
+            "totalTestCases": {
+              "type": "integer",
+              "example": 10
+            },
+            "msConnectionId": {
+              "type": "string",
+              "example": "c75c8ea5-66b8-41e7-933b-f0a731bddb98"
+            },
+            "testCasesResults": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/TestCaseResult"
+              }
+            }
+          }
+        },
+        "TestCaseResult": {
+          "type": "object",
+          "properties": {
+            "testCaseId": {
+              "type": "string",
+              "example": "924f7c76-8308-4288-9fcf-806f88289053"
+            },
+            "state": {
+              "type": "string",
+              "example": "Unknown|Running|Error|Completed|Cancelled"
+            },
+            "metricsResults": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/TestCaseMetric"
+              }
+            }
+          }
+        },
+        "TestCaseMetric": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "example": "GeneralQuality|ExactMatch|CompareMeaning|TextSimilarity|AllKeywordMatch|AnyKeywordMatch|CustomLabels|CapabilityUse|Unknown"
+            },
+            "result": {
+              "$ref": "#/definitions/TestCaseMetricResult"
+            }
+          }
+        },
+        "TestCaseMetricResult": {
+          "type": "object",
+          "properties": {
+            "data": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              }
+            },
+            "status": {
+              "type": "string",
+              "example": "Pass|Fail|Error|Unknown"
+            },
+            "errorReason": {
+              "type": "string",
+              "example": "QueryIsNullOrEmpty|AgentResponseIsNullOrEmpty|ExpectedOutputIsNullOrEmpty|ExpectedKeywordsAreNullOrEmpty|ExpectedInvocationStepsAreNullOrEmpty|GraderCreationFailed|ModelLabelGraderInvalidLabel|RequestTokenLimitExceeded|EmptyOrInvalidModelResponse|IntentMatchInvalidMatchTypeRetrievedKnowledgeSourcesTextsAreEmpty|RetrievedKnowledgeTokenLimitExceeded|InputOutputCountMismatch|UnexpectedInternalError"
+            },
+            "aiResultReason": {
+              "type": "string"
+            }
+          }
+        },
+        "RunStatusResponse": {
+          "type": "object",
+          "properties": {
+            "runId": {
+              "type": "string",
+              "example": "b12c8ea5-66b8-41e7-933b-f0a731bddb94"
+            },
+            "lastUpdatedAt": {
+              "type": "string",
+              "format": "date-time",
+              "example": "2023-01-02T10:00:00Z"
+            },
+            "state": {
+              "type": "string",
+              "example": "Initializing|Queued|Completed|Failed|Abandoned|Cancelled|Deleted|CreatingRunContent|ProcessingRunContent|EvaluatingRun|Unknown"
+            },
+            "executionState": {
+              "type": "string",
+              "example": "Unknown|Queued|InProgress|Completed|Failed|Abandoned|Cancelled|Deleted"
+            },
+            "totalTestCases": {
+              "type": "integer",
+              "example": 10
+            },
+            "testCasesProcessed": {
+              "type": "integer",
+              "example": 10
+            }
+          }
+        }
+      },
+      "parameters": {},
+      "responses": {},
+      "tags": [],
+      "externalDocs": {
+        "url": "https://docs.microsoft.com/connectors/microsoftcopilotstudio"
+      },
+      "basePath": "/apim/microsoftcopilotstudio"
+    },
+    "runtimeUrls": [
+      "https://92ac575f-d43d-e38d-80a0-d70cec823715.02.common.usa002.azure-apihub.net/apim/microsoftcopilotstudio"
+    ],
+    "primaryRuntimeUrl": "https://92ac575f-d43d-e38d-80a0-d70cec823715.02.common.usa002.azure-apihub.net/apim/microsoftcopilotstudio",
+    "doNotUseApiHubNetRuntimeUrl": "https://92ac575f-d43d-e38d-80a0-d70cec823715.02.common.usa002.azure-apihub.net/apim/microsoftcopilotstudio",
+    "metadata": {
+      "source": "marketplace",
+      "brandColor": "",
+      "connectionLimits": {
+        "*": 50
+      },
+      "useNewApimVersion": "true",
+      "version": {
+        "previous": "releases/v1.0.1808\\1.0.1808.4692",
+        "current": "releases/v1.0.1811\\1.0.1811.4738"
+      }
+    },
+    "capabilities": [
+      "actions",
+      "triggers"
+    ],
+    "interfaces": {},
+    "description": "Microsoft Copilot Studio used to discover and trigger agents",
+    "createdTime": "2024-06-12T22:26:12.3187631Z",
+    "changedTime": "2026-05-08T09:06:57.415629Z",
+    "releaseTag": "Production",
+    "tier": "Standard",
+    "publisher": "Microsoft",
+    "scopes": {
+      "will": [],
+      "wont": []
+    },
+    "rateLimit": 0,
+    "apiVersion": "None"
+  }
+}

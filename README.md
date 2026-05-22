@@ -49,6 +49,15 @@ PP-CodeApp-CoE/
   display names, input schemas, value domains, and which rules have
   typed renderers vs. fall through to raw JSON. Read this before
   adding a new rule renderer to `src/components/ruleRenderers/`.
+- **[Copilot Studio integration](./PP-CoE-CodeApp/docs/copilot-studio-integration.md)** —
+  how the global floating "CoE Assistant" chat panel is wired to a
+  Microsoft Copilot Studio agent, and how it is gated behind the
+  `copilotStudioAssistant` feature flag (default **off**). Covers
+  prereqs (`pac connection list`, publishing the agent), the one-time
+  `pac code add-data-source` for `shared_microsoftcopilotstudio`, the
+  two placeholders you need to replace (`AGENT_NAME` + the MCS
+  connectionId in `power.config.json`), the user-facing toggle at
+  Settings → Feature flags, and the documented troubleshooting checklist.
 
 ## Releases
 

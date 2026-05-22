@@ -18,6 +18,15 @@
       ],
       "authenticationType": "oauth2-auth",
       "dataSets": {}
+    },
+    "5aefb442-1a7d-4024-a102-c085636b92b4": {
+      "id": "/providers/Microsoft.PowerApps/apis/shared_microsoftcopilotstudio",
+      "displayName": "Microsoft Copilot Studio",
+      "dataSources": [
+        "microsoftcopilotstudio"
+      ],
+      "authenticationType": "oauthDefault",
+      "dataSets": {}
     }
   },
   "databaseReferences": {}
