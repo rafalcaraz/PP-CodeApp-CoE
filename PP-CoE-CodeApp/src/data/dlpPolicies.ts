@@ -402,19 +402,28 @@ export async function getApplicableDlpPolicies(
  *  config. */
 const ACP_RULE_ID_KNOWN = "ConnectorManagement";
 
-/** Heuristic rule id for the "Advanced connector policies only"
- *  preview rule that signals ACP-only mode (DLPs are ignored on this
- *  group). The exact id is **not yet confirmed** — `governance-rules-catalog.md`
- *  speculates it may be a sibling rule with this name or a flag inside
- *  `ConnectorManagement.inputs`. We check both:
+/** Rule id for the "Advanced connector policies only" rule that, when
+ *  present AND enabled on an env group, signals ACP-only mode (DLPs
+ *  are ignored on this group, only the ACP allow-list enforces).
  *
- *  - a sibling rule whose id matches a small regex of likely names, AND
- *  - any boolean flag inside `ConnectorManagement.inputs` whose key
- *    looks like an "only / exclusive / override DLP" toggle.
+ *  Confirmed schema from a captured tenant payload (see
+ *  `docs/admin-payload-samples.md` and `docs/governance-rules-catalog.md`):
  *
- *  When we see `ConnectorManagement` present but no ACP-only signal,
- *  we leave `acp.only = false`. If we ever confirm the real schema we
- *  just tighten this code; everything downstream stays the same. */
+ *    {
+ *      "id": "AdvancedConnectorPoliciesOnly",
+ *      "version": "1.0",
+ *      "inputs": { "EnableAdvancedConnectorPoliciesOnly": true }
+ *    }
+ *
+ *  The flag matters — a tenant can have the rule attached but disabled,
+ *  in which case ACPs do NOT override DLPs. We check both id and flag. */
+const ACP_ONLY_RULE_ID_KNOWN = "AdvancedConnectorPoliciesOnly";
+const ACP_ONLY_ENABLE_FLAG = "EnableAdvancedConnectorPoliciesOnly";
+
+/** Heuristic fallbacks for ACP-only detection. Kept around so that if
+ *  Microsoft ever adds a sibling rule id or moves the flag onto
+ *  `ConnectorManagement.inputs`, we still pick it up. The exact match
+ *  on `ACP_ONLY_RULE_ID_KNOWN` is checked first; these are last-resort. */
 const ACP_ONLY_RULE_ID_PATTERN =
   /^(?:advanced)?connectorpolicies?only|^onlyconnectorpolicies?$/i;
 const ACP_ONLY_INPUT_FLAG_PATTERN =
@@ -426,7 +435,9 @@ export interface EnvironmentGroupAcpStatus {
    *  group's effective policies. */
   configured: boolean;
   /** ACPs override DLPs (a.k.a. "Advanced connector policies only").
-   *  Best-effort — see the comment on `ACP_ONLY_RULE_ID_PATTERN`. */
+   *  Tightened to a confirmed schema (exact rule id +
+   *  `EnableAdvancedConnectorPoliciesOnly === true`); see
+   *  `ACP_ONLY_RULE_ID_KNOWN` and `ACP_ONLY_ENABLE_FLAG`. */
   only: boolean;
   /** Total connectors listed across every `ConnectorManagement` rule's
    *  `AllowedConnectorList`. Useful for one-line summaries. */
@@ -439,7 +450,8 @@ export interface EnvironmentGroupAcpStatus {
   policies: Policy[];
 }
 
-/** Scan one rule's `inputs` for an "ACP-only" boolean flag. */
+/** Scan one rule's `inputs` for an "ACP-only" boolean flag. Heuristic
+ *  fallback — exact-id detection is preferred and handled separately. */
 function inputsImplyAcpOnly(inputs: unknown): boolean {
   if (!inputs || typeof inputs !== "object") return false;
   for (const [k, v] of Object.entries(inputs as Record<string, unknown>)) {
@@ -466,16 +478,25 @@ export function summarizeAcpStatus(
     for (const rule of p.ruleSets ?? []) {
       const id = rule.id ?? "";
       if (id) ruleIds.add(id);
+
       if (id === ACP_RULE_ID_KNOWN) {
         configured = true;
         const inputs = (rule.inputs ?? {}) as Record<string, unknown>;
         const list = inputs.AllowedConnectorList;
         if (Array.isArray(list)) allowedConnectorCount += list.length;
+        // Heuristic fallback only — kept in case the platform ever
+        // moves the toggle onto ConnectorManagement.inputs directly.
         if (inputsImplyAcpOnly(inputs)) only = true;
+      } else if (id === ACP_ONLY_RULE_ID_KNOWN) {
+        // Confirmed rule. Toggle is `inputs.EnableAdvancedConnectorPoliciesOnly`
+        // — a tenant can have the rule attached but disabled, so we
+        // require the flag to be truthy before flipping `only`.
+        const inputs = (rule.inputs ?? {}) as Record<string, unknown>;
+        if (inputs[ACP_ONLY_ENABLE_FLAG] === true) only = true;
       } else if (ACP_ONLY_RULE_ID_PATTERN.test(id)) {
-        // Sibling rule whose id matches one of our best-guess names.
-        // Treat presence as a positive ACP-only signal regardless of
-        // its `inputs` (we don't know that schema yet).
+        // Last-resort heuristic. Useful only if Microsoft renames the
+        // rule or ships a sibling. Treat presence as the signal since
+        // we don't know the flag schema for hypothetical variants.
         only = true;
       }
     }

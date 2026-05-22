@@ -107,8 +107,11 @@ shows a green check.
 ```ts
 inputs: {
   AllowedConnectorList: Array<{
-    AllowedConnector: string;       // ARM path: /providers/Microsoft.PowerApps/apis/shared_<slug>
-    AllowedActionsMode: string;     // observed: "AllAllowed". Expected variants: per-action lists.
+    AllowedConnector: string;                  // ARM path: /providers/Microsoft.PowerApps/apis/shared_<slug>
+    AllowedActions?: string[];                 // operation IDs (only when AllowedActionsMode === "SomeAllowed")
+    AllowedActionsMode: "AllAllowed" | "SomeAllowed";
+    AllowedConnectionTypesMode: "AllAllowed" | "SomeAllowed";
+    // AllowedConnectionTypes?: string[];      // expected sibling for SomeAllowed; not captured yet
   }>;
 }
 ```
@@ -116,8 +119,20 @@ inputs: {
 ```json
 {
   "AllowedConnectorList": [
-    { "AllowedConnector": "/providers/Microsoft.PowerApps/apis/shared_office365users",  "AllowedActionsMode": "AllAllowed" },
-    { "AllowedConnector": "/providers/Microsoft.PowerApps/apis/shared_sharepointonline", "AllowedActionsMode": "AllAllowed" }
+    {
+      "AllowedConnector": "/providers/Microsoft.PowerApps/apis/shared_sharepointonline",
+      "AllowedActionsMode": "AllAllowed",
+      "AllowedConnectionTypesMode": "AllAllowed"
+    },
+    {
+      "AllowedConnector": "/providers/Microsoft.PowerApps/apis/shared_sql",
+      "AllowedActions": [
+        "DeleteItem", "GetItem", "GetItems_V2", "PatchItem", "PostItem",
+        "ExecuteProcedure", "TestConnection"
+      ],
+      "AllowedActionsMode": "SomeAllowed",
+      "AllowedConnectionTypesMode": "AllAllowed"
+    }
   ]
 }
 ```
@@ -125,6 +140,46 @@ inputs: {
 Rendering strips the ARM-style prefix and runs each `<slug>` through
 `friendlyConnectorName(...)` from `src/data/inventory.ts`. Unknown
 slugs fall back to a kebab-prettified label.
+
+**Consumed by:** `summarizeAcpStatus()` in `src/data/dlpPolicies.ts` —
+sums `AllowedConnectorList.length` across all `ConnectorManagement`
+rules to feed the env-detail "DLP coverage" card's
+`allowedConnectorCount`. The per-connector action lists
+(`AllowedActions[]`) and `AllowedActionsMode` are **not yet diffed
+or rendered**; surfacing them is the next step for the upcoming ACP
+Comparator (see roadmap).
+
+---
+
+### `AdvancedConnectorPoliciesOnly`
+
+| | |
+| --- | --- |
+| **PPAC display name** | Advanced connector policies only (preview) |
+| **Latest version observed** | 1.0 |
+| **Renderer** | ❌ (status-only — `summarizeAcpStatus` checks the flag; no detail renderer yet) |
+| **Status summary** | `"Enabled"` / `"Disabled"` |
+
+```ts
+inputs: {
+  EnableAdvancedConnectorPoliciesOnly: boolean;
+}
+```
+
+```json
+{ "EnableAdvancedConnectorPoliciesOnly": true }
+```
+
+When this rule is present **and** `EnableAdvancedConnectorPoliciesOnly`
+is `true`, the env group is in **ACP-only mode**: any DLP policies that
+would otherwise scope to environments in this group are ignored, and
+only the `ConnectorManagement` allow-list enforces. The rule can be
+attached but disabled — always require the flag to be truthy.
+
+**Consumed by:** `summarizeAcpStatus()` in `src/data/dlpPolicies.ts`.
+Flips `acp.only = true` on the env-detail DLP-coverage card, which
+swaps the "Both DLP and ACP apply" info banner for a "DLPs are
+overridden by ACP-only mode" warning and tags each DLP row.
 
 ---
 
@@ -249,7 +304,7 @@ it here and into `admin-payload-samples.md`.
 
 | PPAC display name | Likely model | Likely id (guess) | Status |
 | --- | --- | --- | --- |
-| Advanced connector policies only (preview) | B | (possibly the same `ConnectorManagement` with a different mode flag) | ❌ unknown |
+| ~~Advanced connector policies only (preview)~~ | B | ✅ **Confirmed** as `AdvancedConnectorPoliciesOnly` — see entry above |
 | Backup retention | B | `BackupRetention` (?) | ❌ unknown |
 | Computer Use | B | `ComputerUse` (?) | ❌ unknown |
 | Computer Use Access Control | B | `ComputerUseAccessControl` (?) | ❌ unknown |

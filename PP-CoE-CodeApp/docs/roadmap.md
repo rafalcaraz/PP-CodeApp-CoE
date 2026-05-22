@@ -1476,3 +1476,135 @@ environment in the policy's `environments[]`. It doesn't yet:
   ARM-path id (`/providers/.../apis/shared_sql`) into the inventory
   query — it will tokenize wrong and return zero hits.
 
+---
+
+## Unified Comparator + Impact (multi-subject)
+
+> **Status as of last session.** Two stand-alone DLP tools shipped:
+> `DlpComparator` (compare two `PolicyV2` policies on scope + default +
+> per-connector bucket) and `DlpImpact` (pick a policy + a connector,
+> see which resources in the policy's scope use it). The Environment
+> detail page also surfaces a DLP coverage card with ACP cross-check.
+>
+> The pattern obviously generalizes: an admin asking "what's the diff
+> between these two governance things?" or "what would change if I
+> tweaked this thing?" doesn't care whether "thing" is a DLP, an env
+> group, or an ACP rule. Today each subject would need its own page.
+> This roadmap section captures the planned unification.
+
+### The two pages, multi-subject
+
+Keep two top-level entry points but give each a **subject tab strip**.
+Picker + diff/impact content swaps per subject; the result shell (KPI
+strip + table + CSV export) is shared:
+
+| Page | Subject tabs (V1) | What changes per tab |
+| --- | --- | --- |
+| **Comparator** | `[DLP policies]` (shipped) · `[Environment groups]` · `[ACPs]` | Picker pair + diff layer. |
+| **Impact** | `[DLP]` (shipped) · `[ACPs]` | Picker A (DLP policy *or* env group) + picker B (connector). |
+
+Sidenav under Security collapses from `DLP Comparator` / `DLP Impact`
+to `Comparator` / `Impact`. The current routes
+(`/security/dlp-comparator`, `/security/dlp-impact`) become tab-aware
+(e.g. `/security/comparator?subject=dlp` or hash-based) so existing
+bookmarks survive.
+
+### Comparator — Environment groups (new)
+
+Compare every effective governance rule on two env groups:
+
+- **Model A** (`parameters` buckets) — already fetched by
+  `getEnvironmentGroupRulesets`. Diff each `(type, resourceType, id)`
+  triplet across both sides; render with the existing
+  `ModelARulesetRenderer`-style logic but in a diff mode (added /
+  removed / changed badges).
+- **Model B** (`ruleSets`) — already fetched by
+  `getEnvironmentGroupEffectivePolicies`. Diff each rule by `id`. Body
+  rendering reuses `RULE_METADATA.<id>.render` from
+  `RuleSetRenderer.tsx` wrapped in left/right cells.
+- **Environment membership** (later) — diff which envs are *in* each
+  group via `listEnvironmentsInGroup`.
+
+Pure diff layer lands in `src/data/envGroupDiff.ts` (mirrors `dlpDiff.ts`).
+
+### Comparator — ACPs (new, narrow)
+
+Focused mode that diffs only the `ConnectorManagement` rule between
+two env groups. Smaller than the full env-group diff, useful when an
+admin specifically wants to answer "what's different about the
+connector allow-list on these two groups?"
+
+V1 scope = **per-connector membership + AllowedActionsMode**:
+
+- Set diff over `AllowedConnectorList[].AllowedConnector` (normalize
+  via `normalizeConnectorSlug` from `dlpImpact.ts` — same ARM-path-to-
+  slug treatment we use everywhere).
+- For connectors present on both sides, show
+  `AllowedActionsMode` and `AllowedConnectionTypesMode` side by side.
+  Flag rows where either differs.
+- Surface `AdvancedConnectorPoliciesOnly.EnableAdvancedConnectorPoliciesOnly`
+  diff at the top (same / one-side-only / both with same value).
+
+**Deferred to V2:** per-action diff (`AllowedActions[]` set-diff per
+connector). Doable but action lists are long (50+ per connector for
+SQL) and need a dedicated drill-down UI — better as a follow-up than
+crammed into V1.
+
+### Impact — ACPs (new)
+
+Same "pick a connector, see what would lose access" framing as
+`DlpImpact`, but with an env-group entry point:
+
+- Picker A = env group that has a `ConnectorManagement` rule (call
+  `getEnvironmentGroupAcpStatus` to filter).
+- Picker B = connector slug (freeform + suggestions from the group's
+  current `AllowedConnectorList`).
+- Scope = list envs in the group via inventory
+  (`where properties.environmentGroupId == groupId`); reuse
+  `queryDlpImpact`'s `__connectorBag has_any` machinery with that
+  derived env list.
+- Result = resources in those envs using the connector — these would
+  lose access if you removed it from the ACP allow-list (or if the
+  group flipped to ACP-only mode without it).
+
+ACP impact's "before → after" framing is **removed from allow-list**,
+not "moved to Blocked" — wording in the result banner differs but
+otherwise the table is identical.
+
+### Engineering staging
+
+Don't try to land this as a single PR. Sequence:
+
+1. **Shared shell extraction** — pull the picker-pair scaffold + diff
+   summary KPI strip + diff row table out of `DlpComparator.tsx` into
+   `src/components/ComparatorShell.tsx`. `DlpComparator` becomes a
+   thin consumer. No behavior change. (Lowest risk, sets up the rest.)
+2. **Sidenav rename + tabbed routes** — rename to `Comparator` /
+   `Impact`, add the subject tab strip with only the DLP tab live.
+   Old URLs redirect to `?subject=dlp`. Still no new functionality.
+3. **Comparator: ACPs tab** — narrow scope (connector membership +
+   mode flags), reuses the shell. Easiest second subject to add.
+4. **Comparator: Environment groups tab** — full rule diff (Model A + B).
+   Heaviest single piece — own commit.
+5. **Impact: ACP tab** — env-group picker + scope derivation +
+   freeform connector entry. Reuses the result table.
+6. **Action-level diff in ACP comparator** — V2. Deferred per the user.
+
+Each stage ships independently with a working sidenav/tab state at
+every point. Don't merge stages.
+
+### Notes for whoever picks this up
+
+- The `RuleSetRenderer.tsx` registry (`RULE_METADATA`) is already the
+  right home for per-rule body renderers. The diff mode just wraps the
+  same body in a left/right cell; don't fork the renderer.
+- `getEnvironmentGroupEffectivePolicies` + `getEnvironmentGroupRulesets`
+  + `summarizeAcpStatus` already give us almost every piece of data
+  for the new subjects. The work is mostly UI + a thin diff layer.
+- For the **ACP Impact** scope, use `where("properties.environmentGroupId", "==", "'<groupId>'")`
+  against `Environment` type to enumerate envs in the group — this is
+  already how `listEnvironmentsInGroup` works. Pass those env ids
+  into the same `queryDlpImpact`-style filter with a "scope source =
+  group membership" label in the result banner.
+
+
