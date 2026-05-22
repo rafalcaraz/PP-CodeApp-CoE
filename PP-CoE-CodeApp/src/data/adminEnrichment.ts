@@ -317,6 +317,34 @@ export async function getEnvironmentGroupRulesets(
   }
 }
 
+/** Combined result of `getEnvironmentGroupGovernance` — both governance
+ *  models in one payload so callers can render a unified "View all
+ *  rules" surface.
+ *
+ *  Each half is its own `DataResult` so a failure in one model doesn't
+ *  hide the other. The outer call is `ok: true` whenever we have
+ *  *anything* to show; per-section errors render inline alongside the
+ *  successful data. */
+export interface EnvironmentGroupGovernanceResult {
+  rulesets: DataResult<EnvironmentGroupRulesetsResult>;
+  policies: DataResult<EnvironmentGroupEffectivePoliciesResult>;
+}
+
+/** Fetch both Model A (`getEnvironmentGroupRulesets`) and Model B
+ *  (`getEnvironmentGroupEffectivePolicies`) in parallel. */
+export async function getEnvironmentGroupGovernance(
+  groupId: string
+): Promise<DataResult<EnvironmentGroupGovernanceResult>> {
+  if (!groupId) return { ok: false, error: "Environment group ID is required." };
+  const [rulesets, policies] = await Promise.all([
+    getEnvironmentGroupRulesets(groupId),
+    getEnvironmentGroupEffectivePolicies(groupId),
+  ]);
+  // Always `ok: true` at the outer level — per-half failures are
+  // surfaced inline so the user sees whatever did succeed.
+  return { ok: true, data: { rulesets, policies } };
+}
+
 /** Fetch the **Model B** rule-based policies effective on an env group.
  *  No direct connector wrap exists; this fans out internally (see
  *  `EnvironmentGroupEffectivePoliciesResult` doc). */

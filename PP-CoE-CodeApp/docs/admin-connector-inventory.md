@@ -306,27 +306,23 @@ the *existing* V2 connector (no new consent), except where noted.
    question, single call, single env id. Natural follow-up to #0 — could
    live as a second action button inside the same "Admin details" card.
 
-3. 🛠️ **Phase 1 + Phase 2 shipped — env-group "Governance
-   (supplemental)" surface.** Four cards on
-   `views/EnvironmentGroupDetail.tsx`, each backed by a helper in
-   `src/data/adminEnrichment.ts`:
-   - "Group basics" → `GetEnvironmentGroup`
-   - "Group role assignments" → `ListEnvironmentGroupRoleAssignments`
-   - "Rulesets — Model A (parameter buckets)" →
-     `GetRuleSetListForTenant` + client-side filter on
-     `environmentFilter.values[]` (the connector has no direct
-     group-only wrap; the env-scoped `GetRuleSet` returns 404)
-   - "Rule-based policies — Model B" →
-     `ListRuleAssignmentsByEnvironmentGroupId` → parallel
-     `GetRuleBasedPolicyByID` per unique policy id
+3. 🛠️ **Phase 1 + Phase 2 + combined-card shipped — env-group
+   "Governance rules" surface.** Single "View all rules" button on
+   `views/EnvironmentGroupDetail.tsx` fires both governance APIs in
+   parallel via `getEnvironmentGroupGovernance(groupId)`:
 
-   Model B renders policies as nested sections with one bordered
-   sub-card per `ruleSet`, dispatched through
-   `src/components/ruleRenderers/RuleSetRenderer.tsx`. All 6 known
-   rule ids have typed renderers (CopilotTranscripts,
-   ConnectorManagement, CopilotChannelPublishSettings,
-   CopilotEnablePrompts, CopilotFeaturesForMakers,
-   MakerOnboardingContent); unknown ids fall through to raw JSON.
+   - **Group basics card** → `GetEnvironmentGroup`
+   - **Group role assignments card** → `ListEnvironmentGroupRoleAssignments`
+   - **Governance rules card (combined)** → `GetRuleSetListForTenant`
+     (Model A, filtered client-side) + `ListRuleAssignmentsByEnvironmentGroupId`
+     → parallel `GetRuleBasedPolicyByID` per unique policy id (Model B)
+
+   Renders in two sections inside the card (Rule-based policies / Parameter
+   rulesets), each section uses an accordion of rules with **all items
+   expanded by default** but still individually collapsible. Per-rule
+   friendly renderers dispatch through `RULE_METADATA` and `PARAM_REGISTRY`
+   in `src/components/ruleRenderers/`; unknown ids fall through to raw
+   JSON. Schema reference at `docs/governance-rules-catalog.md`.
 
 4. **Rulesets as a new entity surface.**
    `GetRuleSetListForTenant` for a list view, `GetRuleSet` +

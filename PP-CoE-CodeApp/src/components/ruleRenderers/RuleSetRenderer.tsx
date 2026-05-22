@@ -441,8 +441,18 @@ const RULE_METADATA: Record<string, RuleMetadata> = {
 
 /** Render a policy's `ruleSets[]` as an accordion. Each item collapses
  *  by default; the header shows the PPAC display name + a short status
- *  summary so the user can scan the whole policy without expanding. */
-export function PolicyRuleSetsAccordion({ policy }: { policy: Policy }) {
+ *  summary so the user can scan the whole policy without expanding.
+ *
+ *  Pass `defaultOpenAll` when the surrounding surface is dedicated to
+ *  viewing rules (e.g. the "View all rules" page) — every item starts
+ *  expanded, but the user can still collapse individual ones. */
+export function PolicyRuleSetsAccordion({
+  policy,
+  defaultOpenAll = false,
+}: {
+  policy: Policy;
+  defaultOpenAll?: boolean;
+}) {
   const styles = useStyles();
   const ruleSets = policy.ruleSets ?? [];
   if (ruleSets.length === 0) {
@@ -452,8 +462,9 @@ export function PolicyRuleSetsAccordion({ policy }: { policy: Policy }) {
       </Text>
     );
   }
+  const allValues = ruleSets.map((rule, idx) => `${rule.id ?? ""}-${idx}`);
   return (
-    <Accordion collapsible multiple>
+    <Accordion collapsible multiple defaultOpenItems={defaultOpenAll ? allValues : undefined}>
       {ruleSets.map((rule, idx) => {
         const id = rule.id ?? "";
         const inputs = rule.inputs ?? {};

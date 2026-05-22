@@ -509,16 +509,22 @@ function ParameterRow({
 /** Render one Model A `RuleSetDto` — a small header (id + last-modified
  *  + cross-group chip) plus an accordion of `(type, resourceType)`
  *  buckets, each collapsed by default with a status summary in the
- *  header. */
+ *  header.
+ *
+ *  Pass `defaultOpenAll` when the surrounding surface is dedicated to
+ *  viewing rules — every bucket starts expanded but the user can still
+ *  collapse individual ones. */
 export function RulesetBucketsAccordion({
   ruleset,
   currentGroupId,
+  defaultOpenAll = false,
 }: {
   ruleset: RuleSetDto;
   /** If supplied, the renderer adds a chip noting how many *other*
-   *  env groups also receive this ruleset (because rulesets can target
-   *  multiple groups). */
+   *  env groups also receive this ruleset. */
   currentGroupId?: string;
+  /** When true, every bucket accordion item starts expanded. */
+  defaultOpenAll?: boolean;
 }) {
   const styles = useStyles();
   const buckets = ruleset.parameters ?? [];
@@ -527,6 +533,7 @@ export function RulesetBucketsAccordion({
   const otherGroupCount = currentGroupId
     ? filterValues.filter((v) => v.id !== currentGroupId).length
     : 0;
+  const allValues = buckets.map((b, idx) => `${b.type}/${b.resourceType}-${idx}`);
   return (
     <div className={styles.rulesetWrap}>
       <div className={styles.rulesetHeader}>
@@ -551,7 +558,7 @@ export function RulesetBucketsAccordion({
           This ruleset has no parameter buckets.
         </Text>
       ) : (
-        <Accordion collapsible multiple>
+        <Accordion collapsible multiple defaultOpenItems={defaultOpenAll ? allValues : undefined}>
           {buckets.map((b, idx) => {
             const bucketKey = `${b.type}/${b.resourceType}`;
             const display = bucketDisplayName(bucketKey, b.type, b.resourceType);

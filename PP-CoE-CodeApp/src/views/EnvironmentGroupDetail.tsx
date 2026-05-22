@@ -33,13 +33,11 @@ import {
 } from "../data/inventory";
 import {
   getEnvironmentGroupDetails,
-  getEnvironmentGroupEffectivePolicies,
+  getEnvironmentGroupGovernance,
   getEnvironmentGroupRoleAssignments,
-  getEnvironmentGroupRulesets,
   type EnvironmentGroupAdminDetails,
-  type EnvironmentGroupEffectivePoliciesResult,
+  type EnvironmentGroupGovernanceResult,
   type EnvironmentGroupRoleAssignmentsResult,
-  type EnvironmentGroupRulesetsResult,
 } from "../data/adminEnrichment";
 import { EmptyPane, ErrorPane, LoadingPane } from "../components/Status";
 import { PortalActionsBar } from "../components/PortalActions";
@@ -107,6 +105,16 @@ const usePageStyles = makeStyles({
   },
   policyError: {
     color: tokens.colorPaletteRedForeground1,
+  },
+  section: {
+    display: "flex",
+    flexDirection: "column",
+    gap: tokens.spacingVerticalS,
+    paddingTop: tokens.spacingVerticalS,
+  },
+  empty: {
+    color: tokens.colorNeutralForeground3,
+    fontStyle: "italic",
   },
 });
 
@@ -399,49 +407,26 @@ function ReadyView({ row, raw, envs, counts, envColumns }: ReadyViewProps) {
       />
 
       <SupplementalAdminCard
-        className={styles.colHalf}
-        title="Rulesets — Model A (parameter buckets)"
+        className={styles.colFull}
+        title="Governance rules — all rules effective on this group"
         description={
           <>
-            Per-resource-type setting buckets — `(type, resourceType, id, value)` triples
-            (Copilot AI-feature flags, sharing limits per bot kind, CopilotAuth toggles, etc.).
-            See <code>docs/admin-payload-samples.md</code> for the shape.
+            Every rule active on this group from both governance APIs — the named/versioned
+            rule-based policies (Model B) and the parameter-bucket rulesets (Model A). All
+            rules render expanded by default; click any header to collapse it.
           </>
         }
-        buttonLabel="Load Model A rulesets"
-        loadingLabel="Loading rulesets…"
+        buttonLabel="View all rules"
+        loadingLabel="Loading rules from both governance models…"
         helpText={
           <>
-            Calls <code>GetRuleSetListForTenant</code> and filters client-side to rulesets whose{" "}
-            <code>environmentFilter</code> includes this group. The connector has no direct
-            group-only wrap (the env-scoped <code>GetRuleSet</code> returns a 404 for this
-            scope), so this is the right indirect path.
+            Fires <code>GetRuleSetListForTenant</code> + filter (Model A) and{" "}
+            <code>ListRuleAssignmentsByEnvironmentGroupId</code> → parallel{" "}
+            <code>GetRuleBasedPolicyByID</code> per policy id (Model B) in parallel.
           </>
         }
-        loadFn={() => getEnvironmentGroupRulesets(row.id)}
-        renderReady={(result) => <RulesetsBody result={result} currentGroupId={row.id} />}
-      />
-
-      <SupplementalAdminCard
-        className={styles.colHalf}
-        title="Rule-based policies — Model B"
-        description={
-          <>
-            Named, versioned policy modules effective on this group (ConnectorManagement,
-            CopilotChannelPublishSettings, MakerOnboardingContent, …). Fans out internally:
-            list assignments → fetch each policy in parallel.
-          </>
-        }
-        buttonLabel="Load effective policies"
-        loadingLabel="Loading rule-based policies…"
-        helpText={
-          <>
-            Calls <code>ListRuleAssignmentsByEnvironmentGroupId</code>, then{" "}
-            <code>GetRuleBasedPolicyByID</code> per unique <code>policyId</code>.
-          </>
-        }
-        loadFn={() => getEnvironmentGroupEffectivePolicies(row.id)}
-        renderReady={(result) => <EffectivePoliciesBody result={result} />}
+        loadFn={() => getEnvironmentGroupGovernance(row.id)}
+        renderReady={(result) => <GovernanceRulesBody result={result} currentGroupId={row.id} />}
       />
 
       {/* 5. Environments table */}
@@ -562,108 +547,139 @@ function RoleAssignmentsBody({ result }: { result: EnvironmentGroupRoleAssignmen
   );
 }
 
-function RulesetsBody({ result, currentGroupId }: { result: EnvironmentGroupRulesetsResult; currentGroupId: string }) {
-  const matching = result.matching.value ?? [];
-  const parameterCount = matching.reduce((acc, r) => acc + (r.parameters?.length ?? 0), 0);
-  return (
-    <>
-      <Text size={300}>
-        <strong>{matching.length}</strong> ruleset{matching.length === 1 ? "" : "s"} apply to
-        this group · <strong>{parameterCount}</strong> bucket
-        {parameterCount === 1 ? "" : "s"} in total ·{" "}
-        <Text size={200}>
-          ({result.totalInTenant.toLocaleString()} ruleset{result.totalInTenant === 1 ? "" : "s"}{" "}
-          tenant-wide)
-        </Text>
-      </Text>
-      {matching.map((rs, idx) => (
-        <RulesetBucketsAccordion
-          key={rs.id ?? `ruleset-${idx}`}
-          ruleset={rs}
-          currentGroupId={currentGroupId}
-        />
-      ))}
-      <RawJsonAccordion
-        data={result.raw}
-        title="Raw GetRuleSetListForTenant payload (Model A)"
-      />
-    </>
-  );
-}
-
-function EffectivePoliciesBody({
+function GovernanceRulesBody({
   result,
+  currentGroupId,
 }: {
-  result: EnvironmentGroupEffectivePoliciesResult;
+  result: EnvironmentGroupGovernanceResult;
+  currentGroupId: string;
 }) {
   const page = usePageStyles();
-  const assignmentCount = result.assignments.value?.length ?? 0;
-  const policyCount = result.policies.length;
-  const errorCount = Object.keys(result.policyErrors).length;
-  const totalRuleSets = result.policies.reduce((acc, p) => acc + (p.ruleSets?.length ?? 0), 0);
+
+  // ── Top-level summary line aggregated across both models ──────────
+  const policiesData = result.policies.ok ? result.policies.data : undefined;
+  const rulesetsData = result.rulesets.ok ? result.rulesets.data : undefined;
+
+  const policyCount = policiesData?.policies.length ?? 0;
+  const policyRuleCount =
+    policiesData?.policies.reduce((acc, p) => acc + (p.ruleSets?.length ?? 0), 0) ?? 0;
+  const rulesetMatchCount = rulesetsData?.matching.value?.length ?? 0;
+  const rulesetBucketCount =
+    rulesetsData?.matching.value?.reduce((acc, r) => acc + (r.parameters?.length ?? 0), 0) ?? 0;
+
+  const nothingApplies =
+    policyCount === 0 &&
+    (policiesData?.assignments.value?.length ?? 0) === 0 &&
+    rulesetMatchCount === 0;
+
   return (
     <>
       <Text size={300}>
-        <strong>{assignmentCount}</strong> assignment{assignmentCount === 1 ? "" : "s"} →{" "}
-        <strong>{policyCount}</strong> polic{policyCount === 1 ? "y" : "ies"} with{" "}
-        <strong>{totalRuleSets}</strong> rule set{totalRuleSets === 1 ? "" : "s"} between them.
-        {errorCount > 0 && (
-          <>
-            {" "}
-            <Text size={300} weight="semibold" className={page.policyError}>
-              {errorCount} polic{errorCount === 1 ? "y" : "ies"} failed to load
-            </Text>
-            .
-          </>
-        )}
+        <strong>{policyCount}</strong> rule-based polic{policyCount === 1 ? "y" : "ies"} (Model B)
+        with <strong>{policyRuleCount}</strong> rule{policyRuleCount === 1 ? "" : "s"} · {" "}
+        <strong>{rulesetMatchCount}</strong> ruleset{rulesetMatchCount === 1 ? "" : "s"}
+        {" "}(Model A) with <strong>{rulesetBucketCount}</strong> bucket
+        {rulesetBucketCount === 1 ? "" : "s"}.
       </Text>
 
-      {policyCount === 0 && assignmentCount === 0 && (
-        <Text size={300}>No rule-based policies are assigned to this group.</Text>
+      {nothingApplies && result.policies.ok && result.rulesets.ok && (
+        <Text size={300}>No governance rules are currently applied to this group.</Text>
       )}
 
-      <div className={page.policiesList}>
-        {result.policies.map((policy, policyIdx) => {
-          const ruleSets = policy.ruleSets ?? [];
-          return (
-            <div
-              key={policy.id ?? policy.name ?? `policy-${policyIdx}`}
-              className={page.policyBlock}
-            >
-              <div className={page.policyHeader}>
-                <Text size={400} weight="semibold">
-                  {policy.name || "(unnamed policy)"}
-                </Text>
-                <Badge appearance="outline">
-                  {ruleSets.length} rule{ruleSets.length === 1 ? "" : "s"}
-                </Badge>
-                {policy.lastModified && (
-                  <Text size={200}>
-                    Last modified <DateWithRelative value={policy.lastModified} />
-                  </Text>
-                )}
-              </div>
-              {ruleSets.length === 0 ? (
-                <Text size={300}>This policy has no rule sets.</Text>
-              ) : (
-                <PolicyRuleSetsAccordion policy={policy} />
-              )}
-            </div>
-          );
-        })}
+      {/* ── Section 1: Rule-based policies (Model B) ──────────────── */}
+      <div className={page.section}>
+        <Text size={500} weight="semibold">Rule-based policies</Text>
+        <Text size={200} className={page.description}>
+          Named, versioned policy modules. Click any header to collapse a rule.
+        </Text>
+        {!result.policies.ok ? (
+          <ErrorPane title="Couldn't load rule-based policies" message={result.policies.error} />
+        ) : policiesData!.policies.length === 0 && (policiesData!.assignments.value?.length ?? 0) === 0 ? (
+          <Text size={300} className={page.empty}>
+            No rule-based policies are assigned to this group.
+          </Text>
+        ) : (
+          <div className={page.policiesList}>
+            {policiesData!.policies.map((policy, policyIdx) => {
+              const ruleSets = policy.ruleSets ?? [];
+              return (
+                <div
+                  key={policy.id ?? policy.name ?? `policy-${policyIdx}`}
+                  className={page.policyBlock}
+                >
+                  <div className={page.policyHeader}>
+                    <Text size={400} weight="semibold">
+                      {policy.name || "(unnamed policy)"}
+                    </Text>
+                    <Badge appearance="outline">
+                      {ruleSets.length} rule{ruleSets.length === 1 ? "" : "s"}
+                    </Badge>
+                    {policy.lastModified && (
+                      <Text size={200}>
+                        Last modified <DateWithRelative value={policy.lastModified} />
+                      </Text>
+                    )}
+                  </div>
+                  {ruleSets.length === 0 ? (
+                    <Text size={300}>This policy has no rule sets.</Text>
+                  ) : (
+                    <PolicyRuleSetsAccordion policy={policy} defaultOpenAll />
+                  )}
+                </div>
+              );
+            })}
+            {Object.entries(policiesData!.policyErrors).map(([policyId, message]) => (
+              <ErrorPane
+                key={policyId}
+                title={`Couldn't load policy ${policyId}`}
+                message={message}
+              />
+            ))}
+          </div>
+        )}
       </div>
 
-      {Object.entries(result.policyErrors).map(([policyId, message]) => (
-        <ErrorPane
-          key={policyId}
-          title={`Couldn't load policy ${policyId}`}
-          message={message}
-        />
-      ))}
+      {/* ── Section 2: Parameter rulesets (Model A) ───────────────── */}
+      <div className={page.section}>
+        <Text size={500} weight="semibold">Parameter rulesets</Text>
+        <Text size={200} className={page.description}>
+          Per-resource-type setting buckets. Click any header to collapse a bucket.
+        </Text>
+        {!result.rulesets.ok ? (
+          <ErrorPane title="Couldn't load parameter rulesets" message={result.rulesets.error} />
+        ) : rulesetMatchCount === 0 ? (
+          <Text size={300} className={page.empty}>
+            No parameter rulesets apply to this group.{" "}
+            <Text size={200}>
+              ({rulesetsData!.totalInTenant.toLocaleString()} ruleset
+              {rulesetsData!.totalInTenant === 1 ? "" : "s"} tenant-wide.)
+            </Text>
+          </Text>
+        ) : (
+          <>
+            <Text size={200} className={page.description}>
+              {rulesetMatchCount} of {rulesetsData!.totalInTenant.toLocaleString()} tenant-wide
+              ruleset{rulesetsData!.totalInTenant === 1 ? "" : "s"} apply to this group.
+            </Text>
+            {rulesetsData!.matching.value?.map((rs, idx) => (
+              <RulesetBucketsAccordion
+                key={rs.id ?? `ruleset-${idx}`}
+                ruleset={rs}
+                currentGroupId={currentGroupId}
+                defaultOpenAll
+              />
+            ))}
+          </>
+        )}
+      </div>
 
+      {/* ── Raw payloads (collapsed by default — friendly view is primary) ── */}
       <RawJsonAccordion
-        data={result.raw}
-        title="Raw assignments + drilled policies (Model B)"
+        data={{
+          rulesets: result.rulesets.ok ? result.rulesets.data.raw : { error: result.rulesets.error },
+          policies: result.policies.ok ? result.policies.data.raw : { error: result.policies.error },
+        }}
+        title="Raw governance payloads (both models)"
       />
     </>
   );
