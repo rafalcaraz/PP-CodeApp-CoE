@@ -1,0 +1,10 @@
+<botcomponent schemaname="msftcsa_PPCoEAgent.topic.ResetConversation">
+  <componenttype>9</componenttype>
+  <iscustomizable>0</iscustomizable>
+  <name>Reset Conversation</name>
+  <parentbotid>
+    <schemaname>msftcsa_PPCoEAgent</schemaname>
+  </parentbotid>
+  <statecode>0</statecode>
+  <statuscode>1</statuscode>
+</botcomponent>

@@ -1,0 +1,11 @@
+<botcomponent schemaname="msftcsa_PPCoEAgent.gpt.default">
+  <componenttype>15</componenttype>
+  <description>A simple agent that provides general assistance and answers basic questions.</description>
+  <iscustomizable>0</iscustomizable>
+  <name>PPCoE Agent</name>
+  <parentbotid>
+    <schemaname>msftcsa_PPCoEAgent</schemaname>
+  </parentbotid>
+  <statecode>0</statecode>
+  <statuscode>1</statuscode>
+</botcomponent>
