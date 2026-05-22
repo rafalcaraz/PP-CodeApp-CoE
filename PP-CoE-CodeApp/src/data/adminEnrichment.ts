@@ -182,11 +182,25 @@ export interface EnvironmentGroupRoleAssignmentsResult {
   raw: unknown;
 }
 
-/** Result of `getEnvironmentGroupRulesets` (Model A). The connector op
- *  is named `GetRuleSet` but returns a `value[]` collection of
- *  `RuleSetDto`s, so this typed result preserves the array. */
+/** Result of `getEnvironmentGroupRulesets` (Model A — `parameters`-bucket
+ *  rulesets). The connector has no direct "rulesets for this env group
+ *  only" wrap (its `GetRuleSet(envId, groupId)` builds an env-scoped
+ *  URL that returns 404 RouteNotFound when used for a group-only
+ *  scope). We fall back to `GetRuleSetListForTenant()` and filter
+ *  client-side on each ruleset's `environmentFilter.values[]` matching
+ *  this group id.
+ *
+ *  Tenant-wide call is small in practice — most tenants have a handful
+ *  of rulesets total. If a tenant shows up where this is slow we can
+ *  add server-side `$filter` if the connector supports it. */
 export interface EnvironmentGroupRulesetsResult {
-  data: MgGovODataResponse;
+  /** Rulesets whose `environmentFilter` mentions this group. */
+  matching: MgGovODataResponse;
+  /** The complete tenant-wide response. Useful for auditing /
+   *  troubleshooting "why isn't ruleset X showing up here?" */
+  all: MgGovODataResponse;
+  /** Total rulesets returned by the tenant-wide call (before filtering). */
+  totalInTenant: number;
   raw: unknown;
 }
 
@@ -258,30 +272,46 @@ export async function getEnvironmentGroupRoleAssignments(
   }
 }
 
-/** Fetch the **Model A** (`parameters`-bucket) rulesets for an env
- *  group. Backed by `GetRuleSet` — note the connector's parameter
- *  shape: `(environmentId, groupId)`. The underlying REST URL
- *  (`/governance/environmentGroups/{groupId}/ruleSets`) is group-scoped
- *  only, so we pass the group id in both positions on first attempt.
- *  See `docs/admin-payload-samples.md` for the actual payload shape. */
+/** Fetch the **Model A** (`parameters`-bucket) rulesets effective on an
+ *  env group.
+ *
+ *  **Why the indirect path.** The connector exposes `GetRuleSet(envId,
+ *  groupId)` which builds an env-scoped URL
+ *  (`/governance/environments/{envId}/environmentGroups/{groupId}/ruleSets`)
+ *  — and that URL returns 404 RouteNotFound. The real group-only URL
+ *  (`/governance/environmentGroups/{groupId}/ruleSets`) has no direct
+ *  connector wrap.
+ *
+ *  So we use `GetRuleSetListForTenant()` (tenant-wide) and filter
+ *  client-side by `environmentFilter.values[]` containing
+ *  `{ id: groupId, type: "EnvironmentGroup" }`. Cheap in practice — most
+ *  tenants have only a handful of rulesets total.
+ *
+ *  See `docs/admin-payload-samples.md` for the response shape. */
 export async function getEnvironmentGroupRulesets(
   groupId: string
 ): Promise<DataResult<EnvironmentGroupRulesetsResult>> {
   if (!groupId) return { ok: false, error: "Environment group ID is required." };
   try {
-    // First attempt: pass groupId for both `environmentId` and `groupId`.
-    // If the connector rejects this we'll learn from the error message
-    // and tighten the call signature in a follow-up.
-    const result = await PowerPlatformforAdminsV2Service.GetRuleSet(
-      groupId,
-      groupId,
-      API_VERSION
-    );
+    const result = await PowerPlatformforAdminsV2Service.GetRuleSetListForTenant(API_VERSION);
     if (!result.success) {
       return { ok: false, error: formatError(result.error) };
     }
-    const data = result.data ?? {};
-    return { ok: true, data: { data, raw: data } };
+    const all: MgGovODataResponse = result.data ?? {};
+    const allRulesets = all.value ?? [];
+    const matchingRulesets = allRulesets.filter((rs) => {
+      const values = rs.environmentFilter?.values ?? [];
+      return values.some((v) => v.id === groupId && v.type === "EnvironmentGroup");
+    });
+    return {
+      ok: true,
+      data: {
+        matching: { value: matchingRulesets, "@odata.nextLink": all["@odata.nextLink"] },
+        all,
+        totalInTenant: allRulesets.length,
+        raw: all,
+      },
+    };
   } catch (err) {
     return { ok: false, error: formatError(err) };
   }

@@ -306,24 +306,27 @@ the *existing* V2 connector (no new consent), except where noted.
    question, single call, single env id. Natural follow-up to #0 — could
    live as a second action button inside the same "Admin details" card.
 
-3. 🛠️ **Phase 1 shipped — env-group "Governance (supplemental)" surface.**
-   Four cards on `views/EnvironmentGroupDetail.tsx`, each backed by a
-   helper in `src/data/adminEnrichment.ts`:
+3. 🛠️ **Phase 1 + Phase 2 shipped — env-group "Governance
+   (supplemental)" surface.** Four cards on
+   `views/EnvironmentGroupDetail.tsx`, each backed by a helper in
+   `src/data/adminEnrichment.ts`:
    - "Group basics" → `GetEnvironmentGroup`
    - "Group role assignments" → `ListEnvironmentGroupRoleAssignments`
    - "Rulesets — Model A (parameter buckets)" →
-     `GetRuleSet(groupId, groupId)` (env-param semantic still being
-     verified — we pass the group id in both positions on first attempt)
+     `GetRuleSetListForTenant` + client-side filter on
+     `environmentFilter.values[]` (the connector has no direct
+     group-only wrap; the env-scoped `GetRuleSet` returns 404)
    - "Rule-based policies — Model B" →
      `ListRuleAssignmentsByEnvironmentGroupId` → parallel
      `GetRuleBasedPolicyByID` per unique policy id
-   Each card currently renders a brief one-line summary plus the raw
-   payload with `<RawJsonAccordion defaultOpen />` so we can validate
-   live shapes against `docs/admin-payload-samples.md`. **Phase 2** will
-   add friendly per-id renderers (per
-   [`admin-payload-samples.md` → Sample 3 → Observed `ruleSet.id`
-   catalog](./admin-payload-samples.md)) — defer until we've seen at
-   least one live response from a real tenant.
+
+   Model B renders policies as nested sections with one bordered
+   sub-card per `ruleSet`, dispatched through
+   `src/components/ruleRenderers/RuleSetRenderer.tsx`. All 6 known
+   rule ids have typed renderers (CopilotTranscripts,
+   ConnectorManagement, CopilotChannelPublishSettings,
+   CopilotEnablePrompts, CopilotFeaturesForMakers,
+   MakerOnboardingContent); unknown ids fall through to raw JSON.
 
 4. **Rulesets as a new entity surface.**
    `GetRuleSetListForTenant` for a list view, `GetRuleSet` +

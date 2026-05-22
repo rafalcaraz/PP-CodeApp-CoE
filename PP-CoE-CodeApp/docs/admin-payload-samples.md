@@ -86,12 +86,21 @@ attempt to merge them into one table.
 GET https://XXXXXXXX.tenant.api.powerplatform.com/governance/environmentGroups/687c6d74-38dc-45a7-a655-e1c846dcbbc7/ruleSets?api-version=2021-10-01-preview
 ```
 
-**Likely connector op:** `GetRuleSet(environmentId, groupId, api_version)`
-returning `MgGovODataResponse`. The connector's name is misleading
-("Get" → returns a single `value[]` collection, not a single ruleset).
-The `environmentId` parameter's exact semantics when targeting a
-group-scoped ruleset still needs verification — possibly the group id
-goes in both positions, or `environmentId` is empty / null.
+**Connector op:** ❌ **No direct group-only wrap.** The most obvious
+candidate, `GetRuleSet(environmentId, groupId, api_version)`, builds an
+env-scoped URL
+(`/governance/environments/{environmentId}/environmentGroups/{groupId}/ruleSets`)
+and **returns 404 RouteNotFound** even when both ids are the same group
+id — that env-scoped path simply isn't a route. Verified live in
+2026-05 (request id `0d730c48-0cc6-429f-bba1-43b6637b08a5`).
+
+The working fallback is **`GetRuleSetListForTenant(api_version)`** (also
+returns `MgGovODataResponse`) followed by a client-side filter on each
+ruleset's `environmentFilter.values[]` for
+`{ id: <groupId>, type: "EnvironmentGroup" }`. Tenants typically have
+only a handful of rulesets total so this is cheap. See
+`src/data/adminEnrichment.ts#getEnvironmentGroupRulesets` for the
+implementation.
 
 ```json
 {
@@ -371,6 +380,35 @@ interface RuleAssignment {
 ---
 
 ## Implications for the env-group "Governance" surface (shortlist #3)
+
+> **Status (2026-05).** Phase 1 (raw payloads) shipped, then Phase 2
+> (friendly per-id renderers for Model B + Card 3 fix) shipped in the
+> same session. Renderer dispatcher lives at
+> `src/components/ruleRenderers/RuleSetRenderer.tsx`. See the "Observed
+> `ruleSet.id` catalog" above — every id in that table now has a typed
+> component; unknown ids fall through to a raw-JSON viewer.
+>
+> Live-payload findings from validating the surface against a real
+> tenant:
+>
+> - **Group basics** (`GetEnvironmentGroup`) — actual response is
+>   leaner than the typed `EnvironmentGroup` model suggests. In the
+>   test tenant: only `id`, `displayName`, `description`, `createdTime`,
+>   `createdBy: {id, type}` come back. No `parentGroupId`,
+>   `childrenGroupIds`, `lastModifiedTime`, etc. The UI tolerates this
+>   (all those fields render `—`) but a follow-up could collapse
+>   absent rows.
+> - **Group role assignments** (`ListEnvironmentGroupRoleAssignments`)
+>   — returns OData-shape `{ "@odata.context", value, "@odata.nextLink" }`.
+>   The `@odata.nextLink` is set even when `value: []`, which is
+>   surprising — looks like the connector hands back a paging token
+>   eagerly. The UI today shows only the first page; we should plumb
+>   continuation-token handling for tenants with many assignments.
+> - **Model A rulesets** (`GetRuleSet`) — confirmed dead route, see
+>   Sample 1 above. The `GetRuleSetListForTenant` fallback is the
+>   right call.
+> - **Model B effective policies** — confirmed exactly the shape in
+>   Sample 3 above, all 6 documented rule ids present.
 
 When that surface gets built (see
 [`admin-connector-inventory.md`](./admin-connector-inventory.md) shortlist

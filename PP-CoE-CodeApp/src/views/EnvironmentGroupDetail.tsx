@@ -44,6 +44,7 @@ import {
 import { EmptyPane, ErrorPane, LoadingPane } from "../components/Status";
 import { PortalActionsBar } from "../components/PortalActions";
 import { RawJsonAccordion } from "../components/RawJsonAccordion";
+import { RuleSetRenderer } from "../components/ruleRenderers";
 import {
   DateWithRelative,
   IdentifiersAccordion,
@@ -85,6 +86,32 @@ const usePageStyles = makeStyles({
     flexDirection: "column",
     gap: tokens.spacingVerticalXXS,
     marginTop: tokens.spacingVerticalM,
+  },
+  // Per-policy + per-rule-set vertical lists inside the Effective
+  // Policies card body.
+  policiesList: {
+    display: "flex",
+    flexDirection: "column",
+    gap: tokens.spacingVerticalL,
+  },
+  policyBlock: {
+    display: "flex",
+    flexDirection: "column",
+    gap: tokens.spacingVerticalS,
+  },
+  policyHeader: {
+    display: "flex",
+    alignItems: "baseline",
+    gap: tokens.spacingHorizontalS,
+    flexWrap: "wrap",
+  },
+  ruleSetList: {
+    display: "flex",
+    flexDirection: "column",
+    gap: tokens.spacingVerticalS,
+  },
+  policyError: {
+    color: tokens.colorPaletteRedForeground1,
   },
 });
 
@@ -381,20 +408,19 @@ function ReadyView({ row, raw, envs, counts, envColumns }: ReadyViewProps) {
         title="Rulesets — Model A (parameter buckets)"
         description={
           <>
-            Per-resource-type setting buckets — `(type, resourceType, id, value)` triples. Covers
-            things like Copilot AI-feature flags, sharing limits per bot kind, and
-            CopilotAuth toggles. See{" "}
-            <code>docs/admin-payload-samples.md</code> for the shape.
+            Per-resource-type setting buckets — `(type, resourceType, id, value)` triples
+            (Copilot AI-feature flags, sharing limits per bot kind, CopilotAuth toggles, etc.).
+            See <code>docs/admin-payload-samples.md</code> for the shape.
           </>
         }
         buttonLabel="Load Model A rulesets"
         loadingLabel="Loading rulesets…"
         helpText={
           <>
-            Calls <code>GetRuleSet(groupId, groupId)</code>. The connector requires both an
-            env id and a group id; we pass the group id in both positions on first attempt — if
-            you see <code>environmentId</code>-shaped errors, capture the message and we'll
-            tighten the call.
+            Calls <code>GetRuleSetListForTenant</code> and filters client-side to rulesets whose{" "}
+            <code>environmentFilter</code> includes this group. The connector has no direct
+            group-only wrap (the env-scoped <code>GetRuleSet</code> returns a 404 for this
+            scope), so this is the right indirect path.
           </>
         }
         loadFn={() => getEnvironmentGroupRulesets(row.id)}
@@ -542,16 +568,24 @@ function RoleAssignmentsBody({ result }: { result: EnvironmentGroupRoleAssignmen
 }
 
 function RulesetsBody({ result }: { result: EnvironmentGroupRulesetsResult }) {
-  const rows = result.data.value ?? [];
-  const parameterCount = rows.reduce((acc, r) => acc + (r.parameters?.length ?? 0), 0);
+  const matching = result.matching.value ?? [];
+  const parameterCount = matching.reduce((acc, r) => acc + (r.parameters?.length ?? 0), 0);
   return (
     <>
       <Text size={300}>
-        <strong>{rows.length}</strong> ruleset{rows.length === 1 ? "" : "s"} ·{" "}
-        <strong>{parameterCount}</strong> parameter bucket{parameterCount === 1 ? "" : "s"} in
-        total.
+        <strong>{matching.length}</strong> ruleset{matching.length === 1 ? "" : "s"} apply to
+        this group · <strong>{parameterCount}</strong> parameter bucket
+        {parameterCount === 1 ? "" : "s"} in total ·{" "}
+        <Text size={200}>
+          ({result.totalInTenant.toLocaleString()} ruleset{result.totalInTenant === 1 ? "" : "s"}{" "}
+          tenant-wide)
+        </Text>
       </Text>
-      <RawJsonAccordion data={result.raw} title="Raw GetRuleSet payload (Model A)" defaultOpen />
+      <RawJsonAccordion
+        data={result.raw}
+        title="Raw GetRuleSetListForTenant payload (Model A)"
+        defaultOpen
+      />
     </>
   );
 }
@@ -561,6 +595,7 @@ function EffectivePoliciesBody({
 }: {
   result: EnvironmentGroupEffectivePoliciesResult;
 }) {
+  const page = usePageStyles();
   const assignmentCount = result.assignments.value?.length ?? 0;
   const policyCount = result.policies.length;
   const errorCount = Object.keys(result.policyErrors).length;
@@ -574,17 +609,67 @@ function EffectivePoliciesBody({
         {errorCount > 0 && (
           <>
             {" "}
-            <Text size={300} weight="semibold" style={{ color: "var(--colorPaletteRedForeground1)" }}>
+            <Text size={300} weight="semibold" className={page.policyError}>
               {errorCount} polic{errorCount === 1 ? "y" : "ies"} failed to load
             </Text>
             .
           </>
         )}
       </Text>
+
+      {policyCount === 0 && assignmentCount === 0 && (
+        <Text size={300}>No rule-based policies are assigned to this group.</Text>
+      )}
+
+      <div className={page.policiesList}>
+        {result.policies.map((policy, policyIdx) => {
+          const ruleSets = policy.ruleSets ?? [];
+          return (
+            <div
+              key={policy.id ?? policy.name ?? `policy-${policyIdx}`}
+              className={page.policyBlock}
+            >
+              <div className={page.policyHeader}>
+                <Text size={400} weight="semibold">
+                  {policy.name || "(unnamed policy)"}
+                </Text>
+                <Badge appearance="outline">
+                  {ruleSets.length} rule{ruleSets.length === 1 ? "" : "s"}
+                </Badge>
+                {policy.lastModified && (
+                  <Text size={200}>
+                    Last modified <DateWithRelative value={policy.lastModified} />
+                  </Text>
+                )}
+              </div>
+              {ruleSets.length === 0 ? (
+                <Text size={300}>This policy has no rule sets.</Text>
+              ) : (
+                <div className={page.ruleSetList}>
+                  {ruleSets.map((rule, idx) => (
+                    <RuleSetRenderer
+                      key={`${policy.id}-${rule.id ?? idx}`}
+                      rule={rule}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {Object.entries(result.policyErrors).map(([policyId, message]) => (
+        <ErrorPane
+          key={policyId}
+          title={`Couldn't load policy ${policyId}`}
+          message={message}
+        />
+      ))}
+
       <RawJsonAccordion
         data={result.raw}
         title="Raw assignments + drilled policies (Model B)"
-        defaultOpen
       />
     </>
   );
