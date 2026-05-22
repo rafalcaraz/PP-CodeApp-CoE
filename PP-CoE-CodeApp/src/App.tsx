@@ -78,6 +78,9 @@ const Impact = lazy(() =>
 const ZonesView = lazy(() =>
   import("./views/ZonesView").then((m) => ({ default: m.ZonesView }))
 );
+const ZoneDetailView = lazy(() =>
+  import("./views/ZoneDetailView").then((m) => ({ default: m.ZoneDetailView }))
+);
 
 const useStyles = makeStyles({
   app: {
@@ -136,6 +139,7 @@ function AppShell() {
               <Route path="/security/dlp-impact" element={<Impact />} />
               <Route path="/security/impact" element={<Impact />} />
               <Route path="/zones" element={<ZonesView />} />
+              <Route path="/zones/:zoneId" element={<ZoneDetailView />} />
               <Route path="*" element={<HomeRedirect />} />
             </Routes>
           </Suspense>

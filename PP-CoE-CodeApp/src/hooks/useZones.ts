@@ -20,10 +20,15 @@ import {
   type Zone,
   type ZoneAssignments,
 } from "../data/zones";
+import {
+  listStandardGroups,
+  type StandardCustomGroup,
+} from "../data/standardGroups";
 
 export interface UseZonesResult {
   zones: Zone[];
   assignments: ZoneAssignments;
+  standardGroups: StandardCustomGroup[];
   refresh: () => void;
 }
 
@@ -32,10 +37,14 @@ export function useZones(): UseZonesResult {
   const [assignments, setAssignments] = useState<ZoneAssignments>(() =>
     listAssignments(),
   );
+  const [standardGroups, setStandardGroups] = useState<StandardCustomGroup[]>(
+    () => listStandardGroups(),
+  );
 
   const refresh = useCallback(() => {
     setZones(listZones());
     setAssignments(listAssignments());
+    setStandardGroups(listStandardGroups());
   }, []);
 
   useEffect(() => {
@@ -51,5 +60,5 @@ export function useZones(): UseZonesResult {
     };
   }, [refresh]);
 
-  return { zones, assignments, refresh };
+  return { zones, assignments, standardGroups, refresh };
 }

@@ -1,5 +1,6 @@
 /**
- * Zones — user-defined parent grouping over Microsoft environment groups.
+ * Zones — user-defined parent grouping over Microsoft environment groups
+ *          AND user-managed Standard custom groups.
  *
  * **Why this exists.** Microsoft's Power Platform admin model does not
  * support a hierarchy over environment groups. From the official
@@ -11,15 +12,22 @@
  *
  * This module gives admins the parent layer Microsoft refused to ship:
  * users assemble their own "Zones" (BU / pillar / region / capability —
- * whatever they want) and drop environment groups inside them. No
- * Microsoft data is touched; everything lives in localStorage and is
- * scoped to the current browser profile.
+ * whatever they want) and drop groups inside them. The groups themselves
+ * can be either real Microsoft environment groups (Managed envs only,
+ * read-only from us) OR Standard custom groups (Standard envs only, fully
+ * owned by us in localStorage). See `data/standardGroups.ts`.
  *
- * **Storage layout.** Two keys, intentionally separated so renaming or
- * deleting a Zone doesn't rewrite the assignment blob and vice versa:
+ * **Storage layout.** Three keys, intentionally separated so renaming or
+ * deleting one entity doesn't rewrite unrelated blobs:
  *
  *   `ppcoe.zones.v1`            → Zone[]
- *   `ppcoe.zoneAssignments.v1`  → ZoneAssignments (envGroupId → location)
+ *   `ppcoe.standardGroups.v1`   → StandardCustomGroup[]  (separate module)
+ *   `ppcoe.zoneAssignments.v1`  → ZoneAssignments
+ *
+ * Assignment keys are `${kind}:${id}` strings (`ms:abc-def-...` for a
+ * Microsoft env group, `custom:xyz-...` for a Standard custom group).
+ * v1 of this module used bare env-group IDs as keys; those are migrated
+ * on first read after the upgrade.
  *
  * **Migration path.** Mirror of `savedQueries.ts`: pure functions wrap
  * localStorage so a future Dataverse promotion (see `docs/roadmap.md` →
@@ -48,12 +56,45 @@ export interface ZoneSection {
   name: string;
 }
 
-/** Map of environmentGroupId → where it lives. Absence = unassigned. */
+/**
+ * Reference to a group placed in a zone. `kind` discriminates between
+ * Microsoft env groups (Managed) and Standard custom groups (Standard) —
+ * the two are NOT interchangeable. Type purity is enforced upstream
+ * (e.g., a Standard env can never land in an MS group; an MS env group
+ * always holds Managed envs only).
+ */
+export type GroupKind = "ms" | "custom";
+
+export interface GroupRef {
+  kind: GroupKind;
+  id: string;
+}
+
+export const msRef = (id: string): GroupRef => ({ kind: "ms", id });
+export const customRef = (id: string): GroupRef => ({ kind: "custom", id });
+
+export function refToKey(ref: GroupRef): string {
+  return `${ref.kind}:${ref.id}`;
+}
+
+export function keyToRef(key: string): GroupRef {
+  const colonAt = key.indexOf(":");
+  if (colonAt < 0) {
+    // Legacy bare key (pre-v2). Existed only for MS env groups.
+    return { kind: "ms", id: key };
+  }
+  const kind = key.slice(0, colonAt) as GroupKind;
+  return { kind, id: key.slice(colonAt + 1) };
+}
+
+/**
+ * Map of `${kind}:${id}` → where the group lives. Absence = unassigned.
+ */
 export type ZoneAssignments = Record<string, ZoneAssignment>;
 
 export interface ZoneAssignment {
   zoneId: string;
-  /** Optional — when omitted, the env group sits in the zone's default lane. */
+  /** Optional — when omitted, the group sits in the zone's default lane. */
   sectionId?: string;
 }
 
@@ -87,8 +128,15 @@ export function ZONES_CHANGE_EVENT(): string {
 }
 
 export function isZonesStorageKey(key: string | null): boolean {
-  return key === ZONES_KEY || key === ASSIGNMENTS_KEY;
+  return (
+    key === ZONES_KEY ||
+    key === ASSIGNMENTS_KEY ||
+    key === STANDARD_GROUPS_KEY
+  );
 }
+
+/** Re-exported for `data/standardGroups.ts` to avoid circular imports. */
+export const STANDARD_GROUPS_KEY = "ppcoe.standardGroups.v1";
 
 // ---------------------------------------------------------------------------
 // Zone CRUD
@@ -178,18 +226,20 @@ export function updateZone(
 }
 
 /**
- * Delete a zone. Every env group assigned to it (or any of its sections)
- * is returned to the implicit Unassigned bucket — the alternative is
- * orphans, which would confuse the UI and lose data silently.
+ * Delete a zone. Every group assigned to it (or any of its sections) is
+ * returned to the implicit Unassigned bucket — the alternative is
+ * orphans, which would confuse the UI and lose data silently. Affects
+ * BOTH MS env groups and Standard custom groups equally; the zone is
+ * type-agnostic.
  */
 export function deleteZone(id: string): void {
   const items = readZones().filter((z) => z.id !== id);
   writeZones(items);
   const assignments = readAssignments();
   let changed = false;
-  for (const [envGroupId, location] of Object.entries(assignments)) {
+  for (const [refKey, location] of Object.entries(assignments)) {
     if (location.zoneId === id) {
-      delete assignments[envGroupId];
+      delete assignments[refKey];
       changed = true;
     }
   }
@@ -259,10 +309,11 @@ export function renameSection(
 }
 
 /**
- * Remove a section from a zone. Env groups previously placed in that
+ * Remove a section from a zone. Groups previously placed in that
  * section drop back to the zone's default lane (the zone still owns
  * them — we don't yank assignments to Unassigned, that would feel
- * destructive for a section delete).
+ * destructive for a section delete). Type-agnostic across MS and
+ * Standard custom groups.
  */
 export function deleteSection(zoneId: string, sectionId: string): void {
   const items = readZones();
@@ -277,9 +328,9 @@ export function deleteSection(zoneId: string, sectionId: string): void {
   writeZones(items);
   const assignments = readAssignments();
   let changed = false;
-  for (const [envGroupId, location] of Object.entries(assignments)) {
+  for (const [refKey, location] of Object.entries(assignments)) {
     if (location.zoneId === zoneId && location.sectionId === sectionId) {
-      assignments[envGroupId] = { zoneId };
+      assignments[refKey] = { zoneId };
       changed = true;
     }
   }
@@ -287,7 +338,7 @@ export function deleteSection(zoneId: string, sectionId: string): void {
 }
 
 // ---------------------------------------------------------------------------
-// Assignment CRUD (envGroupId → zone/section)
+// Assignment CRUD (GroupRef → zone/section)
 // ---------------------------------------------------------------------------
 
 function readAssignments(): ZoneAssignments {
@@ -298,10 +349,41 @@ function readAssignments(): ZoneAssignments {
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
       return {};
     }
-    return parsed as ZoneAssignments;
+    return migrateLegacyKeysIfNeeded(parsed as Record<string, ZoneAssignment>);
   } catch {
     return {};
   }
+}
+
+/**
+ * v1 of this module keyed assignments by bare env-group IDs (always
+ * Microsoft). v2 keys by `${kind}:${id}`. Detect bare keys and rewrite
+ * them in-place to `ms:${id}`. Idempotent — running on already-migrated
+ * data is a no-op.
+ */
+function migrateLegacyKeysIfNeeded(
+  map: Record<string, ZoneAssignment>,
+): ZoneAssignments {
+  let needsWrite = false;
+  const out: ZoneAssignments = {};
+  for (const [key, location] of Object.entries(map)) {
+    if (key.includes(":")) {
+      out[key] = location;
+    } else {
+      out[`ms:${key}`] = location;
+      needsWrite = true;
+    }
+  }
+  if (needsWrite) {
+    try {
+      localStorage.setItem(ASSIGNMENTS_KEY, JSON.stringify(out));
+      // Don't emit a local change event — this is a silent transparent
+      // migration, not a user-visible state change.
+    } catch {
+      /* quota or privacy mode — silent, app still works on in-memory copy */
+    }
+  }
+  return out;
 }
 
 function writeAssignments(map: ZoneAssignments): void {
@@ -318,26 +400,41 @@ export function listAssignments(): ZoneAssignments {
 }
 
 /**
- * Place an env group into a zone (and optionally a section). Calling
- * with `null` removes the assignment, returning the env group to
- * Unassigned.
+ * Place a group (MS env group OR Standard custom group) into a zone
+ * and optionally a section. Calling with `null` removes the assignment,
+ * returning the group to Unassigned.
  */
 export function setAssignment(
-  envGroupId: string,
+  ref: GroupRef,
   target: { zoneId: string; sectionId?: string } | null,
 ): void {
   const map = readAssignments();
+  const key = refToKey(ref);
   if (!target) {
-    if (envGroupId in map) {
-      delete map[envGroupId];
+    if (key in map) {
+      delete map[key];
       writeAssignments(map);
     }
     return;
   }
-  map[envGroupId] = target.sectionId
+  map[key] = target.sectionId
     ? { zoneId: target.zoneId, sectionId: target.sectionId }
     : { zoneId: target.zoneId };
   writeAssignments(map);
+}
+
+/**
+ * Remove every assignment that points at the given group ref. Used when
+ * a Standard custom group is deleted — its assignment (if any) is wiped
+ * so we don't leave a phantom placement.
+ */
+export function clearAssignmentsFor(ref: GroupRef): void {
+  const map = readAssignments();
+  const key = refToKey(ref);
+  if (key in map) {
+    delete map[key];
+    writeAssignments(map);
+  }
 }
 
 /** Bulk replace assignments (used by import / migration). */

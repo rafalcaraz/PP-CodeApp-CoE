@@ -1,23 +1,22 @@
 /**
- * Zones — the drag-and-drop canvas.
+ * Zones — the drag-and-drop canvas (top-level board).
  *
  * Microsoft does not support a parent layer over environment groups
  * ("Although you can't configure the group hierarchy yet, you can use a
  * combination of naming conventions…" — Environment Strategy docs). This
- * view is that parent layer, persisted to localStorage. Drag env-group
+ * view is that parent layer, persisted to localStorage. Drag group
  * chips between user-defined Zones (and optional Sections inside each
  * zone) to organize a tenant the way it actually makes sense for *you*.
  *
- * Architecture:
- *  - Env groups fetched once via `listEnvironmentGroups` (lazy view, so
- *    that's a per-route concern, not a global cache).
- *  - Zones + assignments come from `useZones`, which subscribes to the
- *    localStorage keys (cross-tab + same-tab).
- *  - DndContext owns the drag interaction; on drop, we look at the
- *    droppable's `data` payload to decide where the chip landed and
- *    persist via `setAssignment`.
- *  - The implicit "Unassigned" column is computed: all env groups that
- *    don't appear in the assignments map.
+ * Chips on this board can be either:
+ *  - 🛡️ Microsoft env groups — fetched live from the connector, hold
+ *    Managed envs, policy-bearing, read-only from this app.
+ *  - 📦 Standard custom groups — user-managed in localStorage, hold
+ *    Standard envs, label-only. The construct Microsoft refuses to
+ *    ship for Standard tenants.
+ *
+ * Click a zone's title to open the Zone Detail view, where you can
+ * focus on a single zone's contents and add / remove groups in/out.
  */
 
 import { useEffect, useMemo, useState } from "react";
@@ -31,6 +30,12 @@ import {
   DialogSurface,
   DialogTitle,
   makeStyles,
+  Menu,
+  MenuButton,
+  MenuItem,
+  MenuList,
+  MenuPopover,
+  MenuTrigger,
   SearchBox,
   Text,
   tokens,
@@ -53,17 +58,28 @@ import {
 import {
   addSection,
   createZone,
+  customRef,
   deleteSection,
   deleteZone,
+  msRef,
+  refToKey,
   renameSection,
   setAssignment,
   updateZone,
+  type GroupRef,
   type Zone,
 } from "../data/zones";
+import {
+  createStandardGroup,
+  updateStandardGroup,
+  type StandardCustomGroup,
+} from "../data/standardGroups";
 import { useZones } from "../hooks/useZones";
 import { EmptyPane, ErrorPane, LoadingPane } from "../components/Status";
 import { ZoneColumn, type ZoneColumnGroups } from "./zones/ZoneColumn";
 import { ZoneEditorDialog } from "./zones/ZoneEditorDialog";
+import { StandardGroupEditorDialog } from "./zones/StandardGroupEditorDialog";
+import type { GroupItem } from "./zones/GroupChip";
 
 const useStyles = makeStyles({
   root: {
@@ -154,21 +170,45 @@ interface EnvGroupState {
   error?: string;
 }
 
+/**
+ * Convert a raw MS env group row to the UI-shaped `GroupItem` the
+ * board operates on. Inlined here because it's used in exactly one
+ * place; ZoneDetailView has its own equivalent for the same reason.
+ */
+function msToItem(g: EnvironmentGroupRow): GroupItem {
+  return {
+    ref: msRef(g.id),
+    displayName: g.displayName,
+    description: g.description,
+    meta: g.location || undefined,
+  };
+}
+
+function customToItem(g: StandardCustomGroup): GroupItem {
+  return {
+    ref: customRef(g.id),
+    displayName: g.displayName,
+    description: g.description,
+    color: g.color,
+    icon: g.icon,
+  };
+}
+
 export function ZonesView() {
   const styles = useStyles();
-  const { zones, assignments, refresh } = useZones();
+  const { zones, assignments, standardGroups, refresh } = useZones();
   const [envGroups, setEnvGroups] = useState<EnvGroupState>({
     kind: "loading",
     rows: [],
   });
-  const [editorOpen, setEditorOpen] = useState(false);
+  const [zoneEditorOpen, setZoneEditorOpen] = useState(false);
   const [editingZone, setEditingZone] = useState<Zone | null>(null);
   const [zoneToDelete, setZoneToDelete] = useState<Zone | null>(null);
+  const [customGroupEditorOpen, setCustomGroupEditorOpen] = useState(false);
+  const [editingCustomGroup, setEditingCustomGroup] =
+    useState<StandardCustomGroup | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
 
-  // Hold-to-drag with a small distance threshold so click events on
-  // chips (e.g. the tooltip) still work without accidentally dragging.
-  // Keyboard sensor pulled in for accessibility — drag with Space + arrows.
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: { distance: 6 },
@@ -192,23 +232,20 @@ export function ZonesView() {
     };
   }, []);
 
-  // Bucket env groups by their current assignment so each column only
-  // iterates its own list. Recomputed when env groups or assignments
-  // change — both stable references coming out of state hooks.
-  //
-  // When a search query is active, env groups that don't match are
-  // dropped from the buckets entirely (rather than greyed out). For a
-  // "find and drag" interaction, hiding non-matches keeps the visible
-  // chips actionable and makes the target unambiguous.
+  // Bucket all placeable items (MS env groups + Standard custom groups)
+  // into zone columns by current assignment. Search filtering hides
+  // non-matching items entirely so a "find and drag" interaction has
+  // an unambiguous target.
   const buckets = useMemo(() => {
+    const allItems: GroupItem[] = [
+      ...envGroups.rows.map(msToItem),
+      ...standardGroups.map(customToItem),
+    ];
+
     const trimmedQuery = searchQuery.trim().toLowerCase();
-    const matches = (group: EnvironmentGroupRow): boolean => {
+    const matches = (item: GroupItem): boolean => {
       if (!trimmedQuery) return true;
-      const haystack = [
-        group.displayName,
-        group.description,
-        group.location,
-      ]
+      const haystack = [item.displayName, item.description, item.meta ?? ""]
         .filter(Boolean)
         .join(" ")
         .toLowerCase();
@@ -219,17 +256,15 @@ export function ZonesView() {
     for (const zone of zones) {
       byZone.set(zone.id, { default: [], bySection: {} });
     }
-    const unassigned: EnvironmentGroupRow[] = [];
+    const unassigned: GroupItem[] = [];
     let matchCount = 0;
-    for (const group of envGroups.rows) {
-      if (!matches(group)) continue;
+
+    for (const item of allItems) {
+      if (!matches(item)) continue;
       matchCount++;
-      const location = assignments[group.id];
+      const location = assignments[refToKey(item.ref)];
       if (!location || !byZone.has(location.zoneId)) {
-        // No assignment, OR assigned to a zone that no longer exists
-        // (defensive — `deleteZone` already clears assignments, but
-        // a hand-edited localStorage blob shouldn't crash the view).
-        unassigned.push(group);
+        unassigned.push(item);
         continue;
       }
       const zoneBucket = byZone.get(location.zoneId)!;
@@ -242,22 +277,22 @@ export function ZonesView() {
         const list =
           zoneBucket.bySection[location.sectionId] ??
           (zoneBucket.bySection[location.sectionId] = []);
-        list.push(group);
+        list.push(item);
       } else {
         // Section was deleted out from under us — drop to default lane.
-        zoneBucket.default.push(group);
+        zoneBucket.default.push(item);
       }
     }
-    return { byZone, unassigned, matchCount };
-  }, [zones, assignments, envGroups.rows, searchQuery]);
+    return { byZone, unassigned, matchCount, totalCount: allItems.length };
+  }, [zones, assignments, envGroups.rows, standardGroups, searchQuery]);
 
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
     if (!over) return;
     const activeData = active.data.current as
       | {
-          kind: "envGroup";
-          envGroupId: string;
+          kind: "groupChip";
+          ref: GroupRef;
           fromZoneId: string | null;
           fromSectionId?: string;
         }
@@ -267,13 +302,12 @@ export function ZonesView() {
       | undefined;
     if (
       !activeData ||
-      activeData.kind !== "envGroup" ||
+      activeData.kind !== "groupChip" ||
       !overData ||
       overData.kind !== "lane"
     ) {
       return;
     }
-    // No-op if dropped back into the exact same lane.
     if (
       activeData.fromZoneId === overData.zoneId &&
       activeData.fromSectionId === overData.sectionId
@@ -281,29 +315,24 @@ export function ZonesView() {
       return;
     }
     if (overData.zoneId === null) {
-      setAssignment(activeData.envGroupId, null);
+      setAssignment(activeData.ref, null);
     } else {
-      setAssignment(activeData.envGroupId, {
+      setAssignment(activeData.ref, {
         zoneId: overData.zoneId,
         sectionId: overData.sectionId,
       });
     }
-    // No explicit refresh() needed — the storage write fires our local
-    // change event and the hook re-reads. But trigger one anyway for
-    // belt-and-suspenders if the event ever races.
     refresh();
   };
 
   const openNewZone = () => {
     setEditingZone(null);
-    setEditorOpen(true);
+    setZoneEditorOpen(true);
   };
-
   const openEditZone = (zone: Zone) => {
     setEditingZone(zone);
-    setEditorOpen(true);
+    setZoneEditorOpen(true);
   };
-
   const handleZoneSubmit = (
     input: { name: string; description: string; color: string; icon: string },
     zone: Zone | null,
@@ -313,8 +342,30 @@ export function ZonesView() {
     } else {
       createZone(input);
     }
-    setEditorOpen(false);
+    setZoneEditorOpen(false);
     setEditingZone(null);
+  };
+
+  const openNewCustomGroup = () => {
+    setEditingCustomGroup(null);
+    setCustomGroupEditorOpen(true);
+  };
+  const handleCustomGroupSubmit = (
+    input: {
+      displayName: string;
+      description: string;
+      color: string;
+      icon: string;
+    },
+    group: StandardCustomGroup | null,
+  ) => {
+    if (group) {
+      updateStandardGroup(group.id, input);
+    } else {
+      createStandardGroup(input);
+    }
+    setCustomGroupEditorOpen(false);
+    setEditingCustomGroup(null);
   };
 
   if (envGroups.kind === "loading") {
@@ -331,7 +382,7 @@ export function ZonesView() {
 
   const totalAssigned = Object.keys(assignments).length;
   const noZones = zones.length === 0;
-  const noGroups = envGroups.rows.length === 0;
+  const noGroups = buckets.totalCount === 0;
 
   return (
     <div className={styles.root}>
@@ -340,10 +391,10 @@ export function ZonesView() {
           Zones
         </Text>
         <Text className={styles.subtitle}>
-          Drag environment groups into Zones to organize your tenant the way it
-          actually fits — by business unit, region, lifecycle stage, capability,
-          or anything else. Zones are personal to this browser and never modify
-          Microsoft data.
+          Drag groups (Microsoft env groups + Standard custom groups) into
+          Zones to organize your tenant the way it actually fits — by business
+          unit, region, lifecycle stage, capability, or anything else. Zones
+          are personal to this browser and never modify Microsoft data.
         </Text>
       </div>
 
@@ -364,39 +415,49 @@ export function ZonesView() {
         <Text className={styles.meta}>
           {searchQuery.trim() ? (
             <>
-              {buckets.matchCount} of {envGroups.rows.length} env group
-              {envGroups.rows.length === 1 ? "" : "s"} match "{searchQuery.trim()}" ·{" "}
-              {zones.length} zone{zones.length === 1 ? "" : "s"} · {totalAssigned} placed
+              {buckets.matchCount} of {buckets.totalCount} group
+              {buckets.totalCount === 1 ? "" : "s"} match "{searchQuery.trim()}" ·{" "}
+              {zones.length} zone{zones.length === 1 ? "" : "s"} ·{" "}
+              {totalAssigned} placed
             </>
           ) : (
             <>
-              {envGroups.rows.length} environment group
-              {envGroups.rows.length === 1 ? "" : "s"} · {zones.length} zone
-              {zones.length === 1 ? "" : "s"} · {totalAssigned} placed
+              {envGroups.rows.length} MS env group
+              {envGroups.rows.length === 1 ? "" : "s"} · {standardGroups.length}{" "}
+              custom · {zones.length} zone{zones.length === 1 ? "" : "s"} ·{" "}
+              {totalAssigned} placed
             </>
           )}
         </Text>
         <div className={styles.toolbarRight}>
           <SearchBox
             className={styles.searchBox}
-            placeholder="Search env groups…"
+            placeholder="Search groups…"
             value={searchQuery}
             onChange={(_: SearchBoxChangeEvent, data: InputOnChangeData) =>
               setSearchQuery(data.value)
             }
           />
-          <Button
-            appearance="primary"
-            icon={<AddRegular />}
-            onClick={openNewZone}
-          >
-            New zone
-          </Button>
+          <Menu positioning="below-end">
+            <MenuTrigger disableButtonEnhancement>
+              <MenuButton appearance="primary" icon={<AddRegular />}>
+                New
+              </MenuButton>
+            </MenuTrigger>
+            <MenuPopover>
+              <MenuList>
+                <MenuItem onClick={openNewZone}>New zone…</MenuItem>
+                <MenuItem onClick={openNewCustomGroup}>
+                  New Standard custom group…
+                </MenuItem>
+              </MenuList>
+            </MenuPopover>
+          </Menu>
         </div>
       </div>
 
       {noGroups ? (
-        <EmptyPane message="No environment groups in this tenant yet — create one in Power Platform admin center, then come back to organize." />
+        <EmptyPane message="No env groups in this tenant and no custom groups yet. Create a Standard custom group above to start organizing." />
       ) : noZones ? (
         <div className={styles.emptyState}>
           <Text size={400} weight="semibold">
@@ -404,7 +465,7 @@ export function ZonesView() {
           </Text>
           <Text className={styles.subtitle} style={{ textAlign: "center" }}>
             A zone is your own grouping — a business unit, a region, an ALM
-            stage, anything. Then drag environment groups in.
+            stage, anything. Then drag groups in.
           </Text>
           <Button
             appearance="primary"
@@ -417,13 +478,13 @@ export function ZonesView() {
       ) : (
         <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
           <div className={styles.board}>
-            <ZoneColumn kind="unassigned" groups={buckets.unassigned} />
+            <ZoneColumn kind="unassigned" items={buckets.unassigned} />
             {zones.map((zone) => (
               <ZoneColumn
                 key={zone.id}
                 kind="zone"
                 zone={zone}
-                groups={
+                items={
                   buckets.byZone.get(zone.id) ?? {
                     default: [],
                     bySection: {},
@@ -441,13 +502,23 @@ export function ZonesView() {
       )}
 
       <ZoneEditorDialog
-        open={editorOpen}
+        open={zoneEditorOpen}
         zone={editingZone}
         onDismiss={() => {
-          setEditorOpen(false);
+          setZoneEditorOpen(false);
           setEditingZone(null);
         }}
         onSubmit={handleZoneSubmit}
+      />
+
+      <StandardGroupEditorDialog
+        open={customGroupEditorOpen}
+        group={editingCustomGroup}
+        onDismiss={() => {
+          setCustomGroupEditorOpen(false);
+          setEditingCustomGroup(null);
+        }}
+        onSubmit={handleCustomGroupSubmit}
       />
 
       <Dialog
@@ -462,8 +533,9 @@ export function ZonesView() {
             <DialogContent>
               <Text>
                 Deleting <strong>{zoneToDelete?.name}</strong> returns its
-                environment groups to Unassigned. The Microsoft environment
-                groups themselves are not affected.
+                groups to Unassigned. The Microsoft environment groups
+                themselves are not affected. Standard custom groups remain in
+                Unassigned.
               </Text>
             </DialogContent>
             <DialogActions>

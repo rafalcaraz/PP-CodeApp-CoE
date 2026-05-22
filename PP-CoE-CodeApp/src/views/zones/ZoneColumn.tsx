@@ -1,14 +1,16 @@
 /**
- * A single column in the Zones canvas.
+ * A single column on the Zones board.
  *
  * Two modes:
- *  - User zone   — full chrome (color stripe, header actions, sections)
+ *  - User zone   — full chrome (color stripe, header actions, sections,
+ *                  Open / Edit / Delete menu)
  *  - Unassigned  — read-only container with a special look, no edit
  *                  controls, always pinned to the left
  *
- * Each "lane" (a zone's default lane or any section inside it) is its
- * own droppable target; the parent view consumes the resulting drop
- * event and persists the new assignment.
+ * Group rendering is delegated to the shared `Lane` primitive so the
+ * same drop / chip behavior works in Zone Detail too. This column only
+ * owns the column-level chrome (header + section management) and a
+ * tiny footer for adding new sections.
  */
 
 import { useState } from "react";
@@ -28,28 +30,27 @@ import {
 } from "@fluentui/react-components";
 import {
   AddRegular,
+  ArrowRightRegular,
   DeleteRegular,
   EditRegular,
   MoreHorizontalRegular,
 } from "@fluentui/react-icons";
-import { useDroppable } from "@dnd-kit/core";
-import type { EnvironmentGroupRow } from "../../data/inventory";
+import { useNavigate } from "react-router-dom";
 import type { Zone } from "../../data/zones";
-import { EnvGroupChip } from "./EnvGroupChip";
-
-const SECTION_DEFAULT = "__default__";
+import type { GroupItem } from "./GroupChip";
+import { Lane } from "./Lane";
 
 export interface ZoneColumnGroups {
-  /** Groups that belong to this zone but no specific section. */
-  default: EnvironmentGroupRow[];
-  /** Groups indexed by sectionId. */
-  bySection: Record<string, EnvironmentGroupRow[]>;
+  /** Items that belong to this zone but no specific section. */
+  default: GroupItem[];
+  /** Items indexed by sectionId. */
+  bySection: Record<string, GroupItem[]>;
 }
 
 interface UserZoneProps {
   kind: "zone";
   zone: Zone;
-  groups: ZoneColumnGroups;
+  items: ZoneColumnGroups;
   onEdit: (zone: Zone) => void;
   onDelete: (zone: Zone) => void;
   onAddSection: (zoneId: string, name: string) => void;
@@ -59,7 +60,7 @@ interface UserZoneProps {
 
 interface UnassignedProps {
   kind: "unassigned";
-  groups: EnvironmentGroupRow[];
+  items: GroupItem[];
 }
 
 type Props = UserZoneProps | UnassignedProps;
@@ -110,6 +111,30 @@ const useStyles = makeStyles({
     fontSize: tokens.fontSizeBase400,
     flexShrink: 0,
   },
+  titleButton: {
+    background: "none",
+    border: "none",
+    padding: 0,
+    margin: 0,
+    cursor: "pointer",
+    font: "inherit",
+    color: "inherit",
+    textAlign: "left",
+    fontWeight: tokens.fontWeightSemibold,
+    whiteSpace: "nowrap",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    flex: 1,
+    minWidth: 0,
+    ":hover": {
+      color: tokens.colorBrandForeground1,
+      textDecoration: "underline",
+    },
+    ":focus-visible": {
+      outline: `2px solid ${tokens.colorStrokeFocus2}`,
+      outlineOffset: "2px",
+    },
+  },
   title: {
     fontWeight: tokens.fontWeightSemibold,
     whiteSpace: "nowrap",
@@ -135,50 +160,6 @@ const useStyles = makeStyles({
     flex: 1,
     minHeight: "120px",
   },
-  lane: {
-    display: "flex",
-    flexDirection: "column",
-    gap: tokens.spacingVerticalXS,
-    padding: tokens.spacingHorizontalS,
-    borderRadius: tokens.borderRadiusMedium,
-    border: `1px dashed transparent`,
-    transition: "background-color 120ms ease, border-color 120ms ease",
-    minHeight: "60px",
-  },
-  laneOver: {
-    backgroundColor: tokens.colorBrandBackground2,
-    border: `1px dashed ${tokens.colorBrandStroke1}`,
-  },
-  laneHeader: {
-    display: "flex",
-    alignItems: "center",
-    gap: tokens.spacingHorizontalXS,
-    color: tokens.colorNeutralForeground3,
-  },
-  laneTitle: {
-    flex: 1,
-    fontSize: tokens.fontSizeBase200,
-    fontWeight: tokens.fontWeightSemibold,
-    textTransform: "uppercase",
-    letterSpacing: "0.04em",
-    color: tokens.colorNeutralForeground3,
-    minWidth: 0,
-    whiteSpace: "nowrap",
-    overflow: "hidden",
-    textOverflow: "ellipsis",
-  },
-  chipList: {
-    display: "flex",
-    flexDirection: "column",
-    gap: tokens.spacingVerticalXS,
-  },
-  emptyLane: {
-    color: tokens.colorNeutralForeground4,
-    fontSize: tokens.fontSizeBase200,
-    fontStyle: "italic",
-    paddingBlock: tokens.spacingVerticalS,
-    textAlign: "center",
-  },
   footer: {
     padding: tokens.spacingHorizontalM,
     borderTop: `1px solid ${tokens.colorNeutralStroke2}`,
@@ -192,118 +173,9 @@ const useStyles = makeStyles({
   },
 });
 
-interface LaneProps {
-  zoneId: string | "unassigned";
-  sectionId?: string;
-  title?: string;
-  groups: EnvironmentGroupRow[];
-  onRenameSection?: (newName: string) => void;
-  onDeleteSection?: () => void;
-}
-
-function Lane({
-  zoneId,
-  sectionId,
-  title,
-  groups,
-  onRenameSection,
-  onDeleteSection,
-}: LaneProps) {
-  const styles = useStyles();
-  const laneKey =
-    zoneId === "unassigned"
-      ? "lane:unassigned"
-      : `lane:${zoneId}:${sectionId ?? SECTION_DEFAULT}`;
-  const { isOver, setNodeRef } = useDroppable({
-    id: laneKey,
-    data: {
-      kind: "lane",
-      zoneId: zoneId === "unassigned" ? null : zoneId,
-      sectionId,
-    },
-  });
-  const [renaming, setRenaming] = useState(false);
-  const [draftName, setDraftName] = useState(title ?? "");
-
-  return (
-    <div
-      ref={setNodeRef}
-      className={`${styles.lane}${isOver ? ` ${styles.laneOver}` : ""}`}
-    >
-      {title !== undefined && (
-        <div className={styles.laneHeader}>
-          {renaming ? (
-            <Input
-              size="small"
-              value={draftName}
-              autoFocus
-              onChange={(_, d: InputOnChangeData) => setDraftName(d.value)}
-              onBlur={() => {
-                if (onRenameSection && draftName.trim()) {
-                  onRenameSection(draftName.trim());
-                }
-                setRenaming(false);
-              }}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  if (onRenameSection && draftName.trim()) {
-                    onRenameSection(draftName.trim());
-                  }
-                  setRenaming(false);
-                } else if (e.key === "Escape") {
-                  setDraftName(title ?? "");
-                  setRenaming(false);
-                }
-              }}
-            />
-          ) : (
-            <Text className={styles.laneTitle} title={title}>
-              {title}
-            </Text>
-          )}
-          {onRenameSection && !renaming && (
-            <Button
-              size="small"
-              appearance="subtle"
-              icon={<EditRegular />}
-              aria-label="Rename section"
-              onClick={() => {
-                setDraftName(title ?? "");
-                setRenaming(true);
-              }}
-            />
-          )}
-          {onDeleteSection && !renaming && (
-            <Button
-              size="small"
-              appearance="subtle"
-              icon={<DeleteRegular />}
-              aria-label="Delete section"
-              onClick={onDeleteSection}
-            />
-          )}
-        </div>
-      )}
-      {groups.length === 0 ? (
-        <div className={styles.emptyLane}>Drop env groups here</div>
-      ) : (
-        <div className={styles.chipList}>
-          {groups.map((g) => (
-            <EnvGroupChip
-              key={g.id}
-              group={g}
-              fromZoneId={zoneId === "unassigned" ? null : zoneId}
-              fromSectionId={sectionId}
-            />
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
 export function ZoneColumn(props: Props) {
   const styles = useStyles();
+  const navigate = useNavigate();
   const [addingSection, setAddingSection] = useState(false);
   const [newSectionName, setNewSectionName] = useState("");
 
@@ -324,22 +196,24 @@ export function ZoneColumn(props: Props) {
               <Text className={styles.title}>Unassigned</Text>
             </div>
             <Caption1 className={styles.description}>
-              Env groups without a zone — drag into any zone to place them
+              Groups without a zone — drag into any zone to place them
             </Caption1>
-            <Text className={styles.count}>{props.groups.length} groups</Text>
+            <Text className={styles.count}>{props.items.length} groups</Text>
           </div>
         </div>
         <div className={styles.body}>
-          <Lane zoneId="unassigned" groups={props.groups} />
+          <Lane zoneId="unassigned" items={props.items} />
         </div>
       </div>
     );
   }
 
-  const { zone, groups } = props;
+  const { zone, items } = props;
   const totalCount =
-    groups.default.length +
-    Object.values(groups.bySection).reduce((sum, arr) => sum + arr.length, 0);
+    items.default.length +
+    Object.values(items.bySection).reduce((sum, arr) => sum + arr.length, 0);
+
+  const openDetail = () => navigate(`/zones/${zone.id}`);
 
   return (
     <div className={styles.column}>
@@ -354,7 +228,14 @@ export function ZoneColumn(props: Props) {
             <span className={styles.icon} aria-hidden="true">
               {zone.icon}
             </span>
-            <Text className={styles.title}>{zone.name}</Text>
+            <button
+              type="button"
+              className={styles.titleButton}
+              onClick={openDetail}
+              aria-label={`Open zone ${zone.name}`}
+            >
+              {zone.name}
+            </button>
           </div>
           {zone.description && (
             <Caption1 className={styles.description}>
@@ -379,6 +260,9 @@ export function ZoneColumn(props: Props) {
           </MenuTrigger>
           <MenuPopover>
             <MenuList>
+              <MenuItem icon={<ArrowRightRegular />} onClick={openDetail}>
+                Open zone…
+              </MenuItem>
               <MenuItem
                 icon={<EditRegular />}
                 onClick={() => props.onEdit(zone)}
@@ -398,7 +282,7 @@ export function ZoneColumn(props: Props) {
       <div className={styles.body}>
         <Lane
           zoneId={zone.id}
-          groups={groups.default}
+          items={items.default}
           title={zone.sections.length > 0 ? "Unsectioned" : undefined}
         />
         {zone.sections.map((section) => (
@@ -407,7 +291,7 @@ export function ZoneColumn(props: Props) {
             zoneId={zone.id}
             sectionId={section.id}
             title={section.name}
-            groups={groups.bySection[section.id] ?? []}
+            items={items.bySection[section.id] ?? []}
             onRenameSection={(name) =>
               props.onRenameSection(zone.id, section.id, name)
             }
