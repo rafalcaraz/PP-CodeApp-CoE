@@ -80,7 +80,7 @@ const NAV_ITEMS: NavItem[] = [
   { key: "flows", label: "Flows", icon: <FlowRegular />, path: "/flows" },
   { key: "agents", label: "Agents", icon: <BotRegular />, path: "/agents" },
   { key: "queries", label: "Queries", icon: <SearchSquareRegular />, path: "/queries" },
-  { key: "settings", label: "Settings", icon: <SettingsRegular /> },
+  { key: "settings", label: "Settings", icon: <SettingsRegular />, path: "/settings" },
 ];
 
 export function SideNav() {
