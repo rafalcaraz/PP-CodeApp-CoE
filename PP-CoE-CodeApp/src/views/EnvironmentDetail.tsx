@@ -39,6 +39,11 @@ import {
   getEnvironmentAdminDetails,
   type EnvironmentAdminDetails,
 } from "../data/adminEnrichment";
+import {
+  getApplicableDlpPolicies,
+  type DlpPolicyCoverage,
+  type DlpScopeMatchReason,
+} from "../data/dlpPolicies";
 import { EmptyPane, ErrorPane, LoadingPane } from "../components/Status";
 import { PortalActionsBar } from "../components/PortalActions";
 import { RawJsonAccordion } from "../components/RawJsonAccordion";
@@ -387,6 +392,22 @@ function ReadyView({
         renderReady={(details) => <AdminDetailsBody details={details} />}
       />
 
+      {/* 3c. DLP policy coverage — supplemental, on-demand.
+          Same shell as Admin details so the UX (idle → load → list /
+          error) is identical. The helper fetches every policy in the
+          tenant then filters client-side, so it's gated behind the
+          button to avoid drumming `ListPoliciesV2` on every page nav. */}
+      <SupplementalAdminCard
+        className={styles.colFull}
+        title="DLP policy coverage (supplemental)"
+        description="Tenant DLP policies that target this environment, by scope rule (AllEnvironments / OnlyEnvironments / ExceptEnvironments / SingleEnvironment). Fetched on demand from the Power Platform for Admins connector — never auto-loaded."
+        helpText={<>Click to call <code>ListPoliciesV2</code> and filter to this environment.</>}
+        buttonLabel="Load DLP policy coverage"
+        loadingLabel="Loading DLP policies…"
+        loadFn={() => getApplicableDlpPolicies(row.id)}
+        renderReady={(rows) => <DlpCoverageBody rows={rows} />}
+      />
+
       {/* 4. Resource roll-up */}
       <Card className={styles.colFull}>
         <CardHeader
@@ -562,4 +583,143 @@ function AdminDetailsBody({ details }: { details: EnvironmentAdminDetails }) {
       <RawJsonAccordion data={details.raw} title="Raw admin payload" />
     </>
   );
+}
+
+// ── DlpCoverageBody ────────────────────────────────────────────────────────
+// Renders the list of DLP policies currently applicable to this
+// environment (one row per policy). The match reason is shown as a
+// colored badge so it's immediately obvious why each one applies:
+// "All envs" / "Included" / "Not excluded".
+function DlpCoverageBody({ rows }: { rows: DlpPolicyCoverage[] }) {
+  const styles = useDetailStyles();
+  const dlpStyles = useDlpCoverageStyles();
+  if (rows.length === 0) {
+    return (
+      <EmptyPane message="No DLP policies in this tenant currently target this environment." />
+    );
+  }
+  return (
+    <div className={dlpStyles.list}>
+      <Text size={200} className={dlpStyles.subtle}>
+        {rows.length} polic{rows.length === 1 ? "y" : "ies"} applies to this
+        environment.
+      </Text>
+      {rows.map(({ policy, reason }) => (
+        <Card
+          key={policy.name}
+          className={dlpStyles.row}
+          appearance="outline"
+        >
+          <div className={dlpStyles.rowHeader}>
+            <Text className={dlpStyles.policyName}>
+              {policy.displayName || policy.name}
+            </Text>
+            <Badge
+              appearance="filled"
+              color={matchReasonColor(reason)}
+              shape="rounded"
+              size="small"
+            >
+              {matchReasonLabel(reason)}
+            </Badge>
+            <Badge appearance="outline" size="small">
+              {policy.environmentType}
+            </Badge>
+            <Badge
+              appearance="tint"
+              color={defaultClassificationColor(
+                policy.defaultConnectorsClassification
+              )}
+              size="small"
+            >
+              Default: {policy.defaultConnectorsClassification || "—"}
+            </Badge>
+          </div>
+          <div className={dlpStyles.rowMeta}>
+            <span className={styles.mono}>{policy.name}</span>
+            <span>
+              Modified <DateWithRelative value={policy.lastModifiedTime ?? ""} />
+            </span>
+          </div>
+        </Card>
+      ))}
+    </div>
+  );
+}
+
+const useDlpCoverageStyles = makeStyles({
+  list: {
+    display: "flex",
+    flexDirection: "column",
+    gap: tokens.spacingVerticalS,
+  },
+  subtle: {
+    color: tokens.colorNeutralForeground3,
+  },
+  row: {
+    padding: tokens.spacingHorizontalM,
+    display: "flex",
+    flexDirection: "column",
+    gap: tokens.spacingVerticalXS,
+  },
+  rowHeader: {
+    display: "flex",
+    flexWrap: "wrap",
+    alignItems: "center",
+    gap: tokens.spacingHorizontalS,
+  },
+  rowMeta: {
+    display: "flex",
+    flexWrap: "wrap",
+    alignItems: "center",
+    gap: tokens.spacingHorizontalL,
+    color: tokens.colorNeutralForeground3,
+    fontSize: tokens.fontSizeBase200,
+  },
+  policyName: {
+    fontWeight: tokens.fontWeightSemibold,
+  },
+});
+
+function matchReasonLabel(r: DlpScopeMatchReason): string {
+  switch (r) {
+    case "all":
+      return "All environments";
+    case "included":
+      return "Explicitly included";
+    case "not-excluded":
+      return "Not excluded";
+    case "none":
+      return "Does not apply";
+  }
+}
+
+function matchReasonColor(
+  r: DlpScopeMatchReason
+): "brand" | "informative" | "warning" | "subtle" {
+  switch (r) {
+    case "all":
+      return "brand";
+    case "included":
+      return "informative";
+    case "not-excluded":
+      return "warning";
+    case "none":
+      return "subtle";
+  }
+}
+
+function defaultClassificationColor(
+  v: string
+): "brand" | "success" | "danger" | "subtle" {
+  switch (v) {
+    case "Confidential":
+      return "brand";
+    case "General":
+      return "success";
+    case "Blocked":
+      return "danger";
+    default:
+      return "subtle";
+  }
 }
