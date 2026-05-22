@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   makeStyles,
   tokens,
@@ -23,6 +23,7 @@ import {
   Option,
   Link,
   Input,
+  Button,
   MessageBar,
   MessageBarBody,
   MessageBarTitle,
@@ -97,10 +98,22 @@ const usePageStyles = makeStyles({
     alignItems: "center",
     gap: tokens.spacingHorizontalM,
   },
+  resourcesIdle: {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "flex-start",
+    gap: tokens.spacingVerticalS,
+  },
+  resourcesIdleHelp: {
+    color: tokens.colorNeutralForeground3,
+  },
+  resourcesRetry: {
+    paddingTop: tokens.spacingVerticalS,
+  },
 });
 
 interface AsyncSlot<T> {
-  kind: "loading" | "error" | "ready";
+  kind: "idle" | "loading" | "error" | "ready";
   message?: string;
   data?: T;
 }
@@ -116,7 +129,12 @@ export function EnvironmentDetail() {
     kind: "loading",
   });
   const [counts, setCounts] = useState<AsyncSlot<ResourceCountRow[]>>({ kind: "loading" });
-  const [resources, setResources] = useState<AsyncSlot<ResourceRow[]>>({ kind: "loading" });
+  // Resources can be 10k+ rows in a busy env — gate behind a button so
+  // opening an env doesn't kick off a tenant-busting fanout the user
+  // may not even want. The count card above still loads automatically
+  // (one aggregate call) and tells the user *whether* they want the
+  // full list before clicking.
+  const [resources, setResources] = useState<AsyncSlot<ResourceRow[]>>({ kind: "idle" });
   const [typeFilter, setTypeFilter] = useState<string>(ALL_TYPES_KEY);
 
   useEffect(() => {
@@ -124,13 +142,15 @@ export function EnvironmentDetail() {
     void (async () => {
       setEnv({ kind: "loading" });
       setCounts({ kind: "loading" });
-      setResources({ kind: "loading" });
+      // Resources stays idle — fired explicitly by the "Load resources"
+      // button below. Reset to idle if we switch envs in the same
+      // session so the previous env's data doesn't bleed through.
+      setResources({ kind: "idle" });
       setTypeFilter(ALL_TYPES_KEY);
 
-      const [envRes, countsRes, resourcesRes] = await Promise.all([
+      const [envRes, countsRes] = await Promise.all([
         getEnvironment(envId),
         countResourcesByTypeForEnvironment(envId),
-        listResourcesInEnvironment(envId),
       ]);
       if (cancelled) return;
 
@@ -138,15 +158,23 @@ export function EnvironmentDetail() {
       setCounts(
         countsRes.ok ? { kind: "ready", data: countsRes.data } : { kind: "error", message: countsRes.error }
       );
-      setResources(
-        resourcesRes.ok
-          ? { kind: "ready", data: resourcesRes.data }
-          : { kind: "error", message: resourcesRes.error }
-      );
     })();
     return () => {
       cancelled = true;
     };
+  }, [envId]);
+
+  // Explicit, button-driven load for the resources list. Returns a
+  // stable reference so the ReadyView can wire it to the button without
+  // tripping the no-unstable-callback lint rule.
+  const loadResources = useCallback(async () => {
+    setResources({ kind: "loading" });
+    const res = await listResourcesInEnvironment(envId);
+    setResources(
+      res.ok
+        ? { kind: "ready", data: res.data }
+        : { kind: "error", message: res.error }
+    );
   }, [envId]);
 
   const visibleResources = useMemo(() => {
@@ -245,6 +273,7 @@ export function EnvironmentDetail() {
           navigate={navigate}
           counts={counts}
           resources={resources}
+          onLoadResources={loadResources}
           visibleResources={visibleResources}
           typeFilter={typeFilter}
           typeOptions={typeOptions}
@@ -263,6 +292,7 @@ interface ReadyViewProps {
   navigate: ReturnType<typeof useNavigate>;
   counts: AsyncSlot<ResourceCountRow[]>;
   resources: AsyncSlot<ResourceRow[]>;
+  onLoadResources: () => void;
   visibleResources: ResourceRow[];
   typeFilter: string;
   typeOptions: ResourceCountRow[];
@@ -277,6 +307,7 @@ function ReadyView({
   navigate,
   counts,
   resources,
+  onLoadResources,
   visibleResources,
   typeFilter,
   typeOptions,
@@ -474,10 +505,22 @@ function ReadyView({
           header={
             <Text weight="semibold">
               Resources
-              {resources.kind === "ready" ? ` (${visibleResources.length})` : ""}
+              {resources.kind === "ready"
+                ? ` (${visibleResources.length})`
+                : counts.kind === "ready" && counts.data
+                  ? ` (${counts.data.reduce((sum, c) => sum + c.count, 0)})`
+                  : ""}
             </Text>
           }
-          description={<Text size={200}>Apps, flows, and agents living in this environment.</Text>}
+          description={
+            <Text size={200}>
+              Apps, flows, and agents living in this environment.
+              {resources.kind === "ready" && " "}
+              {resources.kind === "ready" && (
+                <Link onClick={onLoadResources}>Refresh</Link>
+              )}
+            </Text>
+          }
         />
         <Divider />
         <div className={page.resourcesBody}>
@@ -498,9 +541,28 @@ function ReadyView({
             </div>
           )}
 
+          {resources.kind === "idle" && (
+            <div className={page.resourcesIdle}>
+              <Text size={200} className={page.resourcesIdleHelp}>
+                The full resource list can be heavy in busy environments
+                {counts.kind === "ready" && counts.data
+                  ? ` (this one has ${counts.data.reduce((s, c) => s + c.count, 0).toLocaleString()} resource${counts.data.reduce((s, c) => s + c.count, 0) === 1 ? "" : "s"})`
+                  : ""}
+                . Click below to fetch it.
+              </Text>
+              <Button appearance="primary" onClick={onLoadResources}>
+                Load resources
+              </Button>
+            </div>
+          )}
           {resources.kind === "loading" && <LoadingPane label="Loading resources…" />}
           {resources.kind === "error" && (
-            <ErrorPane title="Couldn't load resources" message={resources.message ?? "Unknown error"} />
+            <>
+              <ErrorPane title="Couldn't load resources" message={resources.message ?? "Unknown error"} />
+              <div className={page.resourcesRetry}>
+                <Button onClick={onLoadResources}>Retry</Button>
+              </div>
+            </>
           )}
           {resources.kind === "ready" && (resources.data?.length ?? 0) === 0 && (
             <EmptyPane message="No resources found in this environment." />
