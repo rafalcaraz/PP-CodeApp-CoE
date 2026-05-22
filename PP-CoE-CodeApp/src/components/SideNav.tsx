@@ -1,5 +1,7 @@
+import { useCallback, useEffect, useState } from "react";
 import {
   makeStyles,
+  mergeClasses,
   tokens,
   Text,
   Tab,
@@ -10,12 +12,17 @@ import {
 import {
   AppsRegular,
   BotRegular,
+  ChartMultipleRegular,
+  ChevronDownRegular,
+  ChevronRightRegular,
+  BranchCompareRegular,
   EarthRegular,
   FlowRegular,
   HomeRegular,
   PeopleTeamRegular,
   SearchSquareRegular,
   SettingsRegular,
+  ShieldRegular,
   DataPieRegular,
 } from "@fluentui/react-icons";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -29,6 +36,7 @@ const useStyles = makeStyles({
     display: "flex",
     flexDirection: "column",
     paddingTop: tokens.spacingVerticalM,
+    overflowY: "auto",
   },
   brand: {
     paddingInline: tokens.spacingHorizontalL,
@@ -44,6 +52,44 @@ const useStyles = makeStyles({
   brandSubtitle: {
     color: tokens.colorNeutralForeground3,
     fontSize: tokens.fontSizeBase200,
+  },
+  section: {
+    display: "flex",
+    flexDirection: "column",
+    marginBottom: tokens.spacingVerticalXS,
+  },
+  sectionHeader: {
+    display: "flex",
+    alignItems: "center",
+    gap: tokens.spacingHorizontalXS,
+    width: "100%",
+    background: "none",
+    border: "none",
+    cursor: "pointer",
+    textAlign: "left",
+    paddingInline: tokens.spacingHorizontalL,
+    paddingBlock: tokens.spacingVerticalXS,
+    color: tokens.colorNeutralForeground3,
+    fontFamily: tokens.fontFamilyBase,
+    fontSize: tokens.fontSizeBase200,
+    fontWeight: tokens.fontWeightSemibold,
+    textTransform: "uppercase",
+    letterSpacing: "0.04em",
+    ":hover": {
+      color: tokens.colorNeutralForeground2,
+    },
+    ":focus-visible": {
+      outline: `2px solid ${tokens.colorStrokeFocus2}`,
+      outlineOffset: "-2px",
+    },
+  },
+  sectionHeaderIcon: {
+    display: "inline-flex",
+    alignItems: "center",
+    color: tokens.colorNeutralForeground3,
+  },
+  sectionHeaderLabel: {
+    flex: 1,
   },
   tabList: {
     paddingInlineStart: tokens.spacingHorizontalS,
@@ -61,38 +107,122 @@ interface NavItem {
   path?: string; // when set, the item is enabled
 }
 
-const NAV_ITEMS: NavItem[] = [
-  { key: "home", label: "Home", icon: <HomeRegular />, path: "/home" },
-  { key: "dashboards", label: "Dashboards", icon: <DataPieRegular />, path: "/dashboards" },
+interface NavSection {
+  key: string;
+  label: string;
+  icon?: React.ReactElement;
+  defaultOpen?: boolean;
+  items: NavItem[];
+}
+
+const NAV_SECTIONS: NavSection[] = [
   {
-    key: "environment-groups",
-    label: "Environment groups",
-    icon: <PeopleTeamRegular />,
-    path: "/environment-groups",
+    key: "inventory",
+    label: "Inventory",
+    defaultOpen: true,
+    items: [
+      { key: "home", label: "Home", icon: <HomeRegular />, path: "/home" },
+      { key: "dashboards", label: "Dashboards", icon: <DataPieRegular />, path: "/dashboards" },
+      {
+        key: "environment-groups",
+        label: "Environment groups",
+        icon: <PeopleTeamRegular />,
+        path: "/environment-groups",
+      },
+      {
+        key: "environments",
+        label: "Environments",
+        icon: <EarthRegular />,
+        path: "/environments",
+      },
+      { key: "apps", label: "Apps", icon: <AppsRegular />, path: "/apps" },
+      { key: "flows", label: "Flows", icon: <FlowRegular />, path: "/flows" },
+      { key: "agents", label: "Agents", icon: <BotRegular />, path: "/agents" },
+      { key: "queries", label: "Queries", icon: <SearchSquareRegular />, path: "/queries" },
+      { key: "settings", label: "Settings", icon: <SettingsRegular />, path: "/settings" },
+    ],
   },
   {
-    key: "environments",
-    label: "Environments",
-    icon: <EarthRegular />,
-    path: "/environments",
+    key: "security",
+    label: "Security",
+    icon: <ShieldRegular />,
+    defaultOpen: true,
+    items: [
+      {
+        key: "dlp-comparator",
+        label: "DLP Comparator",
+        icon: <BranchCompareRegular />,
+        path: "/security/dlp-comparator",
+      },
+      {
+        key: "dlp-analysis",
+        label: "DLP Analysis",
+        icon: <ChartMultipleRegular />,
+      },
+    ],
   },
-  { key: "apps", label: "Apps", icon: <AppsRegular />, path: "/apps" },
-  { key: "flows", label: "Flows", icon: <FlowRegular />, path: "/flows" },
-  { key: "agents", label: "Agents", icon: <BotRegular />, path: "/agents" },
-  { key: "queries", label: "Queries", icon: <SearchSquareRegular />, path: "/queries" },
-  { key: "settings", label: "Settings", icon: <SettingsRegular />, path: "/settings" },
 ];
+
+const COLLAPSED_STORAGE_KEY = "ppcoe.sidenav.collapsedSections";
+
+function loadCollapsedSections(): Set<string> {
+  try {
+    const raw = localStorage.getItem(COLLAPSED_STORAGE_KEY);
+    if (!raw) return new Set();
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? new Set(parsed) : new Set();
+  } catch {
+    return new Set();
+  }
+}
+
+function saveCollapsedSections(collapsed: Set<string>): void {
+  try {
+    localStorage.setItem(COLLAPSED_STORAGE_KEY, JSON.stringify(Array.from(collapsed)));
+  } catch {
+    // ignore quota / privacy-mode errors
+  }
+}
 
 export function SideNav() {
   const styles = useStyles();
   const navigate = useNavigate();
   const location = useLocation();
 
+  const [collapsed, setCollapsed] = useState<Set<string>>(() => {
+    const stored = loadCollapsedSections();
+    // Seed with sections that opt out of defaultOpen, unless the user already
+    // expanded them in a previous session.
+    for (const section of NAV_SECTIONS) {
+      if (section.defaultOpen === false && !stored.has(section.key)) {
+        stored.add(section.key);
+      }
+    }
+    return stored;
+  });
+
+  useEffect(() => {
+    saveCollapsedSections(collapsed);
+  }, [collapsed]);
+
+  const toggleSection = useCallback((sectionKey: string) => {
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      if (next.has(sectionKey)) {
+        next.delete(sectionKey);
+      } else {
+        next.add(sectionKey);
+      }
+      return next;
+    });
+  }, []);
+
+  const allItems = NAV_SECTIONS.flatMap((s) => s.items);
   const activeKey =
-    NAV_ITEMS.find((item) => item.path && location.pathname.startsWith(item.path))?.key ?? "home";
+    allItems.find((item) => item.path && location.pathname.startsWith(item.path))?.key ?? "home";
 
   const onSelect = (_e: SelectTabEvent, data: SelectTabData) => {
-    const target = NAV_ITEMS.find((item) => item.key === data.value);
+    const target = allItems.find((item) => item.key === data.value);
     if (target?.path) {
       navigate(target.path);
     }
@@ -106,25 +236,56 @@ export function SideNav() {
         </Text>
         <Text className={styles.brandSubtitle}>Inventory &amp; governance</Text>
       </div>
-      <TabList
-        className={styles.tabList}
-        vertical
-        selectedValue={activeKey}
-        onTabSelect={onSelect}
-        size="large"
-      >
-        {NAV_ITEMS.map((item) => (
-          <Tab
-            key={item.key}
-            value={item.key}
-            icon={item.icon}
-            disabled={!item.path}
-            className={styles.tab}
-          >
-            {item.label}
-          </Tab>
-        ))}
-      </TabList>
+      {NAV_SECTIONS.map((section) => {
+        const isCollapsed = collapsed.has(section.key);
+        const sectionId = `sidenav-section-${section.key}`;
+        return (
+          <div key={section.key} className={styles.section}>
+            <button
+              type="button"
+              className={styles.sectionHeader}
+              onClick={() => toggleSection(section.key)}
+              aria-expanded={!isCollapsed}
+              aria-controls={sectionId}
+            >
+              <span className={styles.sectionHeaderIcon} aria-hidden="true">
+                {isCollapsed ? <ChevronRightRegular /> : <ChevronDownRegular />}
+              </span>
+              {section.icon && (
+                <span className={styles.sectionHeaderIcon} aria-hidden="true">
+                  {section.icon}
+                </span>
+              )}
+              <span className={styles.sectionHeaderLabel}>{section.label}</span>
+            </button>
+            {!isCollapsed && (
+              <TabList
+                id={sectionId}
+                className={mergeClasses(styles.tabList)}
+                vertical
+                // Each TabList is independent; only the list owning the active
+                // item will visually highlight it. Passing the global activeKey
+                // is harmless for the others.
+                selectedValue={activeKey}
+                onTabSelect={onSelect}
+                size="large"
+              >
+                {section.items.map((item) => (
+                  <Tab
+                    key={item.key}
+                    value={item.key}
+                    icon={item.icon}
+                    disabled={!item.path}
+                    className={styles.tab}
+                  >
+                    {item.label}
+                  </Tab>
+                ))}
+              </TabList>
+            )}
+          </div>
+        );
+      })}
     </nav>
   );
 }
