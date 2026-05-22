@@ -81,6 +81,11 @@ const ZonesView = lazy(() =>
 const ZoneDetailView = lazy(() =>
   import("./views/ZoneDetailView").then((m) => ({ default: m.ZoneDetailView }))
 );
+const StandardCustomGroupDetailView = lazy(() =>
+  import("./views/StandardCustomGroupDetailView").then((m) => ({
+    default: m.StandardCustomGroupDetailView,
+  }))
+);
 
 const useStyles = makeStyles({
   app: {
@@ -140,6 +145,10 @@ function AppShell() {
               <Route path="/security/impact" element={<Impact />} />
               <Route path="/zones" element={<ZonesView />} />
               <Route path="/zones/:zoneId" element={<ZoneDetailView />} />
+              <Route
+                path="/zones/custom-groups/:groupId"
+                element={<StandardCustomGroupDetailView />}
+              />
               <Route path="*" element={<HomeRedirect />} />
             </Routes>
           </Suspense>

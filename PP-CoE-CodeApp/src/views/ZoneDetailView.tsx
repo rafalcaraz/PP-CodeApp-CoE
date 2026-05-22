@@ -66,12 +66,17 @@ import {
   updateZone,
   type GroupRef,
 } from "../data/zones";
-import type { StandardCustomGroup } from "../data/standardGroups";
+import {
+  deleteStandardGroup,
+  updateStandardGroup,
+  type StandardCustomGroup,
+} from "../data/standardGroups";
 import { useZones } from "../hooks/useZones";
 import { ErrorPane, LoadingPane } from "../components/Status";
 import { Lane } from "./zones/Lane";
 import { AvailableGroupsPanel } from "./zones/AvailableGroupsPanel";
 import { ZoneEditorDialog } from "./zones/ZoneEditorDialog";
+import { StandardGroupEditorDialog } from "./zones/StandardGroupEditorDialog";
 import type { GroupItem } from "./zones/GroupChip";
 
 function msToItem(g: EnvironmentGroupRow): GroupItem {
@@ -83,13 +88,27 @@ function msToItem(g: EnvironmentGroupRow): GroupItem {
   };
 }
 
-function customToItem(g: StandardCustomGroup): GroupItem {
+/**
+ * Custom-group items in Zone Detail carry the same kebab-menu
+ * actions as on the board so navigation / edit / delete are reachable
+ * without bouncing back to /zones first.
+ */
+function customToItem(
+  g: StandardCustomGroup,
+  actions: {
+    onOpen: () => void;
+    onEdit: () => void;
+    onDelete: () => void;
+  },
+): GroupItem {
   return {
     ref: customRef(g.id),
     displayName: g.displayName,
     description: g.description,
     color: g.color,
     icon: g.icon,
+    envCount: g.envIds.length,
+    actions,
   };
 }
 
@@ -196,6 +215,11 @@ export function ZoneDetailView() {
   const [addingSection, setAddingSection] = useState(false);
   const [newSectionName, setNewSectionName] = useState("");
   const [panelSearch, setPanelSearch] = useState("");
+  const [customGroupEditorOpen, setCustomGroupEditorOpen] = useState(false);
+  const [editingCustomGroup, setEditingCustomGroup] =
+    useState<StandardCustomGroup | null>(null);
+  const [customGroupToDelete, setCustomGroupToDelete] =
+    useState<StandardCustomGroup | null>(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
@@ -227,9 +251,18 @@ export function ZoneDetailView() {
     if (envGroupsState.kind !== "ready") return [];
     return [
       ...envGroupsState.rows.map(msToItem),
-      ...standardGroups.map(customToItem),
+      ...standardGroups.map((g) =>
+        customToItem(g, {
+          onOpen: () => navigate(`/zones/custom-groups/${g.id}`),
+          onEdit: () => {
+            setEditingCustomGroup(g);
+            setCustomGroupEditorOpen(true);
+          },
+          onDelete: () => setCustomGroupToDelete(g),
+        }),
+      ),
     ];
-  }, [envGroupsState, standardGroups]);
+  }, [envGroupsState, standardGroups, navigate]);
 
   const zoneNamesById = useMemo(
     () => new Map(zones.map((z) => [z.id, z.name])),
@@ -513,6 +546,60 @@ export function ZoneDetailView() {
               </Button>
               <Button appearance="primary" onClick={handleDeleteConfirm}>
                 Delete zone
+              </Button>
+            </DialogActions>
+          </DialogBody>
+        </DialogSurface>
+      </Dialog>
+
+      <StandardGroupEditorDialog
+        open={customGroupEditorOpen}
+        group={editingCustomGroup}
+        onDismiss={() => {
+          setCustomGroupEditorOpen(false);
+          setEditingCustomGroup(null);
+        }}
+        onSubmit={(input, group) => {
+          if (group) updateStandardGroup(group.id, input);
+          setCustomGroupEditorOpen(false);
+          setEditingCustomGroup(null);
+        }}
+      />
+
+      <Dialog
+        open={customGroupToDelete !== null}
+        onOpenChange={(_, data) => {
+          if (!data.open) setCustomGroupToDelete(null);
+        }}
+      >
+        <DialogSurface>
+          <DialogBody>
+            <DialogTitle>Delete Standard custom group?</DialogTitle>
+            <DialogContent>
+              <Text>
+                Deleting{" "}
+                <strong>{customGroupToDelete?.displayName}</strong> removes
+                the group entirely. Any environments that were members return
+                to "loose Standard" status; the environments themselves are
+                not affected.
+              </Text>
+            </DialogContent>
+            <DialogActions>
+              <Button
+                appearance="secondary"
+                onClick={() => setCustomGroupToDelete(null)}
+              >
+                Cancel
+              </Button>
+              <Button
+                appearance="primary"
+                onClick={() => {
+                  if (customGroupToDelete)
+                    deleteStandardGroup(customGroupToDelete.id);
+                  setCustomGroupToDelete(null);
+                }}
+              >
+                Delete group
               </Button>
             </DialogActions>
           </DialogBody>

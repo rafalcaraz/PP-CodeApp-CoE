@@ -12,11 +12,13 @@
  * Type purity is critical: a Standard custom group contains Standard
  * envs ONLY (a Managed env going into one would be a category error,
  * losing the "this should be in a proper MS group" actionable signal).
+ * `addEnvToStandardGroup` enforces this at the data layer — the UI
+ * doesn't have to remember.
  *
- * **Membership is not yet modeled.** v1 of Standard custom groups ships
- * them as named, draggable, placeable containers — but the "which envs
- * are in this group" UX is deliberately the next iteration. This is the
- * smallest meaningful step toward the Zone Detail experience.
+ * **Exclusive env membership.** Like MS env groups, a Standard env can
+ * be in at most one Standard custom group at a time. Calling
+ * `addEnvToStandardGroup` automatically removes the env from any
+ * other custom group it was previously in.
  *
  * Mirrors the shape of `data/zones.ts` (same read/write/CRUD pattern,
  * same local-tab change event, same migration story for an eventual
@@ -33,6 +35,13 @@ export interface StandardCustomGroup {
   color: string;
   /** Single-character/emoji glyph shown next to the name. */
   icon: string;
+  /**
+   * Environment IDs belonging to this group. Standard envs only —
+   * `addEnvToStandardGroup` enforces the type check. v2 of this module
+   * shipped groups without this field; reads default it to `[]` for
+   * backwards compatibility.
+   */
+  envIds: string[];
   createdAt: string;
   updatedAt: string;
 }
@@ -62,7 +71,18 @@ function readStandardGroups(): StandardCustomGroup[] {
     if (!raw) return [];
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
-    return parsed as StandardCustomGroup[];
+    // Backwards compat: v2 groups have no `envIds`. Default to empty
+    // array so all downstream code can assume the field exists.
+    return (parsed as Partial<StandardCustomGroup>[]).map((g) => ({
+      id: g.id ?? "",
+      displayName: g.displayName ?? "",
+      description: g.description ?? "",
+      color: g.color ?? "#525252",
+      icon: g.icon ?? "📦",
+      envIds: Array.isArray(g.envIds) ? g.envIds : [],
+      createdAt: g.createdAt ?? nowIso(),
+      updatedAt: g.updatedAt ?? nowIso(),
+    }));
   } catch {
     return [];
   }
@@ -77,7 +97,7 @@ function writeStandardGroups(items: StandardCustomGroup[]): void {
   }
 }
 
-/** Read all standard custom groups, newest first by createdAt. */
+/** Read all standard custom groups, ordered by createdAt ascending. */
 export function listStandardGroups(): StandardCustomGroup[] {
   return readStandardGroups()
     .slice()
@@ -86,6 +106,17 @@ export function listStandardGroups(): StandardCustomGroup[] {
 
 export function getStandardGroup(id: string): StandardCustomGroup | null {
   return readStandardGroups().find((g) => g.id === id) ?? null;
+}
+
+/**
+ * Reverse lookup: given an env id, find the Standard custom group it
+ * belongs to (or null). Used by the available-envs panel to render the
+ * "currently in: X" label and to drive exclusive membership.
+ */
+export function findStandardGroupForEnv(
+  envId: string,
+): StandardCustomGroup | null {
+  return readStandardGroups().find((g) => g.envIds.includes(envId)) ?? null;
 }
 
 export interface StandardCustomGroupInput {
@@ -105,6 +136,7 @@ export function createStandardGroup(
     description: (input.description ?? "").trim(),
     color: input.color,
     icon: input.icon || "📦",
+    envIds: [],
     createdAt: nowIso(),
     updatedAt: nowIso(),
   };
@@ -141,9 +173,109 @@ export function updateStandardGroup(
 
 /**
  * Delete a Standard custom group. Also wipes any zone assignment that
- * pointed at it so we don't leave a phantom placement behind.
+ * pointed at it so we don't leave a phantom placement behind. Envs
+ * that were in the group simply become loose Standard envs (we don't
+ * own their underlying records — they continue to exist in Microsoft).
  */
 export function deleteStandardGroup(id: string): void {
   writeStandardGroups(readStandardGroups().filter((g) => g.id !== id));
   clearAssignmentsFor(customRef(id));
 }
+
+// ---------------------------------------------------------------------------
+// Env membership
+// ---------------------------------------------------------------------------
+
+export type AddEnvResult =
+  | { ok: true; group: StandardCustomGroup }
+  | { ok: false; reason: string };
+
+/**
+ * Add a Standard environment to a Standard custom group. Returns a
+ * discriminated result so the caller can show the precise rejection
+ * reason. Three guardrails:
+ *
+ *   1. Group must exist.
+ *   2. Env must be Standard (not Managed). Managed envs belong in a
+ *      real MS env group; placing one here would lose the "this should
+ *      be governed properly" actionable signal.
+ *   3. Exclusive membership — if the env was in another custom group,
+ *      it's removed there first (parallels MS env group behavior).
+ */
+export function addEnvToStandardGroup(
+  groupId: string,
+  env: { id: string; isManaged: boolean },
+): AddEnvResult {
+  if (env.isManaged) {
+    return {
+      ok: false,
+      reason:
+        "This environment is Managed. Managed environments belong in a Microsoft environment group, not a Standard custom group. Promote a group in PPAC instead.",
+    };
+  }
+  const items = readStandardGroups();
+  const targetIdx = items.findIndex((g) => g.id === groupId);
+  if (targetIdx < 0) {
+    return { ok: false, reason: "That Standard custom group no longer exists." };
+  }
+  // Remove from any other custom group first (exclusive membership).
+  const cleaned = items.map((g, idx) =>
+    idx === targetIdx
+      ? g
+      : g.envIds.includes(env.id)
+        ? { ...g, envIds: g.envIds.filter((id) => id !== env.id), updatedAt: nowIso() }
+        : g,
+  );
+  // Add to target (no-op if already present).
+  const target = cleaned[targetIdx];
+  if (target.envIds.includes(env.id)) {
+    writeStandardGroups(cleaned);
+    return { ok: true, group: target };
+  }
+  const updated: StandardCustomGroup = {
+    ...target,
+    envIds: [...target.envIds, env.id],
+    updatedAt: nowIso(),
+  };
+  cleaned[targetIdx] = updated;
+  writeStandardGroups(cleaned);
+  return { ok: true, group: updated };
+}
+
+/**
+ * Remove a Standard env from its Standard custom group (if any).
+ * The env returns to loose Standard status; nothing else changes.
+ */
+export function removeEnvFromStandardGroup(envId: string): void {
+  const items = readStandardGroups();
+  let changed = false;
+  const next = items.map((g) => {
+    if (!g.envIds.includes(envId)) return g;
+    changed = true;
+    return {
+      ...g,
+      envIds: g.envIds.filter((id) => id !== envId),
+      updatedAt: nowIso(),
+    };
+  });
+  if (changed) writeStandardGroups(next);
+}
+
+/**
+ * Bulk prune — drop any envIds in any group that aren't in the given
+ * "currently-known env IDs" set. Used by reads of the detail page to
+ * silently clean up after envs deleted in PPAC, without surfacing a
+ * drift inbox prompt for what is effectively just dead data.
+ */
+export function pruneDeletedEnvs(knownEnvIds: Set<string>): void {
+  const items = readStandardGroups();
+  let changed = false;
+  const next = items.map((g) => {
+    const kept = g.envIds.filter((id) => knownEnvIds.has(id));
+    if (kept.length === g.envIds.length) return g;
+    changed = true;
+    return { ...g, envIds: kept, updatedAt: nowIso() };
+  });
+  if (changed) writeStandardGroups(next);
+}
+

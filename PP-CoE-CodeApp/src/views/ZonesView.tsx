@@ -19,6 +19,7 @@
  * focus on a single zone's contents and add / remove groups in/out.
  */
 
+import { useNavigate } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
 import {
   Button,
@@ -71,6 +72,7 @@ import {
 } from "../data/zones";
 import {
   createStandardGroup,
+  deleteStandardGroup,
   updateStandardGroup,
   type StandardCustomGroup,
 } from "../data/standardGroups";
@@ -184,18 +186,34 @@ function msToItem(g: EnvironmentGroupRow): GroupItem {
   };
 }
 
-function customToItem(g: StandardCustomGroup): GroupItem {
+/**
+ * Custom groups carry per-chip kebab actions (Open / Edit / Delete)
+ * that MS groups don't get. The caller passes in the navigate + edit +
+ * delete callbacks; this function bakes them into the resulting item
+ * so Lane/ZoneColumn don't need to plumb extra props.
+ */
+function customToItem(
+  g: StandardCustomGroup,
+  actions: {
+    onOpen: () => void;
+    onEdit: () => void;
+    onDelete: () => void;
+  },
+): GroupItem {
   return {
     ref: customRef(g.id),
     displayName: g.displayName,
     description: g.description,
     color: g.color,
     icon: g.icon,
+    envCount: g.envIds.length,
+    actions,
   };
 }
 
 export function ZonesView() {
   const styles = useStyles();
+  const navigate = useNavigate();
   const { zones, assignments, standardGroups, refresh } = useZones();
   const [envGroups, setEnvGroups] = useState<EnvGroupState>({
     kind: "loading",
@@ -206,6 +224,8 @@ export function ZonesView() {
   const [zoneToDelete, setZoneToDelete] = useState<Zone | null>(null);
   const [customGroupEditorOpen, setCustomGroupEditorOpen] = useState(false);
   const [editingCustomGroup, setEditingCustomGroup] =
+    useState<StandardCustomGroup | null>(null);
+  const [customGroupToDelete, setCustomGroupToDelete] =
     useState<StandardCustomGroup | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -239,7 +259,16 @@ export function ZonesView() {
   const buckets = useMemo(() => {
     const allItems: GroupItem[] = [
       ...envGroups.rows.map(msToItem),
-      ...standardGroups.map(customToItem),
+      ...standardGroups.map((g) =>
+        customToItem(g, {
+          onOpen: () => navigate(`/zones/custom-groups/${g.id}`),
+          onEdit: () => {
+            setEditingCustomGroup(g);
+            setCustomGroupEditorOpen(true);
+          },
+          onDelete: () => setCustomGroupToDelete(g),
+        }),
+      ),
     ];
 
     const trimmedQuery = searchQuery.trim().toLowerCase();
@@ -284,7 +313,7 @@ export function ZonesView() {
       }
     }
     return { byZone, unassigned, matchCount, totalCount: allItems.length };
-  }, [zones, assignments, envGroups.rows, standardGroups, searchQuery]);
+  }, [zones, assignments, envGroups.rows, standardGroups, searchQuery, navigate]);
 
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
@@ -553,6 +582,45 @@ export function ZonesView() {
                 }}
               >
                 Delete zone
+              </Button>
+            </DialogActions>
+          </DialogBody>
+        </DialogSurface>
+      </Dialog>
+
+      <Dialog
+        open={customGroupToDelete !== null}
+        onOpenChange={(_, data) => {
+          if (!data.open) setCustomGroupToDelete(null);
+        }}
+      >
+        <DialogSurface>
+          <DialogBody>
+            <DialogTitle>Delete Standard custom group?</DialogTitle>
+            <DialogContent>
+              <Text>
+                Deleting <strong>{customGroupToDelete?.displayName}</strong>{" "}
+                removes the group entirely. Any environments that were members
+                return to "loose Standard" status; the environments themselves
+                are not affected.
+              </Text>
+            </DialogContent>
+            <DialogActions>
+              <Button
+                appearance="secondary"
+                onClick={() => setCustomGroupToDelete(null)}
+              >
+                Cancel
+              </Button>
+              <Button
+                appearance="primary"
+                onClick={() => {
+                  if (customGroupToDelete)
+                    deleteStandardGroup(customGroupToDelete.id);
+                  setCustomGroupToDelete(null);
+                }}
+              >
+                Delete group
               </Button>
             </DialogActions>
           </DialogBody>

@@ -16,7 +16,19 @@ import {
   Tooltip,
   Caption1,
   Badge,
+  Button,
+  Menu,
+  MenuItem,
+  MenuList,
+  MenuPopover,
+  MenuTrigger,
 } from "@fluentui/react-components";
+import {
+  ArrowRightRegular,
+  DeleteRegular,
+  EditRegular,
+  MoreVerticalRegular,
+} from "@fluentui/react-icons";
 import { useDraggable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
 import type { GroupRef } from "../../data/zones";
@@ -38,6 +50,17 @@ export interface GroupItem {
   icon?: string;
   /** Optional secondary line (e.g., MS group location). */
   meta?: string;
+  /** Optional env-count badge (currently only used for custom groups). */
+  envCount?: number;
+  /** Per-chip kebab-menu actions. Surfaced only for custom-kind chips
+   *  (MS groups are read-only from this app). The owning view bakes
+   *  these in when constructing the item so Lane/ZoneColumn don't have
+   *  to plumb extra props. */
+  actions?: {
+    onOpen?: () => void;
+    onEdit?: () => void;
+    onDelete?: () => void;
+  };
 }
 
 interface Props {
@@ -108,6 +131,11 @@ const useStyles = makeStyles({
     overflow: "hidden",
     textOverflow: "ellipsis",
   },
+  menuButton: {
+    // Stop the chip's pointer listeners from interpreting button
+    // interactions as drag-start gestures.
+    cursor: "pointer",
+  },
 });
 
 const KIND_DEFAULTS = {
@@ -119,6 +147,13 @@ export function GroupChip({ item, fromZoneId, fromSectionId }: Props) {
   const styles = useStyles();
   const kindMeta = KIND_DEFAULTS[item.ref.kind];
   const displayIcon = item.icon || kindMeta.icon;
+  const actions = item.actions;
+  const hasMenu =
+    item.ref.kind === "custom" &&
+    actions !== undefined &&
+    (actions.onOpen !== undefined ||
+      actions.onEdit !== undefined ||
+      actions.onDelete !== undefined);
 
   const { attributes, listeners, setNodeRef, transform, isDragging } =
     useDraggable({
@@ -164,10 +199,57 @@ export function GroupChip({ item, fromZoneId, fromSectionId }: Props) {
               {kindMeta.badge}
             </Badge>
           </div>
-          {item.meta && (
-            <Caption1 className={styles.meta}>{item.meta}</Caption1>
+          {(item.meta || item.envCount !== undefined) && (
+            <Caption1 className={styles.meta}>
+              {item.envCount !== undefined
+                ? `${item.envCount} env${item.envCount === 1 ? "" : "s"}`
+                : null}
+              {item.envCount !== undefined && item.meta ? " · " : null}
+              {item.meta ?? null}
+            </Caption1>
           )}
         </div>
+        {hasMenu && (
+          <Menu>
+            <MenuTrigger disableButtonEnhancement>
+              <Button
+                className={styles.menuButton}
+                size="small"
+                appearance="subtle"
+                icon={<MoreVerticalRegular />}
+                aria-label={`${item.displayName} actions`}
+                // Stop pointerdown so the chip's drag activator doesn't
+                // initialize a drag gesture when the menu trigger is
+                // clicked. Without this, opening the menu can fight
+                // with drag start on slower devices.
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={(e) => e.stopPropagation()}
+              />
+            </MenuTrigger>
+            <MenuPopover>
+              <MenuList>
+                {actions?.onOpen && (
+                  <MenuItem
+                    icon={<ArrowRightRegular />}
+                    onClick={actions.onOpen}
+                  >
+                    Open
+                  </MenuItem>
+                )}
+                {actions?.onEdit && (
+                  <MenuItem icon={<EditRegular />} onClick={actions.onEdit}>
+                    Edit…
+                  </MenuItem>
+                )}
+                {actions?.onDelete && (
+                  <MenuItem icon={<DeleteRegular />} onClick={actions.onDelete}>
+                    Delete
+                  </MenuItem>
+                )}
+              </MenuList>
+            </MenuPopover>
+          </Menu>
+        )}
       </div>
     </Tooltip>
   );
