@@ -477,6 +477,47 @@ function toImpactRow(item: ResourceItem): DlpImpactRow {
   };
 }
 
+/**
+ * Build every plausible inventory-id form for a connector slug. The
+ * inventory schema is **inconsistent across resource types** for how it
+ * records the same logical connector:
+ *
+ *   - Canvas apps, model-driven apps, agents typically use the prefixed
+ *     form (`shared_sharepointonline`, `shared_sql`).
+ *   - Cloud flows often use the bare slug in both
+ *     `properties.powerPlatformConnectors[].connectorId` and
+ *     `properties.trigger.connectorId` (`sharepointonline`, `sql`).
+ *   - App-builder apps use the full ARM path
+ *     (`/providers/.../apis/shared_sharepointonline`) but the
+ *     `__connectorBag` extend in inventory normalizes that into the
+ *     same flat string blob the `has` filter scans.
+ *
+ * Concretely: searching for `has 'shared_sharepointonline'` matches
+ * canvas + agents but **misses every flow** that uses the same
+ * connector, because the flow's stored token is `sharepointonline`.
+ *
+ * Solution: always query with both the prefixed and bare forms, then
+ * use `has_any` (the sentinel filter's `in~` operator) so EITHER form
+ * matches. KQL `has`/`has_any` are tokenized on `_`, so this is
+ * intentionally narrow — `has 'sql'` matches a resource using
+ * `shared_sql` (tokenizes to `[shared, sql]`) but does NOT
+ * collide with `shared_sqlserver` (token `sqlserver`, not `sql`).
+ *
+ * Returns deduplicated lowercased variants. Order is stable but not
+ * significant (`has_any` is set-like).
+ */
+export function connectorIdVariants(slug: string): string[] {
+  const normalized = slug.trim().toLowerCase();
+  if (!normalized) return [];
+  const bare = normalized.startsWith("shared_")
+    ? normalized.substring("shared_".length)
+    : normalized;
+  const prefixed = `shared_${bare}`;
+  // Set keeps insertion-order; dedupe in case `bare === normalized`
+  // (already without prefix) or the user typed exotic input.
+  return Array.from(new Set([prefixed, bare].filter((v) => v.length > 0)));
+}
+
 // ---------------------------------------------------------------------------
 // Public query
 // ---------------------------------------------------------------------------
@@ -517,7 +558,17 @@ export async function queryDlpImpact(
       value: scope.envIds.join(","),
     });
   }
-  filters.push({ field: CONNECTOR_FIELD, op: "==", value: slug });
+  // `in~` on the CONNECTOR_FIELD sentinel translates to `has_any`
+  // against the synthesized `__connectorBag` column — required so
+  // both `shared_sharepointonline` (apps/agents) and `sharepointonline`
+  // (flows) match the same logical connector. See
+  // `connectorIdVariants` for why.
+  const variants = connectorIdVariants(slug);
+  filters.push({
+    field: CONNECTOR_FIELD,
+    op: "in~",
+    value: variants.join(","),
+  });
 
   const spec: QuerySpec = {
     resourceTypes: IMPACT_RESOURCE_TYPES,
