@@ -163,6 +163,74 @@ export function countExcludedConnectors(
   return { blocked, custom };
 }
 
+/** Reason an entry is hidden from the picker — used to badge each row
+ *  in the collapsible "Hidden connectors" panel. A single connector can
+ *  only have one reason (Custom takes precedence over Blocked because
+ *  the V1 limitation is the more useful explanation). */
+export type DlpHiddenReason = "blocked" | "custom";
+
+export interface DlpHiddenConnector {
+  /** Inventory slug (e.g. `shared_sql`) or the raw ARM-path tail for
+   *  custom connectors that may not normalize cleanly. Always
+   *  non-empty. */
+  id: string;
+  name: string;
+  /** Original ARM-path id from the policy. */
+  rawId: string;
+  /** Why we excluded it. */
+  reason: DlpHiddenReason;
+  /** Classification bucket the policy currently has the connector in.
+   *  Useful when the reason is "custom" — a custom connector can sit
+   *  in Confidential/General/Blocked. */
+  classification: string;
+  /** Raw `_type` from the policy. */
+  type: string;
+}
+
+/**
+ * Return the connectors that `extractNonBlockedConnectors` filters out,
+ * with the reason. Sorted blocked-first (more common case), then by
+ * name. The two helpers are kept independent so the picker code can
+ * stay simple — counts vs. expandable list have different callers.
+ */
+export function extractHiddenConnectors(
+  policy: PolicyV2
+): DlpHiddenConnector[] {
+  const out: DlpHiddenConnector[] = [];
+  const seen = new Set<string>();
+  for (const group of policy.connectorGroups ?? []) {
+    const classification = group.classification;
+    const isBlocked = classification === "Blocked";
+    for (const c of group.connectors ?? []) {
+      if (!c.id) continue;
+      const slug = normalizeConnectorSlug(c.id);
+      const key = slug || c.id;
+      if (seen.has(key)) continue;
+      const custom = isCustomConnector(c._type);
+      // Only emit rows we actually hide.
+      if (!isBlocked && !custom) continue;
+      seen.add(key);
+      out.push({
+        id: slug || c.id,
+        name: c.name || friendlyConnectorName(slug),
+        rawId: c.id,
+        // Custom wins — it's the more actionable label ("V1 doesn't
+        // match this yet" vs "you already blocked this").
+        reason: custom ? "custom" : "blocked",
+        classification,
+        type: c._type ?? "",
+      });
+    }
+  }
+  out.sort((a, b) => {
+    if (a.reason !== b.reason) {
+      return a.reason === "blocked" ? -1 : 1;
+    }
+    return a.name.localeCompare(b.name);
+  });
+  return out;
+}
+
 // ---------------------------------------------------------------------------
 // Scope resolution
 // ---------------------------------------------------------------------------

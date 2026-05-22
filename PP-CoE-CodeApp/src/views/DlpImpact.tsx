@@ -38,9 +38,11 @@ import { useNavigate } from "react-router-dom";
 import { listDlpPolicies } from "../data/dlpPolicies";
 import {
   countExcludedConnectors,
+  extractHiddenConnectors,
   extractNonBlockedConnectors,
   queryDlpImpact,
   type DlpConnectorOption,
+  type DlpHiddenConnector,
   type DlpImpactResult,
   type DlpImpactRow,
 } from "../data/dlpImpact";
@@ -335,6 +337,10 @@ export function DlpImpact() {
     [connectorSlug, connectorOptions]
   );
 
+  const hiddenConnectors = useMemo(
+    () => (policy ? extractHiddenConnectors(policy) : []),
+    [policy]
+  );
   const excluded = useMemo(
     () =>
       policy
@@ -405,6 +411,7 @@ export function DlpImpact() {
               onChange={changePolicy}
             />
             <ConnectorPicker
+              key={policyId ?? "no-policy"}
               options={connectorOptions}
               value={connectorSlug}
               onChange={setConnectorSlug}
@@ -425,25 +432,12 @@ export function DlpImpact() {
 
           {policy && (
             <>
-              {(excluded.blocked > 0 || excluded.custom > 0) && (
-                <MessageBar intent="warning">
-                  <MessageBarBody>
-                    Hidden from the connector picker:{" "}
-                    {excluded.blocked > 0 && (
-                      <>
-                        <strong>{excluded.blocked}</strong> already Blocked
-                      </>
-                    )}
-                    {excluded.blocked > 0 && excluded.custom > 0 && ", "}
-                    {excluded.custom > 0 && (
-                      <>
-                        <strong>{excluded.custom}</strong> custom connector
-                        {excluded.custom === 1 ? "" : "s"} (V1 limitation)
-                      </>
-                    )}
-                    .
-                  </MessageBarBody>
-                </MessageBar>
+              {hiddenConnectors.length > 0 && (
+                <HiddenConnectorsSection
+                  hidden={hiddenConnectors}
+                  blockedCount={excluded.blocked}
+                  customCount={excluded.custom}
+                />
               )}
 
               <ScopeCard policy={policy} />
@@ -474,6 +468,17 @@ export function DlpImpact() {
 
 // ---------------------------------------------------------------------------
 // Pickers
+//
+// Fluent's `Combobox` accepts typed input but does NOT filter its
+// children based on that input out of the box. The pickers below add
+// the missing piece: a controlled `query` state that filters the
+// rendered `<Option>` list as the user types. Selecting an option
+// resets the query to the chosen item's display name so the field
+// reads back the selection cleanly.
+//
+// ConnectorPicker uses `key={policyId}` from the parent to remount on
+// policy change — that resets the internal `query` state without us
+// having to plumb it through props or wrestle with sync effects.
 // ---------------------------------------------------------------------------
 
 function PolicyPicker({
@@ -487,34 +492,59 @@ function PolicyPicker({
 }) {
   const styles = useStyles();
   const selected = value ? policies.find((p) => p.name === value) : undefined;
-  const onSelect = (_e: SelectionEvents, data: OptionOnSelectData) => {
-    onChange(data.optionValue || undefined);
-  };
+  const [query, setQuery] = useState(selected?.displayName ?? "");
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    // No filter when empty, or when the input still matches the picked
+    // option exactly (user hasn't started typing a new search yet).
+    if (!q) return policies;
+    if (selected && q === selected.displayName.toLowerCase()) return policies;
+    return policies.filter(
+      (p) =>
+        p.displayName.toLowerCase().includes(q) ||
+        p.name.toLowerCase().includes(q) ||
+        (p.environmentType ?? "").toLowerCase().includes(q)
+    );
+  }, [policies, query, selected]);
+
   return (
     <label>
       <span className={styles.pickerLabel}>DLP policy</span>
       <Combobox
         className={styles.combobox}
+        freeform
         placeholder="Choose a policy…"
-        value={selected?.displayName ?? ""}
+        value={query}
         selectedOptions={value ? [value] : []}
-        onOptionSelect={onSelect}
+        onChange={(e) => setQuery((e.target as HTMLInputElement).value)}
+        onOptionSelect={(_e: SelectionEvents, data: OptionOnSelectData) => {
+          const picked = policies.find((p) => p.name === data.optionValue);
+          onChange(data.optionValue || undefined);
+          setQuery(picked?.displayName ?? "");
+        }}
       >
-        {policies.map((p) => (
-          <Option key={p.name} value={p.name} text={p.displayName}>
-            <div style={{ display: "flex", flexDirection: "column" }}>
-              <span>{p.displayName}</span>
-              <span
-                style={{
-                  color: tokens.colorNeutralForeground3,
-                  fontSize: tokens.fontSizeBase100,
-                }}
-              >
-                {p.environmentType}
-              </span>
-            </div>
+        {filtered.length === 0 ? (
+          <Option key="no-match" value="" disabled text="">
+            No policies match "{query}"
           </Option>
-        ))}
+        ) : (
+          filtered.map((p) => (
+            <Option key={p.name} value={p.name} text={p.displayName}>
+              <div style={{ display: "flex", flexDirection: "column" }}>
+                <span>{p.displayName}</span>
+                <span
+                  style={{
+                    color: tokens.colorNeutralForeground3,
+                    fontSize: tokens.fontSizeBase100,
+                  }}
+                >
+                  {p.environmentType}
+                </span>
+              </div>
+            </Option>
+          ))
+        )}
       </Combobox>
     </label>
   );
@@ -535,14 +565,24 @@ function ConnectorPicker({
 }) {
   const styles = useStyles();
   const selected = value ? options.find((c) => c.id === value) : undefined;
-  const onSelect = (_e: SelectionEvents, data: OptionOnSelectData) => {
-    onChange(data.optionValue || undefined);
-  };
+  const [query, setQuery] = useState(selected?.name ?? "");
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return options;
+    if (selected && q === selected.name.toLowerCase()) return options;
+    return options.filter(
+      (c) =>
+        c.name.toLowerCase().includes(q) ||
+        c.id.toLowerCase().includes(q)
+    );
+  }, [options, query, selected]);
+
   const placeholder = disabled
     ? "Choose a policy first"
     : options.length === 0
       ? "No non-blocked connectors in this policy"
-      : "Choose a connector to simulate blocking…";
+      : "Type to filter, or pick a connector…";
   return (
     <label>
       <span className={styles.pickerLabel}>
@@ -566,30 +606,131 @@ function ConnectorPicker({
       </span>
       <Combobox
         className={styles.combobox}
+        freeform
         placeholder={placeholder}
-        value={selected?.name ?? ""}
+        value={query}
         selectedOptions={value ? [value] : []}
-        onOptionSelect={onSelect}
         disabled={disabled || options.length === 0}
+        onChange={(e) => setQuery((e.target as HTMLInputElement).value)}
+        onOptionSelect={(_e: SelectionEvents, data: OptionOnSelectData) => {
+          const picked = options.find((c) => c.id === data.optionValue);
+          onChange(data.optionValue || undefined);
+          setQuery(picked?.name ?? "");
+        }}
       >
-        {options.map((c) => (
-          <Option key={c.id} value={c.id} text={c.name}>
-            <div className={styles.connectorOptionMain}>
+        {filtered.length === 0 ? (
+          <Option key="no-match" value="" disabled text="">
+            No connectors match "{query}"
+          </Option>
+        ) : (
+          filtered.map((c) => (
+            <Option key={c.id} value={c.id} text={c.name}>
+              <div className={styles.connectorOptionMain}>
+                <Badge
+                  color={classificationColor(c.classification)}
+                  appearance="filled"
+                  shape="rounded"
+                  size="small"
+                >
+                  {classificationLabel(c.classification)}
+                </Badge>
+                <span>{c.name}</span>
+                <span className={styles.connectorOptionSub}>{c.id}</span>
+              </div>
+            </Option>
+          ))
+        )}
+      </Combobox>
+    </label>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Hidden connectors (collapsible)
+//
+// The picker filters out two classes of connectors — already-Blocked
+// (no-op to simulate) and Custom (V1 doesn't match these against
+// inventory). Earlier versions just showed a count in a warn
+// MessageBar; this section gives users a way to *see* what's actually
+// hidden so they can verify their assumptions.
+// ---------------------------------------------------------------------------
+
+function HiddenConnectorsSection({
+  hidden,
+  blockedCount,
+  customCount,
+}: {
+  hidden: DlpHiddenConnector[];
+  blockedCount: number;
+  customCount: number;
+}) {
+  const styles = useStyles();
+  const [expanded, setExpanded] = useState(false);
+
+  const parts: string[] = [];
+  if (blockedCount > 0) {
+    parts.push(`${blockedCount} already Blocked`);
+  }
+  if (customCount > 0) {
+    parts.push(`${customCount} custom`);
+  }
+  const subtitle = parts.length > 0 ? parts.join(" · ") : "";
+
+  return (
+    <section
+      className={styles.section}
+      aria-label="Connectors hidden from the picker"
+    >
+      <button
+        type="button"
+        className={styles.toggle}
+        onClick={() => setExpanded((v) => !v)}
+        aria-expanded={expanded}
+      >
+        {expanded ? <ChevronDownRegular /> : <ChevronRightRegular />}
+        {hidden.length} connector{hidden.length === 1 ? "" : "s"} hidden from
+        the picker
+        {subtitle && (
+          <span
+            style={{
+              color: tokens.colorNeutralForeground3,
+              fontWeight: tokens.fontWeightRegular,
+              marginInlineStart: tokens.spacingHorizontalXS,
+            }}
+          >
+            ({subtitle})
+          </span>
+        )}
+      </button>
+      {expanded && (
+        <ul className={styles.envList}>
+          {hidden.map((h) => (
+            <li key={h.rawId} className={styles.envRow}>
               <Badge
-                color={classificationColor(c.classification)}
+                color={h.reason === "blocked" ? "danger" : "warning"}
                 appearance="filled"
                 shape="rounded"
                 size="small"
               >
-                {classificationLabel(c.classification)}
+                {h.reason === "blocked" ? "Blocked" : "Custom"}
               </Badge>
-              <span>{c.name}</span>
-              <span className={styles.connectorOptionSub}>{c.id}</span>
-            </div>
-          </Option>
-        ))}
-      </Combobox>
-    </label>
+              <span>{h.name}</span>
+              <span className={styles.envMono}>{h.id}</span>
+              {h.reason === "custom" && h.classification && (
+                <span
+                  style={{
+                    color: tokens.colorNeutralForeground3,
+                    fontSize: tokens.fontSizeBase100,
+                  }}
+                >
+                  · currently {h.classification}
+                </span>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   );
 }
 
