@@ -314,14 +314,35 @@ async function runQueryAllPages(
 ): Promise<DataResult<ResourceItem[]>> {
   const all: ResourceItem[] = [];
   let skipToken = "";
+  let previousToken: string | undefined;
   for (let page = 0; page < pageCap; page++) {
     const res = await runQuery(clauses, { Top: pageSize, Skip: 0, SkipToken: skipToken });
     if (!res.ok) return res;
     all.push(...res.data.items);
-    if (!res.data.skipToken) return { ok: true, data: all };
+    if (!res.data.skipToken) break;
+    // Defensive guard: if the backend returns the SAME skipToken twice
+    // in a row, pagination is stuck and we'd otherwise loop until pageCap
+    // accumulating duplicates (was the root cause of inflated env counts
+    // like "7300 managed envs" on 730-env tenants).
+    if (res.data.skipToken === previousToken) break;
+    previousToken = skipToken;
     skipToken = res.data.skipToken;
   }
-  return { ok: true, data: all };
+  // Second-line defense: dedupe by `name` (which is the resource id in
+  // the Admin V2 schema). Cheap O(n) pass; only re-allocates when there
+  // *is* a duplicate to remove. Protects all `list*` callers uniformly
+  // from any future pagination weirdness — if the backend behaves
+  // correctly, this is a no-op.
+  const byId = new Map<string, ResourceItem>();
+  for (const item of all) {
+    const key = item.name ?? "";
+    if (!key) continue;
+    if (!byId.has(key)) byId.set(key, item);
+  }
+  return {
+    ok: true,
+    data: byId.size === all.length ? all : Array.from(byId.values()),
+  };
 }
 
 /** Run a query and call `onPage` as each page arrives. Caller can render
