@@ -12,3 +12,7 @@ export {
   IdentifiersAccordion,
   type IdentifierItem,
 } from "./IdentifiersAccordion";
+export {
+  SupplementalAdminCard,
+  type SupplementalAdminCardProps,
+} from "./SupplementalAdminCard";

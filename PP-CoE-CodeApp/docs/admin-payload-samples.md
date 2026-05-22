@@ -20,14 +20,29 @@
 
 ---
 
-## ⚠️ Plot twist before you read further — "ruleSet" means two things
+## ⚠️ Before you read further — "ruleSet" means two different things
 
 The Power Platform governance surface ships **two parallel governance
-models that both use the word "ruleSet"** and both apply to the same
-env group at the same time. They are structurally different and need
-different rendering:
+APIs that both use the word "ruleSet"** and that **co-exist by design**.
+This is *not* a legacy/replacement story — they own different slices of
+the governance picture and an env group is governed by both at once.
+Mentally: **Model A + Model B = the full ruleset story.**
 
-### Model A — legacy "parameter rule sets"
+What each one actually carries (from the sample tenant below):
+
+- **Model A** owns atomic, per-`(type, resourceType)` toggles —
+  AI-feature gates per app type, auth-mode flags, sharing limits per
+  bot kind, etc. Open-enum string key/value buckets.
+- **Model B** owns named, versioned **policy modules** — composable
+  bundles like `ConnectorManagement` (allowed-connector list),
+  `CopilotChannelPublishSettings` (which channels Copilot can publish
+  to), `MakerOnboardingContent` (the welcome markdown for a group), …
+
+They don't overlap. The two APIs return structurally different shapes,
+need different per-section rendering, and surface different admin
+intents — but to the user they're "the governance for this env group."
+
+### Model A — `parameters`-bucket rule sets
 
 - **Where it lives.** Returned by the connector's `GetRuleSet`
   operation (return type `MgGovODataResponse` → `value: RuleSetDto[]`,
@@ -37,14 +52,13 @@ different rendering:
   keyed by `(type, resourceType)` buckets like
   `(Copilot, App)`, `(Sharing, AuthoringBot)`,
   `(CopilotAuth, NotSpecified)`.
-- **Mental model.** The classic PPAC tenant-settings / env-group
-  settings buckets — string id → string value, grouped by feature
-  family.
+- **Mental model.** Per-resource-type setting buckets — string id →
+  string value, grouped by feature family.
 - **UI implication.** Render as a flat table grouped by
   `(type, resourceType)`. Open enum on both axes; new bucket types
   appear over time without warning.
 
-### Model B — new "rule-based policy"
+### Model B — rule-based policy with named `ruleSets[]`
 
 - **Where it lives.** Returned by `GetRuleBasedPolicyByID` (single)
   and `ListRuleBasedPolicies` (tenant-wide list) — return types
@@ -54,19 +68,19 @@ different rendering:
   structured `inputs`. The connector model types `inputs` as an
   open `Record<string, unknown>`, but in practice **each `id` has a
   well-known input schema** that's stable per `version`.
-- **Mental model.** The newer converged governance bundle — think of
-  it as a small set of well-defined policy modules (Copilot publish
+- **Mental model.** Composable policy modules (Copilot publish
   channels, allowed connectors, maker onboarding, …) that an
-  administrator composes into a policy and assigns to env groups.
-- **UI implication.** Render with one small per-id renderer component.
-  Generic fallback for unknown ids = raw JSON viewer.
+  administrator bundles into a `Policy` and assigns to env groups.
+- **UI implication.** One small per-id renderer component. Generic
+  fallback to a raw JSON viewer for unknown ids.
 
-**The same env group is governed by BOTH at once.** Any "Governance"
-surface for env groups needs both sections.
+**The two render as separate sections of one Governance card** — same
+intent ("what governs this env group"), different data shapes, no
+attempt to merge them into one table.
 
 ---
 
-## Sample 1 — Legacy rulesets for an env group (Model A)
+## Sample 1 — `parameters`-bucket rulesets for an env group (Model A)
 
 ```http
 GET https://XXXXXXXX.tenant.api.powerplatform.com/governance/environmentGroups/687c6d74-38dc-45a7-a655-e1c846dcbbc7/ruleSets?api-version=2021-10-01-preview
