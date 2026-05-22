@@ -32,6 +32,21 @@ import type {
   Policy,
 } from "../generated/models/PowerPlatformforAdminsV2Model";
 import { getEnvironmentGroupEffectivePolicies } from "./adminEnrichment";
+
+/** Power Platform admin center host for inline DLP deep-links. Kept
+ *  here (not in the `PortalActions/registry.ts`) because DLP coverage
+ *  shows policies inline in a card list, not as a single-entity detail
+ *  page where the `PortalActionsBar` would be the right home. If a DLP
+ *  detail page is ever added, hoist this into the registry instead. */
+const PPAC_BASE = "https://admin.powerplatform.microsoft.com";
+
+/** Build a deep-link into the PPAC DLP policy editor for the given
+ *  policy GUID (`PolicyV2.name`). Used by the DLP coverage card and
+ *  evaluation trace to give admins one-click handoff to "open this
+ *  policy in PPAC". */
+export function ppacDlpPolicyUrl(policyId: string): string {
+  return `${PPAC_BASE}/security/dataprotection/dlp/policy/${encodeURIComponent(policyId)}`;
+}
 import type { DataResult } from "./inventory";
 
 /** Best-effort error normalization. Mirrors the helper in

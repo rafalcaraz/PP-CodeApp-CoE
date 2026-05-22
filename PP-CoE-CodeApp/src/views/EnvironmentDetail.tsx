@@ -46,6 +46,7 @@ import {
 } from "../data/adminEnrichment";
 import {
   getEnvironmentDlpAndAcpStatus,
+  ppacDlpPolicyUrl,
   type DlpAndAcpStatus,
   type DlpPolicyEvaluation,
   type DlpScopeMatchReason,
@@ -682,9 +683,14 @@ function DlpCoverageBody({
           appearance="outline"
         >
           <div className={dlpStyles.rowHeader}>
-            <Text className={dlpStyles.policyName}>
+            <Link
+              href={ppacDlpPolicyUrl(policy.name)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={dlpStyles.policyName}
+            >
               {policy.displayName || policy.name}
-            </Text>
+            </Link>
             <Badge
               appearance="filled"
               color={matchReasonColor(reason)}
@@ -822,34 +828,44 @@ function EvaluationTraceRow({ entry }: { entry: DlpPolicyEvaluation }) {
 
   return (
     <div className={dlpStyles.traceRow}>
-      <button
-        type="button"
-        className={dlpStyles.traceRowHeader}
-        onClick={() => setOpen((v) => !v)}
-        aria-expanded={open}
-        disabled={!hasEnvList}
-      >
-        {hasEnvList ? (
-          open ? <ChevronDownRegular /> : <ChevronRightRegular />
-        ) : (
-          <span style={{ display: "inline-block", width: 16 }} />
-        )}
-        <Badge
-          color={entry.applies ? "success" : "subtle"}
-          appearance={entry.applies ? "filled" : "outline"}
-          size="small"
+      <div className={dlpStyles.traceRowHead}>
+        <button
+          type="button"
+          className={dlpStyles.traceRowHeader}
+          onClick={() => setOpen((v) => !v)}
+          aria-expanded={open}
+          disabled={!hasEnvList}
         >
-          {entry.applies ? "Applies" : "No match"}
-        </Badge>
-        <span className={dlpStyles.policyName}>{entry.displayName}</span>
-        <span className={detailStyles.mono}>{entry.policyId}</span>
-        <Badge appearance="outline" size="small">
-          {entry.environmentType}
-        </Badge>
-        <span className={dlpStyles.subtle}>
-          {envSummary} · reason: <code>{entry.reason}</code>
-        </span>
-      </button>
+          {hasEnvList ? (
+            open ? <ChevronDownRegular /> : <ChevronRightRegular />
+          ) : (
+            <span style={{ display: "inline-block", width: 16 }} />
+          )}
+          <Badge
+            color={entry.applies ? "success" : "subtle"}
+            appearance={entry.applies ? "filled" : "outline"}
+            size="small"
+          >
+            {entry.applies ? "Applies" : "No match"}
+          </Badge>
+          <span className={dlpStyles.policyName}>{entry.displayName}</span>
+          <span className={detailStyles.mono}>{entry.policyId}</span>
+          <Badge appearance="outline" size="small">
+            {entry.environmentType}
+          </Badge>
+          <span className={dlpStyles.subtle}>
+            {envSummary} · reason: <code>{entry.reason}</code>
+          </span>
+        </button>
+        <Link
+          href={ppacDlpPolicyUrl(entry.policyId)}
+          target="_blank"
+          rel="noopener noreferrer"
+          className={dlpStyles.traceOpenLink}
+        >
+          Open in PPAC ↗
+        </Link>
+      </div>
       {open && hasEnvList && (
         <div className={dlpStyles.traceRowBody}>
           <div className={dlpStyles.traceLabel}>Target env id (normalized)</div>
@@ -1120,8 +1136,18 @@ const useDlpCoverageStyles = makeStyles({
     borderRadius: tokens.borderRadiusMedium,
     backgroundColor: tokens.colorNeutralBackground1,
   },
+  traceRowHead: {
+    display: "flex",
+    alignItems: "center",
+    gap: tokens.spacingHorizontalS,
+    paddingInlineEnd: tokens.spacingHorizontalM,
+  },
+  traceOpenLink: {
+    fontSize: tokens.fontSizeBase200,
+    whiteSpace: "nowrap",
+  },
   traceRowHeader: {
-    width: "100%",
+    flex: 1,
     background: "none",
     border: "none",
     padding: tokens.spacingHorizontalS,
