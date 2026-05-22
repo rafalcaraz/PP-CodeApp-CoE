@@ -31,8 +31,11 @@ import {
   DialogSurface,
   DialogTitle,
   makeStyles,
+  SearchBox,
   Text,
   tokens,
+  type SearchBoxChangeEvent,
+  type InputOnChangeData,
 } from "@fluentui/react-components";
 import { AddRegular, InfoRegular } from "@fluentui/react-icons";
 import {
@@ -91,6 +94,9 @@ const useStyles = makeStyles({
     display: "flex",
     alignItems: "center",
     gap: tokens.spacingHorizontalM,
+  },
+  searchBox: {
+    minWidth: "280px",
   },
   meta: {
     color: tokens.colorNeutralForeground3,
@@ -158,6 +164,7 @@ export function ZonesView() {
   const [editorOpen, setEditorOpen] = useState(false);
   const [editingZone, setEditingZone] = useState<Zone | null>(null);
   const [zoneToDelete, setZoneToDelete] = useState<Zone | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
 
   // Hold-to-drag with a small distance threshold so click events on
   // chips (e.g. the tooltip) still work without accidentally dragging.
@@ -188,13 +195,35 @@ export function ZonesView() {
   // Bucket env groups by their current assignment so each column only
   // iterates its own list. Recomputed when env groups or assignments
   // change — both stable references coming out of state hooks.
+  //
+  // When a search query is active, env groups that don't match are
+  // dropped from the buckets entirely (rather than greyed out). For a
+  // "find and drag" interaction, hiding non-matches keeps the visible
+  // chips actionable and makes the target unambiguous.
   const buckets = useMemo(() => {
+    const trimmedQuery = searchQuery.trim().toLowerCase();
+    const matches = (group: EnvironmentGroupRow): boolean => {
+      if (!trimmedQuery) return true;
+      const haystack = [
+        group.displayName,
+        group.description,
+        group.location,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      return haystack.includes(trimmedQuery);
+    };
+
     const byZone = new Map<string, ZoneColumnGroups>();
     for (const zone of zones) {
       byZone.set(zone.id, { default: [], bySection: {} });
     }
     const unassigned: EnvironmentGroupRow[] = [];
+    let matchCount = 0;
     for (const group of envGroups.rows) {
+      if (!matches(group)) continue;
+      matchCount++;
       const location = assignments[group.id];
       if (!location || !byZone.has(location.zoneId)) {
         // No assignment, OR assigned to a zone that no longer exists
@@ -219,8 +248,8 @@ export function ZonesView() {
         zoneBucket.default.push(group);
       }
     }
-    return { byZone, unassigned };
-  }, [zones, assignments, envGroups.rows]);
+    return { byZone, unassigned, matchCount };
+  }, [zones, assignments, envGroups.rows, searchQuery]);
 
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
@@ -333,11 +362,29 @@ export function ZonesView() {
 
       <div className={styles.toolbar}>
         <Text className={styles.meta}>
-          {envGroups.rows.length} environment group
-          {envGroups.rows.length === 1 ? "" : "s"} · {zones.length} zone
-          {zones.length === 1 ? "" : "s"} · {totalAssigned} placed
+          {searchQuery.trim() ? (
+            <>
+              {buckets.matchCount} of {envGroups.rows.length} env group
+              {envGroups.rows.length === 1 ? "" : "s"} match "{searchQuery.trim()}" ·{" "}
+              {zones.length} zone{zones.length === 1 ? "" : "s"} · {totalAssigned} placed
+            </>
+          ) : (
+            <>
+              {envGroups.rows.length} environment group
+              {envGroups.rows.length === 1 ? "" : "s"} · {zones.length} zone
+              {zones.length === 1 ? "" : "s"} · {totalAssigned} placed
+            </>
+          )}
         </Text>
         <div className={styles.toolbarRight}>
+          <SearchBox
+            className={styles.searchBox}
+            placeholder="Search env groups…"
+            value={searchQuery}
+            onChange={(_: SearchBoxChangeEvent, data: InputOnChangeData) =>
+              setSearchQuery(data.value)
+            }
+          />
           <Button
             appearance="primary"
             icon={<AddRegular />}
