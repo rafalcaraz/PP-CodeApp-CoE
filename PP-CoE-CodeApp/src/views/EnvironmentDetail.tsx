@@ -22,6 +22,9 @@ import {
   Dropdown,
   Option,
   Link,
+  MessageBar,
+  MessageBarBody,
+  MessageBarTitle,
   type OptionOnSelectData,
   type SelectionEvents,
 } from "@fluentui/react-components";
@@ -405,7 +408,7 @@ function ReadyView({
         buttonLabel="Load DLP policy coverage"
         loadingLabel="Loading DLP policies…"
         loadFn={() => getApplicableDlpPolicies(row.id)}
-        renderReady={(rows) => <DlpCoverageBody rows={rows} />}
+        renderReady={(rows) => <DlpCoverageBody rows={rows} env={row} />}
       />
 
       {/* 4. Resource roll-up */}
@@ -590,12 +593,33 @@ function AdminDetailsBody({ details }: { details: EnvironmentAdminDetails }) {
 // environment (one row per policy). The match reason is shown as a
 // colored badge so it's immediately obvious why each one applies:
 // "All envs" / "Included" / "Not excluded".
-function DlpCoverageBody({ rows }: { rows: DlpPolicyCoverage[] }) {
+//
+// Empty-state is context-aware. "No DLPs target this env" means very
+// different things depending on whether the environment is managed
+// and/or in an environment group:
+//
+//   - Not managed:        wide open (no DLP + no ACPs available) — error.
+//   - Managed, no group:  no DLP + no group means no ACPs either — error.
+//   - Managed, in group:  no DLP, but ACPs *might* be configured on the
+//                         group. We don't auto-check the group's rules
+//                         yet — that's a follow-up (similar wiring to
+//                         the existing env-group rule renderers).
+//                         Surface a warning + link to the group so the
+//                         user can verify.
+function DlpCoverageBody({
+  rows,
+  env,
+}: {
+  rows: DlpPolicyCoverage[];
+  env: EnvironmentRow;
+}) {
   const styles = useDetailStyles();
   const dlpStyles = useDlpCoverageStyles();
+  const navigate = useNavigate();
+
   if (rows.length === 0) {
     return (
-      <EmptyPane message="No DLP policies in this tenant currently target this environment." />
+      <NoDlpCoverageWarning env={env} onNavigate={navigate} />
     );
   }
   return (
@@ -644,6 +668,75 @@ function DlpCoverageBody({ rows }: { rows: DlpPolicyCoverage[] }) {
         </Card>
       ))}
     </div>
+  );
+}
+
+/** Empty-state warning that varies by Managed-Environment + env-group
+ *  membership. See `DlpCoverageBody` for the decision table. */
+function NoDlpCoverageWarning({
+  env,
+  onNavigate,
+}: {
+  env: EnvironmentRow;
+  onNavigate: ReturnType<typeof useNavigate>;
+}) {
+  const inGroup = Boolean(env.environmentGroupId);
+
+  if (!env.isManaged) {
+    return (
+      <MessageBar intent="error">
+        <MessageBarBody>
+          <MessageBarTitle>No DLP coverage on an unmanaged environment</MessageBarTitle>
+          No tenant DLP policy currently targets this environment, and{" "}
+          <strong>Managed Environments is not enabled</strong>. Without DLP,
+          makers in this environment can use any connector the tenant allows —
+          there is no enforcement at all. Either bring it under an existing
+          policy (or scope an existing one to include it), or enable Managed
+          Environments and place it in an environment group with the
+          appropriate Application Control Policies (ACPs).
+        </MessageBarBody>
+      </MessageBar>
+    );
+  }
+
+  if (!inGroup) {
+    return (
+      <MessageBar intent="error">
+        <MessageBarBody>
+          <MessageBarTitle>No DLP coverage and not in an environment group</MessageBarTitle>
+          No tenant DLP policy currently targets this environment, and it is
+          not a member of any environment group — so{" "}
+          <strong>no Application Control Policies (ACPs) apply either</strong>.
+          Either scope a DLP policy to include it, or add it to an environment
+          group that has the appropriate ACP rules configured.
+        </MessageBarBody>
+      </MessageBar>
+    );
+  }
+
+  // Managed + in group. ACPs may or may not be configured on the group
+  // itself; we don't auto-detect that yet (see TODO above).
+  return (
+    <MessageBar intent="warning">
+      <MessageBarBody>
+        <MessageBarTitle>No DLP coverage — relying on environment-group ACPs</MessageBarTitle>
+        No tenant DLP policy targets this environment directly. Because it is
+        a member of{" "}
+        <Link
+          onClick={() =>
+            onNavigate(
+              `/environment-groups/${encodeURIComponent(env.environmentGroupId)}`
+            )
+          }
+        >
+          {env.environmentGroup || env.environmentGroupId}
+        </Link>
+        , governance may still be enforced via the group's Application Control
+        Policies (ACPs). Verify the group has the expected ACP rules
+        configured. (Auto-detection of ACP coverage from the group's rule set
+        is on the roadmap.)
+      </MessageBarBody>
+    </MessageBar>
   );
 }
 
