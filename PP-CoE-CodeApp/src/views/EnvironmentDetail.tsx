@@ -22,12 +22,14 @@ import {
   Dropdown,
   Option,
   Link,
+  Input,
   MessageBar,
   MessageBarBody,
   MessageBarTitle,
   type OptionOnSelectData,
   type SelectionEvents,
 } from "@fluentui/react-components";
+import { ChevronDownRegular, ChevronRightRegular } from "@fluentui/react-icons";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   countResourcesByTypeForEnvironment,
@@ -45,6 +47,7 @@ import {
 import {
   getEnvironmentDlpAndAcpStatus,
   type DlpAndAcpStatus,
+  type DlpPolicyEvaluation,
   type DlpScopeMatchReason,
   type EnvironmentGroupAcpStatus,
 } from "../data/dlpPolicies";
@@ -626,18 +629,21 @@ function DlpCoverageBody({
   const dlpStyles = useDlpCoverageStyles();
   const navigate = useNavigate();
 
-  const { coverage, acp } = status;
+  const { coverage, trace, acp } = status;
   const acpData = acp && "configured" in acp ? acp : null;
   const acpError = acp && "error" in acp ? acp.error : null;
 
   if (coverage.length === 0) {
     return (
-      <NoDlpCoverageWarning
-        env={env}
-        acp={acpData}
-        acpError={acpError}
-        onNavigate={navigate}
-      />
+      <>
+        <NoDlpCoverageWarning
+          env={env}
+          acp={acpData}
+          acpError={acpError}
+          onNavigate={navigate}
+        />
+        <EvaluationTraceSection trace={trace} envId={env.id} />
+      </>
     );
   }
 
@@ -713,6 +719,174 @@ function DlpCoverageBody({
           </div>
         </Card>
       ))}
+
+      <EvaluationTraceSection trace={trace} envId={env.id} />
+    </div>
+  );
+}
+
+/** Collapsible debug surface that lists every policy evaluated against
+ *  this environment — matched and unmatched — with the raw and
+ *  normalized env id lists. Lets admins answer "policy X should cover
+ *  env Y but doesn't" without instrumenting the codebase.
+ *
+ *  The same trace is also dumped to `console.info` from
+ *  `getEnvironmentDlpAndAcpStatus` so devtools sees it without
+ *  expanding the UI. */
+function EvaluationTraceSection({
+  trace,
+  envId,
+}: {
+  trace: DlpPolicyEvaluation[];
+  envId: string;
+}) {
+  const dlpStyles = useDlpCoverageStyles();
+  const [expanded, setExpanded] = useState(false);
+  const [filter, setFilter] = useState("");
+
+  const filtered = useMemo(() => {
+    const q = filter.trim().toLowerCase();
+    if (!q) return trace;
+    return trace.filter(
+      (t) =>
+        t.displayName.toLowerCase().includes(q) ||
+        t.policyId.toLowerCase().includes(q)
+    );
+  }, [trace, filter]);
+
+  const appliedCount = trace.filter((t) => t.applies).length;
+
+  if (trace.length === 0) return null;
+
+  return (
+    <section className={dlpStyles.traceSection}>
+      <button
+        type="button"
+        className={dlpStyles.traceToggle}
+        onClick={() => setExpanded((v) => !v)}
+        aria-expanded={expanded}
+      >
+        {expanded ? <ChevronDownRegular /> : <ChevronRightRegular />}
+        Show evaluation details ({trace.length} polic
+        {trace.length === 1 ? "y" : "ies"} evaluated, {appliedCount} match
+        {appliedCount === 1 ? "" : "es"})
+      </button>
+      {expanded && (
+        <div className={dlpStyles.traceBody}>
+          <Text size={200} className={dlpStyles.subtle}>
+            Comparing inventory env id <code>{envId}</code> against each
+            policy's <code>environments[]</code>. The connector returns
+            <code> id</code> as an ARM path (e.g.{" "}
+            <code>/providers/…/environments/&lt;guid&gt;</code>) and{" "}
+            <code>name</code> as the bare GUID — we prefer{" "}
+            <code>name</code> when present, otherwise we strip the path
+            prefix off <code>id</code>. The same trace is in the browser
+            console as <code>[DLP coverage] evaluation</code>.
+          </Text>
+          <Input
+            placeholder="Filter by policy name or GUID…"
+            value={filter}
+            onChange={(_e, data) => setFilter(data.value)}
+          />
+          <div className={dlpStyles.traceList}>
+            {filtered.length === 0 ? (
+              <Text size={200} className={dlpStyles.subtle}>
+                No policies match "{filter}".
+              </Text>
+            ) : (
+              filtered.map((t) => (
+                <EvaluationTraceRow key={t.policyId} entry={t} />
+              ))
+            )}
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function EvaluationTraceRow({ entry }: { entry: DlpPolicyEvaluation }) {
+  const dlpStyles = useDlpCoverageStyles();
+  const detailStyles = useDetailStyles();
+  const [open, setOpen] = useState(false);
+  const hasEnvList = entry.policyEnvIdsNormalized.length > 0;
+  const matchedSlot = entry.policyEnvIdsNormalized.indexOf(
+    entry.targetEnvIdNormalized
+  );
+  const envSummary =
+    entry.environmentType === "AllEnvironments"
+      ? "— (no env list)"
+      : hasEnvList
+        ? `${entry.policyEnvIdsNormalized.length} env${entry.policyEnvIdsNormalized.length === 1 ? "" : "s"}${matchedSlot >= 0 ? " · target present" : " · target absent"}`
+        : "(empty list)";
+
+  return (
+    <div className={dlpStyles.traceRow}>
+      <button
+        type="button"
+        className={dlpStyles.traceRowHeader}
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        disabled={!hasEnvList}
+      >
+        {hasEnvList ? (
+          open ? <ChevronDownRegular /> : <ChevronRightRegular />
+        ) : (
+          <span style={{ display: "inline-block", width: 16 }} />
+        )}
+        <Badge
+          color={entry.applies ? "success" : "subtle"}
+          appearance={entry.applies ? "filled" : "outline"}
+          size="small"
+        >
+          {entry.applies ? "Applies" : "No match"}
+        </Badge>
+        <span className={dlpStyles.policyName}>{entry.displayName}</span>
+        <span className={detailStyles.mono}>{entry.policyId}</span>
+        <Badge appearance="outline" size="small">
+          {entry.environmentType}
+        </Badge>
+        <span className={dlpStyles.subtle}>
+          {envSummary} · reason: <code>{entry.reason}</code>
+        </span>
+      </button>
+      {open && hasEnvList && (
+        <div className={dlpStyles.traceRowBody}>
+          <div className={dlpStyles.traceLabel}>Target env id (normalized)</div>
+          <code className={dlpStyles.traceEnvId}>
+            {entry.targetEnvIdNormalized}
+          </code>
+          <div className={dlpStyles.traceLabel}>
+            Policy env ids ({entry.policyEnvIdsNormalized.length})
+          </div>
+          <ul className={dlpStyles.traceEnvList}>
+            {entry.policyEnvIdsNormalized.map((id, i) => {
+              const raw = entry.policyEnvIdsRaw[i] ?? "";
+              const isMatch = id === entry.targetEnvIdNormalized;
+              return (
+                <li
+                  key={`${id}-${i}`}
+                  className={
+                    isMatch ? dlpStyles.traceEnvHit : dlpStyles.traceEnvMiss
+                  }
+                >
+                  <code className={dlpStyles.traceEnvId}>{id}</code>
+                  {raw !== id && (
+                    <span className={dlpStyles.subtle}>
+                      {" "}from <code>{raw}</code>
+                    </span>
+                  )}
+                  {isMatch && (
+                    <Badge color="success" size="small" appearance="tint">
+                      match
+                    </Badge>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
     </div>
   );
 }
@@ -904,6 +1078,102 @@ const useDlpCoverageStyles = makeStyles({
   },
   policyName: {
     fontWeight: tokens.fontWeightSemibold,
+  },
+  traceSection: {
+    marginTop: tokens.spacingVerticalM,
+    paddingTop: tokens.spacingVerticalS,
+    borderTop: `1px solid ${tokens.colorNeutralStroke2}`,
+    display: "flex",
+    flexDirection: "column",
+    gap: tokens.spacingVerticalS,
+  },
+  traceToggle: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: tokens.spacingHorizontalXXS,
+    background: "none",
+    border: "none",
+    padding: 0,
+    cursor: "pointer",
+    color: tokens.colorBrandForegroundLink,
+    fontSize: tokens.fontSizeBase200,
+    fontFamily: tokens.fontFamilyBase,
+    alignSelf: "flex-start",
+    ":hover": { textDecoration: "underline" },
+  },
+  traceBody: {
+    display: "flex",
+    flexDirection: "column",
+    gap: tokens.spacingVerticalS,
+    padding: tokens.spacingHorizontalM,
+    backgroundColor: tokens.colorNeutralBackground2,
+    borderRadius: tokens.borderRadiusMedium,
+    border: `1px solid ${tokens.colorNeutralStroke2}`,
+  },
+  traceList: {
+    display: "flex",
+    flexDirection: "column",
+    gap: tokens.spacingVerticalXS,
+  },
+  traceRow: {
+    border: `1px solid ${tokens.colorNeutralStroke2}`,
+    borderRadius: tokens.borderRadiusMedium,
+    backgroundColor: tokens.colorNeutralBackground1,
+  },
+  traceRowHeader: {
+    width: "100%",
+    background: "none",
+    border: "none",
+    padding: tokens.spacingHorizontalS,
+    display: "flex",
+    flexWrap: "wrap",
+    alignItems: "center",
+    gap: tokens.spacingHorizontalS,
+    cursor: "pointer",
+    textAlign: "left",
+    fontFamily: tokens.fontFamilyBase,
+    fontSize: tokens.fontSizeBase200,
+    ":disabled": { cursor: "default" },
+  },
+  traceRowBody: {
+    padding: tokens.spacingHorizontalM,
+    borderTop: `1px solid ${tokens.colorNeutralStroke2}`,
+    display: "flex",
+    flexDirection: "column",
+    gap: tokens.spacingVerticalXS,
+  },
+  traceLabel: {
+    color: tokens.colorNeutralForeground3,
+    fontSize: tokens.fontSizeBase100,
+    textTransform: "uppercase",
+    letterSpacing: "0.04em",
+    fontWeight: tokens.fontWeightSemibold,
+    marginTop: tokens.spacingVerticalXS,
+  },
+  traceEnvId: {
+    fontFamily: tokens.fontFamilyMonospace,
+    fontSize: tokens.fontSizeBase200,
+  },
+  traceEnvList: {
+    margin: 0,
+    paddingInlineStart: tokens.spacingHorizontalL,
+    display: "flex",
+    flexDirection: "column",
+    gap: tokens.spacingVerticalXXS,
+  },
+  traceEnvHit: {
+    color: tokens.colorPaletteGreenForeground1,
+    display: "flex",
+    alignItems: "center",
+    gap: tokens.spacingHorizontalXS,
+    flexWrap: "wrap",
+  },
+  traceEnvMiss: {
+    color: tokens.colorNeutralForeground2,
+    display: "flex",
+    alignItems: "center",
+    gap: tokens.spacingHorizontalXS,
+    flexWrap: "wrap",
   },
 });
 

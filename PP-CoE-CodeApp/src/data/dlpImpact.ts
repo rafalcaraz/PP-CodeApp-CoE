@@ -27,6 +27,7 @@
  */
 
 import type { PolicyV2 } from "../generated/models/PowerPlatformforAdminsModel";
+import { policyEnvEntryId } from "./dlpPolicies";
 import {
   ALL_RESOURCE_TYPES,
   CONNECTOR_FIELD,
@@ -270,12 +271,23 @@ export interface DlpResolvedScope {
  *   be honoured by the KQL endpoint is a footgun. Client-side filtering
  *   is straightforward because the query is already narrowed by
  *   connector+type to a small result set.
+ *
+ * **Env-id normalization**: every entry in `policy.environments[]` is
+ * resolved through `policyEnvEntryId` (prefers `name`, falls back to
+ * the trailing segment of `id`). This is the same resolver
+ * `policyAppliesToEnvironment` uses for the env detail card —
+ * required because the connector returns `id` as an ARM path
+ * (`/providers/…/environments/<guid>`) but inventory queries match
+ * against the bare GUID stored in `properties.environmentId`. Without
+ * the normalization, `OnlyEnvironments` policies returned zero
+ * impacted resources and `ExceptEnvironments` policies excluded
+ * nothing — both silently false.
  */
 export function resolveDlpScope(policy: PolicyV2): DlpResolvedScope {
   const rawType = policy.environmentType ?? "AllEnvironments";
   const envIds = (policy.environments ?? [])
-    .map((e) => e.id)
-    .filter((id): id is string => Boolean(id));
+    .map(policyEnvEntryId)
+    .filter((id) => id.length > 0);
 
   if (rawType === "AllEnvironments") {
     return { mode: "all", envIds: [], rawType };
@@ -480,12 +492,14 @@ export async function queryDlpImpact(
     skip += res.data.items.length;
   }
 
-  // Apply ExceptEnvironments client-side.
+  // Apply ExceptEnvironments client-side. `scope.envIds` is already
+  // lowercased by `policyEnvEntryId`; lowercase the inventory side too
+  // so case-only differences don't sneak past the exclusion.
   let filtered = items;
   if (scope.mode === "exclude" && scope.envIds.length > 0) {
     const excluded = new Set(scope.envIds);
     filtered = items.filter((it) => {
-      const envId = readStr(it, "environmentId");
+      const envId = readStr(it, "environmentId").toLowerCase();
       return envId && !excluded.has(envId);
     });
   }

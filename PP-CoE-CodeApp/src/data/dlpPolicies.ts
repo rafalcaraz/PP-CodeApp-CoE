@@ -164,6 +164,55 @@ export interface DlpScopeMatch {
 }
 
 /**
+ * Normalize an environment id for comparison.
+ *
+ * The connector's `PolicyV2.environments[]` entries return **two**
+ * fields that look like ids — and the right one to compare against
+ * inventory is non-obvious. Captured from a real PPAC payload (see
+ * `docs/admin-payload-samples.md`):
+ *
+ *   {
+ *     "id":   "/providers/Microsoft.BusinessAppPlatform/scopes/admin/environments/0fdcb4b5-…",
+ *     "name": "0fdcb4b5-…",
+ *     "type": "Microsoft.BusinessAppPlatform/scopes/environments"
+ *   }
+ *
+ * Inventory's `EnvironmentRow.id` is always the **bare GUID** from
+ * `QueryResources`. So:
+ *
+ *   - The right field to compare against is `e.name` when present.
+ *   - This helper exists as a defensive fallback for when only the
+ *     ARM-style `e.id` is available, or for unknown future shapes
+ *     (URN, encoded slashes, mixed case): strip everything before the
+ *     last `/`, trim, lowercase.
+ *
+ * `policyAppliesToEnvironment` prefers `e.name`, then falls back to
+ * `normalizeEnvIdForScope(e.id)`. This combination has matched every
+ * shape we've seen the platform emit.
+ */
+export function normalizeEnvIdForScope(raw: string): string {
+  if (!raw) return "";
+  const trimmed = raw.trim();
+  const idx = trimmed.lastIndexOf("/");
+  const tail = idx >= 0 ? trimmed.substring(idx + 1) : trimmed;
+  return tail.toLowerCase();
+}
+
+/** Pick the canonical env GUID out of one `policy.environments[]`
+ *  entry. Prefers `name` (the bare GUID per the captured payload),
+ *  falls back to extracting the trailing segment of `id`. Always
+ *  returned lowercased so callers can compare without re-normalizing.
+ *
+ *  Exported so `dlpImpact.ts` (and any future consumer) uses the same
+ *  resolution rule the coverage predicate does. Mismatch between
+ *  the two would cause DLP Impact to find zero resources in
+ *  OnlyEnvironments-scoped policies. */
+export function policyEnvEntryId(e: { id?: string; name?: string }): string {
+  if (e.name && e.name.trim()) return e.name.trim().toLowerCase();
+  return normalizeEnvIdForScope(e.id ?? "");
+}
+
+/**
  * Pure predicate: does `policy` apply to the environment with id
  * `envId`? Kept free of any IO so it can be reused in tests, in the
  * DLP Impact picker, and in any future coverage UI.
@@ -171,6 +220,11 @@ export interface DlpScopeMatch {
  * Treats unknown / missing `environmentType` as `AllEnvironments`
  * (the connector default), matching how PPAC interprets a blank
  * scope field.
+ *
+ * Comparison is case-insensitive on the bare GUID. See
+ * `normalizeEnvIdForScope` and `policyEnvEntryId` for the id-shape
+ * gymnastics this paper over (connector returns ARM-path in `id`,
+ * bare GUID in `name`; inventory returns bare GUID).
  */
 export function policyAppliesToEnvironment(
   policy: PolicyV2,
@@ -181,18 +235,19 @@ export function policyAppliesToEnvironment(
   if (type === "AllEnvironments") {
     return { applies: true, reason: "all" };
   }
+  const target = normalizeEnvIdForScope(envId);
   const ids = new Set(
     (policy.environments ?? [])
-      .map((e) => e.id)
-      .filter((id): id is string => Boolean(id))
+      .map(policyEnvEntryId)
+      .filter((id) => id.length > 0)
   );
   if (type === "OnlyEnvironments" || type === "SingleEnvironment") {
-    return ids.has(envId)
+    return ids.has(target)
       ? { applies: true, reason: "included" }
       : { applies: false, reason: "none" };
   }
   if (type === "ExceptEnvironments") {
-    return ids.has(envId)
+    return ids.has(target)
       ? { applies: false, reason: "none" }
       : { applies: true, reason: "not-excluded" };
   }
@@ -207,11 +262,80 @@ export interface DlpPolicyCoverage {
   reason: DlpScopeMatchReason;
 }
 
+/** Full evaluation entry — emitted for **every** policy in the tenant,
+ *  not just matches. Powers the "Show evaluation details" debugging
+ *  surface so admins can answer "why doesn't policy X apply to my
+ *  env Y?" without instrumenting the codebase.
+ *
+ *  All the diagnostic fields (raw vs. normalized ids on both sides)
+ *  are stable shapes safe to dump straight to JSON or render in a
+ *  small table. */
+export interface DlpPolicyEvaluation {
+  policyId: string;
+  displayName: string;
+  environmentType: string;
+  applies: boolean;
+  reason: DlpScopeMatchReason;
+  /** The target env id we evaluated against (post-normalization). */
+  targetEnvIdNormalized: string;
+  /** The target env id we evaluated against (as passed in). */
+  targetEnvIdRaw: string;
+  /** Every env id on the policy, raw form (as the connector returned). */
+  policyEnvIdsRaw: string[];
+  /** Every env id on the policy, normalized — what the predicate
+   *  actually compared against. Diff this against the raw list to
+   *  spot ARM-prefix / case-mismatch bugs. */
+  policyEnvIdsNormalized: string[];
+}
+
+/** Pure: evaluate every policy in the supplied list against `envId`
+ *  and return a full per-policy trace. The trace is sorted matches-
+ *  first (so users see the relevant rows up top) then alphabetically
+ *  by displayName. */
+export function evaluateDlpCoverage(
+  policies: PolicyV2[],
+  envId: string
+): DlpPolicyEvaluation[] {
+  const target = normalizeEnvIdForScope(envId);
+  const out: DlpPolicyEvaluation[] = policies.map((p) => {
+    const m = policyAppliesToEnvironment(p, envId);
+    const rawIds = (p.environments ?? [])
+      .map((e) => e.id)
+      .filter((id): id is string => Boolean(id));
+    // Normalized list uses the same `name`-preferring resolver the
+    // predicate uses, so what you see here is *exactly* what the
+    // predicate compared against.
+    const normalized = (p.environments ?? [])
+      .map(policyEnvEntryId)
+      .filter((id) => id.length > 0);
+    return {
+      policyId: p.name,
+      displayName: p.displayName || p.name,
+      environmentType: p.environmentType || "AllEnvironments",
+      applies: m.applies,
+      reason: m.reason,
+      targetEnvIdRaw: envId,
+      targetEnvIdNormalized: target,
+      policyEnvIdsRaw: rawIds,
+      policyEnvIdsNormalized: normalized,
+    };
+  });
+  out.sort((a, b) => {
+    if (a.applies !== b.applies) return a.applies ? -1 : 1;
+    return a.displayName.localeCompare(b.displayName);
+  });
+  return out;
+}
+
 /**
  * Returns every DLP policy that targets the given environment, with
- * the reason it matched. Drains `listDlpPolicies` once and filters
- * client-side — there is no per-env query on the connector. Result is
- * sorted by display name for stable rendering.
+ * the reason it matched, AND a full evaluation trace for every policy
+ * in the tenant (matched + unmatched). The trace powers the debugging
+ * expander on the env detail page so admins can diagnose "this policy
+ * SHOULD cover this env but doesn't" without instrumenting the code.
+ *
+ * Drains `listDlpPolicies` once and filters client-side — there is no
+ * per-env query on the connector.
  *
  * On-demand only: this is meant to back a "Load DLP policy coverage"
  * button on the environment detail page, not be called as part of
@@ -219,21 +343,25 @@ export interface DlpPolicyCoverage {
  */
 export async function getApplicableDlpPolicies(
   envId: string
-): Promise<DataResult<DlpPolicyCoverage[]>> {
+): Promise<
+  DataResult<{ coverage: DlpPolicyCoverage[]; trace: DlpPolicyEvaluation[] }>
+> {
   if (!envId) {
     return { ok: false, error: "Environment id is required." };
   }
   const all = await listDlpPolicies();
   if (!all.ok) return all;
-  const rows: DlpPolicyCoverage[] = [];
-  for (const policy of all.data) {
-    const m = policyAppliesToEnvironment(policy, envId);
-    if (m.applies) rows.push({ policy, reason: m.reason });
+  const trace = evaluateDlpCoverage(all.data, envId);
+  const coverage: DlpPolicyCoverage[] = [];
+  for (const t of trace) {
+    if (!t.applies) continue;
+    const policy = all.data.find((p) => p.name === t.policyId);
+    if (policy) coverage.push({ policy, reason: t.reason });
   }
-  rows.sort((a, b) =>
+  coverage.sort((a, b) =>
     (a.policy.displayName || "").localeCompare(b.policy.displayName || "")
   );
-  return { ok: true, data: rows };
+  return { ok: true, data: { coverage, trace } };
 }
 
 // ---------------------------------------------------------------------------
@@ -364,6 +492,10 @@ export async function getEnvironmentGroupAcpStatus(
  *  coverage entirely. */
 export interface DlpAndAcpStatus {
   coverage: DlpPolicyCoverage[];
+  /** Full per-policy evaluation trace (matched + unmatched), surfaced
+   *  in the UI behind a "Show evaluation details" expander for
+   *  debugging scope mismatches. */
+  trace: DlpPolicyEvaluation[];
   acp:
     | EnvironmentGroupAcpStatus
     | { error: string }
@@ -407,8 +539,23 @@ export async function getEnvironmentDlpAndAcpStatus(
   if (acp) {
     acpField = acp.ok ? acp.data : { error: acp.error };
   }
+  // Devtools breadcrumb. Useful when an admin pings about
+  // "policy X should cover env Y but doesn't" — the per-policy trace
+  // lands in the console without them needing to expand the UI.
+  console.info("[DLP coverage] evaluation", {
+    envId: env.id,
+    isManaged: env.isManaged,
+    environmentGroupId: env.environmentGroupId,
+    appliedCount: coverage.data.coverage.length,
+    totalPolicies: coverage.data.trace.length,
+    trace: coverage.data.trace,
+  });
   return {
     ok: true,
-    data: { coverage: coverage.data, acp: acpField },
+    data: {
+      coverage: coverage.data.coverage,
+      trace: coverage.data.trace,
+      acp: acpField,
+    },
   };
 }
