@@ -32,37 +32,27 @@ import {
   type ResourceCountRow,
 } from "../data/inventory";
 import { EmptyPane, ErrorPane, LoadingPane } from "../components/Status";
+import { PortalActionsBar } from "../components/PortalActions";
+import { RawJsonAccordion } from "../components/RawJsonAccordion";
+import {
+  DateWithRelative,
+  IdentifiersAccordion,
+  Meta,
+  formatDate,
+  useDetailStyles,
+} from "../components/detail";
 
-const useStyles = makeStyles({
-  root: {
-    display: "flex",
-    flexDirection: "column",
-    gap: tokens.spacingVerticalL,
-  },
-  headerBlock: {
-    display: "flex",
-    flexDirection: "column",
-    gap: tokens.spacingVerticalXS,
-  },
-  meta: {
-    display: "flex",
-    gap: tokens.spacingHorizontalXL,
-    color: tokens.colorNeutralForeground3,
-    flexWrap: "wrap",
-    fontSize: tokens.fontSizeBase200,
-  },
-  section: {
-    display: "flex",
-    flexDirection: "column",
-    gap: tokens.spacingVerticalM,
-  },
-  sectionTitle: {
-    fontWeight: tokens.fontWeightSemibold,
+// Group-specific styles (stat grid + envs body) not shared with the simpler
+// resource detail pages.
+const usePageStyles = makeStyles({
+  description: {
+    color: tokens.colorNeutralForeground2,
   },
   statGrid: {
     display: "grid",
     gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
     gap: tokens.spacingHorizontalM,
+    padding: tokens.spacingHorizontalL,
   },
   statCard: {
     padding: tokens.spacingVerticalM,
@@ -76,13 +66,10 @@ const useStyles = makeStyles({
     color: tokens.colorNeutralForeground3,
     fontSize: tokens.fontSizeBase200,
   },
+  envsBody: {
+    padding: tokens.spacingHorizontalL,
+  },
 });
-
-function formatDate(value: string): string {
-  if (!value) return "—";
-  const d = new Date(value);
-  return Number.isNaN(d.getTime()) ? value : d.toLocaleString();
-}
 
 interface AsyncSlot<T> {
   kind: "loading" | "error" | "ready";
@@ -91,11 +78,13 @@ interface AsyncSlot<T> {
 }
 
 export function EnvironmentGroupDetail() {
-  const styles = useStyles();
+  const styles = useDetailStyles();
   const navigate = useNavigate();
   const { groupId = "" } = useParams<{ groupId: string }>();
 
-  const [group, setGroup] = useState<AsyncSlot<EnvironmentGroupRow | null>>({ kind: "loading" });
+  const [group, setGroup] = useState<AsyncSlot<{ row: EnvironmentGroupRow; raw: unknown } | null>>({
+    kind: "loading",
+  });
   const [envs, setEnvs] = useState<AsyncSlot<EnvironmentRow[]>>({ kind: "loading" });
   const [counts, setCounts] = useState<AsyncSlot<ResourceCountRow[]>>({ kind: "loading" });
 
@@ -164,120 +153,232 @@ export function EnvironmentGroupDetail() {
 
   return (
     <div className={styles.root}>
-      <Breadcrumb>
-        <BreadcrumbItem>
-          <BreadcrumbButton onClick={() => navigate("/environment-groups")}>
-            Environment groups
-          </BreadcrumbButton>
-        </BreadcrumbItem>
-        <BreadcrumbDivider />
-        <BreadcrumbItem>
-          <BreadcrumbButton current>
-            {group.kind === "ready" && group.data?.displayName ? group.data.displayName : groupId}
-          </BreadcrumbButton>
-        </BreadcrumbItem>
-      </Breadcrumb>
+      <div className={styles.colFull}>
+        <Breadcrumb>
+          <BreadcrumbItem>
+            <BreadcrumbButton onClick={() => navigate("/environment-groups")}>
+              Environment groups
+            </BreadcrumbButton>
+          </BreadcrumbItem>
+          <BreadcrumbDivider />
+          <BreadcrumbItem>
+            <BreadcrumbButton current>
+              {group.kind === "ready" && group.data?.row.displayName
+                ? group.data.row.displayName
+                : groupId}
+            </BreadcrumbButton>
+          </BreadcrumbItem>
+        </Breadcrumb>
+      </div>
 
-      {group.kind === "loading" && <LoadingPane label="Loading environment group…" />}
+      {group.kind === "loading" && (
+        <div className={styles.colFull}>
+          <LoadingPane label="Loading environment group…" />
+        </div>
+      )}
 
       {group.kind === "error" && (
-        <ErrorPane title="Couldn't load environment group" message={group.message ?? "Unknown error"} />
+        <div className={styles.colFull}>
+          <ErrorPane title="Couldn't load environment group" message={group.message ?? "Unknown error"} />
+        </div>
       )}
 
       {group.kind === "ready" && !group.data && (
-        <EmptyPane message={`Environment group "${groupId}" was not found.`} />
+        <div className={styles.colFull}>
+          <EmptyPane message={`Environment group "${groupId}" was not found.`} />
+        </div>
       )}
 
       {group.kind === "ready" && group.data && (
-        <>
-          <div className={styles.headerBlock}>
-            <Text size={600} weight="semibold">
-              {group.data.displayName || group.data.id}
-            </Text>
-            {group.data.description && <Text>{group.data.description}</Text>}
-            <div className={styles.meta}>
-              <span>
-                <strong>Created:</strong> {formatDate(group.data.createdAt)}
-              </span>
-              <span>
-                <strong>Location:</strong> {group.data.location || "—"}
-              </span>
-              <span>
-                <strong>ID:</strong> {group.data.id}
-              </span>
-            </div>
+        <ReadyView
+          row={group.data.row}
+          raw={group.data.raw}
+          envs={envs}
+          counts={counts}
+          envColumns={envColumns}
+        />
+      )}
+    </div>
+  );
+}
+
+interface ReadyViewProps {
+  row: EnvironmentGroupRow;
+  raw: unknown;
+  envs: AsyncSlot<EnvironmentRow[]>;
+  counts: AsyncSlot<ResourceCountRow[]>;
+  envColumns: TableColumnDefinition<EnvironmentRow>[];
+}
+
+function ReadyView({ row, raw, envs, counts, envColumns }: ReadyViewProps) {
+  const styles = useDetailStyles();
+  const page = usePageStyles();
+  return (
+    <>
+      <div className={styles.colFull}>
+        <PortalActionsBar
+          context={{
+            entityKind: "environmentGroup",
+            entityId: row.id,
+          }}
+        />
+      </div>
+
+      {/* 1. Overview header */}
+      <div className={`${styles.header} ${styles.colFull}`}>
+        <Text size={700} weight="semibold">
+          {row.displayName || row.id}
+        </Text>
+        <div className={styles.badgeRow}>
+          <Badge appearance="filled" color="brand">
+            Environment group
+          </Badge>
+          {row.location && <Badge appearance="outline">{row.location}</Badge>}
+        </div>
+        {row.description && (
+          <Text size={300} className={page.description}>
+            {row.description}
+          </Text>
+        )}
+      </div>
+
+      {/* 2. Details */}
+      <Card className={styles.colHalf}>
+        <CardHeader
+          header={<Text weight="semibold">Details</Text>}
+          description={<Text size={200}>How this group is positioned in the tenant.</Text>}
+        />
+        <Divider />
+        <div className={styles.cardBody}>
+          <div className={styles.metaGridTwo}>
+            <Meta label="Location">{row.location || "—"}</Meta>
+            <Meta label="Environments">
+              {envs.kind === "ready" ? (envs.data?.length ?? 0).toLocaleString() : "…"}
+            </Meta>
           </div>
+        </div>
+      </Card>
 
-          <Divider />
+      {/* 3. Lifecycle */}
+      <Card className={styles.colHalf}>
+        <CardHeader
+          header={<Text weight="semibold">Lifecycle</Text>}
+          description={<Text size={200}>When this group was created.</Text>}
+        />
+        <Divider />
+        <div className={styles.cardBody}>
+          <div className={styles.metaGridTwo}>
+            <Meta label="Created on">
+              <DateWithRelative value={row.createdAt} />
+            </Meta>
+            <Meta label="Created by">{row.createdBy || "—"}</Meta>
+          </div>
+        </div>
+      </Card>
 
-          <section className={styles.section}>
-            <Text className={styles.sectionTitle} size={500}>
-              Resource roll-up
-            </Text>
-            {counts.kind === "loading" && <LoadingPane label="Loading resource counts…" />}
-            {counts.kind === "error" && (
-              <ErrorPane title="Couldn't load resource roll-up" message={counts.message ?? "Unknown error"} />
-            )}
-            {counts.kind === "ready" && (counts.data?.length ?? 0) === 0 && (
-              <EmptyPane message="No resources found across environments in this group." />
-            )}
-            {counts.kind === "ready" && counts.data && counts.data.length > 0 && (
-              <div className={styles.statGrid}>
-                {counts.data.map((c) => (
-                  <Card key={c.type} className={styles.statCard} appearance="outline">
-                    <CardHeader
-                      header={<Text className={styles.statValue}>{c.count}</Text>}
-                      description={
-                        <Text className={styles.statLabel}>{friendlyResourceType(c.type)}</Text>
-                      }
-                    />
-                  </Card>
-                ))}
-              </div>
-            )}
-          </section>
+      {/* 4. Resource roll-up */}
+      <Card className={styles.colFull}>
+        <CardHeader
+          header={<Text weight="semibold">Resource roll-up</Text>}
+          description={
+            <Text size={200}>Totals across every environment in this group.</Text>
+          }
+        />
+        <Divider />
+        {counts.kind === "loading" && (
+          <div className={styles.cardBody}>
+            <LoadingPane label="Loading resource counts…" />
+          </div>
+        )}
+        {counts.kind === "error" && (
+          <div className={styles.cardBody}>
+            <ErrorPane
+              title="Couldn't load resource roll-up"
+              message={counts.message ?? "Unknown error"}
+            />
+          </div>
+        )}
+        {counts.kind === "ready" && (counts.data?.length ?? 0) === 0 && (
+          <div className={styles.cardBody}>
+            <EmptyPane message="No resources found across environments in this group." />
+          </div>
+        )}
+        {counts.kind === "ready" && counts.data && counts.data.length > 0 && (
+          <div className={page.statGrid}>
+            {counts.data.map((c) => (
+              <Card key={c.type} className={page.statCard} appearance="outline">
+                <CardHeader
+                  header={<Text className={page.statValue}>{c.count}</Text>}
+                  description={
+                    <Text className={page.statLabel}>{friendlyResourceType(c.type)}</Text>
+                  }
+                />
+              </Card>
+            ))}
+          </div>
+        )}
+      </Card>
 
-          <Divider />
-
-          <section className={styles.section}>
-            <Text className={styles.sectionTitle} size={500}>
+      {/* 5. Environments table */}
+      <Card className={styles.colFull}>
+        <CardHeader
+          header={
+            <Text weight="semibold">
               Environments in this group
               {envs.kind === "ready" ? ` (${envs.data?.length ?? 0})` : ""}
             </Text>
-            {envs.kind === "loading" && <LoadingPane label="Loading environments…" />}
-            {envs.kind === "error" && (
-              <ErrorPane title="Couldn't load environments" message={envs.message ?? "Unknown error"} />
-            )}
-            {envs.kind === "ready" && (envs.data?.length ?? 0) === 0 && (
-              <EmptyPane message="No environments are assigned to this group." />
-            )}
-            {envs.kind === "ready" && envs.data && envs.data.length > 0 && (
-              <DataGrid
-                items={envs.data}
-                columns={envColumns}
-                getRowId={(row) => row.id}
-                sortable={false}
-                focusMode="composite"
-              >
-                <DataGridHeader>
-                  <DataGridRow>
-                    {({ renderHeaderCell }) => (
-                      <DataGridHeaderCell>{renderHeaderCell()}</DataGridHeaderCell>
-                    )}
-                  </DataGridRow>
-                </DataGridHeader>
-                <DataGridBody<EnvironmentRow>>
-                  {({ item, rowId }) => (
-                    <DataGridRow<EnvironmentRow> key={rowId}>
-                      {({ renderCell }) => <DataGridCell>{renderCell(item)}</DataGridCell>}
-                    </DataGridRow>
+          }
+          description={<Text size={200}>Every environment assigned to this group.</Text>}
+        />
+        <Divider />
+        <div className={page.envsBody}>
+          {envs.kind === "loading" && <LoadingPane label="Loading environments…" />}
+          {envs.kind === "error" && (
+            <ErrorPane title="Couldn't load environments" message={envs.message ?? "Unknown error"} />
+          )}
+          {envs.kind === "ready" && (envs.data?.length ?? 0) === 0 && (
+            <EmptyPane message="No environments are assigned to this group." />
+          )}
+          {envs.kind === "ready" && envs.data && envs.data.length > 0 && (
+            <DataGrid
+              items={envs.data}
+              columns={envColumns}
+              getRowId={(r) => r.id}
+              sortable={false}
+              focusMode="composite"
+            >
+              <DataGridHeader>
+                <DataGridRow>
+                  {({ renderHeaderCell }) => (
+                    <DataGridHeaderCell>{renderHeaderCell()}</DataGridHeaderCell>
                   )}
-                </DataGridBody>
-              </DataGrid>
-            )}
-          </section>
-        </>
-      )}
-    </div>
+                </DataGridRow>
+              </DataGridHeader>
+              <DataGridBody<EnvironmentRow>>
+                {({ item, rowId }) => (
+                  <DataGridRow<EnvironmentRow> key={rowId}>
+                    {({ renderCell }) => <DataGridCell>{renderCell(item)}</DataGridCell>}
+                  </DataGridRow>
+                )}
+              </DataGridBody>
+            </DataGrid>
+          )}
+        </div>
+      </Card>
+
+      {/* 6. Identifiers — collapsed */}
+      <IdentifiersAccordion
+        className={styles.colFull}
+        items={[
+          { label: "Environment group ID", value: row.id },
+          { label: "Resource type", value: "microsoft.powerplatform/environmentgroups" },
+        ]}
+      />
+
+      {/* 7. Raw JSON */}
+      <div className={styles.colFull}>
+        <RawJsonAccordion data={raw} />
+      </div>
+    </>
   );
 }

@@ -766,7 +766,9 @@ export async function listEnvironmentGroups(): Promise<DataResult<EnvironmentGro
   };
 }
 
-export async function getEnvironmentGroup(groupId: string): Promise<DataResult<EnvironmentGroupRow | null>> {
+export async function getEnvironmentGroup(
+  groupId: string
+): Promise<DataResult<{ row: EnvironmentGroupRow; raw: ResourceItem } | null>> {
   const clauses: Clause[] = [
     where("type", "==", [`'${ResourceType.EnvironmentGroup}'`]),
     where("name", "==", [`'${groupId}'`]),
@@ -779,12 +781,15 @@ export async function getEnvironmentGroup(groupId: string): Promise<DataResult<E
   return {
     ok: true,
     data: {
-      id: item.name ?? "",
-      displayName: propStr(item, "displayName"),
-      description: propStr(item, "description"),
-      createdAt: propStr(item, "createdAt"),
-      createdBy: propStr(item, "createdBy"),
-      location: item.location ?? "",
+      row: {
+        id: item.name ?? "",
+        displayName: propStr(item, "displayName"),
+        description: propStr(item, "description"),
+        createdAt: propStr(item, "createdAt"),
+        createdBy: propStr(item, "createdBy"),
+        location: item.location ?? "",
+      },
+      raw: item,
     },
   };
 }
@@ -922,7 +927,9 @@ export async function listEnvironmentsPage(
   };
 }
 
-export async function getEnvironment(envId: string): Promise<DataResult<EnvironmentRow | null>> {
+export async function getEnvironment(
+  envId: string
+): Promise<DataResult<{ row: EnvironmentRow; raw: ResourceItem } | null>> {
   const clauses: Clause[] = [
     where("type", "==", [`'${ResourceType.Environment}'`]),
     where("name", "==", [`'${envId}'`]),
@@ -931,7 +938,7 @@ export async function getEnvironment(envId: string): Promise<DataResult<Environm
   const res = await runQuery(clauses, { Top: 1, Skip: 0, SkipToken: "" });
   if (!res.ok) return res;
   const item = res.data.items[0];
-  return { ok: true, data: item ? toEnvironmentRow(item) : null };
+  return { ok: true, data: item ? { row: toEnvironmentRow(item), raw: item } : null };
 }
 
 function toEnvironmentRow(item: ResourceItem): EnvironmentRow {
