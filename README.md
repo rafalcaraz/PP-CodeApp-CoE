@@ -43,6 +43,12 @@ PP-CodeApp-CoE/
   but for the per-record `Get_*` / `List_*` calls. Includes the critical
   "two governance models for env groups" caveat (legacy ruleset
   parameters vs. new rule-based-policy `ruleSets`).
+- **[Governance rules catalog](./PP-CoE-CodeApp/docs/governance-rules-catalog.md)** —
+  the full schema reference for every known env-group rule (Model A
+  parameter buckets and Model B rule-based policies). Lists PPAC
+  display names, input schemas, value domains, and which rules have
+  typed renderers vs. fall through to raw JSON. Read this before
+  adding a new rule renderer to `src/components/ruleRenderers/`.
 
 ## Releases
 

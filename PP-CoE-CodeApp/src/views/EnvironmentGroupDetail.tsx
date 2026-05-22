@@ -44,7 +44,7 @@ import {
 import { EmptyPane, ErrorPane, LoadingPane } from "../components/Status";
 import { PortalActionsBar } from "../components/PortalActions";
 import { RawJsonAccordion } from "../components/RawJsonAccordion";
-import { RuleSetRenderer } from "../components/ruleRenderers";
+import { PolicyRuleSetsAccordion, RulesetBucketsAccordion } from "../components/ruleRenderers";
 import {
   DateWithRelative,
   IdentifiersAccordion,
@@ -104,11 +104,6 @@ const usePageStyles = makeStyles({
     alignItems: "baseline",
     gap: tokens.spacingHorizontalS,
     flexWrap: "wrap",
-  },
-  ruleSetList: {
-    display: "flex",
-    flexDirection: "column",
-    gap: tokens.spacingVerticalS,
   },
   policyError: {
     color: tokens.colorPaletteRedForeground1,
@@ -424,7 +419,7 @@ function ReadyView({ row, raw, envs, counts, envColumns }: ReadyViewProps) {
           </>
         }
         loadFn={() => getEnvironmentGroupRulesets(row.id)}
-        renderReady={(result) => <RulesetsBody result={result} />}
+        renderReady={(result) => <RulesetsBody result={result} currentGroupId={row.id} />}
       />
 
       <SupplementalAdminCard
@@ -567,24 +562,30 @@ function RoleAssignmentsBody({ result }: { result: EnvironmentGroupRoleAssignmen
   );
 }
 
-function RulesetsBody({ result }: { result: EnvironmentGroupRulesetsResult }) {
+function RulesetsBody({ result, currentGroupId }: { result: EnvironmentGroupRulesetsResult; currentGroupId: string }) {
   const matching = result.matching.value ?? [];
   const parameterCount = matching.reduce((acc, r) => acc + (r.parameters?.length ?? 0), 0);
   return (
     <>
       <Text size={300}>
         <strong>{matching.length}</strong> ruleset{matching.length === 1 ? "" : "s"} apply to
-        this group · <strong>{parameterCount}</strong> parameter bucket
+        this group · <strong>{parameterCount}</strong> bucket
         {parameterCount === 1 ? "" : "s"} in total ·{" "}
         <Text size={200}>
           ({result.totalInTenant.toLocaleString()} ruleset{result.totalInTenant === 1 ? "" : "s"}{" "}
           tenant-wide)
         </Text>
       </Text>
+      {matching.map((rs, idx) => (
+        <RulesetBucketsAccordion
+          key={rs.id ?? `ruleset-${idx}`}
+          ruleset={rs}
+          currentGroupId={currentGroupId}
+        />
+      ))}
       <RawJsonAccordion
         data={result.raw}
         title="Raw GetRuleSetListForTenant payload (Model A)"
-        defaultOpen
       />
     </>
   );
@@ -645,14 +646,7 @@ function EffectivePoliciesBody({
               {ruleSets.length === 0 ? (
                 <Text size={300}>This policy has no rule sets.</Text>
               ) : (
-                <div className={page.ruleSetList}>
-                  {ruleSets.map((rule, idx) => (
-                    <RuleSetRenderer
-                      key={`${policy.id}-${rule.id ?? idx}`}
-                      rule={rule}
-                    />
-                  ))}
-                </div>
+                <PolicyRuleSetsAccordion policy={policy} />
               )}
             </div>
           );
