@@ -1375,7 +1375,7 @@ environment in the policy's `environments[]`. It doesn't yet:
 - Extend `DlpDiffResult` in `src/data/dlpDiff.ts` with two new
   branches: `blockedActions: BlockedActionDiff[]` and
   `endpointConfigs: EndpointConfigDiff[]`. Keep diff logic pure
-  (no React) so DLP Analysis can reuse it.
+  (no React) so **DLP Impact** (`src/views/DlpImpact.tsx`) can reuse it.
 - Add two new sections to `DlpComparator.tsx` below the connector
   table. Same look-and-feel: KPI tile in the summary row, soft-warning
   row backgrounds for diffs, "show only differences" toggle.
@@ -1394,4 +1394,76 @@ environment in the policy's `environments[]`. It doesn't yet:
   badge them inline? The badge approach keeps the unified table; the
   split approach is two tables (first-party, custom) and easier to
   scan when one side has many customs and the other has none.
+
+---
+
+## DLP Impact — V2 enhancements
+
+> **Status as of last session.** V1 shipped in `src/views/DlpImpact.tsx`
+> + `src/data/dlpImpact.ts`. Pick a DLP policy → pick a currently
+> non-Blocked first-party connector from that policy → see every app,
+> flow, and agent in the policy's scope (`AllEnvironments` /
+> `OnlyEnvironments` / `ExceptEnvironments` / `SingleEnvironment`) that
+> currently uses the connector. KPI strip (apps / flows / agents / envs /
+> owners), flat sortable table with detail-page links, CSV export.
+> `ExceptEnvironments` is filtered client-side because the typed
+> `QueryFilterOp` union doesn't expose `!in~`; revisit if/when that
+> changes upstream.
+
+### V2 parking lot (in rough priority order)
+
+1. **Custom connectors.** V1 hides them from the picker because their
+   id shape (`/providers/.../apis/shared_<env>_<name>`) doesn't slug
+   down to `shared_<x>` cleanly and the inventory's `__connectorBag`
+   `has` filter is tokenized on the slug form. Needs either a
+   per-shape matcher or a switch from `has` to `contains` (with the
+   false-positive risk that implies). Once supported, drop the
+   `_type === "Custom"` filter in `extractNonBlockedConnectors` and the
+   warning MessageBar in the view.
+2. **Reverse mode** ("what would unblock?"). Pick a currently-Blocked
+   connector and show which apps/flows/agents *would gain capability*
+   if unblocked. Symmetric query (`__connectorBag has 'slug'` + scope),
+   but the framing flips and the warn/ok tones invert. Probably a
+   toggle on the same page rather than a new route.
+3. **Multi-connector simulation.** Select N connectors at once and see
+   the union of impact + per-connector breakdown. The KQL would use
+   `has_any` instead of `has`. Useful for "what if we tightened the
+   whole `Confidential` bucket?" scenarios.
+4. **Cross-bucket move analysis.** Beyond "to Blocked" — let the user
+   simulate moving a connector from Confidential to General (or vice
+   versa) and surface the flows/apps that *pair it with another
+   connector* in a way that would now violate the cross-bucket rule.
+   Requires loading both connectors on every impacted resource (already
+   in `properties.powerPlatformConnectors`) and applying the policy's
+   bucket rule client-side.
+5. **Connector-action level.** Once the DLP Comparator V2 adds blocked-
+   action data (see above), DLP Impact should let users simulate
+   blocking a *specific operation* (`OPERATION_FIELD` sentinel already
+   exists in `inventory.ts`), not just the whole connector.
+6. **Save-as-saved-query.** Hand off the underlying `QuerySpec` to
+   `views/QueriesView.tsx` so a power user can keep tweaking it. The
+   spec is already constructed in `queryDlpImpact` — exposing it would
+   be a thin `dlpImpactToQuerySpec(policy, slug)` helper.
+7. **Group by environment / by type.** V1 went with a flat sortable
+   table for speed. If users routinely want the grouped view (e.g.
+   "show me the blast radius env-by-env"), wire it as a layout toggle
+   in the toolbar — keep the underlying `DlpImpactResult` shape stable.
+8. **Result diff across runs.** "Last week 12 resources used this
+   connector; today 18." Would need lightweight persistence in
+   localStorage keyed by `policyId + connectorSlug`.
+
+### Notes for whoever picks this up
+
+- The data-layer helpers (`extractNonBlockedConnectors`,
+  `countExcludedConnectors`, `resolveDlpScope`, `queryDlpImpact`) are
+  all pure / typed and easy to unit-test in isolation if/when we add a
+  test runner. They take a `PolicyV2` directly so you don't need to
+  mock the connector layer to test them.
+- The view uses `getEnvironmentNameMap()` from `inventory.ts` to
+  resolve env ids in the scope card; the 5-minute env-map cache means
+  this is essentially free on repeat renders.
+- Connector slug `shared_sql` matches the inventory shape after
+  `normalizeConnectorId`. Don't accidentally pass the policy's raw
+  ARM-path id (`/providers/.../apis/shared_sql`) into the inventory
+  query — it will tokenize wrong and return zero hits.
 

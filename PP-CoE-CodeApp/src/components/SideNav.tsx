@@ -155,9 +155,10 @@ const NAV_SECTIONS: NavSection[] = [
         path: "/security/dlp-comparator",
       },
       {
-        key: "dlp-analysis",
-        label: "DLP Analysis",
+        key: "dlp-impact",
+        label: "DLP Impact",
         icon: <ChartMultipleRegular />,
+        path: "/security/dlp-impact",
       },
     ],
   },

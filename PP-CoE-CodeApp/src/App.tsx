@@ -72,6 +72,9 @@ const SettingsView = lazy(() =>
 const DlpComparator = lazy(() =>
   import("./views/DlpComparator").then((m) => ({ default: m.DlpComparator }))
 );
+const DlpImpact = lazy(() =>
+  import("./views/DlpImpact").then((m) => ({ default: m.DlpImpact }))
+);
 
 const useStyles = makeStyles({
   app: {
@@ -126,6 +129,7 @@ function AppShell() {
               <Route path="/queries" element={<QueriesView />} />
               <Route path="/settings" element={<SettingsView />} />
               <Route path="/security/dlp-comparator" element={<DlpComparator />} />
+              <Route path="/security/dlp-impact" element={<DlpImpact />} />
               <Route path="*" element={<HomeRedirect />} />
             </Routes>
           </Suspense>
