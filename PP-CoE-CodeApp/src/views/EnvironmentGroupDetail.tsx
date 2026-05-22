@@ -97,15 +97,6 @@ const usePageStyles = makeStyles({
     flexDirection: "column",
     gap: tokens.spacingVerticalS,
   },
-  policyHeader: {
-    display: "flex",
-    alignItems: "baseline",
-    gap: tokens.spacingHorizontalS,
-    flexWrap: "wrap",
-  },
-  policyError: {
-    color: tokens.colorPaletteRedForeground1,
-  },
   section: {
     display: "flex",
     flexDirection: "column",
@@ -412,8 +403,7 @@ function ReadyView({ row, raw, envs, counts, envColumns }: ReadyViewProps) {
         description={
           <>
             Every rule active on this group from both governance APIs — the named/versioned
-            rule-based policies (Model B) and the parameter-bucket rulesets (Model A). All
-            rules render expanded by default; click any header to collapse it.
+            rule-based policies (Model B) and the parameter-bucket rulesets (Model A).
           </>
         }
         buttonLabel="View all rules"
@@ -590,7 +580,7 @@ function GovernanceRulesBody({
       <div className={page.section}>
         <Text size={500} weight="semibold">Rule-based policies</Text>
         <Text size={200} className={page.description}>
-          Named, versioned policy modules. Click any header to collapse a rule.
+          Named, versioned policy modules.
         </Text>
         {!result.policies.ok ? (
           <ErrorPane title="Couldn't load rule-based policies" message={result.policies.error} />
@@ -607,23 +597,10 @@ function GovernanceRulesBody({
                   key={policy.id ?? policy.name ?? `policy-${policyIdx}`}
                   className={page.policyBlock}
                 >
-                  <div className={page.policyHeader}>
-                    <Text size={400} weight="semibold">
-                      {policy.name || "(unnamed policy)"}
-                    </Text>
-                    <Badge appearance="outline">
-                      {ruleSets.length} rule{ruleSets.length === 1 ? "" : "s"}
-                    </Badge>
-                    {policy.lastModified && (
-                      <Text size={200}>
-                        Last modified <DateWithRelative value={policy.lastModified} />
-                      </Text>
-                    )}
-                  </div>
                   {ruleSets.length === 0 ? (
                     <Text size={300}>This policy has no rule sets.</Text>
                   ) : (
-                    <PolicyRuleSetsAccordion policy={policy} defaultOpenAll />
+                    <PolicyRuleSetsAccordion policy={policy} />
                   )}
                 </div>
               );
@@ -643,7 +620,7 @@ function GovernanceRulesBody({
       <div className={page.section}>
         <Text size={500} weight="semibold">Parameter rulesets</Text>
         <Text size={200} className={page.description}>
-          Per-resource-type setting buckets. Click any header to collapse a bucket.
+          Per-resource-type setting buckets.
         </Text>
         {!result.rulesets.ok ? (
           <ErrorPane title="Couldn't load parameter rulesets" message={result.rulesets.error} />
@@ -666,7 +643,6 @@ function GovernanceRulesBody({
                 key={rs.id ?? `ruleset-${idx}`}
                 ruleset={rs}
                 currentGroupId={currentGroupId}
-                defaultOpenAll
               />
             ))}
           </>

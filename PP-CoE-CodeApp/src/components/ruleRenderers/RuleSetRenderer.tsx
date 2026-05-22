@@ -35,11 +35,8 @@
  */
 import type { ReactNode } from "react";
 import {
-  Accordion,
-  AccordionHeader,
-  AccordionItem,
-  AccordionPanel,
   Badge,
+  Divider,
   Text,
   Link,
   makeStyles,
@@ -103,6 +100,16 @@ const useStyles = makeStyles({
   iconBad: {
     color: tokens.colorPaletteRedForeground1,
   },
+  rulesList: {
+    display: "flex",
+    flexDirection: "column",
+  },
+  ruleSection: {
+    display: "flex",
+    flexDirection: "column",
+    gap: tokens.spacingVerticalXS,
+    paddingBlock: tokens.spacingVerticalM,
+  },
   headerRow: {
     display: "flex",
     width: "100%",
@@ -123,16 +130,11 @@ const useStyles = makeStyles({
     fontSize: tokens.fontSizeBase200,
     textAlign: "right",
   },
-  panelBody: {
+  ruleBody: {
     display: "flex",
     flexDirection: "column",
     gap: tokens.spacingVerticalS,
-    paddingBlock: tokens.spacingVerticalS,
-  },
-  mutedCode: {
-    color: tokens.colorNeutralForeground3,
-    fontFamily: "Consolas, 'Courier New', monospace",
-    fontSize: tokens.fontSizeBase200,
+    paddingTop: tokens.spacingVerticalXS,
   },
 });
 
@@ -439,19 +441,14 @@ const RULE_METADATA: Record<string, RuleMetadata> = {
 
 // ─── Accordion ─────────────────────────────────────────────────────────────
 
-/** Render a policy's `ruleSets[]` as an accordion. Each item collapses
- *  by default; the header shows the PPAC display name + a short status
- *  summary so the user can scan the whole policy without expanding.
- *
- *  Pass `defaultOpenAll` when the surrounding surface is dedicated to
- *  viewing rules (e.g. the "View all rules" page) — every item starts
- *  expanded, but the user can still collapse individual ones. */
+/** Render a policy's `ruleSets[]` as a flat sectioned list. Each rule
+ *  is always visible (no expand/collapse) with a clean header showing
+ *  the friendly display name + a right-aligned status summary, then the
+ *  body content below. Rules are separated by a thin divider. */
 export function PolicyRuleSetsAccordion({
   policy,
-  defaultOpenAll = false,
 }: {
   policy: Policy;
-  defaultOpenAll?: boolean;
 }) {
   const styles = useStyles();
   const ruleSets = policy.ruleSets ?? [];
@@ -462,41 +459,36 @@ export function PolicyRuleSetsAccordion({
       </Text>
     );
   }
-  const allValues = ruleSets.map((rule, idx) => `${rule.id ?? ""}-${idx}`);
   return (
-    <Accordion collapsible multiple defaultOpenItems={defaultOpenAll ? allValues : undefined}>
+    <div className={styles.rulesList}>
       {ruleSets.map((rule, idx) => {
         const id = rule.id ?? "";
         const inputs = rule.inputs ?? {};
         const meta = RULE_METADATA[id];
         const displayName = meta?.displayName ?? id ?? "(unnamed rule)";
-        const summary = meta?.summary(inputs) ?? "Unknown rule — click to see raw inputs";
-        const value = `${id}-${idx}`;
+        const summary = meta?.summary(inputs) ?? "Unknown rule — raw inputs below";
         return (
-          <AccordionItem key={value} value={value}>
-            <AccordionHeader>
+          <div key={`${id}-${idx}`}>
+            {idx > 0 && <Divider />}
+            <div className={styles.ruleSection}>
               <span className={styles.headerRow}>
                 <span className={styles.headerName}>
                   <Text weight="semibold">{displayName}</Text>
-                  {rule.version && <Badge appearance="outline">v{rule.version}</Badge>}
                   {!meta && (
                     <Badge appearance="outline" color="warning">
                       Unknown rule id
                     </Badge>
                   )}
-                  {id && id !== displayName && <code className={styles.mutedCode}>{id}</code>}
                 </span>
                 <span className={styles.headerSummary}>{summary}</span>
               </span>
-            </AccordionHeader>
-            <AccordionPanel>
-              <div className={styles.panelBody}>
+              <div className={styles.ruleBody}>
                 {meta ? meta.render(inputs) : <UnknownRuleBody inputs={inputs} id={id} />}
               </div>
-            </AccordionPanel>
-          </AccordionItem>
+            </div>
+          </div>
         );
       })}
-    </Accordion>
+    </div>
   );
 }

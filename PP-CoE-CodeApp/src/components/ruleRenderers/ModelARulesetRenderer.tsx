@@ -8,9 +8,9 @@
  * see `docs/admin-payload-samples.md` and
  * `docs/governance-rules-catalog.md` for the schemas.
  *
- * Same on-demand-accordion UX as Model B: every `(type, resourceType)`
- * bucket is one collapsed `<AccordionItem>` with a friendly heading + a
- * short status summary. Click to expand for full per-setting rows.
+ * Same flat-rendering UX as Model B: every `(type, resourceType)`
+ * bucket is one always-visible section with a friendly heading + a
+ * short status summary, then per-setting rows below. No chevrons.
  *
  * **Adding a new parameter renderer.**
  * 1. Capture a live payload sample with the new triple into
@@ -25,11 +25,8 @@
  */
 import type { ReactNode } from "react";
 import {
-  Accordion,
-  AccordionHeader,
-  AccordionItem,
-  AccordionPanel,
   Badge,
+  Divider,
   Text,
   makeStyles,
   tokens,
@@ -63,6 +60,22 @@ const useStyles = makeStyles({
     fontFamily: "Consolas, 'Courier New', monospace",
     fontSize: tokens.fontSizeBase200,
   },
+  bucketsList: {
+    display: "flex",
+    flexDirection: "column",
+  },
+  bucketSection: {
+    display: "flex",
+    flexDirection: "column",
+    gap: tokens.spacingVerticalXS,
+    paddingBlock: tokens.spacingVerticalM,
+  },
+  bucketBody: {
+    display: "flex",
+    flexDirection: "column",
+    gap: tokens.spacingVerticalXS,
+    paddingTop: tokens.spacingVerticalXS,
+  },
   headerRow: {
     display: "flex",
     width: "100%",
@@ -82,12 +95,6 @@ const useStyles = makeStyles({
     color: tokens.colorNeutralForeground2,
     fontSize: tokens.fontSizeBase200,
     textAlign: "right",
-  },
-  panelBody: {
-    display: "flex",
-    flexDirection: "column",
-    gap: tokens.spacingVerticalXS,
-    paddingBlock: tokens.spacingVerticalS,
   },
   row: {
     display: "grid",
@@ -506,42 +513,33 @@ function ParameterRow({
   );
 }
 
-/** Render one Model A `RuleSetDto` — a small header (id + last-modified
- *  + cross-group chip) plus an accordion of `(type, resourceType)`
- *  buckets, each collapsed by default with a status summary in the
- *  header.
- *
- *  Pass `defaultOpenAll` when the surrounding surface is dedicated to
- *  viewing rules — every bucket starts expanded but the user can still
- *  collapse individual ones. */
+/** Render one Model A `RuleSetDto` — a small header (last-modified +
+ *  cross-group chip + bucket count) plus a flat sectioned list of
+ *  `(type, resourceType)` buckets. Each bucket is always visible with
+ *  a clean header showing the friendly name + a right-aligned status
+ *  summary, then the per-setting rows below. Buckets are separated by
+ *  a thin divider. */
 export function RulesetBucketsAccordion({
   ruleset,
   currentGroupId,
-  defaultOpenAll = false,
 }: {
   ruleset: RuleSetDto;
   /** If supplied, the renderer adds a chip noting how many *other*
    *  env groups also receive this ruleset. */
   currentGroupId?: string;
-  /** When true, every bucket accordion item starts expanded. */
-  defaultOpenAll?: boolean;
 }) {
   const styles = useStyles();
   const buckets = ruleset.parameters ?? [];
-  const id = ruleset.id ?? "";
   const filterValues = ruleset.environmentFilter?.values ?? [];
   const otherGroupCount = currentGroupId
     ? filterValues.filter((v) => v.id !== currentGroupId).length
     : 0;
-  const allValues = buckets.map((b, idx) => `${b.type}/${b.resourceType}-${idx}`);
   return (
     <div className={styles.rulesetWrap}>
       <div className={styles.rulesetHeader}>
-        <Text weight="semibold">Ruleset</Text>
-        <span className={styles.mono}>{id || "(no id)"}</span>
         {ruleset.lastModified && (
           <Text size={200} className={styles.rulesetMeta}>
-            · last modified <DateWithRelative value={ruleset.lastModified} />
+            Last modified <DateWithRelative value={ruleset.lastModified} />
           </Text>
         )}
         {otherGroupCount > 0 && (
@@ -558,31 +556,28 @@ export function RulesetBucketsAccordion({
           This ruleset has no parameter buckets.
         </Text>
       ) : (
-        <Accordion collapsible multiple defaultOpenItems={defaultOpenAll ? allValues : undefined}>
+        <div className={styles.bucketsList}>
           {buckets.map((b, idx) => {
             const bucketKey = `${b.type}/${b.resourceType}`;
             const display = bucketDisplayName(bucketKey, b.type, b.resourceType);
             const values = b.value ?? [];
-            const summary = bucketSummary(bucketKey, values) || `${values.length} setting${values.length === 1 ? "" : "s"}`;
-            const value = `${bucketKey}-${idx}`;
+            const summary =
+              bucketSummary(bucketKey, values) ||
+              `${values.length} setting${values.length === 1 ? "" : "s"}`;
             return (
-              <AccordionItem key={value} value={value}>
-                <AccordionHeader>
+              <div key={`${bucketKey}-${idx}`}>
+                {idx > 0 && <Divider />}
+                <div className={styles.bucketSection}>
                   <span className={styles.headerRow}>
                     <span className={styles.headerName}>
                       <Text weight="semibold">{display}</Text>
-                      <code style={{ color: tokens.colorNeutralForeground3, fontSize: 12 }}>
-                        {b.type}/{b.resourceType}
-                      </code>
                       <Badge appearance="outline">
                         {values.length} setting{values.length === 1 ? "" : "s"}
                       </Badge>
                     </span>
                     <span className={styles.headerSummary}>{summary}</span>
                   </span>
-                </AccordionHeader>
-                <AccordionPanel>
-                  <div className={styles.panelBody}>
+                  <div className={styles.bucketBody}>
                     {values.length === 0 ? (
                       <Text size={300} className={styles.empty}>
                         No values in this bucket.
@@ -597,11 +592,11 @@ export function RulesetBucketsAccordion({
                       ))
                     )}
                   </div>
-                </AccordionPanel>
-              </AccordionItem>
+                </div>
+              </div>
             );
           })}
-        </Accordion>
+        </div>
       )}
     </div>
   );
