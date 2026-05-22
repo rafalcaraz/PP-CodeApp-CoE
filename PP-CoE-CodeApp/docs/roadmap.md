@@ -1046,6 +1046,108 @@ for the rare "find by uncommon property" path.
 
 ---
 
+## Env-group "Governance rules" UX polish
+
+> **What shipped.** A single "View all rules" button on
+> `views/EnvironmentGroupDetail.tsx` (commit `c61e192` and earlier in
+> the same series) loads both governance models in parallel and
+> renders every rule expanded by default through
+> `src/components/ruleRenderers/{RuleSetRenderer,ModelARulesetRenderer}.tsx`.
+> Schema reference at `docs/governance-rules-catalog.md`.
+>
+> **What's still rough.** The rendering reuses the accordion shell from
+> the original collapsed-by-default design, which leaves visual cruft
+> when everything's expanded. Specific issues the user called out
+> after first use:
+>
+> - **Chevron noise.** Accordion items keep their disclosure chevrons
+>   even when they start expanded. With ~6+ rule items per policy and
+>   ~5 buckets per ruleset, the column of chevrons reads as "click me"
+>   when there's nothing further to reveal.
+> - **Redundant version badges.** Every rule today is `v1.0`, so the
+>   `v1.0` badge on every header is pure chart junk. We should only
+>   show the badge when version differs from the policy default (or
+>   from a sibling rule with the same id), or hide entirely until we
+>   see a non-1.0 in the wild.
+> - **Schema-name redundancy.** Each header shows the friendly
+>   display name AND the raw rule id (`CopilotTranscripts`,
+>   `Sharing/AuthoringBot/CanShareWithSecurityGroups`, etc.) right next
+>   to it. The raw id is useful for debugging and for the catalog
+>   cross-reference, but at the primary surface it's noise; should be
+>   tucked behind a hover tooltip or shown only in a "developer mode"
+>   toggle.
+> - **Status summary placement.** Right-aligned status summaries in
+>   the accordion header are great for the collapsed state, but when
+>   the panel is open the same info appears again inside (e.g.
+>   "Enabled" badge in header + "✓ AI prompts: Enabled" in body).
+>   Either deduplicate or only show the summary on collapse.
+> - **Card hierarchy.** Inside the combined "Governance rules" card,
+>   the two section headers ("Rule-based policies", "Parameter
+>   rulesets") + per-policy headers + per-rule headers + per-bucket
+>   headers create 4 levels of heading hierarchy. Either flatten or
+>   add visual separation (alternating background, subtle dividers,
+>   tighter typography ladder).
+> - **Density.** Each rule body has its own padding plus the accordion
+>   panel padding plus the section padding. The whole card scrolls a
+>   long way for content that could be tighter — especially for
+>   single-setting rules like `CopilotEnablePrompts` whose body is one
+>   line of text.
+
+### Suggested next pass
+
+Probably the right thing is to **stop using `<Accordion>` entirely for
+the default-expanded mode** and render each rule as a flat
+`<Card appearance="outline">` with the friendly body always visible.
+The collapsed/accordion behavior can come back as an opt-in "compact
+view" toggle at the top of the card if many-rules-per-group tenants
+ask for it. Concrete changes that would unblock that:
+
+1. Split each renderer into `RuleSummaryRow` + `RuleBody` primitives
+   (currently fused inside the AccordionItem). Pages compose them
+   however they want.
+2. Move the friendly display-name + raw-id pair behind a Fluent
+   `<Tooltip>`: friendly name in the heading, raw id surfaced on hover
+   (and copyable). The catalog doc remains the canonical id source.
+3. Build a "Developer mode" toggle in the card header (or a project-
+   wide settings drawer) that flips raw ids back on for power users
+   and removes the version badge filter so everything's visible.
+4. Replace right-aligned status summaries with **inline-trailing**
+   pills that sit next to the title (e.g. `Maker bot enabled` directly
+   after "AI-powered Copilot features (preview)") so the eye doesn't
+   have to skip to the far right of the row.
+5. Add subtle visual separation between Section 1 and Section 2 —
+   maybe a colored left border per section, or a section "chip"
+   ("Model B" / "Model A") to make the two governance APIs visible
+   without long header text.
+6. For one-line-body rules, render them as a single inline row
+   (`<heading> · <one-line-body>`) instead of stacking the body
+   underneath the heading.
+
+### Touchpoints
+
+- `src/components/ruleRenderers/RuleSetRenderer.tsx` —
+  `PolicyRuleSetsAccordion` + per-id body components + `RULE_METADATA`
+  registry.
+- `src/components/ruleRenderers/ModelARulesetRenderer.tsx` —
+  `RulesetBucketsAccordion` + `ParameterRow` + `PARAM_REGISTRY` +
+  `BUCKET_METADATA`.
+- `src/views/EnvironmentGroupDetail.tsx` →
+  `GovernanceRulesBody` — orchestrates the two-section layout. Likely
+  the right place for the "Developer mode" toggle.
+- `docs/governance-rules-catalog.md` — keep in sync when display
+  names / raw ids move between primary and tooltip surfaces.
+
+### Explicitly NOT in scope for the polish pass
+
+- Editing rules. Read-only stays the contract. Mutation lives on a
+  separate roadmap entry if it ever happens.
+- Pagination of role assignments (separate small task — see the
+  `@odata.nextLink` note in `docs/admin-payload-samples.md`).
+- "Compare two env groups" diff view. Different surface; depends on
+  Phase 4 of the governance work (a `/admin/compare-groups` route).
+
+---
+
 ## Bundle optimization (split vendor + lazy routes)
 
 > **Status as of last session.** Build produces a single
