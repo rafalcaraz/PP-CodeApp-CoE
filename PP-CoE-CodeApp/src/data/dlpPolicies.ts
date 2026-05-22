@@ -47,6 +47,18 @@ const PPAC_BASE = "https://admin.powerplatform.microsoft.com";
 export function ppacDlpPolicyUrl(policyId: string): string {
   return `${PPAC_BASE}/security/dataprotection/dlp/policy/${encodeURIComponent(policyId)}`;
 }
+
+/** Build a deep-link into the PPAC environment-group details page.
+ *
+ *  Note: `PortalActions/registry.ts` has a separate env-group URL
+ *  (`.../manage/envgroups/{id}/details`) used by the per-page action
+ *  bar. This helper uses the current `.../manage/environmentGroups/{id}`
+ *  shape PPAC ships today — verified live in May 2026. The registry
+ *  entry should be reconciled to this same URL whenever someone next
+ *  touches it; doing both atomically is out of scope for this DLP work. */
+export function ppacEnvironmentGroupUrl(groupId: string): string {
+  return `${PPAC_BASE}/manage/environmentGroups/${encodeURIComponent(groupId)}`;
+}
 import type { DataResult } from "./inventory";
 
 /** Best-effort error normalization. Mirrors the helper in

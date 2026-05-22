@@ -47,6 +47,7 @@ import {
 import {
   getEnvironmentDlpAndAcpStatus,
   ppacDlpPolicyUrl,
+  ppacEnvironmentGroupUrl,
   type DlpAndAcpStatus,
   type DlpPolicyEvaluation,
   type DlpScopeMatchReason,
@@ -923,9 +924,22 @@ function AcpInteractionBanner({
   onNavigate: ReturnType<typeof useNavigate>;
 }) {
   const groupLink = (
-    <Link onClick={() => onNavigate(`/environment-groups/${encodeURIComponent(groupId)}`)}>
-      {groupName || groupId}
-    </Link>
+    <>
+      <Link
+        onClick={() => onNavigate(`/environment-groups/${encodeURIComponent(groupId)}`)}
+      >
+        {groupName || groupId}
+      </Link>{" "}
+      (
+      <Link
+        href={ppacEnvironmentGroupUrl(groupId)}
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        open in PPAC ↗
+      </Link>
+      )
+    </>
   );
   if (acp.only) {
     return (
@@ -973,13 +987,24 @@ function NoDlpCoverageWarning({
 }) {
   const inGroup = Boolean(env.environmentGroupId);
   const groupLink = inGroup ? (
-    <Link
-      onClick={() =>
-        onNavigate(`/environment-groups/${encodeURIComponent(env.environmentGroupId)}`)
-      }
-    >
-      {env.environmentGroup || env.environmentGroupId}
-    </Link>
+    <>
+      <Link
+        onClick={() =>
+          onNavigate(`/environment-groups/${encodeURIComponent(env.environmentGroupId)}`)
+        }
+      >
+        {env.environmentGroup || env.environmentGroupId}
+      </Link>{" "}
+      (
+      <Link
+        href={ppacEnvironmentGroupUrl(env.environmentGroupId)}
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        open in PPAC ↗
+      </Link>
+      )
+    </>
   ) : null;
 
   if (!env.isManaged) {
