@@ -57,8 +57,9 @@ export interface SupplementalAdminCardProps<T> {
   /** Card header title. */
   title: string;
   /** Card header description. The Refresh link is automatically appended
-   *  in the ready state — don't include "(Refresh)" in this string. */
-  description: ReactNode;
+   *  in the ready state — don't include "(Refresh)" in this string.
+   *  Optional: omit for a title-only header (Refresh still renders). */
+  description?: ReactNode;
   /** Optional help text rendered above the load button in the idle
    *  state. Good place to mention which connector op fires. */
   helpText?: ReactNode;
@@ -136,15 +137,19 @@ export function SupplementalAdminCard<T>({
   }, [loadFn]);
 
   // The header description grows a Refresh link once we have data, so
-  // re-fetch is one click without leaving the card.
+  // re-fetch is one click without leaving the card. If `description` is
+  // omitted we render Refresh on its own (ready state) or nothing
+  // (idle/loading/error states).
   const headerDescription =
     slot.kind === "ready" ? (
       <Text size={200}>
-        {description} <Link onClick={onLoad}>Refresh</Link>
+        {description}
+        {description ? " " : null}
+        <Link onClick={onLoad}>Refresh</Link>
       </Text>
-    ) : (
+    ) : description ? (
       <Text size={200}>{description}</Text>
-    );
+    ) : undefined;
 
   return (
     <Card className={className}>

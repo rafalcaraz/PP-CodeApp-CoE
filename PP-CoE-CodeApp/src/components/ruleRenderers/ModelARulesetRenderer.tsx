@@ -1,3 +1,9 @@
+/* eslint-disable react-refresh/only-export-components -- this file
+ * exports both per-id body components and the `getRulesetBucketItems`
+ * builder consumed by the unified `<GovernanceRulesGrid>`. Splitting
+ * them across two files would just shuffle code around without making
+ * anything clearer; we accept the Fast Refresh trade-off (component
+ * state isn't preserved across HMR for this module). */
 /**
  * Friendly renderer for **Model A** (`parameters`-bucket) rulesets —
  * the legacy-shape governance data returned by `GetRuleSetListForTenant`
@@ -8,9 +14,9 @@
  * see `docs/admin-payload-samples.md` and
  * `docs/governance-rules-catalog.md` for the schemas.
  *
- * Same on-demand-accordion UX as Model B: every `(type, resourceType)`
- * bucket is one collapsed `<AccordionItem>` with a friendly heading + a
- * short status summary. Click to expand for full per-setting rows.
+ * Same flat-rendering UX as Model B: every `(type, resourceType)`
+ * bucket is one always-visible section with a friendly heading + a
+ * short status summary, then per-setting rows below. No chevrons.
  *
  * **Adding a new parameter renderer.**
  * 1. Capture a live payload sample with the new triple into
@@ -25,10 +31,6 @@
  */
 import type { ReactNode } from "react";
 import {
-  Accordion,
-  AccordionHeader,
-  AccordionItem,
-  AccordionPanel,
   Badge,
   Text,
   makeStyles,
@@ -39,59 +41,23 @@ import {
   DismissCircleFilled,
   WarningRegular,
 } from "@fluentui/react-icons";
-import { DateWithRelative } from "../detail";
+import type { GovernanceRuleItem } from "./GovernanceRuleCard";
 
 // ─── Style + small primitives ──────────────────────────────────────────────
 
 const useStyles = makeStyles({
-  rulesetWrap: {
-    display: "flex",
-    flexDirection: "column",
-    gap: tokens.spacingVerticalS,
-  },
-  rulesetHeader: {
-    display: "flex",
-    alignItems: "baseline",
-    gap: tokens.spacingHorizontalS,
-    flexWrap: "wrap",
-  },
-  rulesetMeta: {
-    color: tokens.colorNeutralForeground3,
-    fontSize: tokens.fontSizeBase200,
-  },
   mono: {
     fontFamily: "Consolas, 'Courier New', monospace",
     fontSize: tokens.fontSizeBase200,
   },
-  headerRow: {
-    display: "flex",
-    width: "100%",
-    alignItems: "center",
-    gap: tokens.spacingHorizontalM,
-    minWidth: 0,
-  },
-  headerName: {
-    minWidth: 0,
-    display: "flex",
-    alignItems: "center",
-    gap: tokens.spacingHorizontalS,
-    flexWrap: "wrap",
-  },
-  headerSummary: {
-    marginLeft: "auto",
-    color: tokens.colorNeutralForeground2,
-    fontSize: tokens.fontSizeBase200,
-    textAlign: "right",
-  },
-  panelBody: {
+  bucketBody: {
     display: "flex",
     flexDirection: "column",
     gap: tokens.spacingVerticalXS,
-    paddingBlock: tokens.spacingVerticalS,
   },
   row: {
     display: "grid",
-    gridTemplateColumns: "minmax(220px, 1fr) 2fr",
+    gridTemplateColumns: "minmax(180px, 1fr) 2fr",
     gap: tokens.spacingHorizontalM,
     alignItems: "baseline",
     paddingBlock: tokens.spacingVerticalXXS,
@@ -506,103 +472,58 @@ function ParameterRow({
   );
 }
 
-/** Render one Model A `RuleSetDto` — a small header (id + last-modified
- *  + cross-group chip) plus an accordion of `(type, resourceType)`
- *  buckets, each collapsed by default with a status summary in the
- *  header.
- *
- *  Pass `defaultOpenAll` when the surrounding surface is dedicated to
- *  viewing rules — every bucket starts expanded but the user can still
- *  collapse individual ones. */
-export function RulesetBucketsAccordion({
-  ruleset,
-  currentGroupId,
-  defaultOpenAll = false,
-}: {
-  ruleset: RuleSetDto;
-  /** If supplied, the renderer adds a chip noting how many *other*
-   *  env groups also receive this ruleset. */
-  currentGroupId?: string;
-  /** When true, every bucket accordion item starts expanded. */
-  defaultOpenAll?: boolean;
-}) {
-  const styles = useStyles();
+// ─── Item builder ──────────────────────────────────────────────────────────
+
+/** Flatten one Model A `RuleSetDto`'s `parameters` buckets into the
+ *  unified `GovernanceRuleItem[]` shape consumed by
+ *  `<GovernanceRulesGrid>`. Each bucket becomes one card; the optional
+ *  cross-group note ("also applies to N other groups") rides along as
+ *  a footnote on every bucket card produced by this ruleset. */
+export function getRulesetBucketItems(
+  ruleset: RuleSetDto,
+  currentGroupId?: string,
+): GovernanceRuleItem[] {
   const buckets = ruleset.parameters ?? [];
-  const id = ruleset.id ?? "";
+  const rulesetKey = ruleset.id ?? "unnamed-ruleset";
   const filterValues = ruleset.environmentFilter?.values ?? [];
   const otherGroupCount = currentGroupId
     ? filterValues.filter((v) => v.id !== currentGroupId).length
     : 0;
-  const allValues = buckets.map((b, idx) => `${b.type}/${b.resourceType}-${idx}`);
+  const footnote =
+    otherGroupCount > 0
+      ? `Also applies to ${otherGroupCount} other group${otherGroupCount === 1 ? "" : "s"}`
+      : undefined;
+  return buckets.map((b, idx) => {
+    const bucketKey = `${b.type}/${b.resourceType}`;
+    const display = bucketDisplayName(bucketKey, b.type, b.resourceType);
+    const values = b.value ?? [];
+    const summary =
+      bucketSummary(bucketKey, values) ||
+      `${values.length} setting${values.length === 1 ? "" : "s"}`;
+    return {
+      key: `ruleset:${rulesetKey}:${bucketKey}-${idx}`,
+      title: display,
+      summary,
+      body: <BucketBody bucketKey={bucketKey} values={values} />,
+      footnote,
+    };
+  });
+}
+
+function BucketBody({ bucketKey, values }: { bucketKey: string; values: RuleValue[] }) {
+  const styles = useStyles();
+  if (values.length === 0) {
+    return (
+      <Text size={300} className={styles.empty}>
+        No values in this bucket.
+      </Text>
+    );
+  }
   return (
-    <div className={styles.rulesetWrap}>
-      <div className={styles.rulesetHeader}>
-        <Text weight="semibold">Ruleset</Text>
-        <span className={styles.mono}>{id || "(no id)"}</span>
-        {ruleset.lastModified && (
-          <Text size={200} className={styles.rulesetMeta}>
-            · last modified <DateWithRelative value={ruleset.lastModified} />
-          </Text>
-        )}
-        {otherGroupCount > 0 && (
-          <Badge appearance="outline" color="informative">
-            Also applies to {otherGroupCount} other group{otherGroupCount === 1 ? "" : "s"}
-          </Badge>
-        )}
-        <Badge appearance="outline">
-          {buckets.length} bucket{buckets.length === 1 ? "" : "s"}
-        </Badge>
-      </div>
-      {buckets.length === 0 ? (
-        <Text size={300} className={styles.empty}>
-          This ruleset has no parameter buckets.
-        </Text>
-      ) : (
-        <Accordion collapsible multiple defaultOpenItems={defaultOpenAll ? allValues : undefined}>
-          {buckets.map((b, idx) => {
-            const bucketKey = `${b.type}/${b.resourceType}`;
-            const display = bucketDisplayName(bucketKey, b.type, b.resourceType);
-            const values = b.value ?? [];
-            const summary = bucketSummary(bucketKey, values) || `${values.length} setting${values.length === 1 ? "" : "s"}`;
-            const value = `${bucketKey}-${idx}`;
-            return (
-              <AccordionItem key={value} value={value}>
-                <AccordionHeader>
-                  <span className={styles.headerRow}>
-                    <span className={styles.headerName}>
-                      <Text weight="semibold">{display}</Text>
-                      <code style={{ color: tokens.colorNeutralForeground3, fontSize: 12 }}>
-                        {b.type}/{b.resourceType}
-                      </code>
-                      <Badge appearance="outline">
-                        {values.length} setting{values.length === 1 ? "" : "s"}
-                      </Badge>
-                    </span>
-                    <span className={styles.headerSummary}>{summary}</span>
-                  </span>
-                </AccordionHeader>
-                <AccordionPanel>
-                  <div className={styles.panelBody}>
-                    {values.length === 0 ? (
-                      <Text size={300} className={styles.empty}>
-                        No values in this bucket.
-                      </Text>
-                    ) : (
-                      values.map((v, vIdx) => (
-                        <ParameterRow
-                          key={v.id ?? `value-${vIdx}`}
-                          bucketKey={bucketKey}
-                          value={v}
-                        />
-                      ))
-                    )}
-                  </div>
-                </AccordionPanel>
-              </AccordionItem>
-            );
-          })}
-        </Accordion>
-      )}
+    <div className={styles.bucketBody}>
+      {values.map((v, vIdx) => (
+        <ParameterRow key={v.id ?? `value-${vIdx}`} bucketKey={bucketKey} value={v} />
+      ))}
     </div>
   );
 }
