@@ -3,6 +3,20 @@
 KQL / ARG / schema idiosyncrasies that bite. Skim this if a paste
 "looks right" but the user reports zero rows or an error.
 
+## 0. Equality is `==`, NEVER `=`
+
+KQL has **no** single-`=` equality operator. The connector silently
+fails (or rejects) clauses with `Operator: "="`. **Always two
+equals signs.**
+
+✅ `"Operator": "=="`
+❌ `"Operator": "="`
+
+Same rule applies to all operator spellings — they must match
+`04-operators.txt` § "Operator catalog" character-for-character.
+No `eq`, no `like`, no `Contains` (wrong case), no `in` (missing
+the `~`).
+
 ## 1. Forgetting the `where type ==` envelope returns garbage
 
 Almost every recipe in `07-recipes.txt` starts with a `where type ==`
