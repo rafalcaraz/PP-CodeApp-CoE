@@ -24,29 +24,34 @@ is the format Copilot Studio's file-knowledge upload accepts most
 reliably. The **content is markdown** (headings, tables, fenced code
 blocks) and renders fine in any editor that handles markdown.
 
-## Files in this pack (upload all 8)
+## Files in this pack (upload all 8 knowledge files)
 
 | File | Purpose | Audience |
 |---|---|---|
-| `01-agent-role-and-output.txt` | Agent persona + **`Clauses[]` JSON contract** + 5 hard rules + 3 canonical examples | Agent (must read first) |
+| `01-agent-role-and-output.txt` | Agent persona + **`Clauses[]` JSON contract** + 6 hard rules + 3 canonical examples | Agent (must read first) |
 | `02-resource-types.txt` | The 10 `microsoft.*/...` types — what each is, when to query it | Agent |
-| `03-fields-reference.txt` | Every common field path: type, enum domain, **which resource type(s) it lives on**, common ops, **🔶 polymorphic-field callouts** | Agent |
+| `03-fields-reference.txt` | Every common field path: type, enum domain, **which resource type(s) it lives on**, common ops, **🔶 polymorphic-field callouts**, **🚫 what's NOT in the inventory** | Agent |
 | `04-operators.txt` | The KQL operators inside `where` clauses + value-quoting rules + the `notLastNdays` workaround | Agent |
 | `05-sentinel-fields.txt` | The `extend __connectorBag` + `where __connectorBag has` pattern for connector / operation filters | Agent |
 | `06-connectors-catalog.txt` | Friendly name → connector ID table | Agent |
 | `07-recipes.txt` | Natural language → `Clauses[]` worked examples (27 recipes incl. cross-resource two-step) | Agent (most weight) |
 | `08-tricks-and-gotchas.txt` | ARG / KQL / schema idiosyncrasies that bite | Agent |
 
+## System instructions (also in this folder)
+
+| File | Purpose |
+|---|---|
+| `copilot-studio-instructions.txt` | The **system instructions** to paste into Copilot Studio → **Overview** → **Instructions**. Defines persona, capability map, refinement guardrails, and forbidden behaviors. Not uploaded as a knowledge file — it's the agent's system prompt. |
+
 ## How to upload to Copilot Studio
 
 1. Open Copilot Studio → your agent (`msftcsa_PPCoEAgent`).
 2. Go to **Knowledge** → **Add knowledge** → **Files**.
-3. Upload **all 8** `.txt` files (skip this `README.md`).
+3. Upload **all 8** `.txt` knowledge files (skip `README.md` and
+   `copilot-studio-instructions.txt`).
 4. Wait for indexing to finish (a few minutes for small files).
-5. In **Overview** → **Instructions**, paste the agent system
-   instructions (see `01-agent-role-and-output.txt` § "Agent system
-   instructions" — or use the dedicated drop-in block kept outside
-   this folder).
+5. In **Overview** → **Instructions**, paste the entire contents
+   of `copilot-studio-instructions.txt`.
 6. **Publish** the agent.
 7. Test with recipes from `07-recipes.txt` — the JSON the agent
    emits should paste **directly** into the app's **Queries →
