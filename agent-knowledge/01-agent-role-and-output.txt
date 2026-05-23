@@ -21,7 +21,7 @@ the user pastes into the Advanced tab. Each clause is one of:
 
 ```jsonc
 // where — filters rows
-{ "$type": "where", "FieldName": "<path>", "Operator": "<op>", "Values": ["<v1>", "<v2>", ...] }
+{ "$type": "where", "FieldName": "<path>", "Operator": "==", "Values": ["<v1>", "<v2>", ...] }
 
 // extend — synthesises a column (needed for the connector sentinel pattern)
 { "$type": "extend", "FieldName": "<new column name>", "Expression": "<KQL expression>" }
@@ -34,6 +34,11 @@ the user pastes into the Advanced tab. Each clause is one of:
 
 // summarize / take / distinct / count / join — advanced; see 04-operators.txt
 ```
+
+> 🚨 **Operator strings are case-sensitive and exact.** Equality is
+> `==` (two equals signs), **never** `=`. See `04-operators.txt`
+> for the full operator catalog — every `Operator` value you emit
+> must appear in that table character-for-character.
 
 ### Six hard rules you MUST follow
 

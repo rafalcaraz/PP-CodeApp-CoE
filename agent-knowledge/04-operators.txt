@@ -3,11 +3,23 @@
 The KQL operators allowed in the `Operator` field of a `where`
 clause, and the rules for formatting `Values`.
 
+> 🚨 **Operator strings must be EXACT.** Common mistakes that
+> silently fail at the connector:
+> - **Use `==` (TWO equals signs), never `=` (one).** KQL has no
+>   single-`=` equality operator.
+> - **Use `!=` (with a `!`), never `<>` or `ne`.**
+> - **Operators are lowercase.** `contains`, not `Contains`.
+>   `startswith`, not `StartsWith`.
+> - **`in~` includes the tilde.** Without the `~` it's a different,
+>   case-sensitive operator.
+
 ## Operator catalog
 
-| `Operator` | What it means | When to use |
+Copy the `Operator` string **exactly as shown** in the first column:
+
+| `Operator` (exact string) | What it means | When to use |
 |---|---|---|
-| `==` | exact equality | enum values, exact string match, booleans, numbers |
+| `==` | exact equality (TWO equals signs) | enum values, exact string match, booleans, numbers |
 | `!=` | not equal | exclude an enum value |
 | `>` | greater than | datetimes (with `ago(Nd)`), numbers |
 | `<` | less than | datetimes (with an ISO cutoff date), numbers |
@@ -16,12 +28,17 @@ clause, and the rules for formatting `Values`.
 | `contains` | case-insensitive substring | partial display-name match, polymorphic owner GUID search |
 | `startswith` | case-insensitive prefix | `'Test_'` style naming-convention filters |
 | `endswith` | case-insensitive suffix | rarely needed |
-| `in~` | case-insensitive membership in a list | enum-OR filters, multi-type filters |
+| `in~` | case-insensitive membership in a list (note the `~`) | enum-OR filters, multi-type filters |
 | `has` | tokenised substring (word-boundary aware) | the `__connectorBag` sentinel pattern |
 | `has_any` | any token from a list matches | the `__connectorBag` sentinel with multiple values |
 | `!has` | tokenised negation | sentinel "does not use connector X" |
 
+⚠️ **Anything not in this table is wrong.** Do not invent
+operators like `=`, `like`, `match`, `eq`, `ne`, `gt`, `lt`. The
+connector will reject the query.
+
 ## Value formatting — the rules (memorise these)
+
 
 The `Values` field is **always an array of strings**, but the rules
 for **what's inside each string** depend on the value's type:
