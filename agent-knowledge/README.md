@@ -2,11 +2,12 @@
 
 > **What this folder is.** The knowledge pack that grounds the
 > Microsoft Copilot Studio agent (`msftcsa_PPCoEAgent`) embedded in
-> the PP-CoE Code App. Every file in this folder is meant to be
-> uploaded as a **knowledge source** in Copilot Studio. The agent's
-> only job is to turn natural-language CoE / Power Platform inventory
-> questions into validated **`QuerySpec` JSON** that the React app
-> consumes (see `01-agent-role-and-output.txt`).
+> the PP-CoE Code App. Every file in this folder is uploaded as a
+> **knowledge source** in Copilot Studio. The agent's job is to turn
+> natural-language CoE / Power Platform inventory questions into a
+> **raw `Clauses[]` JSON array** that pastes directly into the
+> app's **Queries → Advanced** tab and runs without further
+> conversion.
 
 ## Not part of the app
 
@@ -21,36 +22,35 @@ breaking the build is impossible.
 The 8 knowledge files are saved with a `.txt` extension because that
 is the format Copilot Studio's file-knowledge upload accepts most
 reliably. The **content is markdown** (headings, tables, fenced code
-blocks) and renders fine in any editor that handles markdown. If you
-want to preview them with proper formatting, point your editor at the
-file and choose markdown rendering — the extension is the only thing
-that's plain-text.
+blocks) and renders fine in any editor that handles markdown.
 
-## Files in this pack (upload all of them)
+## Files in this pack (upload all 8)
 
 | File | Purpose | Audience |
 |---|---|---|
-| `01-agent-role-and-output.txt` | Agent persona, output contract (`QuerySpec` JSON), hard rules (no clock, no execution, ask when unsure), 3 canonical examples | Agent (must read first) |
+| `01-agent-role-and-output.txt` | Agent persona + **`Clauses[]` JSON contract** + 5 hard rules + 3 canonical examples | Agent (must read first) |
 | `02-resource-types.txt` | The 10 `microsoft.*/...` types — what each is, when to query it | Agent |
 | `03-fields-reference.txt` | Every common field path: type, enum domain, **which resource type(s) it lives on**, common ops, **🔶 polymorphic-field callouts** | Agent |
-| `04-operators.txt` | The 13 operators: semantics, value formatting, **the missing `notLastNdays` workaround** | Agent |
-| `05-sentinel-fields.txt` | `__connector` and `__operation` — when to prefer over raw paths | Agent |
-| `06-connectors-catalog.txt` | Friendly name → connector ID table (SharePoint → `shared_sharepointonline`, etc.) | Agent |
-| `07-recipes.txt` | Natural language → `QuerySpec` worked examples, including cross-resource two-step patterns and out-of-scope answers | Agent (most weight) |
-| `08-tricks-and-gotchas.txt` | KQL idiosyncrasies + lessons learned that aren't obvious from the field list | Agent |
+| `04-operators.txt` | The KQL operators inside `where` clauses + value-quoting rules + the `notLastNdays` workaround | Agent |
+| `05-sentinel-fields.txt` | The `extend __connectorBag` + `where __connectorBag has` pattern for connector / operation filters | Agent |
+| `06-connectors-catalog.txt` | Friendly name → connector ID table | Agent |
+| `07-recipes.txt` | Natural language → `Clauses[]` worked examples (27 recipes incl. cross-resource two-step) | Agent (most weight) |
+| `08-tricks-and-gotchas.txt` | ARG / KQL / schema idiosyncrasies that bite | Agent |
 
 ## How to upload to Copilot Studio
 
 1. Open Copilot Studio → your agent (`msftcsa_PPCoEAgent`).
 2. Go to **Knowledge** → **Add knowledge** → **Files**.
-3. Upload **all 8** files in this folder (skip this `README.md`).
+3. Upload **all 8** `.txt` files (skip this `README.md`).
 4. Wait for indexing to finish (a few minutes for small files).
-5. In **Overview** → **Instructions**, paste the contents of
-   `01-agent-role-and-output.txt` (the "Agent system instructions"
-   section) as the agent's system prompt.
+5. In **Overview** → **Instructions**, paste the agent system
+   instructions (see `01-agent-role-and-output.txt` § "Agent system
+   instructions" — or use the dedicated drop-in block kept outside
+   this folder).
 6. **Publish** the agent.
-7. Test with the recipes from `07-recipes.txt` (the answers in there
-   should match what the agent emits).
+7. Test with recipes from `07-recipes.txt` — the JSON the agent
+   emits should paste **directly** into the app's **Queries →
+   Advanced** tab and run.
 
 ## When to refresh
 
@@ -58,22 +58,22 @@ Re-upload the affected file whenever:
 
 - `src/data/inventory.ts` adds/removes a field in
   `COMMON_FIELD_SUGGESTIONS`, a resource type in `ALL_RESOURCE_TYPES`,
-  a connector in `KNOWN_CONNECTORS`, an operator in `QueryFilterOp`,
+  a connector in `KNOWN_CONNECTORS`, an operator in the where-clause
+  catalog (`04-operators.txt`),
   or a sentinel field
 - The schema doc (`PP-CoE-CodeApp/docs/inventory-schema-samples.md`)
   documents a new field shape or value domain
 - You discover a new common CoE question worth turning into a recipe
 
-A future `scripts/generate-agent-knowledge.mjs` will regenerate the
-data-driven files (02, 03, 04, 06) from `inventory.ts` so they never
-drift. For now they're maintained by hand.
-
 ## The contract with the app (in one sentence)
 
-The agent emits a fenced ` ```json ` block containing one `QuerySpec`
-object. The React app reads `reply.parsed` (see
-`src/services/copilotStudio.ts`), validates the shape, and either
-deep-links to `/queries?spec=<base64>` or shows a "Paste into Queries"
-button. **The agent never sees results, never executes anything, and
-never sees data.** This isolation is intentional — it removes any
-risk of token-blowup from large inventory dumps.
+The agent emits a fenced ` ```json ` block containing a **raw
+`Clauses[]` JSON array** — each element is an object with a `$type`
+discriminator (`where` / `extend` / `orderby` / `project` /
+`summarize` / `take` / `distinct` / `count` / `join`) that the
+app's `runRawQuery` function (`src/data/inventory.ts`) hands
+straight to the `QueryResources` connector. The user copies the
+array, pastes it into **Queries → Advanced**, and clicks **Run
+query**. **The agent never sees results, never executes anything,
+and never sees data** — this isolation is intentional and removes
+any risk of token-blowup from large inventory dumps.

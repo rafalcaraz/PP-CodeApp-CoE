@@ -1,144 +1,188 @@
 # 08 — Tricks and gotchas
 
-KQL / ARG / schema idiosyncrasies that the agent should know about
-even though most are handled automatically by the clause builder.
-Skim this if a query "looks right" but the user reports zero results.
+KQL / ARG / schema idiosyncrasies that bite. Skim this if a paste
+"looks right" but the user reports zero rows or an error.
 
-## 1. `orderField` on `properties.*` is silently wrapped in `tostring()`
+## 1. Forgetting the `where type ==` envelope returns garbage
 
-ARG rejects `order by properties.foo` on dynamic fields with
-`ExpressionKeyCantBeDynamic`. The clause builder wraps every
-`properties.*` orderField in `tostring()` automatically. **You don't
-need to do anything** — just put the raw dot path in `orderField`.
+Almost every recipe in `07-recipes.txt` starts with a `where type ==`
+or `where type in~` clause. Without it, the query runs against
+**every** resource shape in the inventory and returns chaos. Always
+emit the envelope filter first.
 
-## 2. String values are auto-quoted; booleans and numbers are not
+## 2. String values must be SINGLE-QUOTED inside the Values array
 
-`quoteSmart` in the clause builder:
-- `"true"` / `"false"` → KQL boolean (unquoted)
-- numeric strings → KQL number (unquoted)
-- everything else → single-quoted string
+The most common mistake. ARG parses unquoted strings as **column
+names**, then errors with `Operator_FailedToResolveEntity`.
 
-You always pass `value` as a string in JSON. The builder figures out
-how to render it.
+✅ `"Values": ["'Suspended'"]`
+❌ `"Values": ["Suspended"]`
 
-## 3. `lastNdays` translates to `> ago(Nd)`
+The outer JSON quotes are doubles, the inner KQL quotes are singles.
+Embedded single quotes are doubled: `'it''s'`.
 
-The value must be a number-as-string like `"30"`. **Do not** include
-a date or write `"ago(30d)"` yourself.
+## 3. Booleans and numbers are NOT single-quoted
 
-## 4. There is no `notLastNdays`
+The opposite of #2. If you quote them, KQL compares a boolean column
+to a string literal and the filter never matches.
 
-Already covered in `04-operators.txt`. The workaround: ask the user
-for an ISO cutoff date and use `<`. **Never invent today's date.**
+✅ `"Values": ["true"]` / `"Values": ["30"]`
+❌ `"Values": ["'true'"]` / `"Values": ["'30'"]`
 
-## 5. Multiple `where` clauses are AND-ed; OR needs `in~` / `has_any`
+## 4. `ago(Nd)` is a KQL function, not a string
 
-`QuerySpec` has no OR composition across separate filters. For OR,
-use a single filter with `in~` (for `==`-style OR) or `has_any` (for
-tokenised / sentinel OR).
+Pass it bare in the Values array — no single quotes.
 
-## 6. Connector IDs are inconsistent across resource types
+✅ `"Values": ["ago(30d)"]`
+❌ `"Values": ["'ago(30d)'"]`
 
-Three flavors:
-- Canvas / agents / flows: `properties.powerPlatformConnectors[]`
-  with **bare slugs**, sometimes with `shared_` prefix, sometimes
-  without (flows often omit `shared_`)
-- App-builder apps: `properties.connectors[]` with **full ARM paths**
-- Cloud flows also have `properties.trigger.connectorId` for the
-  trigger connector
+Same goes for `datetime(2024-11-22T00:00:00Z)`.
 
-The `__connector` sentinel flattens all three into one searchable
-string (`__connectorBag`). **Always prefer the sentinel for
-connector-name filters.** See `05-sentinel-fields.txt`.
+## 5. `orderby` on `properties.*` requires `tostring()`
 
-## 7. `__connectorBag` extend is emitted at most once per query
+ARG rejects raw sort on dynamic columns with
+`ExpressionKeyCantBeDynamic`.
 
-Multiple `__connector` (or `__operation`) filters in the same
-`QuerySpec` reuse the same synthesised column. This is **why two
-`__connector ==` filters work as AND**: they're two `has` checks
-against the same string, both must succeed.
+✅ `"FieldNamesAscDesc": { "tostring(properties.lastModifiedAt)": "desc" }`
+❌ `"FieldNamesAscDesc": { "properties.lastModifiedAt": "desc" }`
 
-## 8. `properties.environmentType` belongs to environments, NOT apps
+Top-level fields (`name`, `type`, `location`) and `summarize` output
+aliases (e.g. `resourceCount`) **don't** need the wrap.
+
+## 6. There is no inverse of `ago()` operator — use absolute logic
+
+Already covered in `04-operators.txt`. Workaround:
+
+- "last N days" → `Operator: ">", Values: ["ago(Nd)"]`
+- "older than N days" → `Operator: "<", Values: ["ago(Nd)"]` (KQL
+  is fine with this; just confirm N with the user)
+- "older than specific date" → `Operator: "<", Values: ["datetime(2024-11-22T00:00:00Z)"]`
+
+Never invent today's date.
+
+## 7. Multiple `where` clauses are AND-ed; OR needs `in~` / `has_any`
+
+There is no OR composition across separate clauses. To express OR
+on one field, use `in~` (string equality OR) or `has_any` (sentinel
+substring OR) inside one clause.
+
+## 8. Connector arrays cannot be filtered with `==`
+
+The three connector locations
+(`properties.powerPlatformConnectors`, `properties.connectors`,
+`properties.trigger`) are **dynamic** (arrays or nested objects).
+KQL's `==` doesn't work on dynamic values and `mv-expand` isn't in
+the connector's clause whitelist.
+
+**Always use the `__connectorBag` sentinel pattern** — see
+`05-sentinel-fields.txt`.
+
+## 9. The `extend __connectorBag` is emitted once and reused
+
+If you need multiple connector filters in the same paste (e.g.
+"uses both X and Y"), emit the `extend` clause **once** and then
+multiple `where __connectorBag has` clauses. Each `where` runs
+against the same synthesised string column — AND semantics for
+free.
+
+## 10. `properties.environmentType` belongs to environments, NOT apps
 
 This is the #1 cross-resource gotcha. If you filter apps by
-`properties.environmentType == "Production"`, you get **zero rows
+`properties.environmentType == 'Production'`, you get **zero rows
 silently** (ARG doesn't error on missing dynamic fields). The
 correct pattern is the **two-step recipe 7.11**.
 
-The same is true for many fields — see the **"Lives on" column** in
-`03-fields-reference.txt` and check it before every filter.
+Same is true for many fields — check the "Lives on" column in
+`03-fields-reference.txt` before every filter.
 
-## 9. Owner / creator fields are polymorphic — prefer `contains`
+## 11. Owner / creator fields are polymorphic — prefer `contains`
 
-`properties.ownerId`, `properties.createdBy`, `properties.lastModifiedBy`
-are sometimes a flat GUID, sometimes an object
-`{id, displayName, email}`. Exact `==` misses the object form.
+`properties.ownerId`, `properties.createdBy`,
+`properties.lastModifiedBy` are sometimes a flat GUID, sometimes
+an object `{id, displayName, email}`. `==` against a bare GUID
+silently misses the object form.
 
 **Always prefer `contains` against the GUID** for these fields.
 See `03-fields-reference.txt` 🔶 callouts.
 
-## 10. `lastModifiedBy` may be the empty string
+## 12. `lastModifiedBy` may be the empty string
 
 For system-owned / Microsoft-managed resources (e.g. the built-in
 Customer Service Hub model-driven app),
-`properties.lastModifiedBy` is `""`. If the user asks for "modified
-by anyone", excluding empty: add a second filter
-`{ "field": "properties.lastModifiedBy", "op": "!=", "value": "" }`.
+`properties.lastModifiedBy` is `""`. If the user asks for
+"modified by anyone", exclude empty: add a filter
+`{ "$type": "where", "FieldName": "properties.lastModifiedBy", "Operator": "!=", "Values": ["''"] }`.
 
-## 11. There's no "last run" timestamp distinct from `lastModifiedAt`
+## 13. There's no "last run" timestamp distinct from `lastModifiedAt`
 
 Common ask: "flows that haven't run in 90 days". The inventory
 doesn't carry a per-resource "last execution" timestamp. Use
 `properties.lastModifiedAt` as the closest proxy, and be honest
 with the user that it tracks edits, not runs.
 
-## 12. `lastLaunchedTime` exists only on some canvas apps
+## 14. `lastLaunchedTime` exists only on some canvas apps
 
 Don't filter on `properties.lastLaunchedTime` for non-canvas types —
 it'll silently return zero. For "apps that have been opened
-recently", restrict `resourceTypes` to `microsoft.powerapps/canvasapps`
-only, OR fall back to `lastModifiedAt` for cross-type coverage.
+recently", restrict `where type ==` to
+`'microsoft.powerapps/canvasapps'` only, OR fall back to
+`lastModifiedAt` for cross-type coverage.
 
-## 13. `properties.channels` is a dynamic array
+## 15. `properties.channels` is a dynamic string array
 
 The clause builder won't `mv-expand` it. For "agents on Teams":
-use `contains` against `tostring(properties.channels)` — but this is
-awkward; for now, prefer pulling all agents and filtering client-side
-unless the user is OK with a substring-match approximation.
+fall back to `tostring(properties.channels) contains 'Teams'` — but
+this is a substring-match approximation, not exact channel
+membership. Be honest about it in your reply.
 
-## 14. `status` for flows has multiple possible values
+## 16. `properties.status` for flows has multiple possible values
 
-Documented: `"Activated"`, `"Suspended"`, `"Stopped"`, `"Started"`,
-`"NotStarted"`. Older payloads may use `state` or `flowState` —
+Documented: `'Activated'`, `'Suspended'`, `'Stopped'`, `'Started'`,
+`'NotStarted'`. Older payloads may use `state` or `flowState` —
 the inventory layer falls back automatically, but if a user query
 returns zero, suggest trying the alternative casing/name.
 
-## 15. Pagination — `limit` is per-page, not total
+## 17. Pagination — don't emit `take`
 
-`spec.limit` becomes `Top` (page size). Total tenant-wide count is
-returned as `totalRecords`. The app shows "Load more" past the
-first page. **Don't try to "paginate" inside a single QuerySpec** —
-that's the app's job.
+`take` truncates inside KQL and caps the reported `totalRecords` —
+so the UI lies about the real tenant-wide total. The user controls
+page size via the **Page size** input. Just leave `take` out.
 
-## 16. Querying `name` directly works (it's the bare GUID)
+## 18. `name` is the bare GUID — no `properties.` prefix
 
-`name` at top level is the resource GUID — same as the trailing
-segment of `id`. No `properties.` prefix needed. Useful when the
-user has a specific GUID and the resource type is ambiguous:
+`name` at the top level is the resource GUID (same as the trailing
+segment of `id`). Useful when the user has a specific GUID and the
+resource type is ambiguous:
 
 ```json
-{
-  "resourceTypes": [
-    "microsoft.powerapps/canvasapps",
-    "microsoft.powerapps/modeldrivenapps",
-    "microsoft.powerapps/codeapps",
-    "microsoft.powerapps/apps"
-  ],
-  "filters": [
-    { "field": "name", "op": "==", "value": "12345678-1234-1234-1234-123456789012" }
-  ],
-  "orderField": "properties.displayName",
-  "orderDirection": "asc",
-  "limit": 10
-}
+[
+  {
+    "$type": "where",
+    "FieldName": "type",
+    "Operator": "in~",
+    "Values": [
+      "'microsoft.powerapps/canvasapps'",
+      "'microsoft.powerapps/modeldrivenapps'",
+      "'microsoft.powerapps/codeapps'",
+      "'microsoft.powerapps/apps'"
+    ]
+  },
+  {
+    "$type": "where",
+    "FieldName": "name",
+    "Operator": "==",
+    "Values": ["'12345678-1234-1234-1234-123456789012'"]
+  }
+]
 ```
+
+## 19. The Advanced tab accepts both array and wrapped forms
+
+The app's parser accepts either:
+
+- A bare array: `[ {...}, {...} ]`  ← **canonical, use this**
+- A wrapped object: `{ "clauses": [ {...}, {...} ] }`
+
+Always emit the bare array. The wrapped form exists so users can
+paste in a snippet someone copied with surrounding text — don't
+rely on it.
