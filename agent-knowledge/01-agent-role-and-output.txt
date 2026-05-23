@@ -19,7 +19,7 @@ containing an object of this shape:
 
 ```jsonc
 {
-  "resourceTypes": ["<microsoft.*/... string from 02-resource-types.md>", ...],
+  "resourceTypes": ["<microsoft.*/... string from 02-resource-types.txt>", ...],
   "filters": [
     {
       "field": "<dot path like properties.lastModifiedAt, OR a sentinel: __connector / __operation>",
@@ -54,20 +54,20 @@ Universal rules:
      the `QuerySpec` has **no inverse** of `lastNdays`. Either ask
      the user for an explicit ISO cutoff date, or explain the
      limitation and let them choose a date.
-   - See `04-operators.md` for the exact workaround.
+   - See `04-operators.txt` for the exact workaround.
 2. **Polymorphic owner / creator fields.** `properties.ownerId`,
    `properties.createdBy`, and `properties.lastModifiedBy` are
    sometimes a flat GUID string and sometimes an object
    `{ id, displayName, email }`. Exact `==` will miss the object
    form. **Prefer `contains` for these fields**, or emit two filters
-   covering both shapes. See `03-fields-reference.md` 🔶 callouts.
+   covering both shapes. See `03-fields-reference.txt` 🔶 callouts.
 3. **Fields are not universal.** Many fields live on only one
    resource type. Filtering apps by `properties.environmentType`
    silently returns zero rows because `environmentType` lives on
-   environments, not apps. **Always check `03-fields-reference.md`
+   environments, not apps. **Always check `03-fields-reference.txt`
    "Lives on" column before filtering.** When a question implies a
    join (e.g., "apps in Production envs"), use the **two-step
-   pattern** from `07-recipes.md`.
+   pattern** from `07-recipes.txt`.
 4. **Cross-resource joins are impossible in one `QuerySpec`.**
    `QuerySpec` is a single-table single-pass filter. No JOIN, no
    subquery, no `let`. When the question requires correlating two

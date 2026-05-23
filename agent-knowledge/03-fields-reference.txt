@@ -8,7 +8,7 @@ on, and what operators are sensible.
 > targeted resource type returns **zero rows silently** — ARG does
 > not error. Always check the "Lives on" column. When a question
 > implies cross-resource filtering, use a **two-step pattern**
-> (see `07-recipes.md`, recipes 7.11–7.13).
+> (see `07-recipes.txt`, recipes 7.11–7.13).
 
 ## Top-level (envelope) fields
 
@@ -72,7 +72,7 @@ Present on every resource type with the same meaning.
 
 | Field | Type | Domain | Common ops |
 |---|---|---|---|
-| `properties.powerPlatformConnectors` | array of `{connectorId, operations[]}` | dynamic — see `05-sentinel-fields.md` | **DO NOT filter directly — use `__connector` / `__operation` sentinels** |
+| `properties.powerPlatformConnectors` | array of `{connectorId, operations[]}` | dynamic — see `05-sentinel-fields.txt` | **DO NOT filter directly — use `__connector` / `__operation` sentinels** |
 | `properties.lastLaunchedTime` | datetime (ISO 8601, when present) | not on every canvas app | `lastNdays`, `>`, `<`. **Not available on model-driven / code / app-builder apps.** |
 | `properties.sharedUsersCount` | number | non-negative integer | `>`, `<`, `==` |
 | `properties.sharedGroupsCount` | number | non-negative integer | `>`, `<`, `==` |
@@ -156,7 +156,7 @@ step 2 filters by `properties.environmentId in~ <guids>`.
 | "Quarantined" | `properties.isQuarantined == "true"` (apps + agents) |
 | "Activated/suspended/stopped" (flows) | `properties.status` |
 | "Triggered manually / on-demand" | `properties.flowTriggerType == "Instant"` (or `"Manual"`) |
-| "Uses connector X" | `__connector` sentinel — see `05-sentinel-fields.md` |
+| "Uses connector X" | `__connector` sentinel — see `05-sentinel-fields.txt` |
 | "Calls operation X" | `__operation` sentinel |
 | "Published agents" | `properties.lastPublishedAt > ...` (or filter to non-null somehow) |
 | "Managed environments" | `properties.isManaged == "true"` on environments |

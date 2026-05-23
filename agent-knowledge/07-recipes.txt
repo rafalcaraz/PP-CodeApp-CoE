@@ -100,7 +100,7 @@ ownerId is a flat GUID string or `{id, displayName, email}` object.
 ### 7.7 — "Cloud flows using BOTH Outlook AND SQL Server"
 
 Two separate `__connector ==` filters → AND semantics on
-`__connectorBag` (see `05-sentinel-fields.md`).
+`__connectorBag` (see `05-sentinel-fields.txt`).
 
 ```json
 {
@@ -423,7 +423,7 @@ Two ways forward:
 
 The schema doesn't expose a clean "is published" boolean. Best-effort
 proxy: ask the user whether they want agents whose `lastPublishedAt`
-is older than a date (Path A from `04-operators.md`), or just sort
+is older than a date (Path A from `04-operators.txt`), or just sort
 by `lastPublishedAt asc` to see the longest-unpublished ones first.
 
 ```json

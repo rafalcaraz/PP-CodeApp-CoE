@@ -28,7 +28,7 @@ a date or write `"ago(30d)"` yourself.
 
 ## 4. There is no `notLastNdays`
 
-Already covered in `04-operators.md`. The workaround: ask the user
+Already covered in `04-operators.txt`. The workaround: ask the user
 for an ISO cutoff date and use `<`. **Never invent today's date.**
 
 ## 5. Multiple `where` clauses are AND-ed; OR needs `in~` / `has_any`
@@ -49,7 +49,7 @@ Three flavors:
 
 The `__connector` sentinel flattens all three into one searchable
 string (`__connectorBag`). **Always prefer the sentinel for
-connector-name filters.** See `05-sentinel-fields.md`.
+connector-name filters.** See `05-sentinel-fields.txt`.
 
 ## 7. `__connectorBag` extend is emitted at most once per query
 
@@ -66,7 +66,7 @@ silently** (ARG doesn't error on missing dynamic fields). The
 correct pattern is the **two-step recipe 7.11**.
 
 The same is true for many fields — see the **"Lives on" column** in
-`03-fields-reference.md` and check it before every filter.
+`03-fields-reference.txt` and check it before every filter.
 
 ## 9. Owner / creator fields are polymorphic — prefer `contains`
 
@@ -75,7 +75,7 @@ are sometimes a flat GUID, sometimes an object
 `{id, displayName, email}`. Exact `==` misses the object form.
 
 **Always prefer `contains` against the GUID** for these fields.
-See `03-fields-reference.md` 🔶 callouts.
+See `03-fields-reference.txt` 🔶 callouts.
 
 ## 10. `lastModifiedBy` may be the empty string
 

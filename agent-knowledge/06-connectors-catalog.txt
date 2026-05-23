@@ -2,7 +2,7 @@
 
 Friendly-name → connector-ID mapping for every connector the app
 currently recognizes. Use these IDs as the `value` in a `__connector`
-filter (see `05-sentinel-fields.md`).
+filter (see `05-sentinel-fields.txt`).
 
 ## Common Microsoft connectors
 
