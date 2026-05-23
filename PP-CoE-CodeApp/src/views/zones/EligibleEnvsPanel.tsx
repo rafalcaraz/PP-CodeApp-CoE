@@ -186,6 +186,7 @@ export function EligibleEnvsPanel({
                 selectable
                 selected={selection.isSelected(env.id)}
                 onToggle={() => selection.toggle(env.id)}
+                dragSource={{ kind: "loose-standard" }}
               />
             ))
           )}

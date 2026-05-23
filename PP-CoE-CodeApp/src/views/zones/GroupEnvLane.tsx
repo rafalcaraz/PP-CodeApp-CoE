@@ -173,21 +173,23 @@ export function GroupEnvLane({
   // MS group lanes are droppable targets for the "demo the future"
   // drag interaction (drop a Managed env from another MS group / from
   // the Loose Managed side panel to see what the eventual mutation
-  // would do). Custom group lanes are NOT droppable for envs — Managed
-  // envs going there would violate type purity, and Standard envs are
-  // handled via the multi-select Add-to picker, not drag.
-  const droppable = useDroppable({
-    id: `ms-group-lane:${groupId}`,
-    disabled: !isMs,
+  // would do). Custom group lanes are ALSO droppable, but for a
+  // different reason: they accept Standard envs and the drop actually
+  // performs an `addEnvToStandardGroup` mutation (we own that data),
+  // followed by an educational popup. The two drop semantics share the
+  // same hook signature; the discriminator is on the data payload so
+  // `ZoneDetailView`'s handler routes drops to the right action.
+  const { isOver, setNodeRef } = useDroppable({
+    id: `${groupKind === "ms" ? "ms" : "custom"}-group-lane:${groupId}`,
     data: {
-      kind: "msGroupLane",
+      kind: isMs ? "msGroupLane" : "customGroupLane",
       groupId,
       displayName,
     },
   });
 
   const bodyClasses = [styles.body];
-  if (isMs && droppable.isOver) bodyClasses.push(styles.bodyDropTarget);
+  if (isOver) bodyClasses.push(styles.bodyDropTarget);
 
   return (
     <div className={styles.lane}>
@@ -266,7 +268,7 @@ export function GroupEnvLane({
           </Menu>
         )}
       </div>
-      <div ref={isMs ? droppable.setNodeRef : undefined} className={bodyClasses.join(" ")}>
+      <div ref={setNodeRef} className={bodyClasses.join(" ")}>
         {envs.length === 0 ? (
           <div className={styles.empty}>
             {isMs
@@ -293,7 +295,11 @@ export function GroupEnvLane({
                       groupId,
                       groupDisplayName: displayName,
                     }
-                  : undefined
+                  : {
+                      kind: "custom-group",
+                      groupId,
+                      groupDisplayName: displayName,
+                    }
               }
             />
           ))

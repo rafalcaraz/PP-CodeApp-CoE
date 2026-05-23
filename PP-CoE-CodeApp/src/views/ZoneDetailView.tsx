@@ -106,6 +106,7 @@ import {
   EnvMoveDemoDialog,
   type EnvMoveDemoTarget,
 } from "./zones/EnvMoveDemoDialog";
+import { StandardGroupAddDialog } from "./zones/StandardGroupAddDialog";
 import type { EnvDragSource } from "./zones/EnvRow";
 
 interface GroupPlacement {
@@ -284,6 +285,16 @@ export function ZoneDetailView() {
     target: EnvMoveDemoTarget;
   } | null>(null);
 
+  // Post-add state: when a Standard env is dragged into a Standard
+  // custom group lane, the add HAS already happened. The dialog is a
+  // forward-looking "here's what's coming" educational popup pointing
+  // at the future DLP-to-custom-group linkage feature.
+  const [standardAddState, setStandardAddState] = useState<{
+    env: EnvironmentRow;
+    targetGroupName: string;
+    fromGroupName: string | null;
+  } | null>(null);
+
   const sensors = useSensors(
     useSensor(PointerSensor, {
       // Small drag-distance threshold so a quick click on a Loose Managed
@@ -300,34 +311,78 @@ export function ZoneDetailView() {
       | { kind: "envDrag"; env: EnvironmentRow; source: EnvDragSource }
       | undefined;
     const overData = over.data.current as
-      | { kind: "msGroupLane"; groupId: string; displayName: string }
+      | {
+          kind: "msGroupLane" | "customGroupLane";
+          groupId: string;
+          displayName: string;
+        }
       | undefined;
     if (
       !activeData ||
       activeData.kind !== "envDrag" ||
       !overData ||
-      overData.kind !== "msGroupLane"
-    ) {
-      // Drops onto custom group lanes / non-targets fall through here.
-      // Type purity is signalled silently by simply NOT highlighting
-      // custom lanes during drag — no popup or toast needed for the
-      // mis-drop because the user never saw a green "drop here" cue.
-      return;
-    }
-    // Self-drop on the source MS group is a no-op (no popup).
-    if (
-      activeData.source.kind === "ms-group" &&
-      activeData.source.groupId === overData.groupId
+      (overData.kind !== "msGroupLane" && overData.kind !== "customGroupLane")
     ) {
       return;
     }
-    setDemoState({
-      env: activeData.env,
-      source: activeData.source,
-      target: {
-        groupId: overData.groupId,
-        groupDisplayName: overData.displayName,
-      },
+
+    const { env, source } = activeData;
+    const target = overData;
+
+    // ---- MS group lane drops --------------------------------------------
+    if (target.kind === "msGroupLane") {
+      // Type purity: only Managed envs can land in MS group lanes.
+      // Standard envs (loose-standard or custom-group source) are
+      // silently rejected — the absence of a "drop here" cue during
+      // hover is the signal that the drop wouldn't be valid.
+      if (source.kind === "loose-standard" || source.kind === "custom-group") {
+        return;
+      }
+      // Self-drop on the same MS group is a no-op.
+      if (source.kind === "ms-group" && source.groupId === target.groupId) {
+        return;
+      }
+      // Open the preview-only demo dialog (mutation is deferred until
+      // we have permission + audit + rollback infra for PPAC writes).
+      setDemoState({
+        env,
+        source,
+        target: {
+          groupId: target.groupId,
+          groupDisplayName: target.displayName,
+        },
+      });
+      return;
+    }
+
+    // ---- Custom group lane drops ----------------------------------------
+    // Managed envs can't go in custom groups (type purity, enforced at
+    // the data layer too via addEnvToStandardGroup's isManaged check).
+    if (source.kind === "ms-group" || source.kind === "loose-managed") {
+      return;
+    }
+    // Self-drop on the same custom group is a no-op.
+    if (source.kind === "custom-group" && source.groupId === target.groupId) {
+      return;
+    }
+    // Real action: actually add the Standard env to the custom group.
+    // The data layer handles exclusive membership (auto-removes from
+    // any prior custom group).
+    const result = addEnvToStandardGroup(target.groupId, env);
+    if (!result.ok) {
+      // Should be unreachable given the type-purity guard above, but
+      // surface defensively so silent-failure regressions are loud.
+      setBulkMessage({
+        intent: "warning",
+        text: `Couldn't add ${env.displayName}: ${result.reason}`,
+      });
+      return;
+    }
+    setStandardAddState({
+      env,
+      targetGroupName: target.displayName,
+      fromGroupName:
+        source.kind === "custom-group" ? source.groupDisplayName : null,
     });
   };
 
@@ -895,6 +950,14 @@ export function ZoneDetailView() {
         source={demoState?.source ?? null}
         target={demoState?.target ?? null}
         onDismiss={() => setDemoState(null)}
+      />
+
+      <StandardGroupAddDialog
+        open={standardAddState !== null}
+        env={standardAddState?.env ?? null}
+        targetGroupName={standardAddState?.targetGroupName ?? null}
+        fromGroupName={standardAddState?.fromGroupName ?? null}
+        onDismiss={() => setStandardAddState(null)}
       />
 
       <Caption1 className={styles.meta}>
