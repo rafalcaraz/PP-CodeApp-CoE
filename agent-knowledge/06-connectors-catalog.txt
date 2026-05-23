@@ -1,8 +1,8 @@
 # 06 — Connector catalog
 
 Friendly-name → connector-ID mapping for every connector the app
-currently recognizes. Use these IDs as the `value` in a `__connector`
-filter (see `05-sentinel-fields.txt`).
+currently recognizes. Use these IDs as the `Values` entries in a
+`__connectorBag` filter (see `05-sentinel-fields.txt`).
 
 ## Common Microsoft connectors
 
@@ -41,43 +41,55 @@ filter (see `05-sentinel-fields.txt`).
 | Flow management | `shared_flowmanagement` |
 | Logic Flows | `shared_logicflows` |
 
-## Connector ID variants — when to OR them
+## Connector ID variants — when to `has_any` them
 
 For some friendly names, the underlying connector publishes under
-multiple IDs across resource types. Use `in~` with all variants:
+multiple IDs across resource types. Use the sentinel with
+`has_any` and all variants:
 
 ### Dataverse — always use all four
 
-```jsonc
+```json
 {
-  "field": "__connector",
-  "op": "in~",
-  "value": "shared_commondataservice,shared_commondataserviceforapps,commondataservice,commondataserviceforapps"
+  "$type": "where",
+  "FieldName": "__connectorBag",
+  "Operator": "has_any",
+  "Values": [
+    "'shared_commondataservice'",
+    "'shared_commondataserviceforapps'",
+    "'commondataservice'",
+    "'commondataserviceforapps'"
+  ]
 }
 ```
 
 Why: cloud flows publish bare slugs without the `shared_` prefix
 (e.g. `commondataserviceforapps`), while canvas apps and agents
-publish with the prefix.
+publish with the prefix. Both old (`...forapps`) and new
+(`commondataservice`) forms exist concurrently in real tenants.
 
 ## What if the user names a connector NOT in this catalog?
 
-You have two options:
+Two options:
 
 1. **Be honest and ask.** "I don't recognize that connector — what's
    its connector ID slug? (You can usually find it from a flow's
    trigger or the PPAC connector reference.)"
-2. **Take a best-effort guess** using the `__connector` sentinel
-   with `contains`:
+2. **Take a best-effort guess** using `contains` against
+   `__connectorBag` with the substring of the name:
 
-   ```jsonc
-   { "field": "__connector", "op": "contains", "value": "<slug-or-name>" }
+   ```json
+   {
+     "$type": "where",
+     "FieldName": "__connectorBag",
+     "Operator": "contains",
+     "Values": ["'<substring>'"]
+   }
    ```
 
-   …and explicitly tell the user you guessed, e.g.:
-   "I'm not sure of the exact connector ID for X — I used
-   `contains` so this should match if the substring appears in any
-   connector reference. If it returns nothing, please share the
-   exact ID."
+   …and explicitly tell the user you guessed: *"I'm not sure of the
+   exact connector ID for X — I used `contains` so this matches if
+   the substring appears anywhere in the connector references. If
+   it returns nothing, please share the exact slug."*
 
-Never silently invent a connector ID that's not in this catalog.
+**Never silently invent a connector ID that's not in this catalog.**

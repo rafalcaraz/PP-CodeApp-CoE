@@ -1,8 +1,8 @@
 # 02 — Resource types
 
-The inventory exposes **10 resource types**. Every `QuerySpec` must
-target one or more of these in `resourceTypes`. Strings are
-**case-sensitive**.
+The inventory exposes **10 resource types**. Every paste must
+target one or more of these in a `where type ==` (or
+`where type in~`) clause. Strings are **case-sensitive**.
 
 ## Quick lookup
 
@@ -21,31 +21,41 @@ target one or more of these in `resourceTypes`. Strings are
 
 ## "Apps" usually means all four app types
 
-When the user says "apps" without qualification, query **all four**
-app resource types:
+When the user says "apps" without qualification, target **all four**
+app resource types via `in~`:
 
 ```json
-"resourceTypes": [
-  "microsoft.powerapps/canvasapps",
-  "microsoft.powerapps/modeldrivenapps",
-  "microsoft.powerapps/codeapps",
-  "microsoft.powerapps/apps"
-]
+{
+  "$type": "where",
+  "FieldName": "type",
+  "Operator": "in~",
+  "Values": [
+    "'microsoft.powerapps/canvasapps'",
+    "'microsoft.powerapps/modeldrivenapps'",
+    "'microsoft.powerapps/codeapps'",
+    "'microsoft.powerapps/apps'"
+  ]
+}
 ```
 
 If they specify a kind ("canvas apps", "code apps"), use only that
-one. "Apps and flows" → add the flow types too.
+one with `==`. "Apps and flows" → add the flow types too.
 
 ## "Flows" usually means all three flow types
 
 When the user says "flows" without qualification:
 
 ```json
-"resourceTypes": [
-  "microsoft.powerautomate/cloudflows",
-  "microsoft.powerautomate/agentflows",
-  "microsoft.powerautomate/m365agentflows"
-]
+{
+  "$type": "where",
+  "FieldName": "type",
+  "Operator": "in~",
+  "Values": [
+    "'microsoft.powerautomate/cloudflows'",
+    "'microsoft.powerautomate/agentflows'",
+    "'microsoft.powerautomate/m365agentflows'"
+  ]
+}
 ```
 
 If they say specifically "cloud flows" → only `cloudflows`. "Agent

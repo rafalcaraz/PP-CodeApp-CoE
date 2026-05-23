@@ -1,131 +1,193 @@
-# 05 — Sentinel fields (`__connector`, `__operation`)
+# 05 — The `__connectorBag` sentinel pattern
 
-Two special "field" values in `QuerySpec` that the clause builder
-expands into smart cross-shape filters. **You should almost always
-prefer these over the raw `properties.*` paths for connector / op
-filtering.**
+The single most important pattern in this knowledge pack. **Always
+use this for "uses connector X" / "calls operation Y" intents** —
+never try to filter `properties.powerPlatformConnectors` or
+`properties.connectors` directly.
 
-## Why they exist
+## Why the pattern exists
 
 Connector usage is published in **three different shapes** across
-resource types:
+resource types, and KQL can't filter dynamic arrays with `==`:
 
-| Shape | Where | Field path |
+| Where | Field path | Slug style |
 |---|---|---|
-| Array of `{connectorId, operations[]}` with bare slugs | Canvas apps, flows, agents | `properties.powerPlatformConnectors[].connectorId` |
-| Array of `{connectorId, connectionType}` with **ARM path** slugs | App-builder apps | `properties.connectors[].connectorId` |
-| Nested object | Cloud flow trigger | `properties.trigger.connectorId` |
+| Canvas apps, flows, agents | `properties.powerPlatformConnectors[].connectorId` | bare slug (sometimes with `shared_` prefix, sometimes without) |
+| App-builder apps | `properties.connectors[].connectorId` | **ARM path** (`/providers/Microsoft.PowerApps/apis/shared_...`) |
+| Cloud flow trigger | `properties.trigger.connectorId` | bare slug, often empty for first-party connectors |
 
-KQL `==` against any of these directly fails (they're dynamic arrays
-or nested objects), and `mv-expand` isn't available in the
-`QuerySpec` clause set. The sentinels do the right thing
-automatically.
+`mv-expand` isn't in the connector's clause whitelist, so we can't
+unwind the arrays. Instead we **synthesise a single searchable
+string column** that concatenates all three locations, and run a
+tokenised `has` (or `has_any`) against it.
 
-## The sentinels
+## The pattern — two clauses, every time
 
-### `__connector`
+You always emit **exactly two clauses** for a connector filter (in
+addition to the usual `where type == ...` envelope):
 
-> Use when you want to filter "resources that reference connector X
-> (anywhere)" — regardless of resource type or where the connector
-> reference lives in that type's schema.
+### Clause 1 — `extend` to build `__connectorBag`
 
-Behavior:
-
-- Emits a one-time `extend` shim that builds a single string column
-  (`__connectorBag`) concatenating all three connector locations
-- Then translates your filter op against `__connectorBag`:
-  - `==` → `has` (tokenised match — respects word boundaries)
-  - `!=` → `!has`
-  - `in~` → `has_any` (comma-separated values)
-  - `contains` → stays `contains` (substring)
-  - others → pass-through
-- The `extend` is emitted **at most once per query**, so multiple
-  `__connector` filters compose cleanly (e.g. "uses both X and Y").
-
-### `__operation`
-
-Same machinery, same `__connectorBag`. Use for **operation IDs** like
-`"ListRecords"`, `"SendEmailV2"`, `"GetRow"`, etc.
-
-## Always prefer the sentinel for connector-name filters
-
-These are wrong (or only partially right):
-
-❌ `{ "field": "properties.powerPlatformConnectors", "op": "contains", "value": "..." }`
-— misses app-builder apps (they use `properties.connectors`)
-— misses flows whose connector is in `trigger`
-
-❌ `{ "field": "properties.connectors", "op": "contains", "value": "..." }`
-— only matches app-builder apps; misses everything else
-
-This is correct:
-
-✅ `{ "field": "__connector", "op": "==", "value": "shared_sharepointonline" }`
-
-## Connector ID variants you may need to OR together
-
-Bare slug vs `shared_` prefix vs ARM path are **all** flattened into
-`__connectorBag` as strings, so `has` against a bare slug will match
-the ARM-path form too (substring tokenisation). But for **Dataverse
-specifically**, the same connector has multiple legit slugs:
-
-| User says | Add ALL of these via `in~` |
-|---|---|
-| "Dataverse" / "CDS" / "Common Data Service" | `shared_commondataservice,shared_commondataserviceforapps,commondataservice,commondataserviceforapps` |
-| "Office 365" / "Outlook" (enterprise) | `shared_office365` |
-| "Outlook.com" (personal) | `shared_outlook` |
-| "SharePoint" | `shared_sharepointonline` |
-
-When the user just says "Dataverse", default to the full 4-variant
-`in~` list above. The substring tokenisation of `has` covers
-prefix variants too, but being explicit avoids any ambiguity.
-
-## Worked example — "Canvas apps using SharePoint"
+Emit this **once per query**, even if you have multiple connector
+filters. The expression is fixed; copy it verbatim:
 
 ```json
 {
-  "resourceTypes": ["microsoft.powerapps/canvasapps"],
-  "filters": [
-    { "field": "__connector", "op": "==", "value": "shared_sharepointonline" }
-  ],
-  "orderField": "properties.lastModifiedAt",
-  "orderDirection": "desc",
-  "limit": 100
+  "$type": "extend",
+  "FieldName": "__connectorBag",
+  "Expression": "strcat(tostring(properties.powerPlatformConnectors),'|',tostring(properties.connectors),'|',tostring(properties.trigger))"
 }
 ```
 
-## Worked example — "Resources using Office 365 OR SQL"
+### Clause 2 — `where __connectorBag has '<slug>'`
 
 ```json
 {
-  "resourceTypes": [
-    "microsoft.powerapps/canvasapps",
-    "microsoft.powerautomate/cloudflows",
-    "microsoft.copilotstudio/agents"
-  ],
-  "filters": [
-    { "field": "__connector", "op": "in~", "value": "shared_office365,shared_sql" }
-  ],
-  "orderField": "properties.lastModifiedAt",
-  "orderDirection": "desc",
-  "limit": 200
+  "$type": "where",
+  "FieldName": "__connectorBag",
+  "Operator": "has",
+  "Values": ["'shared_sharepointonline'"]
 }
 ```
 
-## Worked example — "Flows using BOTH Outlook AND SQL"
+## Operator translation
+
+| User intent | `Operator` | `Values` |
+|---|---|---|
+| uses connector X | `has` | `["'<slug>'"]` |
+| does NOT use connector X | `!has` | `["'<slug>'"]` |
+| uses any of these connectors (OR) | `has_any` | `["'<slug1>'", "'<slug2>'", ...]` |
+| substring match (e.g. "anything with sharepoint in the name") | `contains` | `["'<substring>'"]` |
+
+## Worked examples
+
+### Canvas apps using SharePoint
+
+```json
+[
+  {
+    "$type": "where",
+    "FieldName": "type",
+    "Operator": "==",
+    "Values": ["'microsoft.powerapps/canvasapps'"]
+  },
+  {
+    "$type": "extend",
+    "FieldName": "__connectorBag",
+    "Expression": "strcat(tostring(properties.powerPlatformConnectors),'|',tostring(properties.connectors),'|',tostring(properties.trigger))"
+  },
+  {
+    "$type": "where",
+    "FieldName": "__connectorBag",
+    "Operator": "has",
+    "Values": ["'shared_sharepointonline'"]
+  },
+  {
+    "$type": "orderby",
+    "FieldNamesAscDesc": { "tostring(properties.lastModifiedAt)": "desc" }
+  }
+]
+```
+
+### Flows using Office 365 OR SQL (OR semantics via `has_any`)
+
+```json
+[
+  {
+    "$type": "where",
+    "FieldName": "type",
+    "Operator": "==",
+    "Values": ["'microsoft.powerautomate/cloudflows'"]
+  },
+  {
+    "$type": "extend",
+    "FieldName": "__connectorBag",
+    "Expression": "strcat(tostring(properties.powerPlatformConnectors),'|',tostring(properties.connectors),'|',tostring(properties.trigger))"
+  },
+  {
+    "$type": "where",
+    "FieldName": "__connectorBag",
+    "Operator": "has_any",
+    "Values": ["'shared_office365'", "'shared_sql'"]
+  },
+  {
+    "$type": "orderby",
+    "FieldNamesAscDesc": { "tostring(properties.lastModifiedAt)": "desc" }
+  }
+]
+```
+
+### Flows using BOTH Office 365 AND SQL (AND semantics via two `where` clauses)
+
+The `extend` is emitted **once**, then two separate `where __connectorBag has`
+clauses against the same synthesised column give AND semantics:
+
+```json
+[
+  {
+    "$type": "where",
+    "FieldName": "type",
+    "Operator": "==",
+    "Values": ["'microsoft.powerautomate/cloudflows'"]
+  },
+  {
+    "$type": "extend",
+    "FieldName": "__connectorBag",
+    "Expression": "strcat(tostring(properties.powerPlatformConnectors),'|',tostring(properties.connectors),'|',tostring(properties.trigger))"
+  },
+  {
+    "$type": "where",
+    "FieldName": "__connectorBag",
+    "Operator": "has",
+    "Values": ["'shared_office365'"]
+  },
+  {
+    "$type": "where",
+    "FieldName": "__connectorBag",
+    "Operator": "has",
+    "Values": ["'shared_sql'"]
+  },
+  {
+    "$type": "orderby",
+    "FieldNamesAscDesc": { "tostring(properties.lastModifiedAt)": "desc" }
+  }
+]
+```
+
+## When NOT to use the sentinel
+
+The sentinel pattern only adds value when filtering on the connector
+**name** (slug). If the user wants:
+
+- The cloud-flow **trigger** display name → filter
+  `properties.trigger.connectorDisplayName` directly
+- The cloud-flow **trigger** operation → filter
+  `properties.trigger.operationId` directly
+- A specific operation ID across resource types → still use the
+  `__connectorBag` sentinel — the bag includes operations[] too,
+  because `tostring(properties.powerPlatformConnectors)` serialises
+  the whole connector → operations array.
+
+## Dataverse needs special handling — see `06-connectors-catalog.txt`
+
+Because cloud flows publish the Dataverse connector under a slug
+**without** the `shared_` prefix (`commondataserviceforapps`),
+while canvas apps and agents use the prefixed form
+(`shared_commondataserviceforapps`), and an even newer current slug
+(`commondataservice` / `shared_commondataservice`) is in play —
+**always `has_any` across all four variants** when the user asks
+for Dataverse:
 
 ```json
 {
-  "resourceTypes": ["microsoft.powerautomate/cloudflows"],
-  "filters": [
-    { "field": "__connector", "op": "==", "value": "shared_office365" },
-    { "field": "__connector", "op": "==", "value": "shared_sql" }
-  ],
-  "orderField": "properties.lastModifiedAt",
-  "orderDirection": "desc",
-  "limit": 100
+  "$type": "where",
+  "FieldName": "__connectorBag",
+  "Operator": "has_any",
+  "Values": [
+    "'shared_commondataservice'",
+    "'shared_commondataserviceforapps'",
+    "'commondataservice'",
+    "'commondataserviceforapps'"
+  ]
 }
 ```
-
-Two separate `__connector ==` filters → two `has` checks against the
-same `__connectorBag` → AND semantics → exactly "uses both".
