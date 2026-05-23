@@ -34,6 +34,14 @@
  *    drops any envIds from custom groups that are now Managed or gone
  */
 
+import {
+  DndContext,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
 import { useEffect, useMemo, useState } from "react";
 import {
   Badge,
@@ -94,6 +102,11 @@ import { GroupEnvLane } from "./zones/GroupEnvLane";
 import { EligibleEnvsPanel } from "./zones/EligibleEnvsPanel";
 import { SelectionActionBar } from "./zones/SelectionActionBar";
 import { AddEnvsToGroupDialog } from "./zones/AddEnvsToGroupDialog";
+import {
+  EnvMoveDemoDialog,
+  type EnvMoveDemoTarget,
+} from "./zones/EnvMoveDemoDialog";
+import type { EnvDragSource } from "./zones/EnvRow";
 
 interface GroupPlacement {
   kind: "ms" | "custom";
@@ -260,6 +273,63 @@ export function ZoneDetailView() {
     intent: "success" | "warning";
     text: string;
   } | null>(null);
+
+  // "Demo the future" state: when a Managed env is dragged onto a
+  // different MS env group lane, instead of mutating Microsoft we
+  // surface a dialog explaining what the eventual mutation would do
+  // and provide a PPAC deep link for the manual workflow today.
+  const [demoState, setDemoState] = useState<{
+    env: EnvironmentRow;
+    source: EnvDragSource;
+    target: EnvMoveDemoTarget;
+  } | null>(null);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      // Small drag-distance threshold so a quick click on a Loose Managed
+      // env's PPAC link doesn't accidentally start a drag gesture.
+      activationConstraint: { distance: 6 },
+    }),
+    useSensor(KeyboardSensor),
+  );
+
+  const handleEnvDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over) return;
+    const activeData = active.data.current as
+      | { kind: "envDrag"; env: EnvironmentRow; source: EnvDragSource }
+      | undefined;
+    const overData = over.data.current as
+      | { kind: "msGroupLane"; groupId: string; displayName: string }
+      | undefined;
+    if (
+      !activeData ||
+      activeData.kind !== "envDrag" ||
+      !overData ||
+      overData.kind !== "msGroupLane"
+    ) {
+      // Drops onto custom group lanes / non-targets fall through here.
+      // Type purity is signalled silently by simply NOT highlighting
+      // custom lanes during drag — no popup or toast needed for the
+      // mis-drop because the user never saw a green "drop here" cue.
+      return;
+    }
+    // Self-drop on the source MS group is a no-op (no popup).
+    if (
+      activeData.source.kind === "ms-group" &&
+      activeData.source.groupId === overData.groupId
+    ) {
+      return;
+    }
+    setDemoState({
+      env: activeData.env,
+      source: activeData.source,
+      target: {
+        groupId: overData.groupId,
+        groupDisplayName: overData.displayName,
+      },
+    });
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -614,8 +684,9 @@ export function ZoneDetailView() {
         </MessageBar>
       )}
 
-      <div className={styles.body}>
-        <div className={styles.main}>
+      <DndContext sensors={sensors} onDragEnd={handleEnvDragEnd}>
+        <div className={styles.body}>
+          <div className={styles.main}>
           {groupsInZone.length === 0 ? (
             <div className={styles.emptyZone}>
               No groups in this zone yet. Drag MS env groups or Standard
@@ -721,7 +792,8 @@ export function ZoneDetailView() {
             toggle: selection.toggle,
           }}
         />
-      </div>
+        </div>
+      </DndContext>
 
       <ZoneEditorDialog
         open={zoneEditorOpen}
@@ -815,6 +887,14 @@ export function ZoneDetailView() {
         candidateGroups={customGroupsInZone}
         onDismiss={() => setAddDialogOpen(false)}
         onConfirm={handleAddToConfirm}
+      />
+
+      <EnvMoveDemoDialog
+        open={demoState !== null}
+        env={demoState?.env ?? null}
+        source={demoState?.source ?? null}
+        target={demoState?.target ?? null}
+        onDismiss={() => setDemoState(null)}
       />
 
       <Caption1 className={styles.meta}>
