@@ -17,12 +17,22 @@ any build step. It only exists so the grounding pack is version-
 controlled and reviewable. Treat it like documentation: PRs welcome,
 breaking the build is impossible.
 
-## File format — `.txt` (written as markdown)
+## File format — plain text, NOT markdown
 
-The 8 knowledge files are saved with a `.txt` extension because that
-is the format Copilot Studio's file-knowledge upload accepts most
-reliably. The **content is markdown** (headings, tables, fenced code
-blocks) and renders fine in any editor that handles markdown.
+The 8 knowledge files are pure ASCII plain text. **No markdown
+formatting at all** — no `#` headings, no `**bold**`, no
+backticks, no fenced code blocks, no `|` tables, no `__` or
+`==` outside of JSON literals where KQL requires them.
+
+This is intentional. Copilot Studio's knowledge ingestion
+parses file content as markdown when chunking, which mangles
+constructs like `__connectorBag` (interpreted as bold-marker
+start) and `==text==` (highlight syntax in some flavors). By
+keeping the source files free of markdown, the agent sees the
+exact identifiers, operators, and JSON structures we intend.
+
+JSON examples inside the files are raw JSON (no fences) since
+JSON syntax does not overlap with markdown.
 
 ## Files in this pack (upload all 8 knowledge files)
 

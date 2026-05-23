@@ -1,174 +1,239 @@
-# 08 — Tricks and gotchas
+============================================================
+08 - TRICKS AND GOTCHAS
+============================================================
 
-KQL / ARG / schema idiosyncrasies that bite. Skim this if a paste
-"looks right" but the user reports zero rows or an error.
+KQL / ARG / schema idiosyncrasies that bite. Skim this if a
+paste "looks right" but the user reports zero rows or an
+error.
 
-## 0. Equality is `==`, NEVER `=`
 
-KQL has **no** single-`=` equality operator. The connector silently
-fails (or rejects) clauses with `Operator: "="`. **Always two
-equals signs.**
+------------------------------------------------------------
+GOTCHA 0: EQUALITY IS == NEVER =
+------------------------------------------------------------
 
-✅ `"Operator": "=="`
-❌ `"Operator": "="`
+KQL has NO single-equals equality operator. The connector
+silently fails (or rejects) clauses with "Operator": "=".
+ALWAYS use two equals signs.
 
-Same rule applies to all operator spellings — they must match
-`04-operators.txt` § "Operator catalog" character-for-character.
-No `eq`, no `like`, no `Contains` (wrong case), no `in` (missing
-the `~`).
+  WRONG: "Operator": "="
+  RIGHT: "Operator": "=="
 
-## 1. Forgetting the `where type ==` envelope returns garbage
+Same rule applies to all operator spellings -- they must
+match 04-operators, "OPERATOR CATALOG", character-for-
+character. No eq, no like, no Contains (wrong case), no in
+(missing the ~).
 
-Almost every recipe in `07-recipes.txt` starts with a `where type ==`
-or `where type in~` clause. Without it, the query runs against
-**every** resource shape in the inventory and returns chaos. Always
-emit the envelope filter first.
 
-## 2. String values must be SINGLE-QUOTED inside the Values array
+------------------------------------------------------------
+GOTCHA 1: FORGETTING THE "where type ==" ENVELOPE RETURNS GARBAGE
+------------------------------------------------------------
 
-The most common mistake. ARG parses unquoted strings as **column
-names**, then errors with `Operator_FailedToResolveEntity`.
+Almost every recipe in 07-recipes starts with a
+"where type ==" or "where type in~" clause. Without it, the
+query runs against EVERY resource shape in the inventory and
+returns chaos. Always emit the envelope filter first.
 
-✅ `"Values": ["'Suspended'"]`
-❌ `"Values": ["Suspended"]`
 
-The outer JSON quotes are doubles, the inner KQL quotes are singles.
-Embedded single quotes are doubled: `'it''s'`.
+------------------------------------------------------------
+GOTCHA 2: STRING VALUES MUST BE SINGLE-QUOTED INSIDE Values
+------------------------------------------------------------
 
-## 3. Booleans and numbers are NOT single-quoted
+The most common mistake. ARG parses unquoted strings as
+COLUMN NAMES, then errors with
+Operator_FailedToResolveEntity.
 
-The opposite of #2. If you quote them, KQL compares a boolean column
-to a string literal and the filter never matches.
+  RIGHT: "Values": ["'Suspended'"]
+  WRONG: "Values": ["Suspended"]
 
-✅ `"Values": ["true"]` / `"Values": ["30"]`
-❌ `"Values": ["'true'"]` / `"Values": ["'30'"]`
+The outer JSON quotes are doubles, the inner KQL quotes are
+singles. Embedded single quotes are doubled: 'it''s'.
 
-## 4. `ago(Nd)` is a KQL function, not a string
 
-Pass it bare in the Values array — no single quotes.
+------------------------------------------------------------
+GOTCHA 3: BOOLEANS AND NUMBERS ARE NOT SINGLE-QUOTED
+------------------------------------------------------------
 
-✅ `"Values": ["ago(30d)"]`
-❌ `"Values": ["'ago(30d)'"]`
+The opposite of #2. If you quote them, KQL compares a
+boolean column to a string literal and the filter never
+matches.
 
-Same goes for `datetime(2024-11-22T00:00:00Z)`.
+  RIGHT: "Values": ["true"]    "Values": ["30"]
+  WRONG: "Values": ["'true'"]  "Values": ["'30'"]
 
-## 5. `orderby` on `properties.*` requires `tostring()`
+
+------------------------------------------------------------
+GOTCHA 4: ago(Nd) IS A KQL FUNCTION, NOT A STRING
+------------------------------------------------------------
+
+Pass it bare in the Values array -- no single quotes.
+
+  RIGHT: "Values": ["ago(30d)"]
+  WRONG: "Values": ["'ago(30d)'"]
+
+Same goes for datetime(2024-11-22T00:00:00Z).
+
+
+------------------------------------------------------------
+GOTCHA 5: orderby ON properties.* REQUIRES tostring()
+------------------------------------------------------------
 
 ARG rejects raw sort on dynamic columns with
-`ExpressionKeyCantBeDynamic`.
+ExpressionKeyCantBeDynamic.
 
-✅ `"FieldNamesAscDesc": { "tostring(properties.lastModifiedAt)": "desc" }`
-❌ `"FieldNamesAscDesc": { "properties.lastModifiedAt": "desc" }`
+  RIGHT: "FieldNamesAscDesc": { "tostring(properties.lastModifiedAt)": "desc" }
+  WRONG: "FieldNamesAscDesc": { "properties.lastModifiedAt": "desc" }
 
-Top-level fields (`name`, `type`, `location`) and `summarize` output
-aliases (e.g. `resourceCount`) **don't** need the wrap.
+Top-level fields (name, type, location) and summarize output
+aliases (e.g. resourceCount) do NOT need the wrap.
 
-## 6. There is no inverse of `ago()` operator — use absolute logic
 
-Already covered in `04-operators.txt`. Workaround:
+------------------------------------------------------------
+GOTCHA 6: NO INVERSE OF ago() -- USE ABSOLUTE LOGIC
+------------------------------------------------------------
 
-- "last N days" → `Operator: ">", Values: ["ago(Nd)"]`
-- "older than N days" → `Operator: "<", Values: ["ago(Nd)"]` (KQL
-  is fine with this; just confirm N with the user)
-- "older than specific date" → `Operator: "<", Values: ["datetime(2024-11-22T00:00:00Z)"]`
+Already covered in 04-operators. Workaround:
 
-Never invent today's date.
+  - "last N days":      "Operator": ">",  "Values": ["ago(Nd)"]
+  - "older than N days":  "Operator": "<",  "Values": ["ago(Nd)"]
+    (KQL is fine with this; just confirm N with the user.)
+  - "older than specific date":  "Operator": "<",  "Values": ["datetime(2024-11-22T00:00:00Z)"]
 
-## 7. Multiple `where` clauses are AND-ed; OR needs `in~` / `has_any`
+NEVER invent today's date.
 
-There is no OR composition across separate clauses. To express OR
-on one field, use `in~` (string equality OR) or `has_any` (sentinel
-substring OR) inside one clause.
 
-## 8. Connector arrays cannot be filtered with `==`
+------------------------------------------------------------
+GOTCHA 7: MULTIPLE where CLAUSES ARE AND-ED; OR NEEDS in~ / has_any
+------------------------------------------------------------
+
+There is no OR composition across separate clauses. To
+express OR on one field, use in~ (string equality OR) or
+has_any (sentinel substring OR) inside ONE clause.
+
+
+------------------------------------------------------------
+GOTCHA 8: CONNECTOR ARRAYS CANNOT BE FILTERED WITH ==
+------------------------------------------------------------
 
 The three connector locations
-(`properties.powerPlatformConnectors`, `properties.connectors`,
-`properties.trigger`) are **dynamic** (arrays or nested objects).
-KQL's `==` doesn't work on dynamic values and `mv-expand` isn't in
-the connector's clause whitelist.
+(properties.powerPlatformConnectors, properties.connectors,
+properties.trigger) are DYNAMIC (arrays or nested objects).
+KQL's == doesn't work on dynamic values and mv-expand isn't
+in the connector's clause whitelist.
 
-**Always use the `__connectorBag` sentinel pattern** — see
-`05-sentinel-fields.txt`.
+ALWAYS use the connectorBag sentinel pattern -- see
+05-sentinel-fields.
 
-## 9. The `extend __connectorBag` is emitted once and reused
 
-If you need multiple connector filters in the same paste (e.g.
-"uses both X and Y"), emit the `extend` clause **once** and then
-multiple `where __connectorBag has` clauses. Each `where` runs
-against the same synthesised string column — AND semantics for
-free.
+------------------------------------------------------------
+GOTCHA 9: THE extend connectorBag IS EMITTED ONCE AND REUSED
+------------------------------------------------------------
 
-## 10. `properties.environmentType` belongs to environments, NOT apps
+If you need multiple connector filters in the same paste
+(e.g. "uses both X and Y"), emit the extend clause ONCE and
+then multiple "where connectorBag has" clauses. Each where
+runs against the same synthesised string column -- AND
+semantics for free.
+
+
+------------------------------------------------------------
+GOTCHA 10: properties.environmentType BELONGS TO ENVIRONMENTS, NOT APPS
+------------------------------------------------------------
 
 This is the #1 cross-resource gotcha. If you filter apps by
-`properties.environmentType == 'Production'`, you get **zero rows
-silently** (ARG doesn't error on missing dynamic fields). The
-correct pattern is the **two-step recipe 7.11**.
+"properties.environmentType == 'Production'", you get ZERO
+ROWS SILENTLY (ARG doesn't error on missing dynamic fields).
+The correct pattern is the TWO-STEP recipe 7.11.
 
-Same is true for many fields — check the "Lives on" column in
-`03-fields-reference.txt` before every filter.
+Same is true for many fields -- check the "Lives on" column
+in 03-fields-reference before every filter.
 
-## 11. Owner / creator fields are polymorphic — prefer `contains`
 
-`properties.ownerId`, `properties.createdBy`,
-`properties.lastModifiedBy` are sometimes a flat GUID, sometimes
-an object `{id, displayName, email}`. `==` against a bare GUID
-silently misses the object form.
+------------------------------------------------------------
+GOTCHA 11: OWNER / CREATOR FIELDS ARE POLYMORPHIC -- PREFER contains
+------------------------------------------------------------
 
-**Always prefer `contains` against the GUID** for these fields.
-See `03-fields-reference.txt` 🔶 callouts.
+properties.ownerId, properties.createdBy,
+properties.lastModifiedBy are sometimes a flat GUID,
+sometimes an object { id, displayName, email }. == against a
+bare GUID silently misses the object form.
 
-## 12. `lastModifiedBy` may be the empty string
+ALWAYS prefer contains against the GUID for these fields.
+See 03-fields-reference, polymorphic section.
 
-For system-owned / Microsoft-managed resources (e.g. the built-in
-Customer Service Hub model-driven app),
-`properties.lastModifiedBy` is `""`. If the user asks for
+
+------------------------------------------------------------
+GOTCHA 12: lastModifiedBy MAY BE THE EMPTY STRING
+------------------------------------------------------------
+
+For system-owned / Microsoft-managed resources (e.g. the
+built-in Customer Service Hub model-driven app),
+properties.lastModifiedBy is "". If the user asks for
 "modified by anyone", exclude empty: add a filter
-`{ "$type": "where", "FieldName": "properties.lastModifiedBy", "Operator": "!=", "Values": ["''"] }`.
 
-## 13. There's no "last run" timestamp distinct from `lastModifiedAt`
+  { "$type": "where", "FieldName": "properties.lastModifiedBy", "Operator": "!=", "Values": ["''"] }
 
-Common ask: "flows that haven't run in 90 days". The inventory
-doesn't carry a per-resource "last execution" timestamp. Use
-`properties.lastModifiedAt` as the closest proxy, and be honest
-with the user that it tracks edits, not runs.
 
-## 14. `lastLaunchedTime` exists only on some canvas apps
+------------------------------------------------------------
+GOTCHA 13: NO "LAST RUN" TIMESTAMP DISTINCT FROM lastModifiedAt
+------------------------------------------------------------
 
-Don't filter on `properties.lastLaunchedTime` for non-canvas types —
-it'll silently return zero. For "apps that have been opened
-recently", restrict `where type ==` to
-`'microsoft.powerapps/canvasapps'` only, OR fall back to
-`lastModifiedAt` for cross-type coverage.
+Common ask: "flows that haven't run in 90 days". The
+inventory doesn't carry a per-resource "last execution"
+timestamp. Use properties.lastModifiedAt as the closest
+proxy, and be honest with the user that it tracks edits,
+not runs.
 
-## 15. `properties.channels` is a dynamic string array
 
-The clause builder won't `mv-expand` it. For "agents on Teams":
-fall back to `tostring(properties.channels) contains 'Teams'` — but
-this is a substring-match approximation, not exact channel
-membership. Be honest about it in your reply.
+------------------------------------------------------------
+GOTCHA 14: lastLaunchedTime EXISTS ONLY ON SOME CANVAS APPS
+------------------------------------------------------------
 
-## 16. `properties.status` for flows has multiple possible values
+Don't filter on properties.lastLaunchedTime for non-canvas
+types -- it'll silently return zero. For "apps that have
+been opened recently", restrict "where type ==" to
+'microsoft.powerapps/canvasapps' only, OR fall back to
+lastModifiedAt for cross-type coverage.
 
-Documented: `'Activated'`, `'Suspended'`, `'Stopped'`, `'Started'`,
-`'NotStarted'`. Older payloads may use `state` or `flowState` —
-the inventory layer falls back automatically, but if a user query
-returns zero, suggest trying the alternative casing/name.
 
-## 17. Pagination — don't emit `take`
+------------------------------------------------------------
+GOTCHA 15: properties.channels IS A DYNAMIC STRING ARRAY
+------------------------------------------------------------
 
-`take` truncates inside KQL and caps the reported `totalRecords` —
-so the UI lies about the real tenant-wide total. The user controls
-page size via the **Page size** input. Just leave `take` out.
+The clause builder won't mv-expand it. For "agents on
+Teams": fall back to "tostring(properties.channels) contains
+'Teams'" -- but this is a substring-match approximation, not
+exact channel membership. Be honest about it in your reply.
 
-## 18. `name` is the bare GUID — no `properties.` prefix
 
-`name` at the top level is the resource GUID (same as the trailing
-segment of `id`). Useful when the user has a specific GUID and the
-resource type is ambiguous:
+------------------------------------------------------------
+GOTCHA 16: properties.status FOR FLOWS HAS MULTIPLE POSSIBLE VALUES
+------------------------------------------------------------
 
-```json
+Documented: 'Activated', 'Suspended', 'Stopped', 'Started',
+'NotStarted'. Older payloads may use state or flowState --
+the inventory layer falls back automatically, but if a user
+query returns zero, suggest trying the alternative
+casing/name.
+
+
+------------------------------------------------------------
+GOTCHA 17: PAGINATION -- DON'T EMIT take
+------------------------------------------------------------
+
+take truncates inside KQL and caps the reported
+totalRecords -- so the UI lies about the real tenant-wide
+total. The user controls page size via the Page size input.
+Just leave take out.
+
+
+------------------------------------------------------------
+GOTCHA 18: name IS THE BARE GUID -- NO properties. PREFIX
+------------------------------------------------------------
+
+name at the top level is the resource GUID (same as the
+trailing segment of id). Useful when the user has a specific
+GUID and the resource type is ambiguous:
+
 [
   {
     "$type": "where",
@@ -188,15 +253,17 @@ resource type is ambiguous:
     "Values": ["'12345678-1234-1234-1234-123456789012'"]
   }
 ]
-```
 
-## 19. The Advanced tab accepts both array and wrapped forms
+
+------------------------------------------------------------
+GOTCHA 19: THE ADVANCED TAB ACCEPTS BOTH ARRAY AND WRAPPED FORMS
+------------------------------------------------------------
 
 The app's parser accepts either:
 
-- A bare array: `[ {...}, {...} ]`  ← **canonical, use this**
-- A wrapped object: `{ "clauses": [ {...}, {...} ] }`
+  - A bare array:        [ {...}, {...} ]                       <- CANONICAL, USE THIS
+  - A wrapped object:    { "clauses": [ {...}, {...} ] }
 
-Always emit the bare array. The wrapped form exists so users can
-paste in a snippet someone copied with surrounding text — don't
-rely on it.
+Always emit the bare array. The wrapped form exists so users
+can paste in a snippet someone copied with surrounding text
+-- don't rely on it.

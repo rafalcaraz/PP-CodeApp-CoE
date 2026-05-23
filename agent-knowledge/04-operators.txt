@@ -1,192 +1,253 @@
-# 04 — Operators and value formatting
+============================================================
+04 - OPERATORS AND VALUE FORMATTING
+============================================================
 
-The KQL operators allowed in the `Operator` field of a `where`
-clause, and the rules for formatting `Values`.
-
-> 🚨 **Operator strings must be EXACT.** Common mistakes that
-> silently fail at the connector:
-> - **Use `==` (TWO equals signs), never `=` (one).** KQL has no
->   single-`=` equality operator.
-> - **Use `!=` (with a `!`), never `<>` or `ne`.**
-> - **Operators are lowercase.** `contains`, not `Contains`.
->   `startswith`, not `StartsWith`.
-> - **`in~` includes the tilde.** Without the `~` it's a different,
->   case-sensitive operator.
-
-## Operator catalog
-
-Copy the `Operator` string **exactly as shown** in the first column:
-
-| `Operator` (exact string) | What it means | When to use |
-|---|---|---|
-| `==` | exact equality (TWO equals signs) | enum values, exact string match, booleans, numbers |
-| `!=` | not equal | exclude an enum value |
-| `>` | greater than | datetimes (with `ago(Nd)`), numbers |
-| `<` | less than | datetimes (with an ISO cutoff date), numbers |
-| `>=` | gte | numbers, datetimes |
-| `<=` | lte | numbers, datetimes |
-| `contains` | case-insensitive substring | partial display-name match, polymorphic owner GUID search |
-| `startswith` | case-insensitive prefix | `'Test_'` style naming-convention filters |
-| `endswith` | case-insensitive suffix | rarely needed |
-| `in~` | case-insensitive membership in a list (note the `~`) | enum-OR filters, multi-type filters |
-| `has` | tokenised substring (word-boundary aware) | the `__connectorBag` sentinel pattern |
-| `has_any` | any token from a list matches | the `__connectorBag` sentinel with multiple values |
-| `!has` | tokenised negation | sentinel "does not use connector X" |
-
-⚠️ **Anything not in this table is wrong.** Do not invent
-operators like `=`, `like`, `match`, `eq`, `ne`, `gt`, `lt`. The
-connector will reject the query.
-
-## Value formatting — the rules (memorise these)
+The KQL operators allowed in the Operator field of a where
+clause, and the rules for formatting Values.
 
 
-The `Values` field is **always an array of strings**, but the rules
-for **what's inside each string** depend on the value's type:
+------------------------------------------------------------
+OPERATOR STRINGS MUST BE EXACT
+------------------------------------------------------------
 
-| Value kind | What goes in the Values array | Example |
-|---|---|---|
-| **String literal** (most filters) | the value wrapped in **single quotes** | `"Values": ["'microsoft.powerapps/canvasapps'"]` |
-| **Boolean** | the bare word, no quotes | `"Values": ["true"]` |
-| **Number** | the bare digits, no quotes | `"Values": ["30"]` |
-| **KQL function call** (e.g. `ago(Nd)`) | the function call as-is, no quotes | `"Values": ["ago(30d)"]` |
-| **Multiple values** (`in~` / `has_any`) | one string per item, formatted by the same rule | `"Values": ["'Production'", "'Sandbox'"]` |
-| **Embedded single quote in a string** | double it | `"Values": ["'it''s'"]` |
+Common mistakes that silently fail at the connector:
 
-> ⚠️ The most common mistake is forgetting the **inner single
-> quotes** on string literals. `Values: ["foo"]` looks right but
-> KQL parses it as a column name; you almost always need
-> `Values: ["'foo'"]`.
+  - Equality is == (TWO equals signs). KQL has NO single-
+    equals operator. NEVER emit "Operator": "=" -- always
+    "Operator": "==".
 
-## Quick recipe — translate plain English to a `where` clause
+  - Not-equal is != (with a !). NEVER <> or ne.
 
-| Intent | Clause |
-|---|---|
-| `status` equals `"Activated"` | `{ "$type": "where", "FieldName": "properties.status", "Operator": "==", "Values": ["'Activated'"] }` |
-| `isManaged` is true | `{ "$type": "where", "FieldName": "properties.isManaged", "Operator": "==", "Values": ["true"] }` |
-| `sharedUsersCount` > 5 | `{ "$type": "where", "FieldName": "properties.sharedUsersCount", "Operator": ">", "Values": ["5"] }` |
-| modified in the last 14 days | `{ "$type": "where", "FieldName": "properties.lastModifiedAt", "Operator": ">", "Values": ["ago(14d)"] }` |
-| `displayName` contains `"finance"` | `{ "$type": "where", "FieldName": "properties.displayName", "Operator": "contains", "Values": ["'finance'"] }` |
-| `displayName` starts with `"Test_"` | `{ "$type": "where", "FieldName": "properties.displayName", "Operator": "startswith", "Values": ["'Test_'"] }` |
-| `environmentType` in (Production, Sandbox) | `{ "$type": "where", "FieldName": "properties.environmentType", "Operator": "in~", "Values": ["'Production'", "'Sandbox'"] }` |
+  - Operators are lowercase. Use contains, not Contains.
+    Use startswith, not StartsWith.
 
-## Multiple `where` clauses are AND-ed
+  - The in operator includes a tilde: in~. Without the ~
+    it's a different, case-sensitive operator.
 
-Every additional `where` in the array becomes another `where` in
-KQL — and consecutive `where` clauses are conjunctive. To express
-"X AND Y", just add two `where` clauses. To express "X OR Y" on a
-single field, use `in~` (string equality OR) or `has_any` (sentinel
-substring OR) inside one clause.
 
-There is **no OR composition across separate clauses.**
+------------------------------------------------------------
+OPERATOR CATALOG (copy exactly)
+------------------------------------------------------------
 
-## `ago(Nd)` is your friend — never invent dates
+Operator     When to use
+----------   ----------------------------------------------------------------------
+==           exact equality (TWO equals signs) -- enums, exact strings, booleans, numbers
+!=           not equal -- exclude an enum value
+>            greater than -- datetimes (with ago(Nd)), numbers
+<            less than -- datetimes (with an ISO cutoff date), numbers
+>=           greater than or equal
+<=           less than or equal
+contains     case-insensitive substring -- partial displayName match, polymorphic owner GUID search
+startswith   case-insensitive prefix -- 'Test_' style naming-convention filters
+endswith     case-insensitive suffix -- rarely needed
+in~          case-insensitive membership in a list (note the ~) -- enum-OR filters, multi-type filters
+has          tokenised substring (word-boundary aware) -- the connectorBag sentinel pattern
+has_any      any token from a list matches -- the connectorBag sentinel with multiple values
+!has         tokenised negation -- sentinel "does not use connector X"
 
-The KQL function `ago(Nd)` returns "N days ago from now" at query
-time, computed by the ARG server. Use it for every "in the last
-N days / hours / minutes" intent. The Values array carries it as a
-**bare expression** (no quotes):
+Anything NOT in this catalog is wrong. Do not invent operators
+like =, like, match, eq, ne, gt, lt. The connector will reject
+the query.
 
-```json
-{
-  "$type": "where",
-  "FieldName": "properties.lastModifiedAt",
-  "Operator": ">",
-  "Values": ["ago(30d)"]
-}
-```
 
-Supported suffixes: `d` (days), `h` (hours), `m` (minutes),
-`s` (seconds). Fractional values are fine: `ago(1.5h)`.
+------------------------------------------------------------
+VALUE FORMATTING RULES (memorise these)
+------------------------------------------------------------
 
-### ⚠️ There is no inverse of `ago()` — the "abandoned" gotcha
+The Values field is ALWAYS a JSON array of strings, but the
+rules for what's INSIDE each string depend on the value's
+type:
+
+STRING LITERAL (most filters):
+  Wrap the value in SINGLE QUOTES inside the JSON string.
+  Example:  "Values": ["'microsoft.powerapps/canvasapps'"]
+
+BOOLEAN:
+  Bare word, no quotes inside.
+  Example:  "Values": ["true"]
+  Example:  "Values": ["false"]
+
+NUMBER:
+  Bare digits, no quotes inside.
+  Example:  "Values": ["30"]
+
+KQL FUNCTION CALL (e.g. ago(Nd)):
+  Pass as-is, no quotes inside.
+  Example:  "Values": ["ago(30d)"]
+
+MULTIPLE VALUES (in~ or has_any):
+  One string per item, formatted by the same rule.
+  Example:  "Values": ["'Production'", "'Sandbox'"]
+
+EMBEDDED SINGLE QUOTE IN A STRING:
+  Double it.
+  Example:  "Values": ["'it''s'"]
+
+The most common mistake is forgetting the INNER single quotes
+on string literals. "Values": ["foo"] looks right but KQL
+parses it as a column name; you almost always need
+"Values": ["'foo'"].
+
+
+------------------------------------------------------------
+QUICK RECIPE -- TRANSLATE PLAIN ENGLISH TO A WHERE CLAUSE
+------------------------------------------------------------
+
+Intent: status equals "Activated"
+  { "$type": "where", "FieldName": "properties.status", "Operator": "==", "Values": ["'Activated'"] }
+
+Intent: isManaged is true
+  { "$type": "where", "FieldName": "properties.isManaged", "Operator": "==", "Values": ["true"] }
+
+Intent: sharedUsersCount greater than 5
+  { "$type": "where", "FieldName": "properties.sharedUsersCount", "Operator": ">", "Values": ["5"] }
+
+Intent: modified in the last 14 days
+  { "$type": "where", "FieldName": "properties.lastModifiedAt", "Operator": ">", "Values": ["ago(14d)"] }
+
+Intent: displayName contains "finance"
+  { "$type": "where", "FieldName": "properties.displayName", "Operator": "contains", "Values": ["'finance'"] }
+
+Intent: displayName starts with "Test_"
+  { "$type": "where", "FieldName": "properties.displayName", "Operator": "startswith", "Values": ["'Test_'"] }
+
+Intent: environmentType in (Production, Sandbox)
+  { "$type": "where", "FieldName": "properties.environmentType", "Operator": "in~", "Values": ["'Production'", "'Sandbox'"] }
+
+
+------------------------------------------------------------
+MULTIPLE WHERE CLAUSES ARE AND-ED
+------------------------------------------------------------
+
+Every additional where in the array becomes another where in
+KQL, and consecutive where clauses are CONJUNCTIVE. To express
+"X AND Y" just add two where clauses. To express "X OR Y" on a
+SINGLE field, use in~ (string equality OR) or has_any
+(sentinel substring OR) inside ONE clause.
+
+There is NO OR composition across separate clauses.
+
+
+------------------------------------------------------------
+ago(Nd) IS YOUR FRIEND -- NEVER INVENT DATES
+------------------------------------------------------------
+
+The KQL function ago(Nd) returns "N days ago from now"
+computed by the ARG server at query time. Use it for every
+"in the last N days / hours / minutes" intent. The Values
+array carries it as a BARE EXPRESSION (no quotes):
+
+  {
+    "$type": "where",
+    "FieldName": "properties.lastModifiedAt",
+    "Operator": ">",
+    "Values": ["ago(30d)"]
+  }
+
+Supported suffixes: d (days), h (hours), m (minutes),
+s (seconds). Fractional values are fine: ago(1.5h).
+
+
+------------------------------------------------------------
+THERE IS NO INVERSE OF ago() -- THE "ABANDONED" GOTCHA
+------------------------------------------------------------
 
 When the user asks for things like:
+  - "apps not modified in the last 90 days"
+  - "abandoned apps"
+  - "agents that haven't been published recently"
 
-- "apps not modified in the last 90 days"
-- "abandoned apps"
-- "agents that haven't been published recently"
+The natural KQL would be < ago(90d) -- that WORKS in KQL but
+requires the agent to compute the right number of days, and
+the intent is still "older than", which means the user is
+reasoning about an absolute date.
 
-The natural KQL would be `< ago(90d)` — that **works in KQL** but
-requires the agent to compute the right number of days, and the
-intent is still "older than", which means the user is reasoning
-about an absolute date. **Always ask the user to confirm the
-threshold** before emitting a spec:
+ALWAYS ask the user to confirm the threshold before emitting
+a spec:
 
-```
-"Abandoned" needs a threshold. Should I use "not modified in the
-last N days" (you pick N), or "modified before a specific ISO
-date" (you give me the date)?
-```
+  "Abandoned" needs a threshold. Should I use "not modified
+  in the last N days" (you pick N), or "modified before a
+  specific ISO date" (you give me the date)?
 
-Once they answer, prefer `< ago(<N>d)` if they gave a number, or
-`<` with the ISO cutoff string if they gave a date:
+Once they answer, prefer < ago(<N>d) if they gave a number,
+or < with the ISO cutoff string wrapped in datetime() if they
+gave a date:
 
-```jsonc
-// "not modified in the last 180 days" (user gave N=180)
-{ "$type": "where", "FieldName": "properties.lastModifiedAt", "Operator": "<", "Values": ["ago(180d)"] }
+  "not modified in the last 180 days" (user gave N=180):
+    { "$type": "where", "FieldName": "properties.lastModifiedAt", "Operator": "<", "Values": ["ago(180d)"] }
 
-// "modified before 2024-11-22" (user gave an ISO date)
-{ "$type": "where", "FieldName": "properties.lastModifiedAt", "Operator": "<", "Values": ["datetime(2024-11-22T00:00:00Z)"] }
-```
+  "modified before 2024-11-22" (user gave an ISO date):
+    { "$type": "where", "FieldName": "properties.lastModifiedAt", "Operator": "<", "Values": ["datetime(2024-11-22T00:00:00Z)"] }
 
-When using an absolute date, wrap it in the KQL `datetime(...)`
-literal so ARG parses it as a datetime, not a string. **Never
-invent the date yourself.** You do not know today's date.
+When using an absolute date, wrap it in the KQL datetime()
+literal so ARG parses it as a datetime, not a string.
 
-## `orderby` rules
+NEVER invent the date yourself. You do not know today's
+date.
 
-```json
-{ "$type": "orderby", "FieldNamesAscDesc": { "<key>": "asc" | "desc" } }
-```
 
-- **`properties.*` keys must be wrapped in `tostring()`.** ARG
-  rejects raw dynamic-column sort with `ExpressionKeyCantBeDynamic`.
-- **Top-level keys** (`name`, `type`, `location`, `tenantId`) and
-  **summarize aliases** (e.g. `resourceCount`) don't need the wrap.
-- Multiple keys are allowed by repeating entries in the object —
-  but order them carefully:
+------------------------------------------------------------
+orderby RULES
+------------------------------------------------------------
 
-```json
-{
-  "$type": "orderby",
-  "FieldNamesAscDesc": {
-    "tostring(properties.environmentId)": "asc",
-    "tostring(properties.lastModifiedAt)": "desc"
+  { "$type": "orderby", "FieldNamesAscDesc": { "<key>": "asc" } }
+  { "$type": "orderby", "FieldNamesAscDesc": { "<key>": "desc" } }
+
+  - properties.* keys MUST be wrapped in tostring(). ARG
+    rejects raw dynamic-column sort with
+    ExpressionKeyCantBeDynamic.
+  - Top-level keys (name, type, location, tenantId) and
+    summarize aliases (e.g. resourceCount) do NOT need the
+    wrap.
+  - Multiple keys are allowed by repeating entries in the
+    object:
+
+  {
+    "$type": "orderby",
+    "FieldNamesAscDesc": {
+      "tostring(properties.environmentId)": "asc",
+      "tostring(properties.lastModifiedAt)": "desc"
+    }
   }
-}
-```
 
-## `take` — almost never needed
 
-```json
-{ "$type": "take", "TakeCount": 100 }
-```
+------------------------------------------------------------
+take -- ALMOST NEVER NEEDED
+------------------------------------------------------------
 
-Don't emit `take` in your clauses. The app sets `Top` (page size)
-from the **Page size** input in the Queries → Advanced UI. Adding
-`take` inside the clauses truncates the result set inside KQL
-itself, which also caps the reported `totalRecords` count — so the
-UI lies about the real tenant-wide total.
+  { "$type": "take", "TakeCount": 100 }
 
-## `summarize` — for aggregations
+Don't emit take in your clauses. The app sets Top (page size)
+from the Page size input in the Queries -> Advanced UI. Adding
+take inside the clauses truncates the result set inside KQL
+itself, which also caps the reported totalRecords count -- so
+the UI lies about the real tenant-wide total.
 
-Aggregations are a real KQL feature but rarely the right answer for
-the CoE Query Assistant — you'd be returning a single number, and
-the user is usually browsing detail rows. If asked for "how many X
-exist", give them a `where` filter and let the result-grid header
-show the total count.
+
+------------------------------------------------------------
+summarize -- FOR AGGREGATIONS
+------------------------------------------------------------
+
+Aggregations are a real KQL feature but rarely the right
+answer for the CoE Query Assistant -- you'd be returning a
+single number, and the user is usually browsing detail rows.
+If asked for "how many X exist", give them a where filter and
+let the result-grid header show the total count.
 
 If you do need a summarize:
 
-```json
-{
-  "$type": "summarize",
-  "SummarizeClauseExpression": {
-    "OperatorName": "count",
-    "OperatorFieldName": "resourceCount",
-    "FieldList": ["type"]
+  {
+    "$type": "summarize",
+    "SummarizeClauseExpression": {
+      "OperatorName": "count",
+      "OperatorFieldName": "resourceCount",
+      "FieldList": ["type"]
+    }
   }
-}
-```
 
-Followed by `{ "$type": "orderby", "FieldNamesAscDesc": { "resourceCount": "desc" } }`.
+Followed by:
+
+  {
+    "$type": "orderby",
+    "FieldNamesAscDesc": { "resourceCount": "desc" }
+  }

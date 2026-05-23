@@ -1,255 +1,288 @@
-# 03 — Fields reference
+============================================================
+03 - FIELDS REFERENCE
+============================================================
 
-This is the **definitive field list** for building `where` and
-`orderby` clauses. For every field: what it is, what type it has,
-which resource type(s) it lives on, and what operators are sensible.
+The definitive field list for building where and orderby
+clauses. For every field: what it is, what type it has, which
+resource type(s) it lives on, and what operators are sensible.
 
-> 🚨 **Critical:** Filtering on a field that doesn't exist on the
-> targeted resource type returns **zero rows silently** — ARG does
-> not error. Always check the "Lives on" column. When a question
-> implies cross-resource filtering, use the **two-step pattern**
-> (see `07-recipes.txt`, recipes 7.11–7.13).
->
-> 💡 **Value formatting (from `01-agent-role-and-output.txt`,
-> hard rule 2):**
-> - Strings → single-quoted inside the JSON: `"Values": ["'foo'"]`
-> - Booleans → unquoted: `"Values": ["true"]`
-> - Numbers → unquoted: `"Values": ["30"]`
-> - `ago(Nd)` and other KQL function calls → unquoted: `"Values": ["ago(30d)"]`
-> - `in~` and `has_any` → one quoted string per item:
->   `"Values": ["'Production'", "'Sandbox'"]`
+CRITICAL: Filtering on a field that doesn't exist on the
+targeted resource type returns ZERO rows silently -- ARG does
+not error. Always check the "Lives on" column. When a question
+implies cross-resource filtering, use the two-step pattern
+(see 07-recipes, recipes 7.11 through 7.13).
 
-## Top-level (envelope) fields
+VALUE FORMATTING (from 01-agent-role-and-output, hard rule 2):
+  - Strings: single-quoted inside the JSON.
+      "Values": ["'foo'"]
+  - Booleans: unquoted.
+      "Values": ["true"]
+  - Numbers: unquoted.
+      "Values": ["30"]
+  - ago(Nd) and other KQL function calls: unquoted.
+      "Values": ["ago(30d)"]
+  - in~ and has_any: one quoted string per item.
+      "Values": ["'Production'", "'Sandbox'"]
 
-These have **no `properties.` prefix** and exist on every resource.
 
-| Field | Type | Lives on | Domain | Common ops |
-|---|---|---|---|---|
-| `type` | string | All 10 | one of the 10 type strings | `==`, `in~` |
-| `name` | string (GUID) | All 10 | bare GUID | `==`, `contains` |
-| `location` | string | All 10 | lower-case region, e.g. `'unitedstates'`, `'westus'`, `'westeurope'` | `==`, `in~` |
-| `tenantId` | string (GUID) | All 10 | one value per tenant | rarely filtered |
+------------------------------------------------------------
+TOP-LEVEL (ENVELOPE) FIELDS
+------------------------------------------------------------
 
-`orderby` on top-level fields does **not** need `tostring()`:
+These have NO properties. prefix and exist on every resource.
 
-```json
-{ "$type": "orderby", "FieldNamesAscDesc": { "name": "asc" } }
-```
+Field        Type            Lives on    Domain                                         Common ops
+---------    ------------    --------    ----------------------------------------       ----------------
+type         string          All 10      one of the 10 type strings                     ==, in~
+name         string (GUID)   All 10      bare GUID                                      ==, contains
+location     string          All 10      lower-case region, e.g. 'unitedstates'         ==, in~
+tenantId     string (GUID)   All 10      one value per tenant                           rarely filtered
 
-## 🔶 Polymorphic owner / creator fields — READ CAREFULLY
+orderby on top-level fields does NOT need tostring():
+  { "$type": "orderby", "FieldNamesAscDesc": { "name": "asc" } }
 
-**These three fields are not always GUID strings.** Sometimes the
-inventory returns them as an **object** `{ id, displayName, email }`.
-A naïve `==` against a GUID will silently miss the object form.
 
-| Field | Lives on | Shapes seen | **Recommended ops** |
-|---|---|---|---|
-| 🔶 `properties.ownerId` | All apps, all flows, agents (not envs / env groups) | (a) GUID string `'05782d11-...'` (b) object `{id, displayName, email}` | **`contains`** with the GUID — works for both shapes. Avoid `==`. |
-| 🔶 `properties.createdBy` | All 10 | same as `ownerId` | **`contains`** with the GUID |
-| 🔶 `properties.lastModifiedBy` | All resources except envs / env groups | same as `ownerId`. May also be the empty string for system-managed records. | **`contains`** with the GUID, or skip the filter for system records |
+------------------------------------------------------------
+POLYMORPHIC OWNER / CREATOR FIELDS -- READ CAREFULLY
+------------------------------------------------------------
 
-**Filter clause for "owned by user GUID X":**
+THESE THREE FIELDS ARE NOT ALWAYS GUID STRINGS. Sometimes
+the inventory returns them as an OBJECT { id, displayName,
+email }. A naive == against a GUID will silently MISS the
+object form.
 
-```json
-{
-  "$type": "where",
-  "FieldName": "properties.ownerId",
-  "Operator": "contains",
-  "Values": ["'12345678-1234-1234-1234-123456789012'"]
-}
-```
+Field                            Lives on                                              Shapes seen                                                                       Recommended op
+----------------------------     -------------------------------                       ----------------------------------------------------------------------            ------------------
+properties.ownerId               All apps, all flows, agents (not envs / env groups)   (a) GUID string '05782d11-...' (b) object { id, displayName, email }              contains (avoid ==)
+properties.createdBy             All 10                                                same as ownerId                                                                   contains
+properties.lastModifiedBy        All except envs / env groups                          same as ownerId. May also be the empty string for system-managed records.        contains, or skip filter
 
-`contains` translates to KQL `contains` — substring match on the
-stringified value — which catches both the bare GUID and the
-serialized object (which embeds the GUID under `id`).
+Filter clause for "owned by user GUID X":
 
-## Universal `properties.*` fields
+  {
+    "$type": "where",
+    "FieldName": "properties.ownerId",
+    "Operator": "contains",
+    "Values": ["'12345678-1234-1234-1234-123456789012'"]
+  }
+
+contains translates to KQL contains (substring match on the
+stringified value), which catches BOTH the bare GUID and the
+serialized object (which embeds the GUID under id).
+
+
+------------------------------------------------------------
+UNIVERSAL properties.* FIELDS
+------------------------------------------------------------
 
 Present on every resource type with the same meaning.
 
-| Field | Type | Domain | Common ops |
-|---|---|---|---|
-| `properties.displayName` | string | free text | `contains`, `startswith`, `endswith`, `==` |
-| `properties.environmentId` | string (GUID) | bare GUID | `==`, `in~` |
-| `properties.createdAt` | datetime (ISO 8601) | e.g. `'2026-05-19T17:53:19Z'` | `> ago(Nd)`, `<`, `>` |
-| `properties.lastModifiedAt` | datetime (ISO 8601) | same | `> ago(Nd)`, `<`, `>` |
-| `properties.isQuarantined` | boolean (unquoted) | `"true"` / `"false"` | `==` |
+Field                          Type                                    Domain                                       Common ops
+-----------------------------  ----------------------------------      -------------------------------------        --------------------
+properties.displayName         string                                  free text                                    contains, startswith, endswith, ==
+properties.environmentId       string (GUID)                           bare GUID                                    ==, in~
+properties.createdAt           datetime (ISO 8601)                     e.g. '2026-05-19T17:53:19Z'                  > ago(Nd), <, >
+properties.lastModifiedAt      datetime (ISO 8601)                     same                                         > ago(Nd), <, >
+properties.isQuarantined       boolean (string "true" / "false")       "true" or "false"                            ==
 
-`orderby` on `properties.*` fields **must** be wrapped in
-`tostring()`:
+orderby on properties.* fields MUST be wrapped in tostring():
+  { "$type": "orderby", "FieldNamesAscDesc": { "tostring(properties.lastModifiedAt)": "desc" } }
 
-```json
-{ "$type": "orderby", "FieldNamesAscDesc": { "tostring(properties.lastModifiedAt)": "desc" } }
-```
 
-## App-type fields
+------------------------------------------------------------
+APP-TYPE FIELDS
+------------------------------------------------------------
 
-### Common to all 4 app types
+Common to all 4 app types:
 
-| Field | Lives on | Domain | Common ops |
-|---|---|---|---|
-| `properties.subType` | code apps, app-builder apps | `'byocApp'`, `'appBuilderApp'`, others possible | `==` |
-| `properties.appType` | canvas apps (when present) | varies | `==` |
+Field                  Lives on                              Domain                              Common ops
+--------------------   --------------------------------      ---------------------               ------------
+properties.subType     code apps, app-builder apps           'byocApp', 'appBuilderApp', ...     ==
+properties.appType     canvas apps (when present)            varies                              ==
 
-### Canvas-specific
+Canvas-specific:
 
-| Field | Type | Domain | Common ops |
-|---|---|---|---|
-| `properties.powerPlatformConnectors` | array of `{connectorId, operations[]}` | dynamic — see `05-sentinel-fields.txt` | **DO NOT filter directly — use the `__connectorBag` sentinel pattern** |
-| `properties.lastLaunchedTime` | datetime (ISO 8601, when present) | not on every canvas app | `> ago(Nd)`, `<`, `>`. **Not available on model-driven / code / app-builder apps.** |
-| `properties.sharedUsersCount` | number | non-negative integer | `>`, `<`, `==` |
-| `properties.sharedGroupsCount` | number | non-negative integer | `>`, `<`, `==` |
-| `properties.isFeaturedApp` | boolean | `"true"` / `"false"` | `==` |
-| `properties.bypassConsent` | boolean | `"true"` / `"false"` | `==` |
+Field                                  Type                                       Domain                                                  Common ops
+-----------------------------------    ---------------------------------------    -----------------------------                           ----------------------
+properties.powerPlatformConnectors     array of { connectorId, operations[] }     dynamic                                                  DO NOT filter directly -- use connectorBag sentinel
+properties.lastLaunchedTime            datetime (ISO 8601, when present)          not on every canvas app                                  > ago(Nd), <, >. NOT available on model-driven / code / app-builder apps.
+properties.sharedUsersCount            number                                     non-negative integer                                     >, <, ==
+properties.sharedGroupsCount           number                                     non-negative integer                                     >, <, ==
+properties.isFeaturedApp               boolean                                    "true" / "false"                                         ==
+properties.bypassConsent               boolean                                    "true" / "false"                                         ==
 
-### Model-driven specific
+Model-driven specific:
 
-| Field | Type | Domain |
-|---|---|---|
-| `properties.logicalName` | string | Dataverse logical name |
-| `properties.appModuleId` | string (GUID) | Dataverse module ID |
+Field                          Type            Domain
+---------------------------    ------------    ----------------------
+properties.logicalName         string          Dataverse logical name
+properties.appModuleId         string (GUID)   Dataverse module ID
 
-### App-builder specific
+App-builder specific:
 
-| Field | Type | Domain | Common ops |
-|---|---|---|---|
-| `properties.connectors` | array of `{connectorId, connectionType}` | `connectorId` is an **ARM path** (`/providers/Microsoft.PowerApps/apis/shared_...`) | **DO NOT filter directly — use the `__connectorBag` sentinel; it covers ARM-path slugs via substring match.** |
+Field                  Type                                              Domain                                                                                Common ops
+-------------------    ------------------------------------------        ---------------------------------------------------------------------------------     -----------------------------------------------
+properties.connectors  array of { connectorId, connectionType }          connectorId is an ARM path ('/providers/Microsoft.PowerApps/apis/shared_...')         DO NOT filter directly -- use connectorBag sentinel
 
-## Flow-type fields (cloud flows, agent flows, m365 agent flows)
 
-| Field | Type | Domain | Common ops |
-|---|---|---|---|
-| `properties.status` | string | `'Activated'`, `'Suspended'`, `'Stopped'`, `'Started'`, `'NotStarted'` | `==`, `in~` |
-| `properties.flowTriggerType` | string | `'Instant'`, `'Automated'`, `'Recurrence'`, `'Manual'` | `==`, `in~` |
-| `properties.trigger.operationId` | string | varies per connector | `==`, `contains` |
-| `properties.trigger.connectorId` | string | bare connector slug; often empty for first-party connectors | **prefer the `__connectorBag` sentinel** for "uses connector X" intent |
-| `properties.trigger.connectorDisplayName` | string | friendly name | `==`, `contains` |
-| `properties.workflowEntityId` | string (GUID) | Dataverse cross-reference | `==` |
-| `properties.powerPlatformConnectors` | array | bare slugs like `commondataserviceforapps` (no `shared_` prefix on flows!) | **use the `__connectorBag` sentinel** |
+------------------------------------------------------------
+FLOW-TYPE FIELDS (cloud flows, agent flows, m365 agent flows)
+------------------------------------------------------------
 
-## Copilot Studio agent fields
+Field                                          Type            Domain                                                                          Common ops
+-------------------------------------------    ------------    -------------------------------------------------------------------------       -----------------------------------------------
+properties.status                              string          'Activated', 'Suspended', 'Stopped', 'Started', 'NotStarted'                    ==, in~
+properties.flowTriggerType                     string          'Instant', 'Automated', 'Recurrence', 'Manual'                                  ==, in~
+properties.trigger.operationId                 string          varies per connector                                                            ==, contains
+properties.trigger.connectorId                 string          bare connector slug; often empty for first-party                                prefer the connectorBag sentinel for "uses connector X"
+properties.trigger.connectorDisplayName        string          friendly name                                                                   ==, contains
+properties.workflowEntityId                    string (GUID)   Dataverse cross-reference                                                       ==
+properties.powerPlatformConnectors             array           bare slugs like commondataserviceforapps (no shared_ prefix on flows!)          use the connectorBag sentinel
 
-| Field | Type | Domain | Common ops |
-|---|---|---|---|
-| `properties.model` | string | `'Claude Sonnet 4.5'`, `'GPT-4o'`, `'GPT-4.1'`, etc. | `==`, `contains` |
-| `properties.orchestration` | string | `'Generative'`, others | `==` |
-| `properties.lastPublishedAt` | datetime | ISO 8601 | `> ago(Nd)`, `<`, `>` |
-| `properties.schemaName` | string | e.g. `'copilots_header_msftcsa_ITServiceAgent'` | `==`, `contains` |
-| `properties.entraAppId` | string (GUID) | Entra app GUID | `==` |
-| `properties.authentication` | string | `'Microsoft Entra'`, others | `==` |
-| `properties.instructionsCharactersCount` | number | integer | `>`, `<`, `==` |
-| `properties.isWebSearchEnabledForKnowledge` | boolean | `"true"` / `"false"` | `==` |
-| `properties.isManaged` | boolean | `"true"` / `"false"` | `==` (**different from env-level `isManaged`!**) |
-| `properties.channels` | string array | `'Teams'`, `'Microsoft 365 Copilot'`, `'Direct Line Channels'`, etc. — DYNAMIC | filtering this directly is unreliable; use `contains` against the raw column or summarise client-side |
-| `properties.createdIn` | string | `'Copilot Studio'`, possibly others | `==` |
 
-## Environment fields
+------------------------------------------------------------
+COPILOT STUDIO AGENT FIELDS
+------------------------------------------------------------
 
-> 🚨 **These fields only exist on `microsoft.powerplatform/environments`.**
-> They are **NOT** present on apps / flows / agents.
+Field                                                Type                Domain                                                             Common ops
+-------------------------------------------------    -------------       ----------------------------------------------------------         ---------------
+properties.model                                     string              'Claude Sonnet 4.5', 'GPT-4o', 'GPT-4.1', etc.                     ==, contains
+properties.orchestration                             string              'Generative', others                                               ==
+properties.lastPublishedAt                           datetime            ISO 8601                                                           > ago(Nd), <, >
+properties.schemaName                                string              e.g. 'copilots_header_msftcsa_ITServiceAgent'                      ==, contains
+properties.entraAppId                                string (GUID)       Entra app GUID                                                     ==
+properties.authentication                            string              'Microsoft Entra', others                                          ==
+properties.instructionsCharactersCount               number              integer                                                            >, <, ==
+properties.isWebSearchEnabledForKnowledge            boolean             "true" / "false"                                                   ==
+properties.isManaged                                 boolean             "true" / "false"                                                   == (different from env-level isManaged!)
+properties.channels                                  string array        'Teams', 'Microsoft 365 Copilot', 'Direct Line Channels', etc.     filtering directly is unreliable; use contains against tostring()
+properties.createdIn                                 string              'Copilot Studio', possibly others                                  ==
 
-| Field | Type | Domain | Common ops |
-|---|---|---|---|
-| `properties.environmentType` | string | `'Production'`, `'Default'`, `'Sandbox'`, `'Trial'`, `'Developer'`, `'Dataverse for Teams'` | `==`, `in~` |
-| `properties.isManaged` | boolean | `"true"` / `"false"` | `==` (Managed Environments flag) |
-| `properties.environmentGroup` | string | env group display name | `==`, `contains` |
-| `properties.environmentGroupId` | string (GUID) | env group GUID | `==`, `in~` |
 
-**To filter apps/flows/agents "in environments of type X":** use the
-**two-step pattern** (recipes 7.11–7.13). Step 1 finds the env GUIDs;
-step 2 filters by `properties.environmentId in~ <guids>`.
+------------------------------------------------------------
+ENVIRONMENT FIELDS (microsoft.powerplatform/environments ONLY)
+------------------------------------------------------------
 
-## 🚫 What's NOT in the inventory — DO NOT OFFER THESE AS REFINEMENTS
+THESE FIELDS ONLY EXIST ON environments. They are NOT
+present on apps / flows / agents.
 
-The `PowerPlatformResources` inventory is a **topology and
-metadata** table. It tells you what exists, who created/owns it,
-when it was modified, what it's wired to. It does **NOT** carry
-runtime, telemetry, billing, identity, or licensing data.
+Field                                  Type            Domain                                                                                       Common ops
+-----------------------------------    ------------    ---------------------------------------------------------------------------------------      -----------
+properties.environmentType             string          'Production', 'Default', 'Sandbox', 'Trial', 'Developer', 'Dataverse for Teams'             ==, in~
+properties.isManaged                   boolean         "true" / "false"                                                                              == (Managed Environments flag)
+properties.environmentGroup            string          env group display name                                                                        ==, contains
+properties.environmentGroupId          string (GUID)   env group GUID                                                                                ==, in~
 
-When the user asks for any of the below — or when you're tempted to
-offer one of them as a "would you like to refine by…" suggestion —
-**don't**. Explain plainly that the inventory doesn't carry it and,
-where possible, name the system that does.
+To filter apps/flows/agents "in environments of type X" use
+the TWO-STEP pattern (recipes 7.11 through 7.13). Step 1
+finds the env GUIDs; step 2 filters by properties.environmentId
+in~ <guids>.
 
-| Concept the user might ask for | Why it's not here | Where it lives |
-|---|---|---|
-| **Launch / run COUNT** ("how many times was this used", "top 10 most-used apps", "session count", "DAU / MAU") | The inventory has timestamps, not counts. There is no run count, session count, or DAU/MAU field on any resource. | Power Platform admin analytics, Application Insights (if instrumented), PPAC "Analytics" surface |
-| **Active USERS** ("how many people used this app last month") | Topology only — no per-user activity data | Power Platform admin analytics; per-app analytics in maker portal |
-| **Last RUN / EXECUTION time for flows** | The inventory has `properties.lastModifiedAt` (edit time) but no separate "last run" timestamp | Power Automate run history (per flow) |
-| **Last LAUNCH time for non-canvas apps** | Only canvas apps publish `properties.lastLaunchedTime`. Model-driven / code / app-builder apps do not. | None — model-driven and code apps simply don't expose this |
-| **License / capacity / billing data** | Not in the inventory | Power Platform admin center → Billing |
-| **User account status** ("disabled", "left the org") | Inventory only stores owner/creator GUIDs | Microsoft Entra ID / Microsoft Graph |
-| **User profile fields** (department, manager, title) for owners | The polymorphic shape sometimes embeds display name and email but never department/manager | Microsoft Graph |
-| **DLP policy assignments** for a specific app/flow | Not in the inventory rows | Power Platform admin DLP APIs |
-| **Sharing details** beyond canvas-app `sharedUsersCount` / `sharedGroupsCount` counts (e.g. WHO the app is shared with) | The inventory only carries the counts | Power Apps admin connector `GetSharedPrincipals` |
-| **Connection / credential information** for a flow (which connection ID, which account) | Not in the inventory | Power Platform admin `ListConnections` connector |
-| **App PERFORMANCE / latency metrics** | Not in the inventory | Application Insights, Monitor / Tracer |
 
-### ✅ What IS available that LOOKS like usage (use with honest caveats)
+------------------------------------------------------------
+ENVIRONMENT GROUP FIELDS
+------------------------------------------------------------
 
-These are the few signals the inventory **does** carry that are
-adjacent to "usage". They're useful, but be precise about what they
-do and don't tell you:
+Field                          Type                                Domain
+-----------------------------  ----------------------------        -------------------
+properties.displayName         string                              e.g. 'Finance'
+properties.description         string                              free text
+properties.createdAt           datetime                            ISO 8601
+properties.createdBy           polymorphic (GUID or object)        see polymorphic section
 
-| Signal | What it tells you | What it does NOT tell you |
-|---|---|---|
-| `properties.lastLaunchedTime` (**canvas apps only**) | The **timestamp** of the most recent launch. Great for "canvas apps not launched in the last 90 days" or "recently-active canvas apps". | How many times it was launched, by whom, or for how long. Not available on model-driven / code / app-builder apps. |
-| `properties.lastModifiedAt` (every resource) | When the resource was last **edited**. A weak proxy for "is anyone maintaining this?" | Anything about **usage**. A heavily-used app that no one's edited in a year still shows old `lastModifiedAt`. |
-| `properties.sharedUsersCount` / `sharedGroupsCount` (**canvas apps only**) | How many users/groups the app has been **shared with**. A weak proxy for reach. | Whether any of those users actually launch it. |
-| `properties.lastPublishedAt` (**agents only**) | When the agent was last **published**. Useful for "agents not republished recently". | How often it's invoked, how many conversations it handles. |
 
-### When the user asks for one of the truly unavailable concepts above, your reply template is:
+------------------------------------------------------------
+WHAT IS NOT IN THE INVENTORY -- DO NOT OFFER AS REFINEMENTS
+------------------------------------------------------------
 
-```
-That data isn't in the PowerPlatformResources inventory — it's
-[topology only / edit metadata only / etc]. <Name the real source>
-holds it. The closest thing I can query for you is <closest
-inventory proxy, if any>. Want me to do that instead, or do you
-have access to <real source> to provide the data?
-```
+The PowerPlatformResources inventory is a TOPOLOGY AND
+METADATA table. It tells you what exists, who created/owns
+it, when it was modified, what it's wired to. It does NOT
+carry runtime, telemetry, billing, identity, or licensing
+data.
 
-### When offering "refinement" suggestions after a query, ONLY suggest:
+When the user asks for any of the below -- or when you're
+tempted to offer one of them as a "would you like to refine
+by..." suggestion -- DON'T. Explain plainly that the
+inventory doesn't carry it and, where possible, name the
+system that does.
 
-- **Resource type** (narrow / widen the `type` filter)
-- **Environment** (specific env GUID, env group, or env type via two-step)
-- **Owner / creator** (GUID, polymorphic — use `contains`)
-- **Time window** (`> ago(Nd)` for created / modified / last published /
-  — for canvas apps only — last launched)
-- **Connector usage** — phrase it precisely as **"which connectors
-  the resource USES"** (which is what `__connectorBag` queries), not
-  as "usage" by itself, which the user might read as runtime usage
-- **Name match** (`contains` / `startswith` / `endswith` on displayName)
-- **Status / lifecycle flags** (isQuarantined, isManaged, status, flowTriggerType)
-- **Sharing breadth** (`sharedUsersCount` / `sharedGroupsCount` on canvas apps)
-- **Resource-specific attributes** documented in the per-type tables above
+Concept the user might ask for                                                                                          Why it's not here                                                                       Where it lives
+------------------------------------------------------------------------------------                                    ----------------------------------------------------------------                        ----------------------------------------------------------------
+Launch / run COUNT ("how many times was this used", "most-used apps", "session count", DAU / MAU)                       Inventory has timestamps, NOT counts.                                                   Power Platform admin analytics, App Insights, PPAC "Analytics" surface
+Active USERS ("how many people used this app last month")                                                               Topology only -- no per-user activity data                                              PPAC admin analytics, per-app analytics in maker portal
+Last RUN / EXECUTION time for flows                                                                                     Inventory has properties.lastModifiedAt (edit time), no separate "last run" timestamp   Power Automate run history (per flow)
+Last LAUNCH time for non-canvas apps                                                                                    Only canvas apps publish properties.lastLaunchedTime                                    None -- model-driven and code apps simply do not expose this
+License / capacity / billing data                                                                                       Not in the inventory                                                                    Power Platform admin center -> Billing
+User account status ("disabled", "left the org")                                                                        Inventory only stores owner/creator GUIDs                                               Microsoft Entra ID / Microsoft Graph
+User profile fields (department, manager, title) for owners                                                             Polymorphic shape sometimes embeds displayName/email but never department/manager       Microsoft Graph
+DLP policy assignments for a specific app/flow                                                                          Not in the inventory rows                                                               Power Platform admin DLP APIs
+Sharing details beyond canvas-app sharedUsersCount / sharedGroupsCount counts (WHO the app is shared with)              Inventory only carries the counts                                                       Power Apps admin connector GetSharedPrincipals
+Connection / credential information for a flow (which connection ID, which account)                                     Not in the inventory                                                                    Power Platform admin ListConnections connector
+App PERFORMANCE / latency metrics                                                                                       Not in the inventory                                                                    Application Insights, Monitor / Tracer
 
-**Never** offer "usage" (ambiguous!), "active users", "run count",
+
+WHAT IS AVAILABLE THAT LOOKS LIKE USAGE (use with honest caveats):
+
+These few signals the inventory DOES carry are adjacent to
+"usage". They're useful but be precise about what they do and
+don't tell you:
+
+Signal                                                          What it tells you                                                                                                       What it does NOT tell you
+------------------------------------------------------          --------------------------------------------------------------------------------------------------                      ----------------------------------------------------------------------------------------------
+properties.lastLaunchedTime (CANVAS APPS ONLY)                  Timestamp of the most recent launch. Great for "canvas apps not launched in 90 days" or "recently-active canvas apps". How many times launched, by whom, or for how long. Not available on model-driven / code / app-builder apps.
+properties.lastModifiedAt (every resource)                      When the resource was last EDITED. A weak proxy for "is anyone maintaining this?"                                       Anything about USAGE. A heavily-used app no one's edited still shows old lastModifiedAt.
+properties.sharedUsersCount / sharedGroupsCount (CANVAS ONLY)   How many users/groups the app has been SHARED with. A weak proxy for reach.                                              Whether any of those users actually launch it.
+properties.lastPublishedAt (AGENTS ONLY)                        When the agent was last PUBLISHED. Useful for "agents not republished recently".                                        How often it's invoked, how many conversations it handles.
+
+
+WHEN THE USER ASKS FOR AN UNAVAILABLE CONCEPT, your reply
+template:
+
+  That data isn't in the PowerPlatformResources inventory --
+  it's [topology only / edit metadata only / etc]. <Name the
+  real source> holds it. The closest thing I can query for
+  you is <closest inventory proxy, if any>. Want me to do
+  that instead, or do you have access to <real source> to
+  provide the data?
+
+
+WHEN OFFERING "REFINEMENT" SUGGESTIONS AFTER A QUERY, ONLY
+SUGGEST:
+
+  - Resource type (narrow / widen the type filter)
+  - Environment (specific env GUID, env group, or env type via two-step)
+  - Owner / creator (GUID, polymorphic -- use contains)
+  - Time window (> ago(Nd) for created / modified / last published /
+    for canvas apps only, last launched)
+  - Which connectors a resource USES (phrase precisely; never just
+    "usage" by itself, which the user might read as runtime usage)
+  - Name match (contains / startswith / endswith on displayName)
+  - Status / lifecycle flags (isQuarantined, isManaged, status, flowTriggerType)
+  - Sharing breadth (sharedUsersCount / sharedGroupsCount on canvas apps)
+  - Resource-specific attributes documented in the per-type tables above
+
+NEVER offer "usage" (ambiguous!), "active users", "run count",
 "last run", "license", "performance", "DLP coverage", or
-"sharing list" as a refinement — the inventory cannot serve any of
-them.
+"sharing list" as a refinement -- the inventory cannot serve
+any of them.
 
-## Environment group fields
 
-| Field | Type | Domain |
-|---|---|---|
-| `properties.displayName` | string | e.g. `'Finance'` |
-| `properties.description` | string | free text |
-| `properties.createdAt` | datetime | ISO 8601 |
-| `properties.createdBy` | 🔶 polymorphic (GUID or object) | — |
+------------------------------------------------------------
+FIELDS SUMMARY BY INTENT
+------------------------------------------------------------
 
-## Fields summary by intent
-
-| User intent | Use this clause |
-|---|---|
-| "Recently modified" / "in the last N days" | `where properties.lastModifiedAt > ago(Nd)` |
-| "Recently created" / "new in the last N days" | `where properties.createdAt > ago(Nd)` |
-| "Owned by user X" | 🔶 `where properties.ownerId contains '<GUID>'` |
-| "Created by user X" | 🔶 `where properties.createdBy contains '<GUID>'` |
-| "Quarantined" | `where properties.isQuarantined == "true"` (apps + agents) |
-| "Activated/Suspended/Stopped" (flows) | `where properties.status == '<value>'` |
-| "Triggered manually / on-demand" | `where properties.flowTriggerType == 'Instant'` |
-| "Uses connector X" | `__connectorBag` sentinel — see `05-sentinel-fields.txt` |
-| "Calls operation X" | `__connectorBag` sentinel (it covers operation IDs too) |
-| "Managed environments" | `where properties.isManaged == "true"` on environments |
-| "In env group X" | `where properties.environmentGroupId == '<GUID>'` |
-| "In environment of type X" | **Two-step pattern** — see recipes 7.11–7.13 |
+User intent                                                Use this clause
+-------------------------------------------------------    -----------------------------------------------------------------------
+"Recently modified" / "in the last N days"                 where properties.lastModifiedAt > ago(Nd)
+"Recently created" / "new in the last N days"              where properties.createdAt > ago(Nd)
+"Owned by user X"                                          where properties.ownerId contains '<GUID>'
+"Created by user X"                                        where properties.createdBy contains '<GUID>'
+"Quarantined"                                              where properties.isQuarantined == "true" (apps + agents)
+"Activated/Suspended/Stopped" (flows)                      where properties.status == '<value>'
+"Triggered manually / on-demand"                           where properties.flowTriggerType == 'Instant'
+"Uses connector X"                                         connectorBag sentinel -- see 05-sentinel-fields
+"Calls operation X"                                        connectorBag sentinel (covers operation IDs too)
+"Managed environments"                                     where properties.isManaged == "true" on environments
+"In env group X"                                           where properties.environmentGroupId == '<GUID>'
+"In environment of type X"                                 TWO-STEP pattern -- see recipes 7.11 through 7.13
