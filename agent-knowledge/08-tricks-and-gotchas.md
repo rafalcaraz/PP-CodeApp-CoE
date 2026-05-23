@@ -1,0 +1,144 @@
+# 08 — Tricks and gotchas
+
+KQL / ARG / schema idiosyncrasies that the agent should know about
+even though most are handled automatically by the clause builder.
+Skim this if a query "looks right" but the user reports zero results.
+
+## 1. `orderField` on `properties.*` is silently wrapped in `tostring()`
+
+ARG rejects `order by properties.foo` on dynamic fields with
+`ExpressionKeyCantBeDynamic`. The clause builder wraps every
+`properties.*` orderField in `tostring()` automatically. **You don't
+need to do anything** — just put the raw dot path in `orderField`.
+
+## 2. String values are auto-quoted; booleans and numbers are not
+
+`quoteSmart` in the clause builder:
+- `"true"` / `"false"` → KQL boolean (unquoted)
+- numeric strings → KQL number (unquoted)
+- everything else → single-quoted string
+
+You always pass `value` as a string in JSON. The builder figures out
+how to render it.
+
+## 3. `lastNdays` translates to `> ago(Nd)`
+
+The value must be a number-as-string like `"30"`. **Do not** include
+a date or write `"ago(30d)"` yourself.
+
+## 4. There is no `notLastNdays`
+
+Already covered in `04-operators.md`. The workaround: ask the user
+for an ISO cutoff date and use `<`. **Never invent today's date.**
+
+## 5. Multiple `where` clauses are AND-ed; OR needs `in~` / `has_any`
+
+`QuerySpec` has no OR composition across separate filters. For OR,
+use a single filter with `in~` (for `==`-style OR) or `has_any` (for
+tokenised / sentinel OR).
+
+## 6. Connector IDs are inconsistent across resource types
+
+Three flavors:
+- Canvas / agents / flows: `properties.powerPlatformConnectors[]`
+  with **bare slugs**, sometimes with `shared_` prefix, sometimes
+  without (flows often omit `shared_`)
+- App-builder apps: `properties.connectors[]` with **full ARM paths**
+- Cloud flows also have `properties.trigger.connectorId` for the
+  trigger connector
+
+The `__connector` sentinel flattens all three into one searchable
+string (`__connectorBag`). **Always prefer the sentinel for
+connector-name filters.** See `05-sentinel-fields.md`.
+
+## 7. `__connectorBag` extend is emitted at most once per query
+
+Multiple `__connector` (or `__operation`) filters in the same
+`QuerySpec` reuse the same synthesised column. This is **why two
+`__connector ==` filters work as AND**: they're two `has` checks
+against the same string, both must succeed.
+
+## 8. `properties.environmentType` belongs to environments, NOT apps
+
+This is the #1 cross-resource gotcha. If you filter apps by
+`properties.environmentType == "Production"`, you get **zero rows
+silently** (ARG doesn't error on missing dynamic fields). The
+correct pattern is the **two-step recipe 7.11**.
+
+The same is true for many fields — see the **"Lives on" column** in
+`03-fields-reference.md` and check it before every filter.
+
+## 9. Owner / creator fields are polymorphic — prefer `contains`
+
+`properties.ownerId`, `properties.createdBy`, `properties.lastModifiedBy`
+are sometimes a flat GUID, sometimes an object
+`{id, displayName, email}`. Exact `==` misses the object form.
+
+**Always prefer `contains` against the GUID** for these fields.
+See `03-fields-reference.md` 🔶 callouts.
+
+## 10. `lastModifiedBy` may be the empty string
+
+For system-owned / Microsoft-managed resources (e.g. the built-in
+Customer Service Hub model-driven app),
+`properties.lastModifiedBy` is `""`. If the user asks for "modified
+by anyone", excluding empty: add a second filter
+`{ "field": "properties.lastModifiedBy", "op": "!=", "value": "" }`.
+
+## 11. There's no "last run" timestamp distinct from `lastModifiedAt`
+
+Common ask: "flows that haven't run in 90 days". The inventory
+doesn't carry a per-resource "last execution" timestamp. Use
+`properties.lastModifiedAt` as the closest proxy, and be honest
+with the user that it tracks edits, not runs.
+
+## 12. `lastLaunchedTime` exists only on some canvas apps
+
+Don't filter on `properties.lastLaunchedTime` for non-canvas types —
+it'll silently return zero. For "apps that have been opened
+recently", restrict `resourceTypes` to `microsoft.powerapps/canvasapps`
+only, OR fall back to `lastModifiedAt` for cross-type coverage.
+
+## 13. `properties.channels` is a dynamic array
+
+The clause builder won't `mv-expand` it. For "agents on Teams":
+use `contains` against `tostring(properties.channels)` — but this is
+awkward; for now, prefer pulling all agents and filtering client-side
+unless the user is OK with a substring-match approximation.
+
+## 14. `status` for flows has multiple possible values
+
+Documented: `"Activated"`, `"Suspended"`, `"Stopped"`, `"Started"`,
+`"NotStarted"`. Older payloads may use `state` or `flowState` —
+the inventory layer falls back automatically, but if a user query
+returns zero, suggest trying the alternative casing/name.
+
+## 15. Pagination — `limit` is per-page, not total
+
+`spec.limit` becomes `Top` (page size). Total tenant-wide count is
+returned as `totalRecords`. The app shows "Load more" past the
+first page. **Don't try to "paginate" inside a single QuerySpec** —
+that's the app's job.
+
+## 16. Querying `name` directly works (it's the bare GUID)
+
+`name` at top level is the resource GUID — same as the trailing
+segment of `id`. No `properties.` prefix needed. Useful when the
+user has a specific GUID and the resource type is ambiguous:
+
+```json
+{
+  "resourceTypes": [
+    "microsoft.powerapps/canvasapps",
+    "microsoft.powerapps/modeldrivenapps",
+    "microsoft.powerapps/codeapps",
+    "microsoft.powerapps/apps"
+  ],
+  "filters": [
+    { "field": "name", "op": "==", "value": "12345678-1234-1234-1234-123456789012" }
+  ],
+  "orderField": "properties.displayName",
+  "orderDirection": "asc",
+  "limit": 10
+}
+```

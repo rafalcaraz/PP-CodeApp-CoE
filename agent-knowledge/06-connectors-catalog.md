@@ -1,0 +1,83 @@
+# 06 — Connector catalog
+
+Friendly-name → connector-ID mapping for every connector the app
+currently recognizes. Use these IDs as the `value` in a `__connector`
+filter (see `05-sentinel-fields.md`).
+
+## Common Microsoft connectors
+
+| Friendly name | Connector ID | Notes |
+|---|---|---|
+| Office 365 Outlook | `shared_office365` | Enterprise. **Default for "Outlook" unless user says Outlook.com.** |
+| Outlook.com | `shared_outlook` | Personal accounts. |
+| Office 365 Users | `shared_office365users` | User profile lookups. |
+| Office 365 Groups | `shared_office365groups` | Group ops. |
+| SharePoint | `shared_sharepointonline` | The SharePoint connector. |
+| OneDrive for Business | `shared_onedriveforbusiness` | |
+| Excel Online (Business) | `shared_excelonlinebusiness` | |
+| Microsoft Teams | `shared_teams` | |
+| Planner | `shared_planner` | |
+| Approvals | `shared_approvals` | Power Automate approvals. |
+| Microsoft Dataverse | `shared_commondataservice` | Current Dataverse connector. |
+| Microsoft Dataverse (legacy) | `shared_commondataserviceforapps` | Older Dataverse connector. Still common on canvas apps. |
+| SQL Server | `shared_sql` | |
+| Azure Blob Storage | `shared_azureblob` | |
+| Azure AD | `shared_azuread` | |
+| Microsoft Graph | `shared_microsoftgraph` | |
+| MSN Weather | `shared_msnweather` | |
+
+## Power Platform admin connectors
+
+| Friendly name | Connector ID |
+|---|---|
+| Power Apps for Admins | `shared_powerappsforadmins` |
+| Power Platform for Admins | `shared_powerplatformforadmins` |
+| Power Platform for Admins V2 | `shared_powerplatformadminv2` |
+
+## Flow plumbing connectors
+
+| Friendly name | Connector ID |
+|---|---|
+| Flow management | `shared_flowmanagement` |
+| Logic Flows | `shared_logicflows` |
+
+## Connector ID variants — when to OR them
+
+For some friendly names, the underlying connector publishes under
+multiple IDs across resource types. Use `in~` with all variants:
+
+### Dataverse — always use all four
+
+```jsonc
+{
+  "field": "__connector",
+  "op": "in~",
+  "value": "shared_commondataservice,shared_commondataserviceforapps,commondataservice,commondataserviceforapps"
+}
+```
+
+Why: cloud flows publish bare slugs without the `shared_` prefix
+(e.g. `commondataserviceforapps`), while canvas apps and agents
+publish with the prefix.
+
+## What if the user names a connector NOT in this catalog?
+
+You have two options:
+
+1. **Be honest and ask.** "I don't recognize that connector — what's
+   its connector ID slug? (You can usually find it from a flow's
+   trigger or the PPAC connector reference.)"
+2. **Take a best-effort guess** using the `__connector` sentinel
+   with `contains`:
+
+   ```jsonc
+   { "field": "__connector", "op": "contains", "value": "<slug-or-name>" }
+   ```
+
+   …and explicitly tell the user you guessed, e.g.:
+   "I'm not sure of the exact connector ID for X — I used
+   `contains` so this should match if the substring appears in any
+   connector reference. If it returns nothing, please share the
+   exact ID."
+
+Never silently invent a connector ID that's not in this catalog.
