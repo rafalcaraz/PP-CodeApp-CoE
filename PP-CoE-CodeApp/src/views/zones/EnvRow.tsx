@@ -44,7 +44,13 @@ import type { EnvironmentRow } from "../../data/inventory";
  */
 export type EnvDragSource =
   | { kind: "ms-group"; groupId: string; groupDisplayName: string }
-  | { kind: "loose-managed" };
+  | { kind: "loose-managed" }
+  | { kind: "loose-standard" }
+  | {
+      kind: "custom-group";
+      groupId: string;
+      groupDisplayName: string;
+    };
 
 interface Props {
   env: EnvironmentRow;
@@ -99,7 +105,7 @@ const useStyles = makeStyles({
     },
   },
   rowDragging: {
-    opacity: 0.4,
+    opacity: 0.2,
   },
   body: {
     flex: 1,

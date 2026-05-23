@@ -125,12 +125,22 @@ export function EnvMoveDemoDialog({
                 )}
 
                 <ul className={styles.inheritList}>
-                  <li>DLP policies aligned with this group</li>
+                  <li>
+                    <strong>Advanced Connector Policy (ACP)</strong> — this
+                    group's connector restrictions (when ACP is configured,
+                    it supersedes tenant DLP for envs in this group)
+                  </li>
                   <li>Sharing limits + maker welcome content</li>
                   <li>Solution checker enforcement level</li>
                   <li>IP firewall / Lockbox if the group requires them</li>
-                  <li>Backup, AI feature, and connector policies</li>
+                  <li>Backup retention + AI feature gating</li>
                 </ul>
+
+                <Caption1>
+                  Tenant DLP policies still apply unless this group has ACP
+                  configured. Microsoft env groups don't bind DLP natively —
+                  that's a known gap (the app exists partly to surface it).
+                </Caption1>
 
                 <Caption1>
                   For now, you can do this manually in the Power Platform
