@@ -1,95 +1,114 @@
-# 06 — Connector catalog
+============================================================
+06 - CONNECTOR CATALOG
+============================================================
 
-Friendly-name → connector-ID mapping for every connector the app
-currently recognizes. Use these IDs as the `Values` entries in a
-`__connectorBag` filter (see `05-sentinel-fields.txt`).
+Friendly-name -> connector-ID mapping for every connector the
+app currently recognizes. Use these IDs as the Values entries
+in a connectorBag filter (see 05-sentinel-fields).
 
-## Common Microsoft connectors
 
-| Friendly name | Connector ID | Notes |
-|---|---|---|
-| Office 365 Outlook | `shared_office365` | Enterprise. **Default for "Outlook" unless user says Outlook.com.** |
-| Outlook.com | `shared_outlook` | Personal accounts. |
-| Office 365 Users | `shared_office365users` | User profile lookups. |
-| Office 365 Groups | `shared_office365groups` | Group ops. |
-| SharePoint | `shared_sharepointonline` | The SharePoint connector. |
-| OneDrive for Business | `shared_onedriveforbusiness` | |
-| Excel Online (Business) | `shared_excelonlinebusiness` | |
-| Microsoft Teams | `shared_teams` | |
-| Planner | `shared_planner` | |
-| Approvals | `shared_approvals` | Power Automate approvals. |
-| Microsoft Dataverse | `shared_commondataservice` | Current Dataverse connector. |
-| Microsoft Dataverse (legacy) | `shared_commondataserviceforapps` | Older Dataverse connector. Still common on canvas apps. |
-| SQL Server | `shared_sql` | |
-| Azure Blob Storage | `shared_azureblob` | |
-| Azure AD | `shared_azuread` | |
-| Microsoft Graph | `shared_microsoftgraph` | |
-| MSN Weather | `shared_msnweather` | |
+------------------------------------------------------------
+COMMON MICROSOFT CONNECTORS
+------------------------------------------------------------
 
-## Power Platform admin connectors
+Friendly name                       Connector ID                                  Notes
+--------------------------------    -----------------------------------------     -----------------------------------------------------------------
+Office 365 Outlook                  shared_office365                              Enterprise. DEFAULT for "Outlook" unless user says Outlook.com.
+Outlook.com                         shared_outlook                                Personal accounts.
+Office 365 Users                    shared_office365users                         User profile lookups.
+Office 365 Groups                   shared_office365groups                        Group operations.
+SharePoint                          shared_sharepointonline                       The SharePoint connector.
+OneDrive for Business               shared_onedriveforbusiness
+Excel Online (Business)             shared_excelonlinebusiness
+Microsoft Teams                     shared_teams
+Planner                             shared_planner
+Approvals                           shared_approvals                              Power Automate approvals.
+Microsoft Dataverse                 shared_commondataservice                      Current Dataverse connector.
+Microsoft Dataverse (legacy)        shared_commondataserviceforapps               Older Dataverse connector. Still common on canvas apps.
+SQL Server                          shared_sql
+Azure Blob Storage                  shared_azureblob
+Azure AD                            shared_azuread
+Microsoft Graph                     shared_microsoftgraph
+MSN Weather                         shared_msnweather
 
-| Friendly name | Connector ID |
-|---|---|
-| Power Apps for Admins | `shared_powerappsforadmins` |
-| Power Platform for Admins | `shared_powerplatformforadmins` |
-| Power Platform for Admins V2 | `shared_powerplatformadminv2` |
 
-## Flow plumbing connectors
+------------------------------------------------------------
+POWER PLATFORM ADMIN CONNECTORS
+------------------------------------------------------------
 
-| Friendly name | Connector ID |
-|---|---|
-| Flow management | `shared_flowmanagement` |
-| Logic Flows | `shared_logicflows` |
+Friendly name                       Connector ID
+-------------------------------     ---------------------------------
+Power Apps for Admins               shared_powerappsforadmins
+Power Platform for Admins           shared_powerplatformforadmins
+Power Platform for Admins V2        shared_powerplatformadminv2
 
-## Connector ID variants — when to `has_any` them
 
-For some friendly names, the underlying connector publishes under
-multiple IDs across resource types. Use the sentinel with
-`has_any` and all variants:
+------------------------------------------------------------
+FLOW PLUMBING CONNECTORS
+------------------------------------------------------------
 
-### Dataverse — always use all four
+Friendly name                       Connector ID
+-------------------------------     ---------------------------------
+Flow management                     shared_flowmanagement
+Logic Flows                         shared_logicflows
 
-```json
-{
-  "$type": "where",
-  "FieldName": "__connectorBag",
-  "Operator": "has_any",
-  "Values": [
-    "'shared_commondataservice'",
-    "'shared_commondataserviceforapps'",
-    "'commondataservice'",
-    "'commondataserviceforapps'"
-  ]
-}
-```
 
-Why: cloud flows publish bare slugs without the `shared_` prefix
-(e.g. `commondataserviceforapps`), while canvas apps and agents
-publish with the prefix. Both old (`...forapps`) and new
-(`commondataservice`) forms exist concurrently in real tenants.
+------------------------------------------------------------
+CONNECTOR ID VARIANTS -- WHEN TO has_any THEM
+------------------------------------------------------------
 
-## What if the user names a connector NOT in this catalog?
+For some friendly names, the underlying connector publishes
+under multiple IDs across resource types. Use the sentinel
+with has_any and all variants:
+
+DATAVERSE -- ALWAYS USE ALL FOUR:
+
+  {
+    "$type": "where",
+    "FieldName": "connectorBag",
+    "Operator": "has_any",
+    "Values": [
+      "'shared_commondataservice'",
+      "'shared_commondataserviceforapps'",
+      "'commondataservice'",
+      "'commondataserviceforapps'"
+    ]
+  }
+
+Why: cloud flows publish bare slugs without the shared_
+prefix (e.g. commondataserviceforapps), while canvas apps and
+agents publish with the prefix. Both old (...forapps) and new
+(commondataservice) forms exist concurrently in real tenants.
+
+
+------------------------------------------------------------
+WHAT IF THE USER NAMES A CONNECTOR NOT IN THIS CATALOG
+------------------------------------------------------------
 
 Two options:
 
-1. **Be honest and ask.** "I don't recognize that connector — what's
-   its connector ID slug? (You can usually find it from a flow's
-   trigger or the PPAC connector reference.)"
-2. **Take a best-effort guess** using `contains` against
-   `__connectorBag` with the substring of the name:
+OPTION 1: Be honest and ask.
 
-   ```json
-   {
-     "$type": "where",
-     "FieldName": "__connectorBag",
-     "Operator": "contains",
-     "Values": ["'<substring>'"]
-   }
-   ```
+  "I don't recognize that connector -- what's its connector
+  ID slug? (You can usually find it from a flow's trigger or
+  the PPAC connector reference.)"
 
-   …and explicitly tell the user you guessed: *"I'm not sure of the
-   exact connector ID for X — I used `contains` so this matches if
-   the substring appears anywhere in the connector references. If
-   it returns nothing, please share the exact slug."*
+OPTION 2: Take a best-effort guess using contains against
+connectorBag with the substring of the name:
 
-**Never silently invent a connector ID that's not in this catalog.**
+  {
+    "$type": "where",
+    "FieldName": "connectorBag",
+    "Operator": "contains",
+    "Values": ["'<substring>'"]
+  }
+
+...and EXPLICITLY tell the user you guessed:
+
+  "I'm not sure of the exact connector ID for X -- I used
+  contains so this matches if the substring appears anywhere
+  in the connector references. If it returns nothing, please
+  share the exact slug."
+
+NEVER silently invent a connector ID that's not in this
+catalog.
