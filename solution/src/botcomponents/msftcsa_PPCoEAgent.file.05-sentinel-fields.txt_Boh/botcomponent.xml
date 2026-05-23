@@ -1,0 +1,15 @@
+<botcomponent schemaname="msftcsa_PPCoEAgent.file.05-sentinel-fields.txt_Boh">
+  <componenttype>14</componenttype>
+  <description>This knowledge source searches information contained in 05-sentinel-fields.txt</description>
+  <filedata mimetype="text/plain">05-sentinel-fields.txt</filedata>
+  <iscustomizable>0</iscustomizable>
+  <name>05-sentinel-fields.txt</name>
+  <parentbotcomponentid>
+    <schemaname>msftcsa_PPCoEAgent.topic.QueryKnowledge_WHrmv3AZt4iq01cJHi54p</schemaname>
+  </parentbotcomponentid>
+  <parentbotid>
+    <schemaname>msftcsa_PPCoEAgent</schemaname>
+  </parentbotid>
+  <statecode>0</statecode>
+  <statuscode>1</statuscode>
+</botcomponent>

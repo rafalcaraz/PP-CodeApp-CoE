@@ -1,0 +1,103 @@
+# 02 — Resource types
+
+The inventory exposes **10 resource types**. Every paste must
+target one or more of these in a `where type ==` (or
+`where type in~`) clause. Strings are **case-sensitive**.
+
+## Quick lookup
+
+| Friendly name | `type` value | When to query it |
+|---|---|---|
+| Canvas app | `microsoft.powerapps/canvasapps` | User-built drag-and-drop apps. Richest connector metadata of any app type. |
+| Model-driven app | `microsoft.powerapps/modeldrivenapps` | Dataverse-backed structured apps (Customer Service Hub, etc.). Sparse — no `powerPlatformConnectors`. |
+| Code app | `microsoft.powerapps/codeapps` | Pro-dev "bring-your-own-code" apps (React/TS/Vite). The sparsest type. |
+| App-builder app | `microsoft.powerapps/apps` | A different app surface — uses `properties.connectors` (not `powerPlatformConnectors`). Connector IDs are ARM paths. |
+| Cloud flow | `microsoft.powerautomate/cloudflows` | Power Automate flows. Has `status`, `flowTriggerType`, `trigger`. |
+| Agent flow | `microsoft.powerautomate/agentflows` | Same shape as cloud flows. |
+| Workflow agent flow | `microsoft.powerautomate/m365agentflows` | Same shape as cloud flows. |
+| Copilot Studio agent | `microsoft.copilotstudio/agents` | The richest schema. Has `model`, `orchestration`, `channels`, `lastPublishedAt`, etc. |
+| Environment | `microsoft.powerplatform/environments` | Power Platform environments. Owns `environmentType` and `isManaged`. |
+| Environment group | `microsoft.powerplatform/environmentgroups` | Groups of environments for governance. Sparse. |
+
+## "Apps" usually means all four app types
+
+When the user says "apps" without qualification, target **all four**
+app resource types via `in~`:
+
+```json
+{
+  "$type": "where",
+  "FieldName": "type",
+  "Operator": "in~",
+  "Values": [
+    "'microsoft.powerapps/canvasapps'",
+    "'microsoft.powerapps/modeldrivenapps'",
+    "'microsoft.powerapps/codeapps'",
+    "'microsoft.powerapps/apps'"
+  ]
+}
+```
+
+If they specify a kind ("canvas apps", "code apps"), use only that
+one with `==`. "Apps and flows" → add the flow types too.
+
+## "Flows" usually means all three flow types
+
+When the user says "flows" without qualification:
+
+```json
+{
+  "$type": "where",
+  "FieldName": "type",
+  "Operator": "in~",
+  "Values": [
+    "'microsoft.powerautomate/cloudflows'",
+    "'microsoft.powerautomate/agentflows'",
+    "'microsoft.powerautomate/m365agentflows'"
+  ]
+}
+```
+
+If they say specifically "cloud flows" → only `cloudflows`. "Agent
+flows" → only `agentflows` (and ask if they meant Copilot Studio
+**agents** instead — different concept).
+
+## Common envelope (every type has these)
+
+These top-level fields exist on every record and you can filter on
+them directly (no `properties.` prefix):
+
+| Field | Type | Notes |
+|---|---|---|
+| `id` | string | Full ARM path. Rarely useful for filtering. |
+| `name` | string (GUID) | The resource GUID — same as the trailing segment of `id`. |
+| `type` | string | One of the 10 strings above. Already set by `resourceTypes`. |
+| `tenantId` | string (GUID) | Almost always the same in a single tenant. |
+| `location` | string | Azure region, lower-case, e.g. `"unitedstates"`, `"westus"`. |
+
+## Resource-type-specific extras (high-level)
+
+Per-resource-type details live in `03-fields-reference.txt`. Headlines:
+
+- **Canvas apps:** `powerPlatformConnectors[]`, `lastLaunchedTime`,
+  `sharedUsersCount`, `sharedGroupsCount`, `appType`, `isFeaturedApp`,
+  `bypassConsent`.
+- **Model-driven apps:** `logicalName`, `appModuleId`.
+- **Code apps:** `subType` (e.g. `"byocApp"`).
+- **App-builder apps:** `connectors[]` (ARM-path connector IDs),
+  `subType: "appBuilderApp"`.
+- **Cloud / agent / m365 agent flows:** `status` (`"Activated"`,
+  `"Suspended"`, `"Stopped"`, `"Started"`, `"NotStarted"`),
+  `flowTriggerType` (`"Instant"`, `"Automated"`, `"Recurrence"`,
+  `"Manual"`), `trigger.{operationId, connectorId, ...}`,
+  `workflowEntityId`, `powerPlatformConnectors[]`.
+- **Copilot Studio agents:** `model` (e.g. `"Claude Sonnet 4.5"`,
+  `"GPT-4o"`), `orchestration` (`"Generative"`, …), `channels[]`,
+  `lastPublishedAt`, `schemaName`, `entraAppId`,
+  `instructionsCharactersCount`, `isWebSearchEnabledForKnowledge`,
+  `sharedWithEditors`, `sharedWithViewers`, `capabilitiesCounts`.
+- **Environments:** `environmentType` (`"Production"`, `"Default"`,
+  `"Sandbox"`, `"Trial"`, `"Developer"`, `"Dataverse for Teams"`),
+  `isManaged`, `environmentGroup`, `environmentGroupId`.
+- **Environment groups:** `displayName`, `description`,
+  `createdAt`, `createdBy`.

@@ -10,7 +10,7 @@
   },
   "aISettings": {
     "$kind": "AISettings",
-    "useModelKnowledge": true,
+    "useModelKnowledge": false,
     "isFileAnalysisEnabled": true,
     "isSemanticSearchEnabled": true,
     "contentModeration": "Low",

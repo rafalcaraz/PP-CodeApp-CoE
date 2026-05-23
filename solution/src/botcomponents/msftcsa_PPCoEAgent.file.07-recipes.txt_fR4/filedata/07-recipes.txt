@@ -1,0 +1,810 @@
+# 07 — Recipes (natural language → `Clauses[]`)
+
+The canonical example library. Each recipe shows a user question, the
+JSON the agent should emit, and a one-liner explanation. **All
+recipes are raw `Clauses[]` arrays** — paste them directly into the
+app's **Queries → Advanced** tab and click **Run query**.
+
+> Conventions used here:
+> - Every recipe starts with a `where type ==` (or `where type in~`)
+>   envelope filter — never omit it.
+> - Order by `tostring(properties.lastModifiedAt) desc` by default;
+>   override when the question motivates something else.
+> - **Do not emit `take`** — let the user control page size in the UI.
+
+## Basics
+
+### 7.1 — "Show me all canvas apps"
+
+```json
+[
+  {
+    "$type": "where",
+    "FieldName": "type",
+    "Operator": "==",
+    "Values": ["'microsoft.powerapps/canvasapps'"]
+  },
+  {
+    "$type": "orderby",
+    "FieldNamesAscDesc": { "tostring(properties.lastModifiedAt)": "desc" }
+  }
+]
+```
+
+### 7.2 — "List managed environments"
+
+```json
+[
+  {
+    "$type": "where",
+    "FieldName": "type",
+    "Operator": "==",
+    "Values": ["'microsoft.powerplatform/environments'"]
+  },
+  {
+    "$type": "where",
+    "FieldName": "properties.isManaged",
+    "Operator": "==",
+    "Values": ["true"]
+  },
+  {
+    "$type": "orderby",
+    "FieldNamesAscDesc": { "tostring(properties.displayName)": "asc" }
+  }
+]
+```
+
+### 7.3 — "All Copilot Studio agents"
+
+```json
+[
+  {
+    "$type": "where",
+    "FieldName": "type",
+    "Operator": "==",
+    "Values": ["'microsoft.copilotstudio/agents'"]
+  },
+  {
+    "$type": "orderby",
+    "FieldNamesAscDesc": { "tostring(properties.displayName)": "asc" }
+  }
+]
+```
+
+### 7.4 — "Cloud flows modified in the last 7 days"
+
+`ago(7d)` is unquoted — it's a KQL function call, not a string.
+
+```json
+[
+  {
+    "$type": "where",
+    "FieldName": "type",
+    "Operator": "==",
+    "Values": ["'microsoft.powerautomate/cloudflows'"]
+  },
+  {
+    "$type": "where",
+    "FieldName": "properties.lastModifiedAt",
+    "Operator": ">",
+    "Values": ["ago(7d)"]
+  },
+  {
+    "$type": "orderby",
+    "FieldNamesAscDesc": { "tostring(properties.lastModifiedAt)": "desc" }
+  }
+]
+```
+
+### 7.5 — "Canvas apps owned by user GUID 12345678-1234-1234-1234-123456789012"
+
+🔶 Uses `contains` on the polymorphic `ownerId` field — works
+whether ownerId is a flat GUID string or `{id, displayName, email}`
+object.
+
+```json
+[
+  {
+    "$type": "where",
+    "FieldName": "type",
+    "Operator": "==",
+    "Values": ["'microsoft.powerapps/canvasapps'"]
+  },
+  {
+    "$type": "where",
+    "FieldName": "properties.ownerId",
+    "Operator": "contains",
+    "Values": ["'12345678-1234-1234-1234-123456789012'"]
+  },
+  {
+    "$type": "orderby",
+    "FieldNamesAscDesc": { "tostring(properties.lastModifiedAt)": "desc" }
+  }
+]
+```
+
+## Sentinel / connector queries
+
+### 7.6 — "Canvas apps using SharePoint"
+
+```json
+[
+  {
+    "$type": "where",
+    "FieldName": "type",
+    "Operator": "==",
+    "Values": ["'microsoft.powerapps/canvasapps'"]
+  },
+  {
+    "$type": "extend",
+    "FieldName": "__connectorBag",
+    "Expression": "strcat(tostring(properties.powerPlatformConnectors),'|',tostring(properties.connectors),'|',tostring(properties.trigger))"
+  },
+  {
+    "$type": "where",
+    "FieldName": "__connectorBag",
+    "Operator": "has",
+    "Values": ["'shared_sharepointonline'"]
+  },
+  {
+    "$type": "orderby",
+    "FieldNamesAscDesc": { "tostring(properties.lastModifiedAt)": "desc" }
+  }
+]
+```
+
+### 7.7 — "Cloud flows using BOTH Outlook AND SQL Server"
+
+Two separate `where __connectorBag has` clauses = AND semantics.
+
+```json
+[
+  {
+    "$type": "where",
+    "FieldName": "type",
+    "Operator": "==",
+    "Values": ["'microsoft.powerautomate/cloudflows'"]
+  },
+  {
+    "$type": "extend",
+    "FieldName": "__connectorBag",
+    "Expression": "strcat(tostring(properties.powerPlatformConnectors),'|',tostring(properties.connectors),'|',tostring(properties.trigger))"
+  },
+  {
+    "$type": "where",
+    "FieldName": "__connectorBag",
+    "Operator": "has",
+    "Values": ["'shared_office365'"]
+  },
+  {
+    "$type": "where",
+    "FieldName": "__connectorBag",
+    "Operator": "has",
+    "Values": ["'shared_sql'"]
+  },
+  {
+    "$type": "orderby",
+    "FieldNamesAscDesc": { "tostring(properties.lastModifiedAt)": "desc" }
+  }
+]
+```
+
+### 7.8 — "Anything using a Dataverse connector"
+
+Uses `has_any` with all four Dataverse slug variants because
+they're inconsistent across resource types.
+
+```json
+[
+  {
+    "$type": "where",
+    "FieldName": "type",
+    "Operator": "in~",
+    "Values": [
+      "'microsoft.powerapps/canvasapps'",
+      "'microsoft.powerapps/modeldrivenapps'",
+      "'microsoft.powerapps/codeapps'",
+      "'microsoft.powerapps/apps'",
+      "'microsoft.powerautomate/cloudflows'",
+      "'microsoft.copilotstudio/agents'"
+    ]
+  },
+  {
+    "$type": "extend",
+    "FieldName": "__connectorBag",
+    "Expression": "strcat(tostring(properties.powerPlatformConnectors),'|',tostring(properties.connectors),'|',tostring(properties.trigger))"
+  },
+  {
+    "$type": "where",
+    "FieldName": "__connectorBag",
+    "Operator": "has_any",
+    "Values": [
+      "'shared_commondataservice'",
+      "'shared_commondataserviceforapps'",
+      "'commondataservice'",
+      "'commondataserviceforapps'"
+    ]
+  },
+  {
+    "$type": "orderby",
+    "FieldNamesAscDesc": { "tostring(properties.lastModifiedAt)": "desc" }
+  }
+]
+```
+
+## Multi-type and enum queries
+
+### 7.9 — "Quarantined apps across every app type"
+
+`in~` for the four app types; boolean `"true"` unquoted.
+
+```json
+[
+  {
+    "$type": "where",
+    "FieldName": "type",
+    "Operator": "in~",
+    "Values": [
+      "'microsoft.powerapps/canvasapps'",
+      "'microsoft.powerapps/modeldrivenapps'",
+      "'microsoft.powerapps/codeapps'",
+      "'microsoft.powerapps/apps'"
+    ]
+  },
+  {
+    "$type": "where",
+    "FieldName": "properties.isQuarantined",
+    "Operator": "==",
+    "Values": ["true"]
+  },
+  {
+    "$type": "orderby",
+    "FieldNamesAscDesc": { "tostring(properties.lastModifiedAt)": "desc" }
+  }
+]
+```
+
+### 7.10 — "Cloud flows whose status is Suspended"
+
+```json
+[
+  {
+    "$type": "where",
+    "FieldName": "type",
+    "Operator": "==",
+    "Values": ["'microsoft.powerautomate/cloudflows'"]
+  },
+  {
+    "$type": "where",
+    "FieldName": "properties.status",
+    "Operator": "==",
+    "Values": ["'Suspended'"]
+  },
+  {
+    "$type": "orderby",
+    "FieldNamesAscDesc": { "tostring(properties.lastModifiedAt)": "desc" }
+  }
+]
+```
+
+## Cross-resource — the two-step pattern
+
+These are the most important recipes in this file. They model how
+the agent handles questions that **can't be answered in one paste**
+because they need correlation between two resource types.
+
+> Common shape: emit step-1 as a valid `Clauses[]` array, then tell
+> the user exactly what to paste back for step 2.
+
+### 7.11 — "Apps in Production-type environments"
+
+`properties.environmentType` lives on environments, not on apps.
+Two-step:
+
+**Step 1 — get the Production env GUIDs:**
+
+```json
+[
+  {
+    "$type": "where",
+    "FieldName": "type",
+    "Operator": "==",
+    "Values": ["'microsoft.powerplatform/environments'"]
+  },
+  {
+    "$type": "where",
+    "FieldName": "properties.environmentType",
+    "Operator": "==",
+    "Values": ["'Production'"]
+  },
+  {
+    "$type": "orderby",
+    "FieldNamesAscDesc": { "tostring(properties.displayName)": "asc" }
+  }
+]
+```
+
+**Then ask the user:** *"Paste the resulting `name` GUIDs back to
+me as a comma-separated list and I'll generate step 2 — the apps
+filter."*
+
+**Step 2 (template — needs user-supplied GUIDs):**
+
+```jsonc
+[
+  {
+    "$type": "where",
+    "FieldName": "type",
+    "Operator": "in~",
+    "Values": [
+      "'microsoft.powerapps/canvasapps'",
+      "'microsoft.powerapps/modeldrivenapps'",
+      "'microsoft.powerapps/codeapps'",
+      "'microsoft.powerapps/apps'"
+    ]
+  },
+  {
+    "$type": "where",
+    "FieldName": "properties.environmentId",
+    "Operator": "in~",
+    "Values": ["'<guid1>'", "'<guid2>'"]
+  },
+  {
+    "$type": "orderby",
+    "FieldNamesAscDesc": { "tostring(properties.lastModifiedAt)": "desc" }
+  }
+]
+```
+
+### 7.12 — "Apps using any Dataverse connector in env aaaa0000-...-444444dddddd"
+
+Single-array version when the env GUID is **already provided**:
+
+```json
+[
+  {
+    "$type": "where",
+    "FieldName": "type",
+    "Operator": "in~",
+    "Values": [
+      "'microsoft.powerapps/canvasapps'",
+      "'microsoft.powerapps/modeldrivenapps'",
+      "'microsoft.powerapps/codeapps'",
+      "'microsoft.powerapps/apps'"
+    ]
+  },
+  {
+    "$type": "where",
+    "FieldName": "properties.environmentId",
+    "Operator": "==",
+    "Values": ["'aaaa0000-bb11-2222-33cc-444444dddddd'"]
+  },
+  {
+    "$type": "extend",
+    "FieldName": "__connectorBag",
+    "Expression": "strcat(tostring(properties.powerPlatformConnectors),'|',tostring(properties.connectors),'|',tostring(properties.trigger))"
+  },
+  {
+    "$type": "where",
+    "FieldName": "__connectorBag",
+    "Operator": "has_any",
+    "Values": [
+      "'shared_commondataservice'",
+      "'shared_commondataserviceforapps'",
+      "'commondataservice'",
+      "'commondataserviceforapps'"
+    ]
+  },
+  {
+    "$type": "orderby",
+    "FieldNamesAscDesc": { "tostring(properties.lastModifiedAt)": "desc" }
+  }
+]
+```
+
+### 7.13 — "Which canvas apps share connectors with our agents?"
+
+Two-step. Step 1 lists agents (user inspects connector slugs); user
+pastes them back; step 2 filters canvas apps.
+
+**Step 1 — list all agents:**
+
+```json
+[
+  {
+    "$type": "where",
+    "FieldName": "type",
+    "Operator": "==",
+    "Values": ["'microsoft.copilotstudio/agents'"]
+  },
+  {
+    "$type": "orderby",
+    "FieldNamesAscDesc": { "tostring(properties.displayName)": "asc" }
+  }
+]
+```
+
+**Then ask the user:** *"From the result, paste back the connector
+slugs you see (comma-separated, e.g. `shared_office365,shared_sql`).
+I'll emit step 2 to find canvas apps using any of them."*
+
+**Step 2 (template):**
+
+```jsonc
+[
+  {
+    "$type": "where",
+    "FieldName": "type",
+    "Operator": "==",
+    "Values": ["'microsoft.powerapps/canvasapps'"]
+  },
+  {
+    "$type": "extend",
+    "FieldName": "__connectorBag",
+    "Expression": "strcat(tostring(properties.powerPlatformConnectors),'|',tostring(properties.connectors),'|',tostring(properties.trigger))"
+  },
+  {
+    "$type": "where",
+    "FieldName": "__connectorBag",
+    "Operator": "has_any",
+    "Values": ["'<slug1>'", "'<slug2>'"]
+  },
+  {
+    "$type": "orderby",
+    "FieldNamesAscDesc": { "tostring(properties.lastModifiedAt)": "desc" }
+  }
+]
+```
+
+## Time-based / "abandoned" queries
+
+### 7.14 — "Find abandoned apps" (canonical clock-aware answer)
+
+**You do not know today's date.** Ask the user for the threshold
+first. Never invent a date.
+
+**The right reply (no JSON, just a question):**
+
+```
+"Abandoned" needs a threshold. Should I use "not modified in the
+last N days" (you pick N), or "modified before a specific ISO
+date" (you give me the date)?
+```
+
+Once they pick "N days", emit the spec with `< ago(<N>d)` and
+exclude already-quarantined apps:
+
+```jsonc
+[
+  {
+    "$type": "where",
+    "FieldName": "type",
+    "Operator": "in~",
+    "Values": [
+      "'microsoft.powerapps/canvasapps'",
+      "'microsoft.powerapps/modeldrivenapps'",
+      "'microsoft.powerapps/codeapps'",
+      "'microsoft.powerapps/apps'"
+    ]
+  },
+  {
+    "$type": "where",
+    "FieldName": "properties.lastModifiedAt",
+    "Operator": "<",
+    "Values": ["ago(<N>d)"]
+  },
+  {
+    "$type": "where",
+    "FieldName": "properties.isQuarantined",
+    "Operator": "==",
+    "Values": ["false"]
+  },
+  {
+    "$type": "orderby",
+    "FieldNamesAscDesc": { "tostring(properties.lastModifiedAt)": "asc" }
+  }
+]
+```
+
+### 7.15 — "Cloud flows that haven't run in 90 days"
+
+Same shape as 7.14 — confirm the threshold first, then use
+`< ago(90d)` on `properties.lastModifiedAt`. (The inventory doesn't
+carry a "last run" timestamp distinct from `lastModifiedAt`.)
+
+## Time-windowed queries (these DO know "last N days")
+
+### 7.16 — "Copilot Studio agents created in the last 14 days, sorted by their creator"
+
+🔶 Sort by `properties.createdBy` works even when it's a polymorphic
+field — the `tostring()` wrap handles both shapes.
+
+```json
+[
+  {
+    "$type": "where",
+    "FieldName": "type",
+    "Operator": "==",
+    "Values": ["'microsoft.copilotstudio/agents'"]
+  },
+  {
+    "$type": "where",
+    "FieldName": "properties.createdAt",
+    "Operator": ">",
+    "Values": ["ago(14d)"]
+  },
+  {
+    "$type": "orderby",
+    "FieldNamesAscDesc": { "tostring(properties.createdBy)": "asc" }
+  }
+]
+```
+
+### 7.17 — "Agents published in the last 30 days"
+
+```json
+[
+  {
+    "$type": "where",
+    "FieldName": "type",
+    "Operator": "==",
+    "Values": ["'microsoft.copilotstudio/agents'"]
+  },
+  {
+    "$type": "where",
+    "FieldName": "properties.lastPublishedAt",
+    "Operator": ">",
+    "Values": ["ago(30d)"]
+  },
+  {
+    "$type": "orderby",
+    "FieldNamesAscDesc": { "tostring(properties.lastPublishedAt)": "desc" }
+  }
+]
+```
+
+## Out-of-scope — name the external source
+
+### 7.18 — "Flows owned by users who have left the org"
+
+This requires data the inventory doesn't carry. **Don't emit JSON.**
+
+**The right reply:**
+
+```
+The inventory only stores ownerId as a GUID — it has no field for
+"account is disabled" or "user has left the org". That data lives
+in Microsoft Entra ID (Azure AD) / Microsoft Graph, not in
+PowerPlatformResources.
+
+Two ways forward:
+  1. Pull disabled / deleted user GUIDs from Microsoft Graph
+     (GET /users?$filter=accountEnabled eq false, or
+      GET /directory/deletedItems/microsoft.graph.user), paste them
+     back, and I'll emit a Clauses[] array filtering cloud flows
+     by properties.ownerId in~ <those GUIDs>.
+  2. If you have an existing list of departed-user GUIDs, paste
+     them directly and I'll skip step 1.
+```
+
+## Agent capability / topology queries
+
+### 7.19 — "Agents using the Claude Sonnet model"
+
+```json
+[
+  {
+    "$type": "where",
+    "FieldName": "type",
+    "Operator": "==",
+    "Values": ["'microsoft.copilotstudio/agents'"]
+  },
+  {
+    "$type": "where",
+    "FieldName": "properties.model",
+    "Operator": "contains",
+    "Values": ["'Claude Sonnet'"]
+  },
+  {
+    "$type": "orderby",
+    "FieldNamesAscDesc": { "tostring(properties.displayName)": "asc" }
+  }
+]
+```
+
+### 7.20 — "Agents that have web search enabled for knowledge"
+
+```json
+[
+  {
+    "$type": "where",
+    "FieldName": "type",
+    "Operator": "==",
+    "Values": ["'microsoft.copilotstudio/agents'"]
+  },
+  {
+    "$type": "where",
+    "FieldName": "properties.isWebSearchEnabledForKnowledge",
+    "Operator": "==",
+    "Values": ["true"]
+  },
+  {
+    "$type": "orderby",
+    "FieldNamesAscDesc": { "tostring(properties.displayName)": "asc" }
+  }
+]
+```
+
+### 7.21 — "Agents never published / longest-unpublished"
+
+The schema doesn't expose a clean "is published" boolean. Best-effort
+proxy: sort by `lastPublishedAt asc` to put the longest-unpublished
+first; the user can spot empty / very-old values in the result grid.
+
+```json
+[
+  {
+    "$type": "where",
+    "FieldName": "type",
+    "Operator": "==",
+    "Values": ["'microsoft.copilotstudio/agents'"]
+  },
+  {
+    "$type": "orderby",
+    "FieldNamesAscDesc": { "tostring(properties.lastPublishedAt)": "asc" }
+  }
+]
+```
+
+## Naming / search queries
+
+### 7.22 — "Apps whose display name contains 'finance'"
+
+```json
+[
+  {
+    "$type": "where",
+    "FieldName": "type",
+    "Operator": "in~",
+    "Values": [
+      "'microsoft.powerapps/canvasapps'",
+      "'microsoft.powerapps/modeldrivenapps'",
+      "'microsoft.powerapps/codeapps'",
+      "'microsoft.powerapps/apps'"
+    ]
+  },
+  {
+    "$type": "where",
+    "FieldName": "properties.displayName",
+    "Operator": "contains",
+    "Values": ["'finance'"]
+  },
+  {
+    "$type": "orderby",
+    "FieldNamesAscDesc": { "tostring(properties.lastModifiedAt)": "desc" }
+  }
+]
+```
+
+### 7.23 — "Flows that start with 'Test_'"
+
+```json
+[
+  {
+    "$type": "where",
+    "FieldName": "type",
+    "Operator": "in~",
+    "Values": [
+      "'microsoft.powerautomate/cloudflows'",
+      "'microsoft.powerautomate/agentflows'",
+      "'microsoft.powerautomate/m365agentflows'"
+    ]
+  },
+  {
+    "$type": "where",
+    "FieldName": "properties.displayName",
+    "Operator": "startswith",
+    "Values": ["'Test_'"]
+  },
+  {
+    "$type": "orderby",
+    "FieldNamesAscDesc": { "tostring(properties.lastModifiedAt)": "desc" }
+  }
+]
+```
+
+## Environment and grouping queries
+
+### 7.24 — "All environments in the 'Finance' env group"
+
+```json
+[
+  {
+    "$type": "where",
+    "FieldName": "type",
+    "Operator": "==",
+    "Values": ["'microsoft.powerplatform/environments'"]
+  },
+  {
+    "$type": "where",
+    "FieldName": "properties.environmentGroup",
+    "Operator": "==",
+    "Values": ["'Finance'"]
+  },
+  {
+    "$type": "orderby",
+    "FieldNamesAscDesc": { "tostring(properties.displayName)": "asc" }
+  }
+]
+```
+
+### 7.25 — "Production OR Sandbox environments"
+
+```json
+[
+  {
+    "$type": "where",
+    "FieldName": "type",
+    "Operator": "==",
+    "Values": ["'microsoft.powerplatform/environments'"]
+  },
+  {
+    "$type": "where",
+    "FieldName": "properties.environmentType",
+    "Operator": "in~",
+    "Values": ["'Production'", "'Sandbox'"]
+  },
+  {
+    "$type": "orderby",
+    "FieldNamesAscDesc": { "tostring(properties.displayName)": "asc" }
+  }
+]
+```
+
+## Triggers / flow shape queries
+
+### 7.26 — "Instant cloud flows"
+
+```json
+[
+  {
+    "$type": "where",
+    "FieldName": "type",
+    "Operator": "==",
+    "Values": ["'microsoft.powerautomate/cloudflows'"]
+  },
+  {
+    "$type": "where",
+    "FieldName": "properties.flowTriggerType",
+    "Operator": "==",
+    "Values": ["'Instant'"]
+  },
+  {
+    "$type": "orderby",
+    "FieldNamesAscDesc": { "tostring(properties.lastModifiedAt)": "desc" }
+  }
+]
+```
+
+### 7.27 — "Flows triggered by Power Apps"
+
+```json
+[
+  {
+    "$type": "where",
+    "FieldName": "type",
+    "Operator": "==",
+    "Values": ["'microsoft.powerautomate/cloudflows'"]
+  },
+  {
+    "$type": "where",
+    "FieldName": "properties.trigger.connectorDisplayName",
+    "Operator": "==",
+    "Values": ["'Power Apps'"]
+  },
+  {
+    "$type": "orderby",
+    "FieldNamesAscDesc": { "tostring(properties.lastModifiedAt)": "desc" }
+  }
+]
+```
