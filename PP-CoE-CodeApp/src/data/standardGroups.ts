@@ -262,10 +262,43 @@ export function removeEnvFromStandardGroup(envId: string): void {
 }
 
 /**
- * Bulk prune — drop any envIds in any group that aren't in the given
- * "currently-known env IDs" set. Used by reads of the detail page to
- * silently clean up after envs deleted in PPAC, without surfacing a
- * drift inbox prompt for what is effectively just dead data.
+ * Bulk prune — drop any envIds from any custom group that are no longer
+ * eligible to live there. Two cases trigger removal:
+ *
+ *   1. Env no longer exists in the tenant (deleted in PPAC)
+ *   2. Env is now Managed (Microsoft moved it into an MS env group, or
+ *      it was upgraded to Managed standalone) — type purity requires
+ *      that custom groups hold Standard envs only
+ *
+ * Runs silently on every detail/Kanban load. No inbox prompts, no
+ * confirmations — the source-of-truth for env state is Microsoft, and
+ * we just respect the current state. This is the "silent drift
+ * reconciliation" feature.
+ */
+export function pruneIneligibleEnvs(
+  envIndex: Map<string, { id: string; isManaged: boolean }>,
+): void {
+  const items = readStandardGroups();
+  let changed = false;
+  const next = items.map((g) => {
+    const kept = g.envIds.filter((id) => {
+      const env = envIndex.get(id);
+      // Drop if: env is gone (deleted in PPAC) OR env is now Managed
+      // (belongs in an MS env group now, not a custom one).
+      return env !== undefined && !env.isManaged;
+    });
+    if (kept.length === g.envIds.length) return g;
+    changed = true;
+    return { ...g, envIds: kept, updatedAt: nowIso() };
+  });
+  if (changed) writeStandardGroups(next);
+}
+
+/**
+ * @deprecated Use `pruneIneligibleEnvs` instead. Kept as a shim so the
+ * v3 Standard Custom Group Detail page keeps working until it's
+ * migrated. New code should pass a full env index so the prune can
+ * also drop now-Managed envs (silent drift).
  */
 export function pruneDeletedEnvs(knownEnvIds: Set<string>): void {
   const items = readStandardGroups();

@@ -1,26 +1,42 @@
 /**
- * Zone Detail — drill-down view for a single zone.
+ * Zone Detail — Tier 2 Kanban view.
  *
- * Where the Zone Board (`ZonesView`) shows the *whole tenant* as a
- * Kanban of zones-containing-groups, this view zooms into ONE zone and
- * makes it the workspace: the zone's groups are arranged into lanes
- * (default + sections), and a side panel exposes every other group in
- * the tenant ready to be dragged in.
+ * The focused workspace for ONE zone. Replaces the v3 Groups-in-lanes
+ * layout with a richer "groups as lanes of envs" Kanban so the user
+ * can see and manipulate the actual environments inside each group
+ * without bouncing into a separate detail page.
  *
- * Drag interactions handled here:
- *  - Drag a chip between sections within this zone — moves it
- *  - Drag a chip from the side panel into a section — places it in this zone
- *  - Drag a chip from this zone onto the side panel's "remove" target —
- *    returns it to Unassigned
+ * Visual structure:
  *
- * Drag-between-MS-groups (the eventual mutation surface that would
- * issue a real PPAC command) is NOT supported here in v1. That requires
- * a separate permission + audit + rollback story; see `plan.md` →
- * "Question 2d — The two-tier UX" → "The philosophical shift."
+ *   [Back to Zones board]
+ *   [Zone header + edit/delete]
+ *   [SelectionActionBar (sticky, only when something is selected)]
+ *
+ *   ┌────────────────────────────────────────┐  ┌──────────────────┐
+ *   │ Main area (group lanes by section)     │  │ Eligible envs    │
+ *   │  ├ Section: Dev                        │  │   Loose Standard │
+ *   │  │  ├ [MS group lane: env, env, env]   │  │     ▢ env-1      │
+ *   │  │  ├ [Custom lane: env, env]          │  │     ▢ env-2      │
+ *   │  │  └ [+ Add custom group]             │  │   Loose Managed  │
+ *   │  ├ Section: Prod                       │  │     (PPAC link)  │
+ *   │  └ Unsectioned                         │  │                  │
+ *   └────────────────────────────────────────┘  └──────────────────┘
+ *
+ * Interaction model in v1:
+ *  - Multi-select Standard envs in side panel → Add to a custom group
+ *    in this zone via the SelectionActionBar
+ *  - Multi-select envs inside a custom group lane → Remove (back to
+ *    Loose Standard)
+ *  - MS group lanes are read-only (their membership lives in Microsoft;
+ *    changing it requires PPAC writes which we defer to a future
+ *    "mutation surface" milestone)
+ *  - Silent drift: pruneIneligibleEnvs runs after envs load and quietly
+ *    drops any envIds from custom groups that are now Managed or gone
  */
 
 import { useEffect, useMemo, useState } from "react";
 import {
+  Badge,
   Button,
   Caption1,
   Dialog,
@@ -31,6 +47,10 @@ import {
   DialogTitle,
   Input,
   makeStyles,
+  MessageBar,
+  MessageBarActions,
+  MessageBarBody,
+  MessageBarTitle,
   Text,
   tokens,
   type InputOnChangeData,
@@ -39,77 +59,55 @@ import {
   AddRegular,
   ArrowLeftRegular,
   DeleteRegular,
+  DismissRegular,
   EditRegular,
 } from "@fluentui/react-icons";
 import { useNavigate, useParams } from "react-router-dom";
 import {
-  DndContext,
-  KeyboardSensor,
-  PointerSensor,
-  useSensor,
-  useSensors,
-  type DragEndEvent,
-} from "@dnd-kit/core";
-import {
   listEnvironmentGroups,
+  listEnvironments,
   type EnvironmentGroupRow,
+  type EnvironmentRow,
 } from "../data/inventory";
 import {
   addSection,
-  customRef,
   deleteSection,
   deleteZone,
-  msRef,
   refToKey,
   renameSection,
-  setAssignment,
   updateZone,
-  type GroupRef,
 } from "../data/zones";
 import {
+  addEnvToStandardGroup,
   deleteStandardGroup,
+  pruneIneligibleEnvs,
+  removeEnvFromStandardGroup,
   updateStandardGroup,
   type StandardCustomGroup,
 } from "../data/standardGroups";
 import { useZones } from "../hooks/useZones";
+import { useSelection } from "../hooks/useSelection";
 import { ErrorPane, LoadingPane } from "../components/Status";
-import { Lane } from "./zones/Lane";
-import { AvailableGroupsPanel } from "./zones/AvailableGroupsPanel";
 import { ZoneEditorDialog } from "./zones/ZoneEditorDialog";
 import { StandardGroupEditorDialog } from "./zones/StandardGroupEditorDialog";
-import type { GroupItem } from "./zones/GroupChip";
+import { GroupEnvLane } from "./zones/GroupEnvLane";
+import { EligibleEnvsPanel } from "./zones/EligibleEnvsPanel";
+import { SelectionActionBar } from "./zones/SelectionActionBar";
+import { AddEnvsToGroupDialog } from "./zones/AddEnvsToGroupDialog";
 
-function msToItem(g: EnvironmentGroupRow): GroupItem {
-  return {
-    ref: msRef(g.id),
-    displayName: g.displayName,
-    description: g.description,
-    meta: g.location || undefined,
-  };
-}
-
-/**
- * Custom-group items in Zone Detail carry the same kebab-menu
- * actions as on the board so navigation / edit / delete are reachable
- * without bouncing back to /zones first.
- */
-function customToItem(
-  g: StandardCustomGroup,
-  actions: {
-    onOpen: () => void;
-    onEdit: () => void;
-    onDelete: () => void;
-  },
-): GroupItem {
-  return {
-    ref: customRef(g.id),
-    displayName: g.displayName,
-    description: g.description,
-    color: g.color,
-    icon: g.icon,
-    envCount: g.envIds.length,
-    actions,
-  };
+interface GroupPlacement {
+  kind: "ms" | "custom";
+  id: string;
+  displayName: string;
+  description?: string;
+  color?: string;
+  icon?: string;
+  envs: EnvironmentRow[];
+  /** Section the group lives in within this zone (undefined = default). */
+  sectionId?: string;
+  /** The raw custom group entity, when kind === "custom". Needed for
+   *  edit/delete + the bulk Add-to picker. */
+  customRef?: StandardCustomGroup;
 }
 
 const useStyles = makeStyles({
@@ -180,23 +178,50 @@ const useStyles = makeStyles({
     minWidth: 0,
     display: "flex",
     flexDirection: "column",
-    gap: tokens.spacingVerticalM,
+    gap: tokens.spacingVerticalL,
     overflowY: "auto",
     paddingInline: tokens.spacingHorizontalXS,
   },
   sectionBlock: {
-    backgroundColor: tokens.colorNeutralBackground2,
-    border: `1px solid ${tokens.colorNeutralStroke2}`,
-    borderRadius: tokens.borderRadiusLarge,
-    padding: tokens.spacingHorizontalM,
     display: "flex",
     flexDirection: "column",
     gap: tokens.spacingVerticalS,
+  },
+  sectionHeader: {
+    display: "flex",
+    alignItems: "center",
+    gap: tokens.spacingHorizontalS,
+    paddingInline: tokens.spacingHorizontalS,
+  },
+  sectionTitle: {
+    fontSize: tokens.fontSizeBase300,
+    fontWeight: tokens.fontWeightSemibold,
+    color: tokens.colorNeutralForeground2,
+    textTransform: "uppercase",
+    letterSpacing: "0.04em",
+  },
+  laneRow: {
+    display: "flex",
+    flexDirection: "row",
+    gap: tokens.spacingHorizontalL,
+    flexWrap: "wrap",
+  },
+  emptyZone: {
+    color: tokens.colorNeutralForeground4,
+    fontSize: tokens.fontSizeBase200,
+    fontStyle: "italic",
+    padding: tokens.spacingVerticalXXL,
+    textAlign: "center",
+    border: `1px dashed ${tokens.colorNeutralStroke2}`,
+    borderRadius: tokens.borderRadiusLarge,
   },
   addSectionRow: {
     display: "flex",
     gap: tokens.spacingHorizontalXS,
     alignItems: "center",
+  },
+  addSectionInput: {
+    flex: 1,
   },
 });
 
@@ -205,136 +230,169 @@ export function ZoneDetailView() {
   const navigate = useNavigate();
   const { zoneId } = useParams<{ zoneId: string }>();
   const { zones, assignments, standardGroups, refresh } = useZones();
+
+  const [envsState, setEnvsState] = useState<
+    | { kind: "loading" }
+    | { kind: "ready"; rows: EnvironmentRow[] }
+    | { kind: "error"; message: string }
+  >({ kind: "loading" });
   const [envGroupsState, setEnvGroupsState] = useState<
     | { kind: "loading" }
     | { kind: "ready"; rows: EnvironmentGroupRow[] }
     | { kind: "error"; message: string }
   >({ kind: "loading" });
-  const [editorOpen, setEditorOpen] = useState(false);
-  const [deleteOpen, setDeleteOpen] = useState(false);
+
+  const [zoneEditorOpen, setZoneEditorOpen] = useState(false);
+  const [zoneDeleteOpen, setZoneDeleteOpen] = useState(false);
+  const [customEditorOpen, setCustomEditorOpen] = useState(false);
+  const [editingCustom, setEditingCustom] =
+    useState<StandardCustomGroup | null>(null);
+  const [customToDelete, setCustomToDelete] =
+    useState<StandardCustomGroup | null>(null);
+
   const [addingSection, setAddingSection] = useState(false);
   const [newSectionName, setNewSectionName] = useState("");
   const [panelSearch, setPanelSearch] = useState("");
-  const [customGroupEditorOpen, setCustomGroupEditorOpen] = useState(false);
-  const [editingCustomGroup, setEditingCustomGroup] =
-    useState<StandardCustomGroup | null>(null);
-  const [customGroupToDelete, setCustomGroupToDelete] =
-    useState<StandardCustomGroup | null>(null);
 
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
-    useSensor(KeyboardSensor),
-  );
+  const selection = useSelection<string>();
+  const [addDialogOpen, setAddDialogOpen] = useState(false);
+  const [bulkMessage, setBulkMessage] = useState<{
+    intent: "success" | "warning";
+    text: string;
+  } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const res = await listEnvironmentGroups();
+      const [envsRes, groupsRes] = await Promise.all([
+        listEnvironments(),
+        listEnvironmentGroups(),
+      ]);
       if (cancelled) return;
-      if (res.ok) {
-        setEnvGroupsState({ kind: "ready", rows: res.data });
+      if (envsRes.ok) {
+        setEnvsState({ kind: "ready", rows: envsRes.data });
+        // Silent drift: drop envIds from custom groups whose envs are
+        // now Managed or have been deleted in PPAC. Runs invisibly.
+        const envIndex = new Map(
+          envsRes.data.map((e) => [
+            e.id,
+            { id: e.id, isManaged: e.isManaged },
+          ]),
+        );
+        pruneIneligibleEnvs(envIndex);
+        refresh();
       } else {
-        setEnvGroupsState({ kind: "error", message: res.error });
+        setEnvsState({ kind: "error", message: envsRes.error });
+      }
+      if (groupsRes.ok) {
+        setEnvGroupsState({ kind: "ready", rows: groupsRes.data });
+      } else {
+        setEnvGroupsState({ kind: "error", message: groupsRes.error });
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [refresh]);
 
   const zone = useMemo(
     () => zones.find((z) => z.id === zoneId) ?? null,
     [zones, zoneId],
   );
 
-  const allItems = useMemo<GroupItem[]>(() => {
-    if (envGroupsState.kind !== "ready") return [];
-    return [
-      ...envGroupsState.rows.map(msToItem),
-      ...standardGroups.map((g) =>
-        customToItem(g, {
-          onOpen: () => navigate(`/zones/custom-groups/${g.id}`),
-          onEdit: () => {
-            setEditingCustomGroup(g);
-            setCustomGroupEditorOpen(true);
-          },
-          onDelete: () => setCustomGroupToDelete(g),
-        }),
-      ),
-    ];
-  }, [envGroupsState, standardGroups, navigate]);
-
-  const zoneNamesById = useMemo(
-    () => new Map(zones.map((z) => [z.id, z.name])),
-    [zones],
-  );
-
-  // Bucket items belonging to THIS zone into the zone's lanes (default
-  // + sections). Items belonging elsewhere are handled by the side
-  // panel via `allItems` directly.
-  const inZoneBuckets = useMemo(() => {
-    const defaultLane: GroupItem[] = [];
-    const bySection: Record<string, GroupItem[]> = {};
-    if (!zone) return { defaultLane, bySection };
-    for (const item of allItems) {
-      const location = assignments[refToKey(item.ref)];
-      if (location?.zoneId !== zone.id) continue;
-      if (
-        location.sectionId &&
-        zone.sections.some((s) => s.id === location.sectionId)
-      ) {
-        const list =
-          bySection[location.sectionId] ??
-          (bySection[location.sectionId] = []);
-        list.push(item);
-      } else {
-        defaultLane.push(item);
-      }
+  // Build the list of groups placed in this zone, with each group's
+  // env contents already resolved. MS groups derive envs from the
+  // current `parentGroupId` mapping; custom groups from their `envIds`.
+  const groupsInZone = useMemo<GroupPlacement[]>(() => {
+    if (!zone || envsState.kind !== "ready" || envGroupsState.kind !== "ready") {
+      return [];
     }
-    return { defaultLane, bySection };
-  }, [zone, allItems, assignments]);
-
-  const handleDragEnd = (event: DragEndEvent) => {
-    const { active, over } = event;
-    if (!over || !zone) return;
-    const activeData = active.data.current as
-      | {
-          kind: "groupChip";
-          ref: GroupRef;
-          fromZoneId: string | null;
-          fromSectionId?: string;
-        }
-      | undefined;
-    const overData = over.data.current as
-      | { kind: "lane"; zoneId: string | null; sectionId?: string }
-      | undefined;
-    if (
-      !activeData ||
-      activeData.kind !== "groupChip" ||
-      !overData ||
-      overData.kind !== "lane"
-    ) {
-      return;
-    }
-    if (
-      activeData.fromZoneId === overData.zoneId &&
-      activeData.fromSectionId === overData.sectionId
-    ) {
-      return;
-    }
-    if (overData.zoneId === null) {
-      setAssignment(activeData.ref, null);
-    } else {
-      setAssignment(activeData.ref, {
-        zoneId: overData.zoneId,
-        sectionId: overData.sectionId,
+    const result: GroupPlacement[] = [];
+    // MS env groups placed in this zone
+    for (const msGroup of envGroupsState.rows) {
+      const placement = assignments[refToKey({ kind: "ms", id: msGroup.id })];
+      if (placement?.zoneId !== zone.id) continue;
+      const envs = envsState.rows.filter(
+        (e) => e.environmentGroupId === msGroup.id,
+      );
+      result.push({
+        kind: "ms",
+        id: msGroup.id,
+        displayName: msGroup.displayName,
+        description: msGroup.description,
+        sectionId: placement.sectionId,
+        envs,
       });
     }
-    refresh();
-  };
+    // Standard custom groups placed in this zone
+    for (const customGroup of standardGroups) {
+      const placement =
+        assignments[refToKey({ kind: "custom", id: customGroup.id })];
+      if (placement?.zoneId !== zone.id) continue;
+      const memberIds = new Set(customGroup.envIds);
+      const envs = envsState.rows.filter((e) => memberIds.has(e.id));
+      result.push({
+        kind: "custom",
+        id: customGroup.id,
+        displayName: customGroup.displayName,
+        description: customGroup.description,
+        color: customGroup.color,
+        icon: customGroup.icon,
+        sectionId: placement.sectionId,
+        envs,
+        customRef: customGroup,
+      });
+    }
+    return result;
+  }, [zone, envsState, envGroupsState, assignments, standardGroups]);
 
-  if (envGroupsState.kind === "loading") {
-    return <LoadingPane label="Loading environment groups…" />;
+  // Set of env IDs that are inside SOME group placed in this zone —
+  // used to exclude them from the eligible-envs side panel.
+  const envIdsInZone = useMemo(() => {
+    const ids = new Set<string>();
+    for (const g of groupsInZone) {
+      for (const e of g.envs) ids.add(e.id);
+    }
+    return ids;
+  }, [groupsInZone]);
+
+  // Group placements bucketed by sectionId (including "default" lane).
+  const placementsBySection = useMemo(() => {
+    const def: GroupPlacement[] = [];
+    const bySection = new Map<string, GroupPlacement[]>();
+    for (const p of groupsInZone) {
+      if (
+        p.sectionId &&
+        zone?.sections.some((s) => s.id === p.sectionId)
+      ) {
+        const list = bySection.get(p.sectionId) ?? [];
+        list.push(p);
+        bySection.set(p.sectionId, list);
+      } else {
+        def.push(p);
+      }
+    }
+    return { def, bySection };
+  }, [groupsInZone, zone]);
+
+  const customGroupsInZone = useMemo(
+    () =>
+      groupsInZone
+        .filter((g) => g.kind === "custom" && g.customRef)
+        .map((g) => g.customRef!),
+    [groupsInZone],
+  );
+
+  if (envsState.kind === "loading" || envGroupsState.kind === "loading") {
+    return <LoadingPane label="Loading zone…" />;
+  }
+  if (envsState.kind === "error") {
+    return (
+      <ErrorPane
+        title="Couldn't load environments"
+        message={envsState.message}
+      />
+    );
   }
   if (envGroupsState.kind === "error") {
     return (
@@ -353,25 +411,123 @@ export function ZoneDetailView() {
     );
   }
 
-  const totalInZone =
-    inZoneBuckets.defaultLane.length +
-    Object.values(inZoneBuckets.bySection).reduce(
-      (sum, arr) => sum + arr.length,
-      0,
-    );
+  const totalEnvs = envIdsInZone.size;
 
-  const handleEditSubmit = (
-    input: { name: string; description: string; color: string; icon: string },
-  ) => {
-    updateZone(zone.id, input);
-    setEditorOpen(false);
+  const handleAddToConfirm = (target: StandardCustomGroup) => {
+    const selectedIds = Array.from(selection.selected);
+    let added = 0;
+    let skipped = 0;
+    let skippedReason: string | null = null;
+    for (const envId of selectedIds) {
+      const env = envsState.rows.find((e) => e.id === envId);
+      if (!env) {
+        skipped++;
+        continue;
+      }
+      const result = addEnvToStandardGroup(target.id, env);
+      if (result.ok) {
+        added++;
+      } else {
+        skipped++;
+        skippedReason = skippedReason ?? result.reason;
+      }
+    }
+    setAddDialogOpen(false);
+    selection.clear();
+    if (skipped === 0) {
+      setBulkMessage({
+        intent: "success",
+        text: `Added ${added} env${added === 1 ? "" : "s"} to "${target.displayName}".`,
+      });
+    } else {
+      setBulkMessage({
+        intent: "warning",
+        text: `Added ${added}, skipped ${skipped}${skippedReason ? ` — ${skippedReason}` : ""}`,
+      });
+    }
   };
 
-  const handleDeleteConfirm = () => {
+  const handleBulkRemove = () => {
+    const selectedIds = Array.from(selection.selected);
+    let removed = 0;
+    for (const envId of selectedIds) {
+      // Only removes from custom groups (where the env is a member);
+      // a no-op if the env isn't in any custom group.
+      removeEnvFromStandardGroup(envId);
+      removed++;
+    }
+    selection.clear();
+    setBulkMessage({
+      intent: "success",
+      text: `Removed ${removed} env${removed === 1 ? "" : "s"} from their custom groups.`,
+    });
+  };
+
+  const handleZoneEditSubmit = (input: {
+    name: string;
+    description: string;
+    color: string;
+    icon: string;
+  }) => {
+    updateZone(zone.id, input);
+    setZoneEditorOpen(false);
+  };
+  const handleZoneDeleteConfirm = () => {
     deleteZone(zone.id);
-    setDeleteOpen(false);
+    setZoneDeleteOpen(false);
     navigate("/zones");
   };
+  const handleCustomEditSubmit = (
+    input: {
+      displayName: string;
+      description: string;
+      color: string;
+      icon: string;
+    },
+    group: StandardCustomGroup | null,
+  ) => {
+    if (group) updateStandardGroup(group.id, input);
+    setCustomEditorOpen(false);
+    setEditingCustom(null);
+  };
+
+  const renderLane = (p: GroupPlacement) => (
+    <GroupEnvLane
+      key={`${p.kind}:${p.id}`}
+      groupKind={p.kind}
+      groupId={p.id}
+      displayName={p.displayName}
+      description={p.description}
+      color={p.color}
+      icon={p.icon}
+      envs={p.envs}
+      selection={
+        p.kind === "custom"
+          ? {
+              isSelected: selection.isSelected,
+              toggle: selection.toggle,
+            }
+          : undefined
+      }
+      onRemoveEnv={
+        p.kind === "custom"
+          ? (envId) => removeEnvFromStandardGroup(envId)
+          : undefined
+      }
+      customActions={
+        p.kind === "custom" && p.customRef
+          ? {
+              onOpen: () => navigate(`/zones/custom-groups/${p.id}`),
+              onEdit: () => {
+                setEditingCustom(p.customRef ?? null);
+                setCustomEditorOpen(true);
+              },
+              onDelete: () => setCustomToDelete(p.customRef ?? null),
+            }
+          : undefined
+      }
+    />
+  );
 
   return (
     <div className={styles.root}>
@@ -390,141 +546,194 @@ export function ZoneDetailView() {
         <div
           className={styles.colorStripe}
           style={{ backgroundColor: zone.color }}
-          aria-hidden="true"
+          aria-hidden
         />
         <div className={styles.headerBody}>
           <div className={styles.titleRow}>
-            <span className={styles.zoneIcon} aria-hidden="true">
+            <span className={styles.zoneIcon} aria-hidden>
               {zone.icon}
             </span>
             <Text size={600} className={styles.zoneTitle}>
               {zone.name}
             </Text>
+            <Badge appearance="outline" color="brand">
+              Zone
+            </Badge>
           </div>
           {zone.description && (
             <Text className={styles.description}>{zone.description}</Text>
           )}
           <Text className={styles.meta}>
-            {totalInZone} group{totalInZone === 1 ? "" : "s"} ·{" "}
-            {zone.sections.length} section
-            {zone.sections.length === 1 ? "" : "s"}
+            {groupsInZone.length} group{groupsInZone.length === 1 ? "" : "s"} ·{" "}
+            {totalEnvs} env{totalEnvs === 1 ? "" : "s"}
           </Text>
         </div>
         <div className={styles.headerActions}>
           <Button
             appearance="subtle"
             icon={<EditRegular />}
-            onClick={() => setEditorOpen(true)}
+            onClick={() => setZoneEditorOpen(true)}
           >
             Edit zone
           </Button>
           <Button
             appearance="subtle"
             icon={<DeleteRegular />}
-            onClick={() => setDeleteOpen(true)}
+            onClick={() => setZoneDeleteOpen(true)}
           >
             Delete
           </Button>
         </div>
       </div>
 
-      <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
-        <div className={styles.body}>
-          <div className={styles.main}>
-            <div className={styles.sectionBlock}>
-              <Lane
-                zoneId={zone.id}
-                items={inZoneBuckets.defaultLane}
-                title={
-                  zone.sections.length > 0 ? "Unsectioned" : "Groups in this zone"
-                }
-                emptyHint="Drag groups from the side panel into this zone"
+      <SelectionActionBar
+        count={selection.count}
+        onAddTo={() => setAddDialogOpen(true)}
+        onRemove={handleBulkRemove}
+        onClear={selection.clear}
+      />
+
+      {bulkMessage && (
+        <MessageBar intent={bulkMessage.intent}>
+          <MessageBarBody>
+            <MessageBarTitle>
+              {bulkMessage.intent === "success" ? "Done" : "Partial"}
+            </MessageBarTitle>
+            {bulkMessage.text}
+          </MessageBarBody>
+          <MessageBarActions
+            containerAction={
+              <Button
+                appearance="transparent"
+                icon={<DismissRegular />}
+                aria-label="Dismiss"
+                onClick={() => setBulkMessage(null)}
               />
+            }
+          />
+        </MessageBar>
+      )}
+
+      <div className={styles.body}>
+        <div className={styles.main}>
+          {groupsInZone.length === 0 ? (
+            <div className={styles.emptyZone}>
+              No groups in this zone yet. Drag MS env groups or Standard
+              custom groups into this zone from the Zones board.
             </div>
-            {zone.sections.map((section) => (
-              <div key={section.id} className={styles.sectionBlock}>
-                <Lane
-                  zoneId={zone.id}
-                  sectionId={section.id}
-                  title={section.name}
-                  items={inZoneBuckets.bySection[section.id] ?? []}
-                  onRenameSection={(name) =>
-                    renameSection(zone.id, section.id, name)
-                  }
-                  onDeleteSection={() => deleteSection(zone.id, section.id)}
-                />
-              </div>
-            ))}
-            {addingSection ? (
-              <div className={styles.addSectionRow}>
-                <Input
-                  size="small"
-                  value={newSectionName}
-                  placeholder="Section name (e.g. Dev, UAT, Prod)"
-                  autoFocus
-                  onChange={(_, d: InputOnChangeData) =>
-                    setNewSectionName(d.value)
-                  }
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && newSectionName.trim()) {
-                      addSection(zone.id, newSectionName.trim());
-                      setNewSectionName("");
-                      setAddingSection(false);
-                    } else if (e.key === "Escape") {
-                      setNewSectionName("");
-                      setAddingSection(false);
-                    }
-                  }}
-                  onBlur={() => {
-                    if (newSectionName.trim()) {
-                      addSection(zone.id, newSectionName.trim());
-                    }
+          ) : (
+            <>
+              {placementsBySection.def.length > 0 && (
+                <div className={styles.sectionBlock}>
+                  {zone.sections.length > 0 && (
+                    <div className={styles.sectionHeader}>
+                      <Text className={styles.sectionTitle}>Unsectioned</Text>
+                    </div>
+                  )}
+                  <div className={styles.laneRow}>
+                    {placementsBySection.def.map(renderLane)}
+                  </div>
+                </div>
+              )}
+              {zone.sections.map((section) => (
+                <div key={section.id} className={styles.sectionBlock}>
+                  <div className={styles.sectionHeader}>
+                    <Text className={styles.sectionTitle}>{section.name}</Text>
+                    <Button
+                      size="small"
+                      appearance="subtle"
+                      icon={<EditRegular />}
+                      aria-label={`Rename section ${section.name}`}
+                      onClick={() => {
+                        const next = prompt("Rename section", section.name);
+                        if (next && next.trim()) {
+                          renameSection(zone.id, section.id, next.trim());
+                        }
+                      }}
+                    />
+                    <Button
+                      size="small"
+                      appearance="subtle"
+                      icon={<DeleteRegular />}
+                      aria-label={`Delete section ${section.name}`}
+                      onClick={() => deleteSection(zone.id, section.id)}
+                    />
+                  </div>
+                  <div className={styles.laneRow}>
+                    {(placementsBySection.bySection.get(section.id) ?? []).map(
+                      renderLane,
+                    )}
+                  </div>
+                </div>
+              ))}
+            </>
+          )}
+          {addingSection ? (
+            <div className={styles.addSectionRow}>
+              <Input
+                size="small"
+                className={styles.addSectionInput}
+                value={newSectionName}
+                placeholder="Section name (e.g. Dev, UAT, Prod)"
+                autoFocus
+                onChange={(_, d: InputOnChangeData) =>
+                  setNewSectionName(d.value)
+                }
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && newSectionName.trim()) {
+                    addSection(zone.id, newSectionName.trim());
                     setNewSectionName("");
                     setAddingSection(false);
-                  }}
-                  style={{ flex: 1 }}
-                />
-              </div>
-            ) : (
-              <div>
-                <Button
-                  size="small"
-                  appearance="subtle"
-                  icon={<AddRegular />}
-                  onClick={() => setAddingSection(true)}
-                >
-                  Add section
-                </Button>
-              </div>
-            )}
-            <Caption1 className={styles.meta}>
-              Tip: drag chips between sections to move them. Coming later: drag
-              envs between MS env groups will issue a real Power Platform admin
-              command (with confirmation + audit).
-            </Caption1>
-          </div>
-          <AvailableGroupsPanel
-            zone={zone}
-            allItems={allItems}
-            assignments={assignments}
-            zoneNamesById={zoneNamesById}
-            searchQuery={panelSearch}
-            onSearchChange={setPanelSearch}
-          />
+                  } else if (e.key === "Escape") {
+                    setNewSectionName("");
+                    setAddingSection(false);
+                  }
+                }}
+                onBlur={() => {
+                  if (newSectionName.trim()) {
+                    addSection(zone.id, newSectionName.trim());
+                  }
+                  setNewSectionName("");
+                  setAddingSection(false);
+                }}
+              />
+            </div>
+          ) : (
+            <div>
+              <Button
+                size="small"
+                appearance="subtle"
+                icon={<AddRegular />}
+                onClick={() => setAddingSection(true)}
+              >
+                Add section
+              </Button>
+            </div>
+          )}
         </div>
-      </DndContext>
+        <EligibleEnvsPanel
+          allEnvs={envsState.rows}
+          envIdsInZone={envIdsInZone}
+          searchQuery={panelSearch}
+          onSearchChange={setPanelSearch}
+          selection={{
+            isSelected: selection.isSelected,
+            toggle: selection.toggle,
+          }}
+        />
+      </div>
 
       <ZoneEditorDialog
-        open={editorOpen}
+        open={zoneEditorOpen}
         zone={zone}
-        onDismiss={() => setEditorOpen(false)}
-        onSubmit={(input) => handleEditSubmit(input)}
+        onDismiss={() => setZoneEditorOpen(false)}
+        onSubmit={(input) => handleZoneEditSubmit(input)}
       />
 
       <Dialog
-        open={deleteOpen}
+        open={zoneDeleteOpen}
         onOpenChange={(_, data) => {
-          if (!data.open) setDeleteOpen(false);
+          if (!data.open) setZoneDeleteOpen(false);
         }}
       >
         <DialogSurface>
@@ -540,11 +749,11 @@ export function ZoneDetailView() {
             <DialogActions>
               <Button
                 appearance="secondary"
-                onClick={() => setDeleteOpen(false)}
+                onClick={() => setZoneDeleteOpen(false)}
               >
                 Cancel
               </Button>
-              <Button appearance="primary" onClick={handleDeleteConfirm}>
+              <Button appearance="primary" onClick={handleZoneDeleteConfirm}>
                 Delete zone
               </Button>
             </DialogActions>
@@ -553,23 +762,19 @@ export function ZoneDetailView() {
       </Dialog>
 
       <StandardGroupEditorDialog
-        open={customGroupEditorOpen}
-        group={editingCustomGroup}
+        open={customEditorOpen}
+        group={editingCustom}
         onDismiss={() => {
-          setCustomGroupEditorOpen(false);
-          setEditingCustomGroup(null);
+          setCustomEditorOpen(false);
+          setEditingCustom(null);
         }}
-        onSubmit={(input, group) => {
-          if (group) updateStandardGroup(group.id, input);
-          setCustomGroupEditorOpen(false);
-          setEditingCustomGroup(null);
-        }}
+        onSubmit={handleCustomEditSubmit}
       />
 
       <Dialog
-        open={customGroupToDelete !== null}
+        open={customToDelete !== null}
         onOpenChange={(_, data) => {
-          if (!data.open) setCustomGroupToDelete(null);
+          if (!data.open) setCustomToDelete(null);
         }}
       >
         <DialogSurface>
@@ -577,26 +782,24 @@ export function ZoneDetailView() {
             <DialogTitle>Delete Standard custom group?</DialogTitle>
             <DialogContent>
               <Text>
-                Deleting{" "}
-                <strong>{customGroupToDelete?.displayName}</strong> removes
-                the group entirely. Any environments that were members return
-                to "loose Standard" status; the environments themselves are
-                not affected.
+                Deleting <strong>{customToDelete?.displayName}</strong>{" "}
+                removes the group entirely. Its environments return to "loose
+                Standard" status; the environments themselves are not
+                affected.
               </Text>
             </DialogContent>
             <DialogActions>
               <Button
                 appearance="secondary"
-                onClick={() => setCustomGroupToDelete(null)}
+                onClick={() => setCustomToDelete(null)}
               >
                 Cancel
               </Button>
               <Button
                 appearance="primary"
                 onClick={() => {
-                  if (customGroupToDelete)
-                    deleteStandardGroup(customGroupToDelete.id);
-                  setCustomGroupToDelete(null);
+                  if (customToDelete) deleteStandardGroup(customToDelete.id);
+                  setCustomToDelete(null);
                 }}
               >
                 Delete group
@@ -605,6 +808,20 @@ export function ZoneDetailView() {
           </DialogBody>
         </DialogSurface>
       </Dialog>
+
+      <AddEnvsToGroupDialog
+        open={addDialogOpen}
+        selectedCount={selection.count}
+        candidateGroups={customGroupsInZone}
+        onDismiss={() => setAddDialogOpen(false)}
+        onConfirm={handleAddToConfirm}
+      />
+
+      <Caption1 className={styles.meta}>
+        Tip: select Standard envs from the side panel, then use the action bar
+        to bulk-add them to a custom group. MS env group contents are
+        read-only here — managing them requires PPAC.
+      </Caption1>
     </div>
   );
 }
