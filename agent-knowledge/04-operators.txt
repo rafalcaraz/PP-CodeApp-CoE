@@ -43,7 +43,7 @@ quoting downstream:
 | Prefix / suffix (`displayName startswith "Test_"`) | `startswith` / `endswith` |
 | "Within the last N days" | `lastNdays` |
 | Connector-name filter | use the **`__connector` sentinel** with `==` (`has`) or `in~` (`has_any`) |
-| Polymorphic owner/creator GUID match | `contains` (see `03-fields-reference.md` 🔶 callouts) |
+| Polymorphic owner/creator GUID match | `contains` (see `03-fields-reference.txt` 🔶 callouts) |
 | Boolean | `==` with value `"true"` / `"false"` |
 
 ## ⚠️ Important: there is NO inverse of `lastNdays`

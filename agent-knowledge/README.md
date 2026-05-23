@@ -6,7 +6,7 @@
 > uploaded as a **knowledge source** in Copilot Studio. The agent's
 > only job is to turn natural-language CoE / Power Platform inventory
 > questions into validated **`QuerySpec` JSON** that the React app
-> consumes (see `01-agent-role-and-output.md`).
+> consumes (see `01-agent-role-and-output.txt`).
 
 ## Not part of the app
 
@@ -16,18 +16,28 @@ any build step. It only exists so the grounding pack is version-
 controlled and reviewable. Treat it like documentation: PRs welcome,
 breaking the build is impossible.
 
+## File format — `.txt` (written as markdown)
+
+The 8 knowledge files are saved with a `.txt` extension because that
+is the format Copilot Studio's file-knowledge upload accepts most
+reliably. The **content is markdown** (headings, tables, fenced code
+blocks) and renders fine in any editor that handles markdown. If you
+want to preview them with proper formatting, point your editor at the
+file and choose markdown rendering — the extension is the only thing
+that's plain-text.
+
 ## Files in this pack (upload all of them)
 
 | File | Purpose | Audience |
 |---|---|---|
-| `01-agent-role-and-output.md` | Agent persona, output contract (`QuerySpec` JSON), hard rules (no clock, no execution, ask when unsure), 3 canonical examples | Agent (must read first) |
-| `02-resource-types.md` | The 10 `microsoft.*/...` types — what each is, when to query it | Agent |
-| `03-fields-reference.md` | Every common field path: type, enum domain, **which resource type(s) it lives on**, common ops, **🔶 polymorphic-field callouts** | Agent |
-| `04-operators.md` | The 13 operators: semantics, value formatting, **the missing `notLastNdays` workaround** | Agent |
-| `05-sentinel-fields.md` | `__connector` and `__operation` — when to prefer over raw paths | Agent |
-| `06-connectors-catalog.md` | Friendly name → connector ID table (SharePoint → `shared_sharepointonline`, etc.) | Agent |
-| `07-recipes.md` | Natural language → `QuerySpec` worked examples, including cross-resource two-step patterns and out-of-scope answers | Agent (most weight) |
-| `08-tricks-and-gotchas.md` | KQL idiosyncrasies + lessons learned that aren't obvious from the field list | Agent |
+| `01-agent-role-and-output.txt` | Agent persona, output contract (`QuerySpec` JSON), hard rules (no clock, no execution, ask when unsure), 3 canonical examples | Agent (must read first) |
+| `02-resource-types.txt` | The 10 `microsoft.*/...` types — what each is, when to query it | Agent |
+| `03-fields-reference.txt` | Every common field path: type, enum domain, **which resource type(s) it lives on**, common ops, **🔶 polymorphic-field callouts** | Agent |
+| `04-operators.txt` | The 13 operators: semantics, value formatting, **the missing `notLastNdays` workaround** | Agent |
+| `05-sentinel-fields.txt` | `__connector` and `__operation` — when to prefer over raw paths | Agent |
+| `06-connectors-catalog.txt` | Friendly name → connector ID table (SharePoint → `shared_sharepointonline`, etc.) | Agent |
+| `07-recipes.txt` | Natural language → `QuerySpec` worked examples, including cross-resource two-step patterns and out-of-scope answers | Agent (most weight) |
+| `08-tricks-and-gotchas.txt` | KQL idiosyncrasies + lessons learned that aren't obvious from the field list | Agent |
 
 ## How to upload to Copilot Studio
 
@@ -36,10 +46,10 @@ breaking the build is impossible.
 3. Upload **all 8** files in this folder (skip this `README.md`).
 4. Wait for indexing to finish (a few minutes for small files).
 5. In **Overview** → **Instructions**, paste the contents of
-   `01-agent-role-and-output.md` (the "Agent system instructions"
+   `01-agent-role-and-output.txt` (the "Agent system instructions"
    section) as the agent's system prompt.
 6. **Publish** the agent.
-7. Test with the recipes from `07-recipes.md` (the answers in there
+7. Test with the recipes from `07-recipes.txt` (the answers in there
    should match what the agent emits).
 
 ## When to refresh

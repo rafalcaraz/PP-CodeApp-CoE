@@ -67,7 +67,7 @@ them directly (no `properties.` prefix):
 
 ## Resource-type-specific extras (high-level)
 
-Per-resource-type details live in `03-fields-reference.md`. Headlines:
+Per-resource-type details live in `03-fields-reference.txt`. Headlines:
 
 - **Canvas apps:** `powerPlatformConnectors[]`, `lastLaunchedTime`,
   `sharedUsersCount`, `sharedGroupsCount`, `appType`, `isFeaturedApp`,
