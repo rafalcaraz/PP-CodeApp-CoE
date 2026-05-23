@@ -34,6 +34,7 @@ import {
   MoreVerticalRegular,
   OpenRegular,
 } from "@fluentui/react-icons";
+import { useDroppable } from "@dnd-kit/core";
 import type { EnvironmentRow } from "../../data/inventory";
 import type { GroupKind } from "../../data/zones";
 import { EnvRow } from "./EnvRow";
@@ -136,6 +137,12 @@ const useStyles = makeStyles({
     maxHeight: "420px",
     overflowY: "auto",
     minHeight: "60px",
+    transition: "background-color 120ms ease",
+  },
+  bodyDropTarget: {
+    backgroundColor: tokens.colorBrandBackground2,
+    outline: `2px dashed ${tokens.colorBrandStroke1}`,
+    outlineOffset: "-4px",
   },
   empty: {
     color: tokens.colorNeutralForeground4,
@@ -162,6 +169,25 @@ export function GroupEnvLane({
   const isMs = groupKind === "ms";
   const stripeColor = color ?? (isMs ? tokens.colorNeutralStroke1 : "#525252");
   const displayIcon = icon ?? (isMs ? "🛡️" : "📦");
+
+  // MS group lanes are droppable targets for the "demo the future"
+  // drag interaction (drop a Managed env from another MS group / from
+  // the Loose Managed side panel to see what the eventual mutation
+  // would do). Custom group lanes are NOT droppable for envs — Managed
+  // envs going there would violate type purity, and Standard envs are
+  // handled via the multi-select Add-to picker, not drag.
+  const droppable = useDroppable({
+    id: `ms-group-lane:${groupId}`,
+    disabled: !isMs,
+    data: {
+      kind: "msGroupLane",
+      groupId,
+      displayName,
+    },
+  });
+
+  const bodyClasses = [styles.body];
+  if (isMs && droppable.isOver) bodyClasses.push(styles.bodyDropTarget);
 
   return (
     <div className={styles.lane}>
@@ -240,7 +266,7 @@ export function GroupEnvLane({
           </Menu>
         )}
       </div>
-      <div className={styles.body}>
+      <div ref={isMs ? droppable.setNodeRef : undefined} className={bodyClasses.join(" ")}>
         {envs.length === 0 ? (
           <div className={styles.empty}>
             {isMs
@@ -260,6 +286,15 @@ export function GroupEnvLane({
                   : undefined
               }
               onRemove={!isMs && onRemoveEnv ? () => onRemoveEnv(env.id) : undefined}
+              dragSource={
+                isMs
+                  ? {
+                      kind: "ms-group",
+                      groupId,
+                      groupDisplayName: displayName,
+                    }
+                  : undefined
+              }
             />
           ))
         )}

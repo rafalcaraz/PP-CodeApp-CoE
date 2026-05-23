@@ -2,12 +2,20 @@
  * Single env row inside a group lane or in the eligible-envs panel.
  *
  * Renders an env with type-aware provenance (🛡️ Managed / 📦 Standard /
- * ⚡ Loose Managed), an optional checkbox for multi-select, and an
- * optional Remove button (used inside custom group lanes to evict).
+ * ⚡ Loose Managed). Has three optional interaction modes:
  *
- * Click-to-drill (the row itself) opens the existing EnvironmentDetail
- * view. Checkbox click is intercepted (stopPropagation) so it doesn't
- * also fire the row click.
+ *   1. Selection (custom group lanes + Loose Standard panel section) —
+ *      a checkbox surfaces and the row participates in multi-select.
+ *   2. Removal (custom group lanes only) — a × button kicks the env
+ *      out of the group.
+ *   3. Drag (Managed envs in MS group lanes + Loose Managed in side
+ *      panel) — used by the Tier 2 Kanban's "demo the future" UX:
+ *      drag a Managed env onto an MS group lane and a popup explains
+ *      what the eventual mutation would do.
+ *
+ * Row click does NOT navigate anywhere. Earlier this used to open the
+ * env's detail page, which fought with multi-select and drag interactions
+ * — both are far more useful in the Kanban than another way to drill in.
  */
 
 import {
@@ -25,22 +33,39 @@ import {
   ShieldRegular,
 } from "@fluentui/react-icons";
 import { Button } from "@fluentui/react-components";
-import { useNavigate } from "react-router-dom";
+import { useDraggable } from "@dnd-kit/core";
+import { CSS } from "@dnd-kit/utilities";
 import type { EnvironmentRow } from "../../data/inventory";
+
+/**
+ * Where a draggable env row came from. Embedded in the drag data so
+ * the drop handler in `ZoneDetailView` can craft a precise "move from
+ * X to Y" message without a reverse lookup.
+ */
+export type EnvDragSource =
+  | { kind: "ms-group"; groupId: string; groupDisplayName: string }
+  | { kind: "loose-managed" };
 
 interface Props {
   env: EnvironmentRow;
-  /** Show the checkbox + selection styling. Omit to render a read-only row. */
+  /** Show the checkbox + selection styling. Omit to render a non-selectable row. */
   selectable?: boolean;
   selected?: boolean;
   onToggle?: () => void;
-  /** When present, renders a small × button. Used in custom group lanes. */
+  /** When present, renders a small × button (used in custom group lanes). */
   onRemove?: () => void;
   /**
    * When true, append a deep link to PPAC for managing this env.
-   * Useful for Loose Managed envs ("promote to a group in PPAC").
+   * Used for Loose Managed envs ("promote to a group in PPAC").
    */
   showPpacLink?: boolean;
+  /**
+   * When provided, the row becomes a drag source. Only set this for
+   * Managed envs that are draggable in the Tier 2 Kanban — selection
+   * (Standard envs) and drag (Managed envs) are kept type-disjoint to
+   * avoid mode collision.
+   */
+  dragSource?: EnvDragSource;
 }
 
 const PPAC_BASE = "https://admin.powerplatform.microsoft.com/manage/environments";
@@ -54,11 +79,9 @@ const useStyles = makeStyles({
     backgroundColor: tokens.colorNeutralBackground1,
     border: `1px solid ${tokens.colorNeutralStroke2}`,
     borderRadius: tokens.borderRadiusMedium,
-    cursor: "pointer",
     transition: "background-color 80ms ease, border-color 80ms ease",
     ":hover": {
       border: `1px solid ${tokens.colorNeutralStroke1}`,
-      backgroundColor: tokens.colorNeutralBackground1Hover,
     },
   },
   rowSelected: {
@@ -69,9 +92,14 @@ const useStyles = makeStyles({
       border: `1px solid ${tokens.colorBrandStroke1}`,
     },
   },
-  rowReadOnly: {
-    cursor: "default",
-    backgroundColor: tokens.colorNeutralBackground3,
+  rowDraggable: {
+    cursor: "grab",
+    ":active": {
+      cursor: "grabbing",
+    },
+  },
+  rowDragging: {
+    opacity: 0.4,
   },
   body: {
     flex: 1,
@@ -107,26 +135,50 @@ export function EnvRow({
   onToggle,
   onRemove,
   showPpacLink = false,
+  dragSource,
 }: Props) {
   const styles = useStyles();
-  const navigate = useNavigate();
 
-  const handleRowClick = () => {
-    navigate(`/environments/${env.id}`);
-  };
+  // Draggable plumbing is conditional: only Managed envs in MS group
+  // lanes or in the Loose Managed side-panel bucket pass `dragSource`.
+  // For all other rows the hook still runs (rules-of-hooks) but its
+  // listeners attach to nothing useful.
+  const draggable = useDraggable({
+    id: `env:${env.id}`,
+    disabled: dragSource === undefined,
+    data: dragSource
+      ? { kind: "envDrag", env, source: dragSource }
+      : undefined,
+  });
 
   const classes = [styles.row];
   if (selected) classes.push(styles.rowSelected);
-  if (!selectable && !onRemove) classes.push(styles.rowReadOnly);
+  if (dragSource) classes.push(styles.rowDraggable);
+  if (draggable.isDragging) classes.push(styles.rowDragging);
+
+  const style: React.CSSProperties = dragSource
+    ? { transform: CSS.Translate.toString(draggable.transform) }
+    : {};
+
+  // Drag-related props only attach when the row is actually draggable.
+  // Spreading `undefined` would still be valid JSX but reads as noise.
+  const dragRefProp = dragSource ? { ref: draggable.setNodeRef } : {};
+  const dragListenerProps = dragSource
+    ? { ...draggable.listeners, ...draggable.attributes }
+    : {};
 
   return (
-    <div className={classes.join(" ")} onClick={handleRowClick}>
+    <div
+      {...dragRefProp}
+      style={style}
+      className={classes.join(" ")}
+      {...dragListenerProps}
+    >
       {selectable && (
         <Checkbox
           checked={selected}
           onClick={(e) => e.stopPropagation()}
           onChange={(_, data: CheckboxOnChangeData) => {
-            // Intercept; the checkbox owns selection, not the row.
             if (onToggle) onToggle();
             void data;
           }}
@@ -153,6 +205,7 @@ export function EnvRow({
                 rel="noopener noreferrer"
                 className={styles.ppacLink}
                 onClick={(e) => e.stopPropagation()}
+                onPointerDown={(e) => e.stopPropagation()}
               >
                 Manage in PPAC <OpenRegular fontSize={10} />
               </Link>

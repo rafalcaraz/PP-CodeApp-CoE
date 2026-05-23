@@ -205,7 +205,12 @@ export function EligibleEnvsPanel({
               </span>
             </div>
             {looseManaged.slice(0, 50).map((env) => (
-              <EnvRow key={env.id} env={env} showPpacLink />
+              <EnvRow
+                key={env.id}
+                env={env}
+                showPpacLink
+                dragSource={{ kind: "loose-managed" }}
+              />
             ))}
             {looseManaged.length > 50 && (
               <Caption1 className={styles.empty}>
