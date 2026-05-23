@@ -30,14 +30,16 @@ import {
 import {
   ArrowRightRegular,
   DeleteRegular,
+  DismissCircleRegular,
   EditRegular,
   MoreVerticalRegular,
   OpenRegular,
 } from "@fluentui/react-icons";
-import { useDroppable } from "@dnd-kit/core";
+import { useDndContext, useDroppable } from "@dnd-kit/core";
+import { useMemo } from "react";
 import type { EnvironmentRow } from "../../data/inventory";
 import type { GroupKind } from "../../data/zones";
-import { EnvRow } from "./EnvRow";
+import { EnvRow, type EnvDragSource } from "./EnvRow";
 
 const PPAC_ENV_GROUP_BASE =
   "https://admin.powerplatform.microsoft.com/manage/environment-groups";
@@ -137,12 +139,39 @@ const useStyles = makeStyles({
     maxHeight: "420px",
     overflowY: "auto",
     minHeight: "60px",
-    transition: "background-color 120ms ease",
+    transition: "background-color 120ms ease, outline-color 120ms ease",
   },
-  bodyDropTarget: {
+  // Valid drop target while hovering: brand highlight (drop here!).
+  bodyDropValid: {
     backgroundColor: tokens.colorBrandBackground2,
     outline: `2px dashed ${tokens.colorBrandStroke1}`,
     outlineOffset: "-4px",
+  },
+  // Invalid drop target while hovering: red highlight (can't drop here).
+  // The reason is shown inline via `invalidHint` so the user sees both
+  // the color cue AND the explanation in the same place.
+  bodyDropInvalid: {
+    backgroundColor: tokens.colorPaletteRedBackground1,
+    outline: `2px dashed ${tokens.colorPaletteRedBorder2}`,
+    outlineOffset: "-4px",
+  },
+  // During any drag, invalid lanes get a subtle red dashed border so
+  // the user knows BEFORE hovering that the drop wouldn't be valid.
+  // Less prominent than the full hover styling above.
+  bodyDragInvalidNotHovering: {
+    outline: `1px dashed ${tokens.colorPaletteRedBorder1}`,
+    outlineOffset: "-4px",
+    opacity: 0.7,
+  },
+  invalidHint: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: tokens.spacingHorizontalXS,
+    padding: tokens.spacingHorizontalS,
+    color: tokens.colorPaletteRedForeground1,
+    fontSize: tokens.fontSizeBase200,
+    fontWeight: tokens.fontWeightSemibold,
   },
   empty: {
     color: tokens.colorNeutralForeground4,
@@ -188,8 +217,68 @@ export function GroupEnvLane({
     },
   });
 
+  // Read the currently-dragging env so we can decide whether THIS lane
+  // would be a valid drop target — and surface that to the user via
+  // green/red styling instead of letting them drop and discover the
+  // rejection only afterward. Type purity becomes teachable visually:
+  //
+  //   - MS group lane accepts Managed envs only
+  //   - Custom group lane accepts Standard envs only
+  //   - Self-drop on the source group is neutral (no cue)
+  const { active } = useDndContext();
+  const activeData = active?.data.current as
+    | { kind?: string; source?: EnvDragSource }
+    | undefined;
+  const activeSource =
+    activeData?.kind === "envDrag" ? activeData.source : undefined;
+
+  const validity = useMemo<"valid" | "invalid" | "self" | null>(() => {
+    if (!activeSource) return null; // not dragging anything
+    if (isMs) {
+      // MS group lane: managed envs only
+      if (
+        activeSource.kind === "loose-standard" ||
+        activeSource.kind === "custom-group"
+      ) {
+        return "invalid";
+      }
+      if (
+        activeSource.kind === "ms-group" &&
+        activeSource.groupId === groupId
+      ) {
+        return "self";
+      }
+      return "valid";
+    }
+    // Custom group lane: standard envs only
+    if (
+      activeSource.kind === "ms-group" ||
+      activeSource.kind === "loose-managed"
+    ) {
+      return "invalid";
+    }
+    if (
+      activeSource.kind === "custom-group" &&
+      activeSource.groupId === groupId
+    ) {
+      return "self";
+    }
+    return "valid";
+  }, [activeSource, isMs, groupId]);
+
   const bodyClasses = [styles.body];
-  if (isOver) bodyClasses.push(styles.bodyDropTarget);
+  if (isOver && validity === "valid") bodyClasses.push(styles.bodyDropValid);
+  if (isOver && validity === "invalid")
+    bodyClasses.push(styles.bodyDropInvalid);
+  // Subtle pre-hover cue: when a drag is active AND this lane is
+  // invalid, dim it slightly so the user sees "not for me" before they
+  // even mouse over.
+  if (!isOver && validity === "invalid")
+    bodyClasses.push(styles.bodyDragInvalidNotHovering);
+
+  const invalidReason = isMs
+    ? "Standard envs can't go in Microsoft env groups"
+    : "Managed envs can't go in Standard custom groups";
 
   return (
     <div className={styles.lane}>
@@ -269,6 +358,12 @@ export function GroupEnvLane({
         )}
       </div>
       <div ref={setNodeRef} className={bodyClasses.join(" ")}>
+        {isOver && validity === "invalid" && (
+          <div className={styles.invalidHint}>
+            <DismissCircleRegular />
+            <span>{invalidReason}</span>
+          </div>
+        )}
         {envs.length === 0 ? (
           <div className={styles.empty}>
             {isMs

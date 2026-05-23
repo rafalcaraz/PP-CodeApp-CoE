@@ -36,11 +36,13 @@
 
 import {
   DndContext,
+  DragOverlay,
   KeyboardSensor,
   PointerSensor,
   useSensor,
   useSensors,
   type DragEndEvent,
+  type DragStartEvent,
 } from "@dnd-kit/core";
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -107,6 +109,7 @@ import {
   type EnvMoveDemoTarget,
 } from "./zones/EnvMoveDemoDialog";
 import { StandardGroupAddDialog } from "./zones/StandardGroupAddDialog";
+import { EnvRowGhost } from "./zones/EnvRowGhost";
 import type { EnvDragSource } from "./zones/EnvRow";
 
 interface GroupPlacement {
@@ -295,6 +298,16 @@ export function ZoneDetailView() {
     fromGroupName: string | null;
   } | null>(null);
 
+  // The currently-dragging env, surfaced via `<DragOverlay>` as a
+  // "lifted ghost" that follows the cursor. Without the overlay the
+  // dragged row only transforms inside its own scroll container, which
+  // clips and feels janky. With it, drag-and-drop has the classic
+  // affordance users expect.
+  const [activeDrag, setActiveDrag] = useState<{
+    env: EnvironmentRow;
+    source: EnvDragSource;
+  } | null>(null);
+
   const sensors = useSensors(
     useSensor(PointerSensor, {
       // Small drag-distance threshold so a quick click on a Loose Managed
@@ -304,7 +317,21 @@ export function ZoneDetailView() {
     useSensor(KeyboardSensor),
   );
 
+  const handleDragStart = (event: DragStartEvent) => {
+    const data = event.active.data.current as
+      | { kind: "envDrag"; env: EnvironmentRow; source: EnvDragSource }
+      | undefined;
+    if (data?.kind === "envDrag") {
+      setActiveDrag({ env: data.env, source: data.source });
+    }
+  };
+
+  const handleDragCancel = () => {
+    setActiveDrag(null);
+  };
+
   const handleEnvDragEnd = (event: DragEndEvent) => {
+    setActiveDrag(null);
     const { active, over } = event;
     if (!over) return;
     const activeData = active.data.current as
@@ -739,7 +766,12 @@ export function ZoneDetailView() {
         </MessageBar>
       )}
 
-      <DndContext sensors={sensors} onDragEnd={handleEnvDragEnd}>
+      <DndContext
+        sensors={sensors}
+        onDragStart={handleDragStart}
+        onDragEnd={handleEnvDragEnd}
+        onDragCancel={handleDragCancel}
+      >
         <div className={styles.body}>
           <div className={styles.main}>
           {groupsInZone.length === 0 ? (
@@ -848,6 +880,9 @@ export function ZoneDetailView() {
           }}
         />
         </div>
+        <DragOverlay dropAnimation={null}>
+          {activeDrag ? <EnvRowGhost env={activeDrag.env} /> : null}
+        </DragOverlay>
       </DndContext>
 
       <ZoneEditorDialog
