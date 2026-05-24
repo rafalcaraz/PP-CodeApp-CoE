@@ -5,6 +5,13 @@
  */
 
 export const dataSourcesInfo = {
+  "aadusers": {
+    "tableId": "",
+    "version": "",
+    "primaryKey": "aaduserid",
+    "dataSourceType": "Dataverse",
+    "apis": {}
+  },
   "microsoftcopilotstudio": {
     "tableId": "",
     "version": "",

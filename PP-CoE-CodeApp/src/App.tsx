@@ -8,6 +8,7 @@ import {
 import { HashRouter, Route, Routes } from "react-router-dom";
 import { SideNav } from "./components/SideNav";
 import { TopBar } from "./components/TopBar";
+import { UserLookupProvider } from "./components/UserLookupProvider";
 import { LoadingPane } from "./components/Status";
 import { HomeRedirect } from "./views/HomeRedirect";
 import { FeatureFlagsProvider, useFeatureFlag } from "./featureFlags";
@@ -185,7 +186,9 @@ function App() {
     <FluentProvider theme={webLightTheme}>
       <FeatureFlagsProvider>
         <HashRouter>
-          <AppShell />
+          <UserLookupProvider>
+            <AppShell />
+          </UserLookupProvider>
         </HashRouter>
       </FeatureFlagsProvider>
     </FluentProvider>

@@ -242,7 +242,17 @@ function __sleep(ms: number): Promise<void> {
 }
 
 /** Single shot at the underlying connector. Separated from the throttling
- *  layer so the retry loop in `runQuery` can call it twice cleanly. */
+ *  layer so the retry loop in `runQuery` can call it twice cleanly.
+ *
+ *  **De-dupes the response by `item.name`.** The QueryResources
+ *  connector occasionally returns the same resource id twice within a
+ *  single page response — confirmed empirically against `agents`
+ *  (16k+ tenant-wide) where React grids see duplicate row keys
+ *  otherwise. The dedup is a cheap O(n) pass that only re-allocates
+ *  when there *is* a duplicate; if the backend is well-behaved it's a
+ *  no-op. `runQueryAllPages` has the same dedup for cross-page
+ *  overlap; doing it here too means every `runQuery` caller gets the
+ *  same guarantee without having to remember. */
 async function __invokeQueryOnce(
   body: ResourceQueryRequest
 ): Promise<RunQueryResult> {
@@ -254,10 +264,21 @@ async function __invokeQueryOnce(
     if (!result.success) {
       return { ok: false, error: formatError(result.error) };
     }
+    const rawItems = result.data?.data ?? [];
+    // Dedup by `name` (the resource GUID). First-seen wins; preserves
+    // server-side ordering since `Map` retains insertion order.
+    const byId = new Map<string, ResourceItem>();
+    for (const item of rawItems) {
+      const key = item.name ?? "";
+      if (!key) continue;
+      if (!byId.has(key)) byId.set(key, item);
+    }
+    const items =
+      byId.size === rawItems.length ? rawItems : Array.from(byId.values());
     return {
       ok: true,
       data: {
-        items: result.data?.data ?? [],
+        items,
         totalRecords: result.data?.totalRecords ?? 0,
         skipToken: result.data?.skipToken || undefined,
       },
@@ -565,9 +586,37 @@ export interface AgentRow {
   connectors: ResourceConnector[];
 }
 
+/** Operator mode for the per-value agent filters. `exclude` translates
+ *  to negated operators (`!=` / `!startswith`); `include` to positive
+ *  (`==` / `startswith`). Empty `value` means the filter is inactive
+ *  regardless of mode. */
+export type AgentFilterMode = "exclude" | "include";
+
+export interface AgentValueFilter {
+  mode: AgentFilterMode;
+  value: string;
+}
+
 export interface AgentFilters {
   environmentId?: string;
+  /** Free-text search. Matches against BOTH `displayName` AND
+   *  `schemaName` (case-insensitive substring) so users can find an
+   *  agent by either its customer-facing name or its solution-
+   *  publisher-prefixed schema name in one box. E.g. "Customer
+   *  Service" hits via displayName; "msdyn" hits first-party Dynamics
+   *  agents via schemaName. */
   nameContains?: string;
+  /** Filter by `schemaName` prefix. `mode='exclude'` hides matches;
+   *  `mode='include'` shows only matches. Schema names carry solution
+   *  publisher prefixes (`msdyn_`, `new_`, `<customer>_`), so this is
+   *  the right hook for "hide the noise" or "drill into one
+   *  publisher" filtering. */
+  schemaPrefix?: AgentValueFilter;
+  /** Filter by Entra owner object id. `mode='exclude'` hides matches
+   *  (useful for hiding Pipelines / SPN-deployed agents);
+   *  `mode='include'` shows only matches (useful for "what does this
+   *  person own"). */
+  owner?: AgentValueFilter;
 }
 
 function propStr(item: ResourceItem, key: string): string {
@@ -1441,11 +1490,25 @@ function toAgentRow(item: ResourceItem): AgentRow {
  *  - environmentId: optional scope to one environment.
  *  - extraWhere: e.g. state filter for flows.
  *  - nameContains: server-side substring match on properties.displayName.
+ *    Used by callers that only care about display-name matching (apps,
+ *    flows).
+ *  - nameOrSchemaContains: server-side substring match against the
+ *    combined `displayName | schemaName` string. Used by callers where
+ *    schemaName carries meaningful identifiers (agents).
+ *  - schemaPrefix: server-side prefix match against properties.schemaName.
+ *    `exclude` mode emits `!startswith`; `include` mode emits `startswith`.
+ *    Empty value = no clause.
+ *  - owner: server-side equality match against properties.ownerId.
+ *    `exclude` mode emits `!=`; `include` mode emits `==`. Empty value
+ *    = no clause.
  */
 function buildListClauses(opts: {
   typeList: ResourceTypeValue[];
   environmentId?: string;
   nameContains?: string;
+  nameOrSchemaContains?: string;
+  schemaPrefix?: AgentValueFilter;
+  owner?: AgentValueFilter;
   extraWhere?: Clause[];
   orderField?: string; // default tostring(properties.lastModifiedAt) desc
 }): Clause[] {
@@ -1472,6 +1535,42 @@ function buildListClauses(opts: {
     // single-quotes are escaped per KQL convention (double them).
     const escaped = opts.nameContains.trim().replace(/'/g, "''");
     clauses.push(where("properties.displayName", "contains", [`'${escaped}'`]));
+  }
+
+  // Combined display+schema search. Built by extending an alias column
+  // (`__ds`) with `strcat(tostring(displayName), '|', tostring(schemaName))`,
+  // then `contains` against the alias. The `|` separator stops accidental
+  // bridge matches (e.g. searching "ooMs" against displayName="Foo" +
+  // schemaName="msdyn" would match "Foo|msdyn" without the separator).
+  // `tostring()` coerces null to empty string so missing fields don't
+  // explode the strcat.
+  if (opts.nameOrSchemaContains && opts.nameOrSchemaContains.trim() !== "") {
+    const escaped = opts.nameOrSchemaContains.trim().replace(/'/g, "''");
+    clauses.push(
+      extend(
+        "__ds",
+        "strcat(tostring(properties.displayName), '|', tostring(properties.schemaName))"
+      )
+    );
+    clauses.push(where("__ds", "contains", [`'${escaped}'`]));
+  }
+
+  // Per-value filters. Both modes use server-side operators documented
+  // by the Inventory API (https://learn.microsoft.com/en-us/power-platform/admin/inventory-api
+  // — "all standard KQL comparison and string operators"). `startswith`
+  // and `!startswith` are case-insensitive by default; `==` and `!=`
+  // are case-sensitive. GUIDs in inventory are stored lowercase, so
+  // callers normalize the owner value before reaching this function.
+  if (opts.schemaPrefix && opts.schemaPrefix.value.trim() !== "") {
+    const escaped = opts.schemaPrefix.value.trim().replace(/'/g, "''");
+    const op = opts.schemaPrefix.mode === "include" ? "startswith" : "!startswith";
+    clauses.push(where("properties.schemaName", op, [`'${escaped}'`]));
+  }
+
+  if (opts.owner && opts.owner.value.trim() !== "") {
+    const escaped = opts.owner.value.trim().replace(/'/g, "''");
+    const op = opts.owner.mode === "include" ? "==" : "!=";
+    clauses.push(where("properties.ownerId", op, [`'${escaped}'`]));
   }
 
   const orderField = opts.orderField ?? "tostring(properties.lastModifiedAt)";
@@ -1578,17 +1677,79 @@ export async function listAgentsPage(
   pageSize = 500,
   skip = 0
 ): Promise<DataResult<{ rows: AgentRow[]; skipToken?: string; totalRecords: number }>> {
-  const clauses = buildListClauses({
-    typeList: [ResourceType.CopilotStudioAgent],
-    environmentId: filters.environmentId,
-    nameContains: filters.nameContains,
-    // Agents don't carry `lastModifiedAt`; use `lastPublishedAt` so the
-    // default sort actually means something. Falls back to nulls last in KQL.
-    orderField: "tostring(properties.lastPublishedAt)",
-  });
-  const res = await runQuery(clauses, { Top: pageSize, Skip: skip, SkipToken: skipToken ?? "" });
+  // Push BOTH per-value filters server-side. Documented Inventory API
+  // operators (`startswith` / `!startswith`, `==` / `!=`) — see
+  // https://learn.microsoft.com/en-us/power-platform/admin/inventory-api.
+  // The combined display+schema search is implemented via extend+contains
+  // inside buildListClauses (see `nameOrSchemaContains` there).
+  // Fallback chain below is cheap defense in case the backend ever
+  // changes — shouldn't trigger in normal operation.
+  const buildClauses = (
+    serverSchemaPrefix: AgentValueFilter | undefined,
+    serverOwner: AgentValueFilter | undefined
+  ) =>
+    buildListClauses({
+      typeList: [ResourceType.CopilotStudioAgent],
+      environmentId: filters.environmentId,
+      // Agent search spans displayName + schemaName so users can find a
+      // bot by either its human-facing name or its solution-publisher-
+      // prefixed schema identifier in one box.
+      nameOrSchemaContains: filters.nameContains,
+      schemaPrefix: serverSchemaPrefix,
+      owner: serverOwner,
+      // Agents don't carry `lastModifiedAt`; use `lastPublishedAt` so the
+      // default sort actually means something. Falls back to nulls last in KQL.
+      orderField: "tostring(properties.lastPublishedAt)",
+    });
+
+  const queryOpts = { Top: pageSize, Skip: skip, SkipToken: skipToken ?? "" };
+  let res = await runQuery(
+    buildClauses(filters.schemaPrefix, filters.owner),
+    queryOpts
+  );
+
+  // Fallback chain. If the server rejected the request and a filter
+  // was set, retry without each in turn to isolate which operator is
+  // unsupported and degrade gracefully to client-side filtering for
+  // just that field.
+  let clientSchemaPrefix: AgentValueFilter | undefined;
+  let clientOwner: AgentValueFilter | undefined;
+  if (!res.ok && (filters.schemaPrefix?.value || filters.owner?.value)) {
+    if (filters.schemaPrefix?.value) {
+      res = await runQuery(buildClauses(undefined, filters.owner), queryOpts);
+      if (res.ok) clientSchemaPrefix = filters.schemaPrefix;
+    }
+    if (!res.ok && filters.owner?.value) {
+      res = await runQuery(buildClauses(undefined, undefined), queryOpts);
+      if (res.ok) {
+        clientSchemaPrefix = filters.schemaPrefix;
+        clientOwner = filters.owner;
+      }
+    }
+  }
+
   if (!res.ok) return res;
-  const rows = res.data.items.map(toAgentRow);
+  let rows = res.data.items.map(toAgentRow);
+
+  // Client-side application of any filter the server didn't accept.
+  // No-op on the happy path.
+  if (clientSchemaPrefix?.value) {
+    const p = clientSchemaPrefix.value.trim().toLowerCase();
+    const include = clientSchemaPrefix.mode === "include";
+    rows = rows.filter((r) => {
+      const starts = (r.schemaName ?? "").toLowerCase().startsWith(p);
+      return include ? starts : !starts;
+    });
+  }
+  if (clientOwner?.value) {
+    const o = clientOwner.value.trim().toLowerCase();
+    const include = clientOwner.mode === "include";
+    rows = rows.filter((r) => {
+      const eq = (r.ownerId ?? "").toLowerCase() === o;
+      return include ? eq : !eq;
+    });
+  }
+
   await backfillEnvironmentNames(rows);
   return {
     ok: true,

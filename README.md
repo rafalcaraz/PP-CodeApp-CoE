@@ -22,7 +22,15 @@ PP-CodeApp-CoE/
   real `properties` payloads for every resource type the app reads (canvas
   apps, model-driven apps, code apps, app-builder apps, cloud flows, agents,
   environments, environment groups), plus the KQL / clause-builder gotchas
-  we've already paid for. Maintain this file as the schema evolves.
+  we've already paid for. Includes the canonical
+  [Owner / creator GUID resolution](./PP-CoE-CodeApp/docs/inventory-schema-samples.md#owner--creator-guid-resolution)
+  callout — what `ownerId` / `createdBy` GUIDs can actually point to
+  (member user, guest, deleted account, **service principal /
+  Enterprise Application**, managed identity), why an `aaduser` miss
+  ≠ "deleted user", and the implications for ownerless-asset tiles
+  and maker-attribution rollups. **Read that section before adding any
+  owner name lookup, ownerless filter, or maker-attribution dashboard.**
+  Maintain this file as the schema evolves.
 - **[Roadmap](./PP-CoE-CodeApp/docs/roadmap.md)** — parking lot for ideas
   not yet built (saved queries in Dataverse, connector inventory rollups,
   bundle splitting, etc.). Each entry has enough context to start from cold.
