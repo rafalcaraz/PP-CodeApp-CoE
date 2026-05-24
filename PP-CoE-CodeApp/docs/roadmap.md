@@ -9,6 +9,186 @@ or update it here.
 
 ---
 
+## ⭐ NEXT: Admin access gate (preflight permission probe)
+
+> **User goal.** The app today loads the full dashboard / inventory immediately
+> on boot. Every query goes through the **Power Platform for Admins V2**
+> connector, which requires either **Power Platform Administrator** or
+> **Global Administrator** to function. Without that role (or with a
+> PIM-eligible role that hasn't been activated) every query returns 403 —
+> the user sees a wall of cascading error toasts with no actionable
+> guidance. We want a single cheap preflight probe gating the app shell so
+> the first thing an under-privileged user sees is a clear, actionable
+> "you need to activate your role" pane, not a broken UI.
+
+### The probe
+
+Cheapest reliable shape: a `QueryResources` call with
+`where type == 'microsoft.powerplatform/environments'` + `take(1)`.
+Returns near-instantly. Proves we can both authenticate the connector AND
+get a row back (not just "the call succeeded but you have no data").
+A pure `count` clause would also work but `take(1)` round-trips actual
+authorization-checked data.
+
+```ts
+// Sketch — wherever the gate lives
+async function probeAdminAccess(): Promise<DataResult<void>> {
+  const res = await runQuery(
+    [
+      where("type", "==", ["'microsoft.powerplatform/environments'"]),
+      take(1),
+    ],
+    { Top: 1, Skip: 0, SkipToken: "" },
+    { forceFresh: true } // never serve a stale cached probe
+  );
+  return res.ok ? { ok: true, data: undefined } : res;
+}
+```
+
+### The three failure modes — the part that's easy to get wrong
+
+Treating every error as "no permission" is the trap. If MS has a regional
+outage, telling users "you need PP Admin role" sends them down a wrong
+rabbit hole for hours. Classify the error before showing a message:
+
+| Error shape | What it means | UI |
+| --- | --- | --- |
+| **403 Forbidden** | No role / role not activated | `<NoAccessPane>` with PIM activation link + "Re-check access" |
+| **401 Unauthorized** | Connection broken / re-consent needed | `<ConnectionBrokenPane>` with link to Power Apps connections page |
+| **429 / 503 / network** | Transient | `<TransientErrorPane>` with auto-retry (jittered backoff, ~2-3 attempts) |
+| **Other 4xx / 5xx** | Unexpected | Generic pane with raw error + manual Retry |
+
+The 403 classifier should match on both the HTTP status (when available
+on the runtime error) and on substrings in the formatted message
+(`Forbidden`, `AuthorizationFailed`, `403`). Mirror the pattern used by
+`isNotFoundError` in `src/data/userEnrichment.ts`.
+
+### The PIM nuance — critical
+
+If the user's PP Admin role is in **PIM and not activated**, the
+connector returns **403 — identical to "no role at all"**. We literally
+cannot distinguish in the response. So the `<NoAccessPane>` copy must
+cover both cases without guessing:
+
+> **You need the Power Platform Administrator role (or Global
+> Administrator) to use this app.**
+>
+> If you have it through Privileged Identity Management (PIM), you may
+> need to **activate it** before this app will load.
+>
+> [Open PIM] [Re-check access]
+
+Activate link: `https://portal.azure.com/#blade/Microsoft_Azure_PIMCommon/CommonMenuBlade/quickStart`
+
+### Architecture — where the gate lives
+
+Wrap the routed shell in a new `<AdminAccessGate>` provider, mounted
+**inside** `<HashRouter>` but **outside** `<AppShell>`. Sketch:
+
+```tsx
+// src/App.tsx — current shape with the new gate slotted in
+<FluentProvider theme={webLightTheme}>
+  <FeatureFlagsProvider>
+    <HashRouter>
+      <UserLookupProvider>
+        <AdminAccessGate>      {/* ← new */}
+          <AppShell />
+        </AdminAccessGate>
+      </UserLookupProvider>
+    </HashRouter>
+  </FeatureFlagsProvider>
+</FluentProvider>
+```
+
+States the gate renders:
+
+- `loading` — short skeleton/spinner. Probe completes in <500ms typically;
+  no need for a heavy loading screen.
+- `granted` — renders children unchanged.
+- `denied (403)` — `<NoAccessPane>`.
+- `connection-broken (401)` — `<ConnectionBrokenPane>`.
+- `transient (429/503/network)` — `<TransientErrorPane>` with auto-retry.
+- `unknown error` — `<GenericErrorPane>` with raw message + Retry.
+
+### Caching — DO NOT probe on every page load
+
+Once we've confirmed access in the session, **trust it**. Don't re-probe
+on navigation. Cache the gate result for the session lifetime. Expose a
+small context hook (`useAdminAccess()`) for a Settings "Access" panel and
+the in-app diagnostics.
+
+### Session-expiry handling (the inverse case)
+
+If someone activates a **PIM time-bound role** (say, 1 hour) and the
+window expires *during* the session, their next real query will 403.
+Two reasonable handling paths:
+
+1. **Simple.** Let each per-page error handler surface its own failure
+   naturally. The user notices things start failing, refreshes the
+   page → gate re-probes → shows `<NoAccessPane>`. This is fine for v1.
+2. **Polished.** Detect 403 in `__invokeQueryOnce` (single chokepoint;
+   it already classifies dedup) and flip a global "access lost — re-check?"
+   banner. Provides a smoother UX without forcing a reload.
+
+User preference: **start with #1**. Don't over-engineer until users
+actually hit the expiry case.
+
+### Re-check button behavior
+
+The single most important interactive element on the `<NoAccessPane>` is
+the **"Re-check access"** button. Users will:
+
+1. Open the app → see "you need PP Admin"
+2. Tab over to PIM → activate role → wait a few seconds
+3. Tab back to the app → hit Re-check
+4. Gate re-probes (with `forceFresh: true`) → on success, swaps to
+   `granted` and children render
+
+Without this, they have to reload the whole app (loses any URL state,
+unsaved filter selections in other tabs, etc.). The button is what makes
+the gate friendly instead of annoying.
+
+### What does NOT need to be gated
+
+- The **Settings** page can stay accessible even on `denied`, so users
+  can flip the `copilotStudioAssistant` feature flag, see their detected
+  identity, etc. Consider rendering `<AppShell>` with a "limited mode"
+  banner instead of fully hiding it. Decision deferrable to UX taste.
+- The **Cmd+K user lookup** dialog uses the Dataverse `aaduser` virtual
+  table (different permission surface — any signed-in user with Graph
+  read can use it). Could remain available even when the PP Admin probe
+  fails. Same banner-vs-full-block call.
+
+### Acceptance signals when you build this
+
+1. Cold-start with a non-admin user → `<NoAccessPane>` renders in
+   <1 second. No 403 toasts. No flash of dashboard.
+2. Cold-start with an admin → gate flashes briefly, then everything
+   renders normally. No noticeable lag (probe runs in parallel with
+   chunk loading, ideally not the critical path).
+3. PIM-expire during session → Plan A: works, user refreshes once.
+   Plan B (if implemented): banner appears within seconds of next
+   real query.
+4. Network blip during probe → `<TransientErrorPane>` with auto-retry
+   shown, not the no-access pane.
+5. Re-check button on `<NoAccessPane>` after PIM activation → flips
+   to `granted` without reload.
+
+### Touchpoints already in the codebase
+
+- `src/data/inventory.ts` → `runQuery`, `__invokeQueryOnce` (probe lives
+  alongside these; classifier mirrors `isNotFoundError` in
+  `src/data/userEnrichment.ts`)
+- `src/App.tsx` → shell-level provider mounting (add new gate next to
+  `UserLookupProvider`)
+- `src/components/Status.tsx` → `LoadingPane`, `ErrorPane`, `EmptyPane`
+  patterns. The new no-access / connection-broken panes should fit the
+  same visual style (Fluent `Card` + icon + headline + body + actions).
+- `power.config.json` → no changes needed; the existing
+  `powerplatformadminv2` connection reference is what we probe.
+
+---
+
 ## Saved queries in a Dataverse table
 
 > **User goal.** The Queries playground (`src/views/QueriesView.tsx`) now
