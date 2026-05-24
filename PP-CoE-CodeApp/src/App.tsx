@@ -36,6 +36,9 @@ const EnvironmentsList = lazy(() =>
 const EnvironmentDetail = lazy(() =>
   import("./views/EnvironmentDetail").then((m) => ({ default: m.EnvironmentDetail }))
 );
+const PdeLandscape = lazy(() =>
+  import("./views/PdeLandscape").then((m) => ({ default: m.PdeLandscape }))
+);
 const AppsList = lazy(() =>
   import("./views/AppsList").then((m) => ({ default: m.AppsList }))
 );
@@ -131,6 +134,7 @@ function AppShell() {
               />
               <Route path="/environments" element={<EnvironmentsList />} />
               <Route path="/environments/:envId" element={<EnvironmentDetail />} />
+              <Route path="/pde-landscape" element={<PdeLandscape />} />
               <Route path="/apps" element={<AppsList />} />
               <Route path="/apps/:appId" element={<AppDetail />} />
               <Route path="/flows" element={<FlowsList />} />
