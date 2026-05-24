@@ -31,11 +31,11 @@ import {
   type AgentFilters,
   type AgentRow,
   type AgentValueFilter,
-} from "../data/inventory";
-import { ResourceListPage } from "../components/ResourceListPage";
-import { EnvironmentPicker } from "../components/EnvironmentPicker";
-import { UserChip } from "../components/UserChip";
-import { useDebouncedValue } from "../hooks/useDebouncedValue";
+} from "./data";
+import { ResourceListPage } from "../../components/ResourceListPage";
+import { EnvironmentPicker } from "../../components/EnvironmentPicker";
+import { UserChip } from "../../components/UserChip";
+import { useDebouncedValue } from "../../hooks/useDebouncedValue";
 
 const useStyles = makeStyles({
   search: {

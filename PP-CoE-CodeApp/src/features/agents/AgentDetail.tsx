@@ -19,17 +19,17 @@ import {
   shortResourceType,
   type AgentRow,
   type AgentSharingCounts,
-} from "../data/inventory";
-import { ErrorPane, LoadingPane } from "../components/Status";
-import { ConnectorsCard } from "../components/ConnectorsCard";
-import { RawJsonAccordion } from "../components/RawJsonAccordion";
-import { PortalActionsBar } from "../components/PortalActions";
+} from "./data";
+import { ErrorPane, LoadingPane } from "../../components/Status";
+import { ConnectorsCard } from "../../components/ConnectorsCard";
+import { RawJsonAccordion } from "../../components/RawJsonAccordion";
+import { PortalActionsBar } from "../../components/PortalActions";
 import {
   DateWithRelative,
   IdentifiersAccordion,
   Meta,
   useDetailStyles,
-} from "../components/detail";
+} from "../../components/detail";
 
 // Agent-specific styles that aren't shared with the other detail pages
 // (channels chip strip, "tools & knowledge" stat blocks, sharing chip grid).

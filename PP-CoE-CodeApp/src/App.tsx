@@ -54,10 +54,10 @@ const FlowDetail = lazy(() =>
   import("./views/FlowDetail").then((m) => ({ default: m.FlowDetail }))
 );
 const AgentsList = lazy(() =>
-  import("./views/AgentsList").then((m) => ({ default: m.AgentsList }))
+  import("./features/agents/AgentsList").then((m) => ({ default: m.AgentsList }))
 );
 const AgentDetail = lazy(() =>
-  import("./views/AgentDetail").then((m) => ({ default: m.AgentDetail }))
+  import("./features/agents/AgentDetail").then((m) => ({ default: m.AgentDetail }))
 );
 const QueriesView = lazy(() =>
   import("./views/QueriesView").then((m) => ({ default: m.QueriesView }))
