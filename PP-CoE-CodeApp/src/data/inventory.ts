@@ -213,6 +213,60 @@ export function invalidateInventoryCache(): void {
   __envNameMapExpiresAt = 0;
 }
 
+/** Classification of an error returned by the underlying admin connector.
+ *  Used by the `<AdminAccessGate>` to decide which failure pane to render.
+ *  See `docs/roadmap.md` — "The three failure modes" — for the rationale
+ *  behind splitting these out instead of treating every error as 403. */
+export type ConnectorErrorKind =
+  | "forbidden"      // 403 — no role, or PIM role not activated
+  | "unauthorized"   // 401 — connection broken / re-consent needed
+  | "transient"      // 429 / 503 / network — worth auto-retrying
+  | "unknown";       // anything else — show raw message
+
+/** Classify an error message (typically the `error` field of a failed
+ *  `DataResult`) into one of the broad buckets the access gate cares
+ *  about. The runtime's error shape is inconsistent across HTTP statuses
+ *  (sometimes a structured `{ status, message }`, sometimes a free-form
+ *  string with the code embedded in the message), so we match on both
+ *  the status (when `formatError` exposed it as `HTTP 4xx`) and on
+ *  substring markers — mirroring `isNotFoundError` in `userEnrichment.ts`. */
+export function classifyConnectorError(message: string): ConnectorErrorKind {
+  if (!message) return "unknown";
+  if (
+    /\bHTTP 403\b/i.test(message) ||
+    /\b403\b/.test(message) ||
+    /Forbidden/i.test(message) ||
+    /AuthorizationFailed/i.test(message) ||
+    /Authorization_RequestDenied/i.test(message)
+  ) {
+    return "forbidden";
+  }
+  if (
+    /\bHTTP 401\b/i.test(message) ||
+    /\b401\b/.test(message) ||
+    /Unauthorized/i.test(message) ||
+    /InvalidAuthenticationToken/i.test(message)
+  ) {
+    return "unauthorized";
+  }
+  if (
+    /\bHTTP 429\b/i.test(message) ||
+    /\bHTTP 503\b/i.test(message) ||
+    /\b429\b/.test(message) ||
+    /\b503\b/.test(message) ||
+    /rate ?limit/i.test(message) ||
+    /throttle/i.test(message) ||
+    /too many requests/i.test(message) ||
+    /service unavailable/i.test(message) ||
+    /network/i.test(message) ||
+    /timed? ?out/i.test(message) ||
+    /fetch failed/i.test(message)
+  ) {
+    return "transient";
+  }
+  return "unknown";
+}
+
 /** Best-effort 429 detection. The runtime surfaces rate limits as either a
  *  thrown object with `status === 429`, or a `result.error` whose message
  *  embeds the status code / "rate limit" / "throttle". */
@@ -419,6 +473,36 @@ async function runQueryStreaming(
     if (isLast) return { ok: true, data: undefined };
     skipToken = res.data.skipToken!;
   }
+  return { ok: true, data: undefined };
+}
+
+// ---------------------------------------------------------------------------
+// Admin access probe — feeds the `<AdminAccessGate>` provider.
+//
+// Cheapest reliable check that proves both (a) the connector can
+// authenticate AND (b) the signed-in user has the role(s) required to
+// actually read data from it (Power Platform Administrator / Global
+// Administrator, possibly through an activated PIM assignment).
+//
+// A pure `count` would suffice but `take(1)` round-trips real
+// authorization-checked data — strictly more diagnostic and barely
+// slower. Always bypasses the cache so a manual re-check after PIM
+// activation actually re-probes.
+// ---------------------------------------------------------------------------
+
+/** Run the access probe. Returns `{ ok: true }` if the connector
+ *  responded with data (the user has access), or `{ ok: false, error }`
+ *  carrying a message that `classifyConnectorError` can bucket. */
+export async function probeAdminAccess(): Promise<DataResult<void>> {
+  const res = await runQuery(
+    [
+      where("type", "==", ["'microsoft.powerplatform/environments'"]),
+      take(1),
+    ],
+    { Top: 1, Skip: 0, SkipToken: "" },
+    { forceFresh: true }
+  );
+  if (!res.ok) return res;
   return { ok: true, data: undefined };
 }
 
