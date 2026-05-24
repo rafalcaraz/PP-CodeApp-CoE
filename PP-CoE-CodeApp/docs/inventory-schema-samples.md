@@ -25,8 +25,76 @@
 - `properties.ownerId`, `properties.createdBy`, `properties.lastModifiedBy`
   are usually GUIDs. Some resource types replace them with an object like
   `{ id, displayName, email }` — the data layer (`src/data/inventory.ts`)
-  reads both shapes via `ownerDisplayName()`.
+  reads both shapes via `ownerDisplayName()`. **See the
+  [Owner / creator GUID resolution](#owner--creator-guid-resolution)
+  section below for what those GUIDs can actually point to** — it is *not*
+  always a human user.
 - `properties.isQuarantined`, `properties.isManaged` are booleans.
+
+## Owner / creator GUID resolution
+
+> **Read this before adding any "owner name lookup" UI, dashboard tile,
+> or `ownerless`-style filter.** The `ownerId` / `createdBy` /
+> `lastModifiedBy` GUIDs on inventory rows are **Entra object IDs**, and
+> Entra object IDs are not exclusively users.
+
+Resolved by `src/data/userEnrichment.ts` (the GUID → user resolver
+backing the Cmd+K lookup dialog and the in-page owner chips —
+`src/components/UserChip.tsx`, used by `useUserDisplay`) against the
+Dataverse `aaduser` virtual table. **Resolution is reactive: any GUID
+resolved anywhere in the app (the dialog, a chip on a detail page, a
+batched list-view render) populates everywhere it's rendered, with no
+re-fetch.** See `src/hooks/useUserDisplay.ts` for the subscription
+plumbing.
+
+### What an owner GUID can actually be
+
+| Kind | Where it lives in Entra | In `aaduser`? | Typical source |
+| --- | --- | --- | --- |
+| **User (member)** | Users blade | ✅ | Maker built it manually. |
+| **User (guest)** | Users blade (`userType=Guest`) | ✅ | B2B-invited maker. |
+| **Deleted user** | Gone | ❌ (Graph 404) | Account offboarded, asset orphaned. |
+| **Service principal** | **Enterprise Applications** blade | ❌ (Graph 404) | Power Platform Pipelines, ALM SPN, custom deployment identity. |
+| **Managed identity / system account** | Enterprise Applications blade | ❌ (Graph 404) | First-party Microsoft components, e.g. some `00000000-0000-0000-0000-…` ids. |
+
+### Why "not found in `aaduser`" ≠ "deleted user"
+
+`aaduser` is a thin wrapper over Microsoft Graph's `/users` endpoint.
+Service principals live at `/servicePrincipals`, not `/users`, so any
+GUID owned by an SPN looks identical to a deleted user from
+`aaduser`'s perspective — both return `Request_ResourceNotFound`. **Do
+not label a missing lookup as "deleted user" in UI copy.** Use neutral
+wording like *"Could not locate a current valid user with this GUID"*
+and call out both possibilities (deleted account **or** Enterprise
+Application object id). The Cmd+K lookup dialog
+(`src/components/UserLookupDialog.tsx`) is the canonical example.
+
+### How to disambiguate when it matters
+
+When you actually need to know which kind of identity a GUID points to:
+
+1. **Check Entra → Enterprise Applications** with the GUID as the
+   Object ID filter. A hit means SPN. The most common CoE scenario is a
+   Pipelines deployment SPN, which becomes the `createdBy` of every
+   asset it deploys.
+2. **Check Entra → Users → Deleted users**. A hit there confirms
+   deletion (within the 30-day soft-delete window).
+3. **(Future option)** Resolve through the Dataverse
+   `serviceprincipal` virtual table (also Graph-backed, symmetric to
+   `aaduser`) or `systemuser` + `applicationid`. See the roadmap entry
+   for the planned `userEnrichment` chain extension.
+
+### Implications for dashboards & filters
+
+- **"Ownerless" / orphaned-asset tiles** that count rows where the
+  owner can't be resolved will over-report if they don't subtract
+  SPN-owned assets. In a tenant that uses Power Platform Pipelines this
+  can be a large fraction of all artifacts.
+- **"Top creators" rollups** keyed by `createdBy` will surface the
+  pipelines SPN as the "top creator" if not filtered out.
+- The data layer never replaces the raw GUID with a friendly name — it
+  always falls through to `ownerId` in `ownerDisplayName()`. Resolution
+  is a presentation concern handled per-page.
 
 ## Resource types covered
 

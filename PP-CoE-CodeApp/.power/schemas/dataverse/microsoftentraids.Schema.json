@@ -1,0 +1,206 @@
+{
+  "name": "aaduser",
+  "title": "Microsoft Entra IDs",
+  "schema": {
+    "type": "array",
+    "items": {
+      "type": "object",
+      "x-ms-dataverse-entity": true,
+      "x-ms-dataverse-entityset": "aadusers",
+      "x-ms-dataverse-primary-id": "aaduserid",
+      "x-ms-dataverse-primary-name": "displayname",
+      "properties": {
+        "aaduserid": {
+          "type": "string",
+          "title": "Id",
+          "x-ms-dataverse-attribute": "aaduserid",
+          "x-ms-dataverse-type": "UniqueidentifierType",
+          "x-ms-schema-name": "aaduserId",
+          "x-ms-dataverse-primary-id": true,
+          "required": true,
+          "x-ms-keyType": "primary"
+        },
+        "accountenabled": {
+          "type": "string",
+          "title": "Microsoft Entra ID Account Enabled",
+          "x-ms-dataverse-attribute": "accountenabled",
+          "x-ms-dataverse-type": "BooleanType",
+          "x-ms-schema-name": "AccountEnabled",
+          "enum": [
+            "No",
+            "Yes"
+          ],
+          "x-ms-enum-values": [
+            0,
+            1
+          ],
+          "Color": [
+            null,
+            null
+          ],
+          "x-ms-optionsetmetadataid": "fe6f9db3-642c-f111-88b4-000d3a368922",
+          "x-ms-isGlobal": false,
+          "x-ms-optionsetdisplayname": "Microsoft Entra ID Account Enabled",
+          "x-ms-optionSetType": "Boolean"
+        },
+        "accountenabledname": {
+          "type": "string",
+          "title": "accountenabledname",
+          "x-ms-dataverse-attribute": "accountenabledname",
+          "x-ms-dataverse-type": "VirtualType",
+          "x-ms-schema-name": "accountenabledName",
+          "x-ms-read-only": true
+        },
+        "businessphones": {
+          "type": "string",
+          "title": "Business Phones",
+          "x-ms-dataverse-attribute": "businessphones",
+          "x-ms-dataverse-type": "StringType",
+          "x-ms-schema-name": "BusinessPhones",
+          "maxLength": 100
+        },
+        "city": {
+          "type": "string",
+          "title": "City",
+          "x-ms-dataverse-attribute": "city",
+          "x-ms-dataverse-type": "StringType",
+          "x-ms-schema-name": "City",
+          "maxLength": 100
+        },
+        "companyname": {
+          "type": "string",
+          "title": "Company Name",
+          "x-ms-dataverse-attribute": "companyname",
+          "x-ms-dataverse-type": "StringType",
+          "x-ms-schema-name": "CompanyName",
+          "maxLength": 100
+        },
+        "createddatetime": {
+          "type": "string",
+          "title": "Created Date Time",
+          "x-ms-dataverse-attribute": "createddatetime",
+          "x-ms-dataverse-type": "DateTimeType",
+          "x-ms-schema-name": "CreatedDateTime",
+          "x-ms-read-only": true
+        },
+        "displayname": {
+          "type": "string",
+          "title": "Display Name",
+          "x-ms-dataverse-attribute": "displayname",
+          "x-ms-dataverse-type": "StringType",
+          "x-ms-schema-name": "DisplayName",
+          "x-ms-dataverse-primary-name": true,
+          "maxLength": 100
+        },
+        "givenname": {
+          "type": "string",
+          "title": "Given Name",
+          "x-ms-dataverse-attribute": "givenname",
+          "x-ms-dataverse-type": "StringType",
+          "x-ms-schema-name": "GivenName",
+          "maxLength": 100
+        },
+        "id": {
+          "type": "string",
+          "title": "A unique identifer for Microsoft Entra ID",
+          "x-ms-dataverse-attribute": "id",
+          "x-ms-dataverse-type": "UniqueidentifierType",
+          "x-ms-schema-name": "id",
+          "required": true
+        },
+        "imaddresses": {
+          "type": "string",
+          "title": "ImAddresses",
+          "x-ms-dataverse-attribute": "imaddresses",
+          "x-ms-dataverse-type": "StringType",
+          "x-ms-schema-name": "ImAddresses",
+          "maxLength": 100
+        },
+        "jobtitle": {
+          "type": "string",
+          "title": "Job Title",
+          "x-ms-dataverse-attribute": "jobtitle",
+          "x-ms-dataverse-type": "StringType",
+          "x-ms-schema-name": "JobTitle",
+          "maxLength": 100
+        },
+        "mail": {
+          "type": "string",
+          "title": "Mail",
+          "x-ms-dataverse-attribute": "mail",
+          "x-ms-dataverse-type": "StringType",
+          "x-ms-schema-name": "Mail",
+          "maxLength": 100
+        },
+        "mobilephone": {
+          "type": "string",
+          "title": "Mobile Phone",
+          "x-ms-dataverse-attribute": "mobilephone",
+          "x-ms-dataverse-type": "StringType",
+          "x-ms-schema-name": "MobilePhone",
+          "maxLength": 100
+        },
+        "officelocation": {
+          "type": "string",
+          "title": "Office Location",
+          "x-ms-dataverse-attribute": "officelocation",
+          "x-ms-dataverse-type": "StringType",
+          "x-ms-schema-name": "OfficeLocation",
+          "maxLength": 200
+        },
+        "postalcode": {
+          "type": "string",
+          "title": "Postal Code",
+          "x-ms-dataverse-attribute": "postalcode",
+          "x-ms-dataverse-type": "StringType",
+          "x-ms-schema-name": "PostalCode",
+          "maxLength": 100
+        },
+        "preferredlanguage": {
+          "type": "string",
+          "title": "Preferred Language",
+          "x-ms-dataverse-attribute": "preferredlanguage",
+          "x-ms-dataverse-type": "StringType",
+          "x-ms-schema-name": "PreferredLanguage",
+          "maxLength": 100
+        },
+        "streetaddress": {
+          "type": "string",
+          "title": "Street Address",
+          "x-ms-dataverse-attribute": "streetaddress",
+          "x-ms-dataverse-type": "StringType",
+          "x-ms-schema-name": "StreetAddress",
+          "maxLength": 100
+        },
+        "surname": {
+          "type": "string",
+          "title": "Surname",
+          "x-ms-dataverse-attribute": "surname",
+          "x-ms-dataverse-type": "StringType",
+          "x-ms-schema-name": "surname",
+          "maxLength": 100
+        },
+        "userprincipalname": {
+          "type": "string",
+          "title": "User Principal Name",
+          "x-ms-dataverse-attribute": "userprincipalname",
+          "x-ms-dataverse-type": "StringType",
+          "x-ms-schema-name": "UserPrincipalName",
+          "maxLength": 100
+        },
+        "usertype": {
+          "type": "string",
+          "title": "User Type",
+          "x-ms-dataverse-attribute": "usertype",
+          "x-ms-dataverse-type": "StringType",
+          "x-ms-schema-name": "UserType",
+          "maxLength": 100
+        }
+      },
+      "required": [
+        "aaduserid",
+        "id"
+      ]
+    }
+  }
+}

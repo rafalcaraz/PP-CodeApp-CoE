@@ -37,5 +37,15 @@
       "dataSets": {}
     }
   },
-  "databaseReferences": {}
+  "databaseReferences": {
+    "default.cds": {
+      "dataSources": {
+        "microsoftentraids": {
+          "entitySetName": "aadusers",
+          "logicalName": "aaduser"
+        }
+      },
+      "environmentVariableName": ""
+    }
+  }
 }

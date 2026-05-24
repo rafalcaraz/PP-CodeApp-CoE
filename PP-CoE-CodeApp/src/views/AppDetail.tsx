@@ -21,6 +21,7 @@ import {
 import { ErrorPane, LoadingPane } from "../components/Status";
 import { ConnectorsCard } from "../components/ConnectorsCard";
 import { RawJsonAccordion } from "../components/RawJsonAccordion";
+import { UserChip } from "../components/UserChip";
 import {
   PortalActionsBar,
   resourceTypeToEntityKind,
@@ -119,7 +120,12 @@ function ReadyView({
   navigate: ReturnType<typeof useNavigate>;
 }) {
   const styles = useDetailStyles();
-  const ownerLabel = row.ownerDisplayName || row.ownerId;
+  // Inventory may already give us a friendly owner display name; if so
+  // use it as-is. Otherwise the owner field is a raw GUID and we resolve
+  // it live via the shared `<UserChip>` (which auto-resolves and shares
+  // its cache with the Cmd+K dialog and every other chip on the page).
+  const hasResolvedOwnerName =
+    !!row.ownerDisplayName && row.ownerDisplayName !== row.ownerId;
   const entityKind = resourceTypeToEntityKind(row.type);
   const hasConfig = !!(row.appType || row.subType || row.logicalName || row.appModuleId);
   const adminSupported = isAppAdminDetailsSupported(row.type);
@@ -166,17 +172,23 @@ function ReadyView({
           )}
         </div>
         <div className={styles.summaryLine}>
-          {ownerLabel && (
+          {(hasResolvedOwnerName || row.ownerId) && (
             <>
               <Text size={300}>Owned by</Text>
-              <Text size={300} weight="semibold">
-                {ownerLabel}
-              </Text>
+              {hasResolvedOwnerName ? (
+                <Text size={300} weight="semibold">
+                  {row.ownerDisplayName}
+                </Text>
+              ) : (
+                <UserChip id={row.ownerId} avatarSize={20} />
+              )}
             </>
           )}
           {row.environmentId && (
             <>
-              {ownerLabel && <span className={styles.summaryDot} aria-hidden>·</span>}
+              {(hasResolvedOwnerName || row.ownerId) && (
+                <span className={styles.summaryDot} aria-hidden>·</span>
+              )}
               <Text size={300}>in</Text>
               <Link
                 onClick={() =>
@@ -237,9 +249,21 @@ function ReadyView({
         <Divider />
         <div className={styles.cardBody}>
           <div className={styles.metaGridTwo}>
-            <Meta label="Owner">{ownerLabel || "—"}</Meta>
-            <Meta label="Created by">{row.createdBy || "—"}</Meta>
-            <Meta label="Last modified by">{row.lastModifiedBy || "—"}</Meta>
+            <Meta label="Owner">
+              {hasResolvedOwnerName ? (
+                row.ownerDisplayName
+              ) : row.ownerId ? (
+                <UserChip id={row.ownerId} />
+              ) : (
+                "—"
+              )}
+            </Meta>
+            <Meta label="Created by">
+              {row.createdBy ? <UserChip id={row.createdBy} /> : "—"}
+            </Meta>
+            <Meta label="Last modified by">
+              {row.lastModifiedBy ? <UserChip id={row.lastModifiedBy} /> : "—"}
+            </Meta>
             <Meta label="Shared users">{row.sharedUsersCount.toLocaleString()}</Meta>
             <Meta label="Shared groups">{row.sharedGroupsCount.toLocaleString()}</Meta>
           </div>
