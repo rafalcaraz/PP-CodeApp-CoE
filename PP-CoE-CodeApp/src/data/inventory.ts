@@ -977,6 +977,147 @@ function toEnvironmentRow(item: ResourceItem): EnvironmentRow {
   };
 }
 
+// ---------------------------------------------------------------------------
+// PDE landscape — Developer-typed environments and their per-env asset rollup.
+//
+// "PDE" (Personal Developer Environment) is the product term for any
+// environment with `properties.environmentType == 'Developer'`. Three
+// distinct creation paths land here, with very different governance posture:
+//   1. Routed PDEs        — auto-provisioned via environment routing;
+//                           always managed; always in an env group.
+//   2. Standalone managed — manually flipped to managed by an admin;
+//                           not in any env group.
+//   3. Self-created       — admin-/maker-created (e.g. Developer Plan);
+//                           un-managed; never in an env group.
+// Use `categorizePdeEnvironment` to bucket a row into one of these.
+// ---------------------------------------------------------------------------
+
+export type PdeCategory = "routed" | "standaloneManaged" | "selfCreated";
+
+/** Inventory uses the all-zeros GUID as a "no group assigned" sentinel on
+ *  some environment payloads instead of an empty string. Treat it as
+ *  un-grouped so categorization doesn't flag those as routed. */
+const EMPTY_GROUP_SENTINEL = "00000000-0000-0000-0000-000000000000";
+
+/** Bucket a Developer-typed environment into one of the three PDE categories.
+ *  Callers should pre-filter to `environmentType == 'Developer'`. */
+export function categorizePdeEnvironment(env: EnvironmentRow): PdeCategory {
+  const hasGroup =
+    !!env.environmentGroupId && env.environmentGroupId !== EMPTY_GROUP_SENTINEL;
+  if (env.isManaged && hasGroup) return "routed";
+  if (env.isManaged) return "standaloneManaged";
+  return "selfCreated";
+}
+
+/** All Developer-typed environments visible to the admin. Pages through to
+ *  exhaustion — PDE inventories tend to be much smaller than the full env
+ *  list since they're filtered server-side, so loading everything up front
+ *  is fine for the landscape view. */
+export async function listDeveloperEnvironments(): Promise<DataResult<EnvironmentRow[]>> {
+  const clauses: Clause[] = [
+    where("type", "==", [`'${ResourceType.Environment}'`]),
+    where("properties.environmentType", "==", ["'Developer'"]),
+    orderBy({ "tostring(properties.displayName)": "asc" }),
+  ];
+  const res = await runQueryAllPages(clauses);
+  if (!res.ok) return res;
+  return { ok: true, data: res.data.map(toEnvironmentRow) };
+}
+
+/** Per-environment asset rollup, scoped to Developer environments only.
+ *  Returns one entry per env that owns at least one asset, with apps /
+ *  flows / agents bucketed from the underlying resource types. Envs with
+ *  zero assets are absent from the map (the caller can default them to
+ *  zero on lookup).
+ *
+ *  Implemented as three parallel single-key summarize queries (one per
+ *  bucket). We tried a single 2-key summarize-by-(envId, type) with an
+ *  inner join to PDE envs, but the connector's group-by readback didn't
+ *  surface the envId column on every row — counts came back zero across
+ *  the board. Splitting into per-bucket queries matches the working
+ *  pattern used elsewhere (`runAggregateCount`) and runs concurrently
+ *  under the existing 4-slot semaphore. */
+export async function countResourcesByEnvironmentForDeveloperEnvs(): Promise<
+  DataResult<Map<string, { apps: number; flows: number; agents: number }>>
+> {
+  const appTypes = [
+    ResourceType.CanvasApp,
+    ResourceType.ModelDrivenApp,
+    ResourceType.CodeApp,
+    ResourceType.AppBuilderApp,
+  ];
+  const flowTypes = [
+    ResourceType.CloudFlow,
+    ResourceType.AgentFlow,
+    ResourceType.WorkflowAgentFlow,
+  ];
+  const agentTypes = [ResourceType.CopilotStudioAgent];
+
+  const [appsRes, flowsRes, agentsRes] = await Promise.all([
+    countByEnvironmentId(appTypes),
+    countByEnvironmentId(flowTypes),
+    countByEnvironmentId(agentTypes),
+  ]);
+  if (!appsRes.ok) return appsRes;
+  if (!flowsRes.ok) return flowsRes;
+  if (!agentsRes.ok) return agentsRes;
+
+  const map = new Map<string, { apps: number; flows: number; agents: number }>();
+  const upsert = (envId: string, key: "apps" | "flows" | "agents", count: number) => {
+    if (!envId || !count) return;
+    let bucket = map.get(envId);
+    if (!bucket) {
+      bucket = { apps: 0, flows: 0, agents: 0 };
+      map.set(envId, bucket);
+    }
+    bucket[key] += count;
+  };
+  for (const [envId, count] of appsRes.data) upsert(envId, "apps", count);
+  for (const [envId, count] of flowsRes.data) upsert(envId, "flows", count);
+  for (const [envId, count] of agentsRes.data) upsert(envId, "agents", count);
+  return { ok: true, data: map };
+}
+
+/** Single-key summarize: count of matching resources grouped by their
+ *  owning environmentId. Returns a tenant-wide map; callers filter to
+ *  the env ids they care about. */
+async function countByEnvironmentId(
+  resourceTypes: string[],
+): Promise<DataResult<Map<string, number>>> {
+  if (resourceTypes.length === 0) {
+    return { ok: true, data: new Map() };
+  }
+  // Mirror the working `runAggregateCount` shape exactly: `g_*` alias,
+  // bare `tostring(...)` extend (no nested `tolower`), explicit orderBy,
+  // single page via `runQuery`. Earlier shapes (camelCase alias, nested
+  // tolower, runQueryAllPages) returned 0 rows on this connector.
+  const groupKey = "g_properties_environmentId";
+  const clauses: Clause[] = [
+    where(
+      "type",
+      "in~",
+      resourceTypes.map((t) => `'${t}'`),
+    ),
+    extend(groupKey, "tostring(properties.environmentId)"),
+    summarize("count", "resourceCount", [groupKey]),
+    orderBy({ resourceCount: "desc" }),
+  ];
+  const res = await runQuery(clauses, { Top: 5000, Skip: 0, SkipToken: "" });
+  if (!res.ok) return res;
+  const out = new Map<string, number>();
+  for (const item of res.data.items) {
+    const raw = item as unknown as Record<string, unknown>;
+    const props = (item.properties ?? {}) as Record<string, unknown>;
+    const envIdRaw = raw[groupKey] ?? props[groupKey];
+    if (envIdRaw === undefined || envIdRaw === null || envIdRaw === "") continue;
+    const envId = String(envIdRaw).toLowerCase();
+    const countVal = raw.resourceCount ?? props.resourceCount ?? 0;
+    const count = typeof countVal === "number" ? countVal : Number(countVal) || 0;
+    if (envId && count) out.set(envId, count);
+  }
+  return { ok: true, data: out };
+}
+
 function toResourceRow(item: ResourceItem): ResourceRow {
   return {
     id: item.name ?? "",
