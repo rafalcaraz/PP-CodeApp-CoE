@@ -9,6 +9,7 @@ import { HashRouter, Route, Routes } from "react-router-dom";
 import { SideNav } from "./components/SideNav";
 import { TopBar } from "./components/TopBar";
 import { UserLookupProvider } from "./components/UserLookupProvider";
+import { AdminAccessGate } from "./components/AdminAccessGate";
 import { LoadingPane } from "./components/Status";
 import { HomeRedirect } from "./views/HomeRedirect";
 import { FeatureFlagsProvider, useFeatureFlag } from "./featureFlags";
@@ -187,7 +188,9 @@ function App() {
       <FeatureFlagsProvider>
         <HashRouter>
           <UserLookupProvider>
-            <AppShell />
+            <AdminAccessGate>
+              <AppShell />
+            </AdminAccessGate>
           </UserLookupProvider>
         </HashRouter>
       </FeatureFlagsProvider>
