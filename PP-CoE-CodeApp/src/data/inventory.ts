@@ -252,7 +252,13 @@ function __sleep(ms: number): Promise<void> {
  *  when there *is* a duplicate; if the backend is well-behaved it's a
  *  no-op. `runQueryAllPages` has the same dedup for cross-page
  *  overlap; doing it here too means every `runQuery` caller gets the
- *  same guarantee without having to remember. */
+ *  same guarantee without having to remember.
+ *
+ *  **Aggregate rows pass through unchanged.** `summarize` results
+ *  (count-by, etc.) carry no `.name` field, so anything with an empty
+ *  `.name` is left in place — never deduped, never dropped. Skipping
+ *  this exception silently dropped every summarize row and broke
+ *  dashboards, `runAggregateCount`, and the PDE Landscape rollup. */
 async function __invokeQueryOnce(
   body: ResourceQueryRequest
 ): Promise<RunQueryResult> {
@@ -265,16 +271,25 @@ async function __invokeQueryOnce(
       return { ok: false, error: formatError(result.error) };
     }
     const rawItems = result.data?.data ?? [];
-    // Dedup by `name` (the resource GUID). First-seen wins; preserves
-    // server-side ordering since `Map` retains insertion order.
-    const byId = new Map<string, ResourceItem>();
+    // Dedup by `name` (the resource GUID), but pass nameless rows
+    // (summarize aggregates) through untouched. First-seen wins;
+    // preserves server-side ordering since arrays + Set keep insertion
+    // order.
+    const seen = new Set<string>();
+    const out: ResourceItem[] = [];
+    let droppedAny = false;
     for (const item of rawItems) {
-      const key = item.name ?? "";
-      if (!key) continue;
-      if (!byId.has(key)) byId.set(key, item);
+      const key = item.name;
+      if (key) {
+        if (seen.has(key)) {
+          droppedAny = true;
+          continue;
+        }
+        seen.add(key);
+      }
+      out.push(item);
     }
-    const items =
-      byId.size === rawItems.length ? rawItems : Array.from(byId.values());
+    const items = droppedAny ? out : rawItems;
     return {
       ok: true,
       data: {
@@ -349,20 +364,33 @@ async function runQueryAllPages(
     previousToken = skipToken;
     skipToken = res.data.skipToken;
   }
-  // Second-line defense: dedupe by `name` (which is the resource id in
-  // the Admin V2 schema). Cheap O(n) pass; only re-allocates when there
+  // Second-line defense: dedupe by `name` (the resource id in the
+  // Admin V2 schema). Cheap O(n) pass; only re-allocates when there
   // *is* a duplicate to remove. Protects all `list*` callers uniformly
   // from any future pagination weirdness — if the backend behaves
   // correctly, this is a no-op.
-  const byId = new Map<string, ResourceItem>();
+  //
+  // Aggregate rows (`summarize` output) carry no `.name`, so anything
+  // nameless passes through. Without this exception every summarize
+  // row would be dropped and rollup callers (`runAggregateCount`,
+  // PDE counts, dashboard tiles) would silently return empty.
+  const seen = new Set<string>();
+  const dedup: ResourceItem[] = [];
+  let droppedAny = false;
   for (const item of all) {
-    const key = item.name ?? "";
-    if (!key) continue;
-    if (!byId.has(key)) byId.set(key, item);
+    const key = item.name;
+    if (key) {
+      if (seen.has(key)) {
+        droppedAny = true;
+        continue;
+      }
+      seen.add(key);
+    }
+    dedup.push(item);
   }
   return {
     ok: true,
-    data: byId.size === all.length ? all : Array.from(byId.values()),
+    data: droppedAny ? dedup : all,
   };
 }
 
