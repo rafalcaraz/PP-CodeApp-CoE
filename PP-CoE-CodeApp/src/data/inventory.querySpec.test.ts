@@ -315,7 +315,7 @@ describe("buildClausesFromSpec — ordering", () => {
   });
 
   it("omits orderby entirely when orderField is blank", () => {
-    const clauses = buildClausesFromSpec(spec({ orderField: "  " })) as Array<
+    const clauses = buildClausesFromSpec(spec({ orderField: "  " })) as unknown as Array<
       Record<string, unknown>
     >;
     expect(clauses.find((c) => c.$type === "orderby")).toBeUndefined();
@@ -327,7 +327,7 @@ describe("buildClausesFromSpec — limit semantics", () => {
     // This is load-bearing behavior: emitting take() inside the query
     // would cap totalRecords to spec.limit, breaking the "Load more"
     // pagination UI. The comment in buildClausesFromSpec spells this out.
-    const clauses = buildClausesFromSpec(spec({ limit: 50 })) as Array<
+    const clauses = buildClausesFromSpec(spec({ limit: 50 })) as unknown as Array<
       Record<string, unknown>
     >;
     expect(clauses.find((c) => c.$type === "take")).toBeUndefined();

@@ -11,85 +11,34 @@ import { TopBar } from "./components/TopBar";
 import { UserLookupProvider } from "./components/UserLookupProvider";
 import { AdminAccessGate } from "./components/AdminAccessGate";
 import { LoadingPane } from "./components/Status";
-import { HomeRedirect } from "./views/HomeRedirect";
+import { HomeRedirect } from "./app/HomeRedirect";
 import { FeatureFlagsProvider, useFeatureFlag } from "./featureFlags";
 
 // ---------------------------------------------------------------------------
-// Route-level code splitting.
+// Feature-slice routing.
 //
-// Every page is loaded lazily so the initial bundle only contains the shell
-// (Fluent provider, side nav, top bar, router, redirect logic). Each route
-// becomes its own chunk that Vite/Rollup downloads on demand the first time
-// the user navigates to it. The lazy chunks themselves are then cached by
-// the browser, so subsequent visits are instant.
+// Each feature exports a `<feature>Routes()` function from its own
+// `routes.tsx` that returns the `<Route>` elements for that feature
+// (lazy-loaded at the feature boundary). Adding a new feature now means
+// creating one folder + adding one import + one spread here — no central
+// registry to corrupt.
 //
 // HomeRedirect stays eager — it's tiny and is the landing route, so lazy
 // loading would add a Suspense fallback flash on cold boot for no win.
 // ---------------------------------------------------------------------------
-const EnvironmentGroupsList = lazy(() =>
-  import("./views/EnvironmentGroupsList").then((m) => ({ default: m.EnvironmentGroupsList }))
-);
-const EnvironmentGroupDetail = lazy(() =>
-  import("./views/EnvironmentGroupDetail").then((m) => ({ default: m.EnvironmentGroupDetail }))
-);
-const EnvironmentsList = lazy(() =>
-  import("./views/EnvironmentsList").then((m) => ({ default: m.EnvironmentsList }))
-);
-const EnvironmentDetail = lazy(() =>
-  import("./views/EnvironmentDetail").then((m) => ({ default: m.EnvironmentDetail }))
-);
-const PdeLandscape = lazy(() =>
-  import("./views/PdeLandscape").then((m) => ({ default: m.PdeLandscape }))
-);
-const AppsList = lazy(() =>
-  import("./views/AppsList").then((m) => ({ default: m.AppsList }))
-);
-const AppDetail = lazy(() =>
-  import("./views/AppDetail").then((m) => ({ default: m.AppDetail }))
-);
-const FlowsList = lazy(() =>
-  import("./views/FlowsList").then((m) => ({ default: m.FlowsList }))
-);
-const FlowDetail = lazy(() =>
-  import("./views/FlowDetail").then((m) => ({ default: m.FlowDetail }))
-);
-const AgentsList = lazy(() =>
-  import("./features/agents/AgentsList").then((m) => ({ default: m.AgentsList }))
-);
-const AgentDetail = lazy(() =>
-  import("./features/agents/AgentDetail").then((m) => ({ default: m.AgentDetail }))
-);
-const QueriesView = lazy(() =>
-  import("./views/QueriesView").then((m) => ({ default: m.QueriesView }))
-);
-const DashboardsList = lazy(() =>
-  import("./views/DashboardsList").then((m) => ({ default: m.DashboardsList }))
-);
-const DashboardDetail = lazy(() =>
-  import("./views/DashboardDetail").then((m) => ({ default: m.DashboardDetail }))
-);
+import { agentsRoutes } from "./features/agents";
+import { appsRoutes } from "./features/apps";
+import { flowsRoutes } from "./features/flows";
+import { environmentsRoutes } from "./features/environments";
+import { environmentGroupsRoutes } from "./features/environment-groups";
+import { dashboardsRoutes } from "./features/dashboards";
+import { zonesRoutes } from "./features/zones";
+import { securityRoutes } from "./features/security";
+import { queriesRoutes } from "./features/queries";
+import { settingsRoutes } from "./features/settings";
+
 const CopilotChatLauncher = lazy(() =>
   import("./components/CopilotChat").then((m) => ({ default: m.CopilotChatLauncher }))
-);
-const SettingsView = lazy(() =>
-  import("./views/SettingsView").then((m) => ({ default: m.SettingsView }))
-);
-const Comparator = lazy(() =>
-  import("./views/Comparator").then((m) => ({ default: m.Comparator }))
-);
-const Impact = lazy(() =>
-  import("./views/Impact").then((m) => ({ default: m.Impact }))
-);
-const ZonesView = lazy(() =>
-  import("./views/ZonesView").then((m) => ({ default: m.ZonesView }))
-);
-const ZoneDetailView = lazy(() =>
-  import("./views/ZoneDetailView").then((m) => ({ default: m.ZoneDetailView }))
-);
-const StandardCustomGroupDetailView = lazy(() =>
-  import("./views/StandardCustomGroupDetailView").then((m) => ({
-    default: m.StandardCustomGroupDetailView,
-  }))
 );
 
 const useStyles = makeStyles({
@@ -127,34 +76,17 @@ function AppShell() {
             <Routes>
               <Route path="/" element={<HomeRedirect />} />
               <Route path="/home" element={<HomeRedirect />} />
-              <Route path="/dashboards" element={<DashboardsList />} />
-              <Route path="/dashboards/:dashboardId" element={<DashboardDetail />} />
-              <Route path="/environment-groups" element={<EnvironmentGroupsList />} />
-              <Route
-                path="/environment-groups/:groupId"
-                element={<EnvironmentGroupDetail />}
-              />
-              <Route path="/environments" element={<EnvironmentsList />} />
-              <Route path="/environments/:envId" element={<EnvironmentDetail />} />
-              <Route path="/pde-landscape" element={<PdeLandscape />} />
-              <Route path="/apps" element={<AppsList />} />
-              <Route path="/apps/:appId" element={<AppDetail />} />
-              <Route path="/flows" element={<FlowsList />} />
-              <Route path="/flows/:flowId" element={<FlowDetail />} />
-              <Route path="/agents" element={<AgentsList />} />
-              <Route path="/agents/:agentId" element={<AgentDetail />} />
-              <Route path="/queries" element={<QueriesView />} />
-              <Route path="/settings" element={<SettingsView />} />
-              <Route path="/security/dlp-comparator" element={<Comparator />} />
-              <Route path="/security/comparator" element={<Comparator />} />
-              <Route path="/security/dlp-impact" element={<Impact />} />
-              <Route path="/security/impact" element={<Impact />} />
-              <Route path="/zones" element={<ZonesView />} />
-              <Route path="/zones/:zoneId" element={<ZoneDetailView />} />
-              <Route
-                path="/zones/custom-groups/:groupId"
-                element={<StandardCustomGroupDetailView />}
-              />
+              {/* Feature routes — see src/features/<name>/routes.tsx */}
+              {dashboardsRoutes()}
+              {environmentGroupsRoutes()}
+              {environmentsRoutes()}
+              {appsRoutes()}
+              {flowsRoutes()}
+              {agentsRoutes()}
+              {queriesRoutes()}
+              {settingsRoutes()}
+              {securityRoutes()}
+              {zonesRoutes()}
               <Route path="*" element={<HomeRedirect />} />
             </Routes>
           </Suspense>
