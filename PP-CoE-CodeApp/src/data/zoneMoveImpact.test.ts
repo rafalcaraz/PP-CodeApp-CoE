@@ -460,3 +460,286 @@ describe("buildZoneMoveImpactResult", () => {
     );
   });
 });
+
+// ---------------------------------------------------------------------------
+// Operation-level extraction (Phase 2)
+// ---------------------------------------------------------------------------
+
+describe("extractUsedConnectors – operationsUsed", () => {
+  it("populates operationsUsed from powerPlatformConnectors.operations", () => {
+    const item = {
+      name: "flow-1",
+      type: "microsoft.powerautomate/cloudflows",
+      properties: {
+        displayName: "My Flow",
+        environmentId: "env-A",
+        powerPlatformConnectors: [
+          {
+            connectorId: "/providers/Microsoft.PowerApps/apis/shared_sql",
+            operations: [
+              { operationId: "GetItems" },
+              { operationId: "CreateRecord" },
+            ],
+          },
+        ],
+      },
+    } as unknown as ResourceItem;
+    const used = extractUsedConnectors([item]);
+    expect(used).toHaveLength(1);
+    expect(used[0].operationsUsed).toEqual(["CreateRecord", "GetItems"]);
+  });
+
+  it("returns empty operationsUsed for app-builder apps (no operations)", () => {
+    const item = appBuilderApp({
+      id: "app-1",
+      displayName: "Builder App",
+      connectorIds: ["/providers/Microsoft.PowerApps/apis/shared_sql"],
+    });
+    const used = extractUsedConnectors([item]);
+    expect(used).toHaveLength(1);
+    expect(used[0].operationsUsed).toEqual([]);
+  });
+
+  it("merges operations from multiple resources on same connector", () => {
+    const item1 = {
+      name: "flow-1",
+      type: "microsoft.powerautomate/cloudflows",
+      properties: {
+        displayName: "Flow 1",
+        environmentId: "env-A",
+        powerPlatformConnectors: [
+          {
+            connectorId: "shared_sql",
+            operations: [{ operationId: "GetItems" }],
+          },
+        ],
+      },
+    } as unknown as ResourceItem;
+    const item2 = {
+      name: "flow-2",
+      type: "microsoft.powerautomate/cloudflows",
+      properties: {
+        displayName: "Flow 2",
+        environmentId: "env-A",
+        powerPlatformConnectors: [
+          {
+            connectorId: "shared_sql",
+            operations: [
+              { operationId: "DeleteItem" },
+              { operationId: "GetItems" },
+            ],
+          },
+        ],
+      },
+    } as unknown as ResourceItem;
+    const used = extractUsedConnectors([item1, item2]);
+    expect(used).toHaveLength(1);
+    expect(used[0].operationsUsed).toEqual(["DeleteItem", "GetItems"]);
+    expect(used[0].resources).toHaveLength(2);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Action-level zone-move classification (Phase 2)
+// ---------------------------------------------------------------------------
+
+describe("buildZoneMoveImpactResult – action-restricted", () => {
+  function snapshotWithActions(entries: {
+    rawId: string;
+    mode: "AllAllowed" | "SomeAllowed";
+    actions?: string[];
+  }[]): AcpSnapshot {
+    return {
+      configured: true,
+      acpOnly: true,
+      allowed: entries.map((e) => {
+        const idx = e.rawId.lastIndexOf("/");
+        const slug = (idx >= 0 ? e.rawId.substring(idx + 1) : e.rawId).toLowerCase();
+        return {
+          id: slug,
+          rawId: e.rawId,
+          name: slug,
+          allowedActionsMode: e.mode,
+          allowedActions: e.actions ?? [],
+          allowedConnectionTypesMode: "AllAllowed" as const,
+        };
+      }),
+    };
+  }
+
+  it("classifies connector as action-restricted when SomeAllowed + disallowed ops used", () => {
+    const used = [
+      {
+        slug: "sql",
+        displayName: "SQL Server",
+        publishedForms: ["shared_sql"],
+        resources: [
+          {
+            id: "flow-1",
+            type: "microsoft.powerautomate/cloudflows",
+            displayName: "Flow 1",
+            environmentId: "env-A",
+            environmentName: "Dev",
+            ownerId: "user-1",
+            ownerDisplayName: "User",
+            detailHref: "",
+          },
+        ],
+        operationsUsed: ["GetItems", "DeleteItem", "CreateRecord"],
+      },
+    ];
+    const snap = snapshotWithActions([
+      {
+        rawId: "/providers/Microsoft.PowerApps/apis/shared_sql",
+        mode: "SomeAllowed",
+        actions: ["GetItems", "CreateRecord"],
+      },
+    ]);
+    const result = buildZoneMoveImpactResult({
+      used,
+      totalResourcesScanned: 5,
+      snapshot: snap,
+      ranAgainst: RAN_AGAINST,
+    });
+    expect(result.atRiskConnectors).toHaveLength(1);
+    expect(result.atRiskConnectors[0].riskLevel).toBe("action-restricted");
+    expect(result.atRiskConnectors[0].restrictedOperations).toEqual(["DeleteItem"]);
+  });
+
+  it("does not flag connector when all used operations are allowed", () => {
+    const used = [
+      {
+        slug: "sql",
+        displayName: "SQL Server",
+        publishedForms: ["shared_sql"],
+        resources: [
+          {
+            id: "flow-1",
+            type: "microsoft.powerautomate/cloudflows",
+            displayName: "Flow 1",
+            environmentId: "env-A",
+            environmentName: "Dev",
+            ownerId: "user-1",
+            ownerDisplayName: "User",
+            detailHref: "",
+          },
+        ],
+        operationsUsed: ["GetItems"],
+      },
+    ];
+    const snap = snapshotWithActions([
+      {
+        rawId: "/providers/Microsoft.PowerApps/apis/shared_sql",
+        mode: "SomeAllowed",
+        actions: ["GetItems", "CreateRecord"],
+      },
+    ]);
+    const result = buildZoneMoveImpactResult({
+      used,
+      totalResourcesScanned: 5,
+      snapshot: snap,
+      ranAgainst: RAN_AGAINST,
+    });
+    expect(result.atRiskConnectors).toHaveLength(0);
+  });
+
+  it("blocked connectors sort before action-restricted", () => {
+    const used = [
+      {
+        slug: "sql",
+        displayName: "SQL Server",
+        publishedForms: ["shared_sql"],
+        resources: [
+          {
+            id: "flow-1",
+            type: "microsoft.powerautomate/cloudflows",
+            displayName: "Flow 1",
+            environmentId: "env-A",
+            environmentName: "Dev",
+            ownerId: "user-1",
+            ownerDisplayName: "User",
+            detailHref: "",
+          },
+        ],
+        operationsUsed: ["GetItems", "DeleteItem"],
+      },
+      {
+        slug: "office365users",
+        displayName: "Office 365 Users",
+        publishedForms: ["shared_office365users"],
+        resources: [
+          {
+            id: "flow-2",
+            type: "microsoft.powerautomate/cloudflows",
+            displayName: "Flow 2",
+            environmentId: "env-A",
+            environmentName: "Dev",
+            ownerId: "user-2",
+            ownerDisplayName: "User 2",
+            detailHref: "",
+          },
+        ],
+        operationsUsed: [],
+      },
+    ];
+    // Allow SQL with SomeAllowed, but office365users not on list at all
+    const snap = snapshotWithActions([
+      {
+        rawId: "/providers/Microsoft.PowerApps/apis/shared_sql",
+        mode: "SomeAllowed",
+        actions: ["GetItems"],
+      },
+    ]);
+    const result = buildZoneMoveImpactResult({
+      used,
+      totalResourcesScanned: 10,
+      snapshot: snap,
+      ranAgainst: RAN_AGAINST,
+    });
+    expect(result.atRiskConnectors).toHaveLength(2);
+    expect(result.atRiskConnectors[0].riskLevel).toBe("blocked");
+    expect(result.atRiskConnectors[0].slug).toBe("office365users");
+    expect(result.atRiskConnectors[1].riskLevel).toBe("action-restricted");
+    expect(result.atRiskConnectors[1].slug).toBe("sql");
+    expect(result.atRiskConnectors[1].restrictedOperations).toEqual(["DeleteItem"]);
+  });
+
+  it("skips action-restriction check when operationsUsed is empty (connector-only)", () => {
+    const used = [
+      {
+        slug: "sql",
+        displayName: "SQL Server",
+        publishedForms: ["shared_sql"],
+        resources: [
+          {
+            id: "app-1",
+            type: "microsoft.powerapps/apps",
+            displayName: "Builder App",
+            environmentId: "env-A",
+            environmentName: "Dev",
+            ownerId: "user-1",
+            ownerDisplayName: "User",
+            detailHref: "",
+          },
+        ],
+        operationsUsed: [], // app-builder — no ops
+      },
+    ];
+    const snap = snapshotWithActions([
+      {
+        rawId: "/providers/Microsoft.PowerApps/apis/shared_sql",
+        mode: "SomeAllowed",
+        actions: ["GetItems"],
+      },
+    ]);
+    const result = buildZoneMoveImpactResult({
+      used,
+      totalResourcesScanned: 1,
+      snapshot: snap,
+      ranAgainst: RAN_AGAINST,
+    });
+    // Connector is on the allow-list; we can't tell which ops the app uses,
+    // so it gets a pass (no false positive).
+    expect(result.atRiskConnectors).toHaveLength(0);
+  });
+});

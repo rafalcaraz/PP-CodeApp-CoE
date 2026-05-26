@@ -47,6 +47,7 @@ import {
 import {
   extractAcpSnapshot,
   type AcpSnapshot,
+  type AcpAllowedConnector,
 } from "./acpDiff";
 import { getEnvironmentGroupAcpStatus } from "./dlpPolicies";
 import { connectorIdVariants } from "./dlpImpact";
@@ -122,6 +123,10 @@ export interface UsedConnector {
   publishedForms: string[];
   /** Resources in the source env that use this connector. */
   resources: ImpactedResource[];
+  /** Distinct operation IDs observed across all resources for this
+   *  connector. Sorted alphabetically. Empty for connector-only usage
+   *  (e.g. app-builder apps or Knowledge sources with no operationId). */
+  operationsUsed: string[];
 }
 
 /** Used connector + at-risk classification + the slice of resources to
@@ -134,6 +139,15 @@ export interface AtRiskConnector extends UsedConnector {
   /** Top-N resources for the inline expand; the dialog renders this
    *  and a "+N more" link when `resources.length > topResources.length`. */
   topResources: ImpactedResource[];
+  /** Why this connector is at risk:
+   *  - `"blocked"`: connector is not on the allow-list at all
+   *  - `"action-restricted"`: connector IS allowed but with `SomeAllowed`
+   *    mode and the resource(s) use operations that aren't in the list */
+  riskLevel: "blocked" | "action-restricted";
+  /** When `riskLevel === "action-restricted"`, the specific operations
+   *  used by resources that are NOT in the target ACP's allowed list.
+   *  Empty for `"blocked"` connectors. */
+  restrictedOperations: string[];
 }
 
 export interface ZoneMoveImpactSummary {
@@ -310,14 +324,62 @@ export function readPublishedConnectorIds(item: ResourceItem): string[] {
   return out;
 }
 
+/** Extract operation IDs per connector from a resource item.
+ *  Returns a Map of bareSlug → operationIds found.
+ *  Only `powerPlatformConnectors[].operations[]` carries operation data;
+ *  plain `connectors[]` (app-builder) does not. */
+function readPublishedOperationsForConnector(
+  item: ResourceItem,
+  _publishedSlugs: string[]
+): Map<string, string[]> {
+  const result = new Map<string, string[]>();
+  const props = (item.properties ?? {}) as Record<string, unknown>;
+  const connectors = Array.isArray(props.powerPlatformConnectors)
+    ? props.powerPlatformConnectors
+    : [];
+
+  for (const entry of connectors) {
+    if (!entry || typeof entry !== "object") continue;
+    const e = entry as Record<string, unknown>;
+    const rawId =
+      typeof e.connectorId === "string"
+        ? e.connectorId
+        : typeof e.id === "string"
+        ? e.id
+        : "";
+    const slug = lastPathSegment(rawId);
+    const bare = toBareForm(slug);
+    if (!bare) continue;
+
+    const ops = Array.isArray(e.operations) ? e.operations : [];
+    const opIds: string[] = [];
+    for (const op of ops) {
+      if (!op || typeof op !== "object") continue;
+      const o = op as Record<string, unknown>;
+      const opId = typeof o.operationId === "string" ? o.operationId : "";
+      if (opId) opIds.push(opId);
+    }
+    if (opIds.length > 0) {
+      const existing = result.get(bare) ?? [];
+      existing.push(...opIds);
+      result.set(bare, existing);
+    }
+  }
+  return result;
+}
+
 /** Walk every resource item and group by bare connector slug. The
  *  result map's key is the bare form; `publishedForms` retains the raw
  *  forms (deduped) for debugging the rare "did this flow publish
- *  `shared_sql` or just `sql`?" question. */
+ *  `shared_sql` or just `sql`?" question. Also tracks operations. */
 export function extractUsedConnectors(items: ResourceItem[]): UsedConnector[] {
   const byBareSlug = new Map<
     string,
-    { publishedForms: Set<string>; resources: Map<string, ImpactedResource> }
+    {
+      publishedForms: Set<string>;
+      resources: Map<string, ImpactedResource>;
+      operations: Set<string>;
+    }
   >();
 
   for (const item of items) {
@@ -336,6 +398,7 @@ export function extractUsedConnectors(items: ResourceItem[]): UsedConnector[] {
         bucket = {
           publishedForms: new Set<string>(),
           resources: new Map<string, ImpactedResource>(),
+          operations: new Set<string>(),
         };
         byBareSlug.set(bare, bucket);
       }
@@ -351,6 +414,14 @@ export function extractUsedConnectors(items: ResourceItem[]): UsedConnector[] {
         seenBareForThisResource.add(bare);
       }
     }
+    // Collect operations for this connector from the item.
+    const ops = readPublishedOperationsForConnector(item, raw);
+    for (const [bareSlug, opIds] of ops) {
+      const bucket = byBareSlug.get(bareSlug);
+      if (bucket) {
+        for (const opId of opIds) bucket.operations.add(opId);
+      }
+    }
   }
 
   const out: UsedConnector[] = [];
@@ -363,6 +434,7 @@ export function extractUsedConnectors(items: ResourceItem[]): UsedConnector[] {
       displayName: friendlyConnectorName(bare) || bare,
       publishedForms: Array.from(bucket.publishedForms).sort(),
       resources,
+      operationsUsed: Array.from(bucket.operations).sort(),
     });
   }
   out.sort((a, b) => a.displayName.localeCompare(b.displayName));
@@ -429,15 +501,57 @@ export function buildZoneMoveImpactResult(args: {
   let atRiskConnectors: AtRiskConnector[] = [];
   if (targetAcpState !== "not-configured") {
     const allowSet = bareFormAllowSet(snapshot);
-    const atRisk = used.filter((c) => !isConnectorAllowed(c.slug, allowSet));
-    atRiskConnectors = atRisk.map((c) => ({
-      ...c,
-      atRisk: true as const,
-      topResources: c.resources.slice(0, ZONE_MOVE_IMPACT_TOP_N),
-    }));
+    // Build a lookup for ACP entries so we can check action-level rules.
+    const acpEntryByBare = new Map<string, AcpAllowedConnector>();
+    for (const entry of snapshot.allowed) {
+      const bare = toBareForm(entry.id);
+      if (bare) acpEntryByBare.set(bare, entry);
+    }
+
+    for (const c of used) {
+      if (!isConnectorAllowed(c.slug, allowSet)) {
+        // Connector not on allow-list at all — fully blocked.
+        atRiskConnectors.push({
+          ...c,
+          atRisk: true as const,
+          riskLevel: "blocked",
+          restrictedOperations: [],
+          topResources: c.resources.slice(0, ZONE_MOVE_IMPACT_TOP_N),
+        });
+      } else {
+        // Connector IS on the allow-list. Check for action-level restrictions.
+        const acpEntry = acpEntryByBare.get(c.slug);
+        if (
+          acpEntry &&
+          acpEntry.allowedActionsMode === "SomeAllowed" &&
+          c.operationsUsed.length > 0
+        ) {
+          const allowedOps = new Set(
+            acpEntry.allowedActions.map((a) => a.toLowerCase())
+          );
+          const restricted = c.operationsUsed.filter(
+            (op) => !allowedOps.has(op.toLowerCase())
+          );
+          if (restricted.length > 0) {
+            atRiskConnectors.push({
+              ...c,
+              atRisk: true as const,
+              riskLevel: "action-restricted",
+              restrictedOperations: restricted.sort(),
+              topResources: c.resources.slice(0, ZONE_MOVE_IMPACT_TOP_N),
+            });
+          }
+        }
+      }
+    }
+
     // At-risk first; within at-risk, sort by impacted-resource count
     // desc so the most-affected connector leads, then alphabetize.
+    // Blocked connectors sort before action-restricted ones.
     atRiskConnectors.sort((a, b) => {
+      if (a.riskLevel !== b.riskLevel) {
+        return a.riskLevel === "blocked" ? -1 : 1;
+      }
       if (a.resources.length !== b.resources.length) {
         return b.resources.length - a.resources.length;
       }

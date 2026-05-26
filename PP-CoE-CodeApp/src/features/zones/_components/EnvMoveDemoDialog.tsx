@@ -494,6 +494,16 @@ function ConnectorImpactReady({
                 <WarningRegular className={styles.iconWarn} aria-hidden />
                 <span className={styles.atRiskHeaderName}>
                   {c.displayName}
+                  {c.riskLevel === "action-restricted" && (
+                    <Badge
+                      appearance="tint"
+                      color="warning"
+                      size="small"
+                      style={{ marginLeft: "6px" }}
+                    >
+                      action-restricted
+                    </Badge>
+                  )}
                 </span>
                 <span className={styles.atRiskHeaderCount}>
                   {c.resources.length} resource
@@ -502,6 +512,17 @@ function ConnectorImpactReady({
               </div>
             </AccordionHeader>
             <AccordionPanel>
+              {c.riskLevel === "action-restricted" &&
+                c.restrictedOperations.length > 0 && (
+                  <Text size={200} style={{ display: "block", marginBottom: "4px" }}>
+                    Disallowed operations:{" "}
+                    {c.restrictedOperations.map((op) => (
+                      <code key={op} style={{ marginRight: "4px" }}>
+                        {op}
+                      </code>
+                    ))}
+                  </Text>
+                )}
               <ul className={styles.resourceList}>
                 {c.topResources.map((r) => (
                   <li key={`${r.type}::${r.id}`}>
