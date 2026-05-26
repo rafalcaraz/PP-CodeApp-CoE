@@ -87,6 +87,36 @@ npm run e2e
 (Different `E2E_BASE_URL` values share one storage state file — re-run
 `e2e:auth` whenever you switch targets.)
 
+### ⚠️ Known limitation — Power Apps player URL + iframe
+
+When `E2E_BASE_URL` is set to the Power Apps player URL (i.e.
+`https://apps.powerapps.com/play/e/<env>/a/local?_localAppUrl=http://localhost:5173/...`),
+the player wraps your dev server in an iframe. **The auth flow works**
+(storage state captures correctly), **but the existing smoke tests
+don't navigate cleanly** because:
+
+- `page.goto("/#/agents")` resolves against the player URL's host, not
+  the iframe. The hash fragment is set on the wrapper, not passed into
+  the iframe app.
+- Page content (SideNav, headings, rows) lives inside the iframe, so
+  `page.getByText(...)` on the top-level page misses them.
+
+**Fixes are tracked as follow-up work:** rewrite the smoke tests +
+`scripts/capture-fixtures.mjs` + `scripts/update-readme-screenshots.mjs`
+to scope queries via `page.frameLocator("iframe").locator(...)` when
+running against a player URL. Alternatively, point `E2E_BASE_URL` at a
+**deployed** Power Apps Code App URL (not the local-dev player wrapper)
+— deployed apps don't use the iframe wrapper and the existing tests
+work as-is.
+
+For now:
+- `npm run e2e:anon` works fine (no auth needed, runs against localhost
+  directly with no iframe)
+- `npm run e2e:auth` works fine — saves storage state from the player
+  flow
+- The `smoke` / `visual` projects + capture / screenshot scripts need
+  the iframe-aware rewrite OR a deployed-app URL to be useful
+
 ## Smoke vs visual
 
 | Project       | Auth needed? | What it does                                                      |
