@@ -42,6 +42,28 @@ export interface StandardCustomGroup {
    * backwards compatibility.
    */
   envIds: string[];
+  /**
+   * Optional link to a DLP policy (the policy's GUID — `PolicyV2.name`).
+   * Read-only association in v3: the link is local to this app and is
+   * NOT pushed to PPAC. Surfaced as a "drift" indicator on the group
+   * detail page so admins can spot envs that should be in the policy's
+   * scope but aren't (and vice versa). A future "Sync to PPAC" action
+   * will optionally mutate `PolicyV2.environments[]` to match the
+   * group's `envIds`.
+   *
+   * Why one-per-group: keeps the mental model simple (this group is
+   * governed by this DLP). Many-to-many is reserved for a future PR
+   * once we see a real need.
+   */
+  dlpPolicyId?: string;
+  /**
+   * Cached display name of the linked DLP policy, captured at link
+   * time. Lets the card render a label even before `getDlpPolicy`
+   * resolves — and gives a fallback if the policy is later deleted in
+   * PPAC (so we can show "Linked: <name> (no longer exists)" rather
+   * than a bare GUID).
+   */
+  dlpPolicyDisplayName?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -71,8 +93,9 @@ function readStandardGroups(): StandardCustomGroup[] {
     if (!raw) return [];
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
-    // Backwards compat: v2 groups have no `envIds`. Default to empty
-    // array so all downstream code can assume the field exists.
+    // Backwards compat: v2 groups have no `envIds`. v3a groups have no
+    // `dlpPolicyId` / `dlpPolicyDisplayName`. Default missing fields so
+    // all downstream code can assume the shape is complete.
     return (parsed as Partial<StandardCustomGroup>[]).map((g) => ({
       id: g.id ?? "",
       displayName: g.displayName ?? "",
@@ -80,6 +103,14 @@ function readStandardGroups(): StandardCustomGroup[] {
       color: g.color ?? "#525252",
       icon: g.icon ?? "📦",
       envIds: Array.isArray(g.envIds) ? g.envIds : [],
+      dlpPolicyId:
+        typeof g.dlpPolicyId === "string" && g.dlpPolicyId
+          ? g.dlpPolicyId
+          : undefined,
+      dlpPolicyDisplayName:
+        typeof g.dlpPolicyDisplayName === "string" && g.dlpPolicyDisplayName
+          ? g.dlpPolicyDisplayName
+          : undefined,
       createdAt: g.createdAt ?? nowIso(),
       updatedAt: g.updatedAt ?? nowIso(),
     }));
@@ -310,5 +341,59 @@ export function pruneDeletedEnvs(knownEnvIds: Set<string>): void {
     return { ...g, envIds: kept, updatedAt: nowIso() };
   });
   if (changed) writeStandardGroups(next);
+}
+
+// ---------------------------------------------------------------------------
+// DLP policy linkage
+// ---------------------------------------------------------------------------
+
+/**
+ * Link (or unlink) a DLP policy to a Standard custom group. Passing
+ * `null` clears the link. Passing a `{ id, displayName }` pair sets it
+ * (and overwrites any existing link — one policy per group).
+ *
+ * **Read-only association.** This does NOT touch PPAC. Nothing about
+ * the DLP policy itself changes — we only persist locally that the
+ * user has chosen to associate the group with the policy, so the
+ * detail page can render a coverage / drift summary and (in a future
+ * PR) offer a "Sync to PPAC" action.
+ *
+ * **`displayName` cache rationale.** Stored alongside the id so the UI
+ * can render a label without first round-tripping `GetPolicyV2`, and
+ * so a deleted-in-PPAC policy still shows something useful instead of
+ * a bare GUID. The cache can drift if the policy is renamed; that's
+ * acceptable for this read-only association and is reconciled the
+ * next time the user re-picks the policy.
+ *
+ * No-op (returns null) if the group doesn't exist. Returns the
+ * updated group on success.
+ */
+export function setStandardGroupDlpPolicy(
+  groupId: string,
+  policy: { id: string; displayName?: string } | null,
+): StandardCustomGroup | null {
+  const items = readStandardGroups();
+  const idx = items.findIndex((g) => g.id === groupId);
+  if (idx < 0) return null;
+  const current = items[idx];
+  const next: StandardCustomGroup = policy
+    ? {
+        ...current,
+        dlpPolicyId: policy.id,
+        dlpPolicyDisplayName:
+          policy.displayName && policy.displayName.trim()
+            ? policy.displayName.trim()
+            : undefined,
+        updatedAt: nowIso(),
+      }
+    : {
+        ...current,
+        dlpPolicyId: undefined,
+        dlpPolicyDisplayName: undefined,
+        updatedAt: nowIso(),
+      };
+  items[idx] = next;
+  writeStandardGroups(items);
+  return next;
 }
 

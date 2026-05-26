@@ -52,6 +52,7 @@ import {
   getStandardGroup,
   pruneDeletedEnvs,
   removeEnvFromStandardGroup,
+  setStandardGroupDlpPolicy,
   updateStandardGroup,
   type StandardCustomGroup,
 } from "../../data/standardGroups";
@@ -59,6 +60,8 @@ import { useZones } from "../../hooks/useZones";
 import { ErrorPane, LoadingPane } from "../../components/Status";
 import { StandardGroupEditorDialog } from "./_components/StandardGroupEditorDialog";
 import { AvailableEnvsPanel } from "./_components/AvailableEnvsPanel";
+import { LinkedDlpPolicyCard } from "./_components/LinkedDlpPolicyCard";
+import { DlpPolicyPickerDialog } from "./_components/DlpPolicyPickerDialog";
 
 const useStyles = makeStyles({
   root: {
@@ -190,6 +193,7 @@ export function StandardCustomGroupDetailView() {
   >({ kind: "loading" });
   const [editorOpen, setEditorOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [dlpPickerOpen, setDlpPickerOpen] = useState(false);
   const [panelSearch, setPanelSearch] = useState("");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -282,6 +286,15 @@ export function StandardCustomGroupDetailView() {
     navigate("/zones");
   };
 
+  const handleDlpSelect = (policy: { id: string; displayName: string }) => {
+    setStandardGroupDlpPolicy(group.id, policy);
+    setDlpPickerOpen(false);
+  };
+
+  const handleDlpUnlink = () => {
+    setStandardGroupDlpPolicy(group.id, null);
+  };
+
   return (
     <div className={styles.root}>
       <Breadcrumb>
@@ -354,6 +367,13 @@ export function StandardCustomGroupDetailView() {
 
       <div className={styles.body}>
         <div className={styles.main}>
+          <LinkedDlpPolicyCard
+            group={group}
+            envsInGroup={envsInGroup}
+            allEnvs={envsState.rows}
+            onLinkClick={() => setDlpPickerOpen(true)}
+            onUnlink={handleDlpUnlink}
+          />
           <div className={styles.envListCard}>
             <Caption1>Environments in this group</Caption1>
             {envsInGroup.length === 0 ? (
@@ -406,6 +426,13 @@ export function StandardCustomGroupDetailView() {
         group={group}
         onDismiss={() => setEditorOpen(false)}
         onSubmit={(input) => handleEditSubmit(input)}
+      />
+
+      <DlpPolicyPickerDialog
+        open={dlpPickerOpen}
+        currentPolicyId={group.dlpPolicyId}
+        onDismiss={() => setDlpPickerOpen(false)}
+        onSelect={handleDlpSelect}
       />
 
       <Dialog
