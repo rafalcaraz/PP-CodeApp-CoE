@@ -38,9 +38,6 @@ const STORAGE_STATE = path.join(__dirname, "tests/e2e/.auth/storageState.json");
  */
 export default defineConfig({
   testDir: "./tests/e2e",
-  // Ignore the auth setup helper when running tests directly — it's
-  // only invoked via the `setup` project / the `e2e:auth` script.
-  testIgnore: "**/auth.setup.ts",
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
@@ -86,7 +83,10 @@ export default defineConfig({
       testMatch: /.*\.anon\.spec\.ts/,
       use: { ...devices["Desktop Chrome"] },
     },
-    // Auth-required smoke tests.
+    // Auth-required smoke tests. Reuses the storage state baked by
+    // `npm run e2e:auth`. We intentionally do NOT depend on the setup
+    // project here — that would force a fresh login on every run.
+    // Run `npm run e2e:auth` explicitly when storage state expires.
     {
       name: "smoke",
       testDir: "./tests/e2e/smoke",
@@ -96,7 +96,6 @@ export default defineConfig({
         ...devices["Desktop Chrome"],
         storageState: STORAGE_STATE,
       },
-      dependencies: ["setup"],
     },
     // Visual regression tests — always auth-required.
     {
@@ -109,7 +108,6 @@ export default defineConfig({
         viewport: { width: 1440, height: 900 },
         storageState: STORAGE_STATE,
       },
-      dependencies: ["setup"],
     },
   ],
 });
