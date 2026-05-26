@@ -51,11 +51,26 @@ export default defineConfig({
     baseURL: process.env.E2E_BASE_URL ?? "http://localhost:5173",
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
-    // 5s default click timeout is plenty for the local dev server. We
-    // crank the overall page-action timeout higher because the first
-    // QueryResources call against a 700+ env tenant can be slow.
     actionTimeout: 30_000,
     navigationTimeout: 60_000,
+    // When pointed at the Power Apps player URL, the app lives in an
+    // iframe at localhost:5173 reached from apps.powerapps.com. Two
+    // Chromium-specific concerns we paper over:
+    //   1. The "Access other apps and services on this device"
+    //      permission popup blocks the player from reaching localhost.
+    //      The PNA family of flags disables it.
+    //   2. Cross-origin iframe site isolation prevents the screenshot
+    //      compositor from including the iframe content in
+    //      page.screenshot() output. The site-isolation flags help
+    //      navigation + content queries via frameLocator, though
+    //      visual screenshot capture of in-iframe content is still
+    //      not reliable (see tests/e2e/README.md "Known limitation").
+    launchOptions: {
+      args: [
+        "--disable-features=IsolateOrigins,site-per-process,LocalNetworkAccessChecks,PrivateNetworkAccessRespectPreflightResults,BlockInsecurePrivateNetworkRequests,PrivateNetworkAccessSendPreflights,PrivateNetworkAccessForNavigations,PrivateNetworkAccessForIframes",
+        "--disable-site-isolation-trials",
+      ],
+    },
   },
   // Visual snapshots config — pixel diff threshold tuned for Fluent UI
   // which renders sub-pixel anti-aliasing differently across machines.

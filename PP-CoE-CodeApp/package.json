@@ -17,8 +17,8 @@
     "e2e:visual": "playwright test --project=visual",
     "e2e:update-snapshots": "playwright test --project=visual --update-snapshots",
     "e2e:report": "playwright show-report",
-    "capture:fixtures": "node ../scripts/capture-fixtures.mjs",
-    "screenshots": "node ../scripts/update-readme-screenshots.mjs",
+    "capture:fixtures": "node scripts/capture-fixtures.mjs",
+    "screenshots": "node scripts/update-readme-screenshots.mjs",
     "postinstall": "node ../scripts/fixup-generated-connectors.mjs"
   },
   "dependencies": {

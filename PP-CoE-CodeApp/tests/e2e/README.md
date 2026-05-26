@@ -89,33 +89,49 @@ npm run e2e
 
 ### ⚠️ Known limitation — Power Apps player URL + iframe
 
-When `E2E_BASE_URL` is set to the Power Apps player URL (i.e.
-`https://apps.powerapps.com/play/e/<env>/a/local?_localAppUrl=http://localhost:5173/...`),
-the player wraps your dev server in an iframe. **The auth flow works**
-(storage state captures correctly), **but the existing smoke tests
-don't navigate cleanly** because:
+When `E2E_BASE_URL` is set to the Power Apps **local-dev player URL**
+(i.e. `https://apps.powerapps.com/play/e/<env>/a/local?_localAppUrl=http://localhost:5173/...`),
+the player wraps your **localhost** dev server in a **cross-origin**
+iframe — and that combination defeats Chromium's screenshot compositor
+no matter what flags we set. Visual capture against the local-dev
+player wrapper isn't possible with current Playwright/Chromium.
 
-- `page.goto("/#/agents")` resolves against the player URL's host, not
-  the iframe. The hash fragment is set on the wrapper, not passed into
-  the iframe app.
-- Page content (SideNav, headings, rows) lives inside the iframe, so
-  `page.getByText(...)` on the top-level page misses them.
+**TL;DR — use a deployed app URL when you can.** Both the smoke tests
+and visual regression now work flawlessly against a deployed app URL
+because the deployed iframe is **same-origin** to the player (both
+apps.powerapps.com), so Chromium composes it correctly.
 
-**Fixes are tracked as follow-up work:** rewrite the smoke tests +
-`scripts/capture-fixtures.mjs` + `scripts/update-readme-screenshots.mjs`
-to scope queries via `page.frameLocator("iframe").locator(...)` when
-running against a player URL. Alternatively, point `E2E_BASE_URL` at a
-**deployed** Power Apps Code App URL (not the local-dev player wrapper)
-— deployed apps don't use the iframe wrapper and the existing tests
-work as-is.
+Compatibility matrix:
 
-For now:
-- `npm run e2e:anon` works fine (no auth needed, runs against localhost
-  directly with no iframe)
-- `npm run e2e:auth` works fine — saves storage state from the player
-  flow
-- The `smoke` / `visual` projects + capture / screenshot scripts need
-  the iframe-aware rewrite OR a deployed-app URL to be useful
+| `E2E_BASE_URL` | Auth | Smoke | Visual | Screenshots | Capture |
+|---|---|---|---|---|---|
+| `http://localhost:5173` (raw) | ❌ no auth (AdminAccessGate) | ❌ | ❌ | ❌ | ❌ |
+| Local-dev player wrapper (`.../a/local?_localAppUrl=...`) | ✅ | 🟡 fragile | ❌ cross-origin | ❌ cross-origin | 🟡 only top-level fetches |
+| **Deployed app URL** (`.../app/<id>?tenantId=...`) | ✅ | ✅ | ✅ | ✅ | ✅ |
+
+When running against any apps.powerapps.com URL, tests/scripts are
+iframe-aware: they detect the iframe at runtime and route DOM queries
+through `page.frameLocator("iframe").first()`, and navigate by
+setting the iframe's `window.location.hash` directly.
+
+### Pointing at a deployed app URL
+
+```powershell
+$env:E2E_BASE_URL = "https://apps.powerapps.com/play/e/<env>/app/<appId>?tenantId=<tenant>"
+npm run e2e:auth     # log in once (saves cookies for this URL)
+npm run e2e          # full smoke
+npm run e2e:visual   # visual regression
+npm run screenshots  # docs PNGs
+npm run capture:fixtures  # refresh test fixtures
+```
+
+### Pointing at the local-dev player wrapper
+
+The local-dev player wrapper URL is what `pac code init` produces — it
+looks like `https://apps.powerapps.com/play/e/<env>/a/local?_localAppUrl=http://localhost:5173/&_localConnectionUrl=...`.
+Auth works. Smoke tests *can* work but the player sometimes redirects
+to the maker portal; tests skip with a message when that happens.
+Visual + screenshots + capture do NOT work — see the table above.
 
 ## Smoke vs visual
 
