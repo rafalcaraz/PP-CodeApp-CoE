@@ -76,6 +76,7 @@ and the diff is obvious in code review.
 
 | If you're touching… | Read first |
 |---|---|
+| **Adding or modifying any tests** | `PP-CoE-CodeApp/tests/TESTING.md` (decision tree + patterns) and `PP-CoE-CodeApp/tests/coverage-gaps.md` (what's untested) |
 | Anything that calls `QueryResources` / writes a clause-builder query | `PP-CoE-CodeApp/docs/inventory-schema-samples.md` |
 | Owner / creator / maker user resolution | `PP-CoE-CodeApp/docs/inventory-schema-samples.md#owner--creator-guid-resolution` |
 | Portal-action buttons on detail pages | `PP-CoE-CodeApp/docs/portal-actions.md` |
@@ -84,6 +85,51 @@ and the diff is obvious in code review.
 | The Copilot Studio assistant chat | `PP-CoE-CodeApp/docs/copilot-studio-integration.md` |
 | Anything under `src/generated/` | `PP-CoE-CodeApp/docs/connector-generator-fixup.md` (the generator is auto-healed by `postinstall` — don't hand-edit) |
 | Dashboards / KPI / chart tiles | `PP-CoE-CodeApp/src/features/dashboards/_components/TileView.tsx` is the entry point; chart tiles must stay `source: "builder"`, raw clauses only work with KPI/Table viz |
+| **E2E tests / Playwright / browser automation** | `PP-CoE-CodeApp/tests/e2e/README.md` (auth flow, iframe gotchas, deployed-URL recommendation) |
+| **Capturing fixtures from real connector responses** | `PP-CoE-CodeApp/scripts/anonymize-fixtures.mjs` + the existing fixtures under `PP-CoE-CodeApp/src/test/fixtures/` (anonymize before committing — real tenant data NEVER lands in `src/test/fixtures/`) |
+
+---
+
+## Working efficiently (cost-aware patterns)
+
+These habits keep sessions short and context windows lean. Prior session-history analysis showed sessions routinely hitting 30-40 turns without compaction and large inline pastes dragging through every subsequent turn.
+
+### Tool selection
+
+Use the **built-in** Copilot CLI tools instead of shelling out to PowerShell — they return cleaner, smaller output:
+
+| Goal | ✅ Use this | ❌ Not this |
+|---|---|---|
+| List files matching a pattern | `glob "**/*.ts"` | `Get-ChildItem -Recurse -Include *.ts \| Where-Object ...` |
+| Search file contents | `grep` with a `glob` filter | `Get-Content $f \| Select-String "pattern"` |
+| Read a file | `view` (with `view_range` for large files) | `Get-Content $f` |
+| Inspect a directory | `view` on a folder path | `Get-ChildItem \| Format-Table` |
+
+PowerShell is fine for things only it can do (process management, registry, `Invoke-WebRequest`). For file/text operations, the built-ins are faster, cheaper, and produce output that's easier to parse next turn.
+
+### Big inputs as files, not pastes
+
+If the user shares a large blob (a JSON capture, a log dump, a security report), **suggest saving it to disk first**:
+
+- Anonymized fixtures: `PP-CoE-CodeApp/src/test/fixtures/<name>.json`
+- Raw captures (gitignored): `PP-CoE-CodeApp/docs/fixtures-raw/<name>.json`
+- One-off scratch: `~/.copilot/session-state/<session-id>/files/`
+
+Then reference by path: *"based on `docs/fixtures-raw/foo.json` …"*. Inline pastes get carried through every later turn; file references get read on demand.
+
+### Delegate heavy reading
+
+If you need to understand a 400+ line file (or a cross-module flow) **purely for context** — not to edit — use the `task` tool with `agent_type: explore`. It runs in a separate context and returns only a summary. Examples that should delegate:
+
+- "How is DLP coverage computed end-to-end?"
+- "Trace where AgentRow gets built from the QueryResources envelope"
+- "Find every component that uses `EnvironmentPicker` and how they wire it"
+
+Inline file reads are correct when you intend to edit; delegate when you only need to learn.
+
+### Compact at natural breakpoints
+
+After committing a meaningful chunk of work (a feature, a phase of tests, a refactor pass), suggest the user run `/compact` before continuing. Sessions over ~25 turns without compaction carry a noticeable per-turn cost; mid-session compaction is much cheaper than continuing to drag the full history.
 
 ---
 
@@ -123,6 +169,9 @@ CI runs lint + typecheck + build + tests on every push/PR via
 - Pure functions in `shared/inventory-core/` (clause builders, sentinel helpers, `buildClausesFromSpec`) MUST have unit tests. They are the lowest-level seam — breaks here ripple through every feature.
 - Each feature should have at least one smoke test per view: render with mocked data layer, assert it doesn't throw and renders the expected key elements.
 - Use `vi.mock("../path/to/data")` to mock data calls — do NOT hit the real `QueryResources` connector in tests.
+- For the full testing playbook (decision tree, four test categories, `vi.hoisted` pattern, golden-oracle pattern, common gotchas), see `PP-CoE-CodeApp/tests/TESTING.md`.
+- **Always run `npm run build` before pushing test-heavy changes.** `tsc -b` (project-references build mode, used in CI) is stricter than `npx tsc --noEmit` and catches type errors in test files that `--noEmit` skips (most commonly: `as TargetType` casts that need `as unknown as TargetType`, and spread-with-defaults that produce duplicate-key warnings).
+- E2E (Playwright) tests need a deployed app URL to work reliably — the local-dev player wrapper has cross-origin iframe limitations. See `PP-CoE-CodeApp/tests/e2e/README.md`.
 
 ## What NOT to do
 
