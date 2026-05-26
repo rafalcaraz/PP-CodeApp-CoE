@@ -1434,6 +1434,157 @@ export async function countResourcesByTypeForGroup(
   };
 }
 
+/**
+ * Resource types we report on in roll-ups (zones, env groups, custom
+ * groups). Shared between every "count resources scoped by X" helper so
+ * the stat-grid columns stay consistent across detail pages.
+ *
+ * Note: `AppBuilderApp` is intentionally NOT in this list — the single-
+ * env helper above includes it for historical reasons, but it produces
+ * confusing duplicates in roll-ups (each builder app double-counts with
+ * its underlying canvas/model-driven sibling). Same intentional omission
+ * as `countResourcesByTypeForGroup`.
+ */
+const ROLLUP_RESOURCE_TYPES: ResourceTypeValue[] = [
+  ResourceType.CanvasApp,
+  ResourceType.ModelDrivenApp,
+  ResourceType.CodeApp,
+  ResourceType.CloudFlow,
+  ResourceType.AgentFlow,
+  ResourceType.CopilotStudioAgent,
+];
+
+/** Max env IDs per `in~` clause. GUIDs are ~38 chars after quoting; 50
+ *  keeps total filter length comfortably under the connector URI budget
+ *  while still folding most real zones into a single round-trip. */
+const ENV_ID_CHUNK_SIZE = 50;
+
+function chunkEnvIds(envIds: string[]): string[][] {
+  const out: string[][] = [];
+  for (let i = 0; i < envIds.length; i += ENV_ID_CHUNK_SIZE) {
+    out.push(envIds.slice(i, i + ENV_ID_CHUNK_SIZE));
+  }
+  return out;
+}
+
+/** Build the canonical `where + summarize` clause list used by both env-
+ *  scoped roll-up helpers. Factored out so the test surface is a single
+ *  pure function and the two callers stay in lockstep. */
+export function buildEnvScopedRollupClauses(
+  envIdChunk: string[],
+  groupBy: ("type" | "properties.environmentId")[]
+): Clause[] {
+  const resourceTypes = ROLLUP_RESOURCE_TYPES.map((t) => `'${t}'`);
+  const envValues = envIdChunk.map((id) => `'${id}'`);
+  // `==` vs. `in~` matters because the connector parses single-value
+  // `in~` slightly differently in some tenants. Match the established
+  // single-env helper above for the 1-id case.
+  const envClause =
+    envValues.length === 1
+      ? where("properties.environmentId", "==", envValues)
+      : where("properties.environmentId", "in~", envValues);
+  return [
+    where("type", "in~", resourceTypes),
+    envClause,
+    summarize("count", "resourceCount", groupBy),
+    orderBy({ resourceCount: "desc" }),
+  ];
+}
+
+/**
+ * Roll up resource counts by type across an arbitrary list of environment
+ * IDs. The natural primitive for "Zone reporting" (Zones mix MS env
+ * groups and Standard custom groups — both contribute envs, so a single
+ * `environmentGroupId` join no longer covers it).
+ *
+ * Chunks `envIds` into ~50-per-batch queries to stay under the connector
+ * URI budget on large zones, then merges the per-chunk count rows back
+ * into a single `{ type, count }[]`.
+ */
+export async function countResourcesByTypeForEnvironments(
+  envIds: string[]
+): Promise<DataResult<ResourceCountRow[]>> {
+  if (envIds.length === 0) return { ok: true, data: [] };
+
+  const chunks = chunkEnvIds(envIds);
+  const merged = new Map<string, number>();
+  for (const chunk of chunks) {
+    const clauses = buildEnvScopedRollupClauses(chunk, ["type"]);
+    const res = await runQueryAllPages(clauses);
+    if (!res.ok) return res;
+    for (const item of res.data) {
+      const raw = item as unknown as Record<string, unknown>;
+      const props = (item.properties ?? {}) as Record<string, unknown>;
+      const type = (raw.type as string) ?? (props.type as string) ?? "";
+      if (!type) continue;
+      const countVal = raw.resourceCount ?? props.resourceCount ?? 0;
+      const count =
+        typeof countVal === "number" ? countVal : Number(countVal) || 0;
+      merged.set(type, (merged.get(type) ?? 0) + count);
+    }
+  }
+
+  return {
+    ok: true,
+    data: [...merged.entries()]
+      .map(([type, count]) => ({ type, count }))
+      .sort((a, b) => b.count - a.count),
+  };
+}
+
+export interface EnvResourceCountRow {
+  environmentId: string;
+  type: string;
+  count: number;
+}
+
+/**
+ * Two-dimensional roll-up: count of each resource type, per environment,
+ * across an arbitrary env-ID list. Designed for the Zone Detail lane
+ * headers — one round-trip per chunk lets us derive both per-group
+ * subtotals (sum by group's env IDs) and the zone-wide total without N
+ * separate queries.
+ *
+ * Returned rows are unsorted; consumers bucket by `environmentId` and
+ * apply their own ordering.
+ */
+export async function countResourcesByEnvAndType(
+  envIds: string[]
+): Promise<DataResult<EnvResourceCountRow[]>> {
+  if (envIds.length === 0) return { ok: true, data: [] };
+
+  const chunks = chunkEnvIds(envIds);
+  const out: EnvResourceCountRow[] = [];
+  for (const chunk of chunks) {
+    const clauses = buildEnvScopedRollupClauses(chunk, [
+      "type",
+      "properties.environmentId",
+    ]);
+    const res = await runQueryAllPages(clauses);
+    if (!res.ok) return res;
+    for (const item of res.data) {
+      const raw = item as unknown as Record<string, unknown>;
+      const props = (item.properties ?? {}) as Record<string, unknown>;
+      // `properties.environmentId` is a dotted grouping field — the
+      // connector may project it back at either the top level or
+      // inside `properties`. Read both, tolerantly (same shape rule
+      // we use everywhere else for summarize output).
+      const envIdVal =
+        (raw.environmentId as string | undefined) ??
+        (props.environmentId as string | undefined) ??
+        (raw["properties.environmentId"] as string | undefined) ??
+        "";
+      const type = (raw.type as string) ?? (props.type as string) ?? "";
+      if (!envIdVal || !type) continue;
+      const countVal = raw.resourceCount ?? props.resourceCount ?? 0;
+      const count =
+        typeof countVal === "number" ? countVal : Number(countVal) || 0;
+      out.push({ environmentId: envIdVal, type, count });
+    }
+  }
+  return { ok: true, data: out };
+}
+
 /** Map a raw inventory type string to a friendly label. */
 export function friendlyResourceType(type: string): string {
   switch (type) {

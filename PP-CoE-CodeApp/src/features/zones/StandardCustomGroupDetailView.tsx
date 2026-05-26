@@ -43,6 +43,7 @@ import {
 } from "@fluentui/react-icons";
 import { useNavigate, useParams } from "react-router-dom";
 import {
+  countResourcesByTypeForEnvironments,
   listEnvironments,
   type EnvironmentRow,
 } from "../../data/inventory";
@@ -62,6 +63,10 @@ import { StandardGroupEditorDialog } from "./_components/StandardGroupEditorDial
 import { AvailableEnvsPanel } from "./_components/AvailableEnvsPanel";
 import { LinkedDlpPolicyCard } from "./_components/LinkedDlpPolicyCard";
 import { DlpPolicyPickerDialog } from "./_components/DlpPolicyPickerDialog";
+import {
+  ResourceRollupCard,
+  type ResourceRollupState,
+} from "./_components/ResourceRollupCard";
 
 const useStyles = makeStyles({
   root: {
@@ -197,6 +202,13 @@ export function StandardCustomGroupDetailView() {
   const [panelSearch, setPanelSearch] = useState("");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
+  // Resource roll-up across the env IDs in this custom group. Re-fires
+  // when the membership list changes (adds, removes, silent drift
+  // prune). Uses the same shared primitive as Zone Detail.
+  const [rollupState, setRollupState] = useState<ResourceRollupState>({
+    kind: "loading",
+  });
+
   // Re-read the group whenever storage changes (useZones drives refresh).
   // Avoid useEffect-driven setState by deriving the latest value each
   // render — useZones already triggers re-renders on every relevant
@@ -237,6 +249,35 @@ export function StandardCustomGroupDetailView() {
     () => new Set(group?.envIds ?? []),
     [group],
   );
+
+  // Roll-up effect: re-fetch when the group membership changes. Uses a
+  // stable sorted-join key so identity comparison doesn't re-fire on
+  // every render.
+  const memberKey = useMemo(
+    () => [...(group?.envIds ?? [])].sort().join("|"),
+    [group?.envIds],
+  );
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const envIds = memberKey ? memberKey.split("|") : [];
+      if (envIds.length === 0) {
+        setRollupState({ kind: "ready", rows: [] });
+        return;
+      }
+      setRollupState({ kind: "loading" });
+      const res = await countResourcesByTypeForEnvironments(envIds);
+      if (cancelled) return;
+      setRollupState(
+        res.ok
+          ? { kind: "ready", rows: res.data }
+          : { kind: "error", message: res.error },
+      );
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [memberKey]);
 
   if (envsState.kind === "loading") {
     return <LoadingPane label="Loading environments…" />;
@@ -373,6 +414,15 @@ export function StandardCustomGroupDetailView() {
             allEnvs={envsState.rows}
             onLinkClick={() => setDlpPickerOpen(true)}
             onUnlink={handleDlpUnlink}
+          />
+          <ResourceRollupCard
+            state={rollupState}
+            description="Counts of every resource type across all environments in this Standard custom group."
+            emptyMessage={
+              envsInGroup.length === 0
+                ? "Add environments to this group to see resource counts."
+                : "No resources found across these environments."
+            }
           />
           <div className={styles.envListCard}>
             <Caption1>Environments in this group</Caption1>

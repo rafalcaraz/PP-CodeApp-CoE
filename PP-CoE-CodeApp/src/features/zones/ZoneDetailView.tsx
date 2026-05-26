@@ -74,10 +74,13 @@ import {
 } from "@fluentui/react-icons";
 import { useNavigate, useParams } from "react-router-dom";
 import {
+  countResourcesByEnvAndType,
+  countResourcesByTypeForEnvironments,
   listEnvironmentGroups,
   listEnvironments,
   type EnvironmentGroupRow,
   type EnvironmentRow,
+  type EnvResourceCountRow,
 } from "../../data/inventory";
 import {
   addSection,
@@ -111,6 +114,10 @@ import {
 import { StandardGroupAddDialog } from "./_components/StandardGroupAddDialog";
 import { EnvRowGhost } from "./_components/EnvRowGhost";
 import type { EnvDragSource } from "./_components/EnvRow";
+import {
+  ResourceRollupCard,
+  type ResourceRollupState,
+} from "./_components/ResourceRollupCard";
 
 interface GroupPlacement {
   kind: "ms" | "custom";
@@ -277,6 +284,25 @@ export function ZoneDetailView() {
     intent: "success" | "warning";
     text: string;
   } | null>(null);
+
+  // Resource roll-up state for this zone (all envs across all groups
+  // placed in the zone). Re-fetches whenever the underlying env-id set
+  // changes — adding/removing a group from the zone, or membership
+  // shifting in any contained custom group.
+  const [rollupState, setRollupState] = useState<ResourceRollupState>({
+    kind: "loading",
+  });
+
+  // Per-(env, type) counts used for the per-lane "M resources" tally
+  // in each group header. Driven by ONE zone-scoped query whose
+  // grouping fields are `type` + `properties.environmentId`, then
+  // bucketed client-side. Avoids N parallel calls when a zone has many
+  // groups.
+  const [envCounts, setEnvCounts] = useState<
+    | { kind: "loading" }
+    | { kind: "ready"; rows: EnvResourceCountRow[] }
+    | { kind: "error"; message: string }
+  >({ kind: "loading" });
 
   // "Demo the future" state: when a Managed env is dragged onto a
   // different MS env group lane, instead of mutating Microsoft we
@@ -508,6 +534,80 @@ export function ZoneDetailView() {
     return ids;
   }, [groupsInZone]);
 
+  // Stable, sorted key derived from `envIdsInZone` for cheap effect
+  // deduping. Without this, `useEffect`'s identity-comparison on the
+  // Set would re-fire on every render and re-issue the rollup query.
+  const envIdsKey = useMemo(
+    () => [...envIdsInZone].sort().join("|"),
+    [envIdsInZone],
+  );
+
+  // Fire BOTH rollup queries in parallel whenever the env-id set
+  // changes. The two queries return different shapes (by-type for the
+  // card, by-(env,type) for the lane headers) but cost the same and
+  // can run together.
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const envIds = envIdsKey ? envIdsKey.split("|") : [];
+      if (envIds.length === 0) {
+        // No envs in this zone yet — surface an empty roll-up
+        // immediately rather than firing a no-op query.
+        setRollupState({ kind: "ready", rows: [] });
+        setEnvCounts({ kind: "ready", rows: [] });
+        return;
+      }
+      setRollupState({ kind: "loading" });
+      setEnvCounts({ kind: "loading" });
+      const [rollupRes, envRes] = await Promise.all([
+        countResourcesByTypeForEnvironments(envIds),
+        countResourcesByEnvAndType(envIds),
+      ]);
+      if (cancelled) return;
+      setRollupState(
+        rollupRes.ok
+          ? { kind: "ready", rows: rollupRes.data }
+          : { kind: "error", message: rollupRes.error },
+      );
+      setEnvCounts(
+        envRes.ok
+          ? { kind: "ready", rows: envRes.data }
+          : { kind: "error", message: envRes.error },
+      );
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [envIdsKey]);
+
+  // Per-environment total resource count, used inside per-group lane
+  // headers. Sums each env's `count` rows together regardless of type.
+  const totalsByEnv = useMemo(() => {
+    const map = new Map<string, number>();
+    if (envCounts.kind !== "ready") return map;
+    for (const row of envCounts.rows) {
+      map.set(row.environmentId, (map.get(row.environmentId) ?? 0) + row.count);
+    }
+    return map;
+  }, [envCounts]);
+
+  /** Sum of resource counts for the env IDs in a single group. */
+  const resourceCountForGroup = (envs: EnvironmentRow[]): number => {
+    let n = 0;
+    for (const env of envs) n += totalsByEnv.get(env.id) ?? 0;
+    return n;
+  };
+
+  // Grand total across all envs in the zone — surfaced in the header
+  // meta line. Derived from the same envCounts response so it matches
+  // what the per-lane numbers sum to.
+  const totalResources = useMemo(() => {
+    let n = 0;
+    for (const v of totalsByEnv.values()) n += v;
+    return n;
+  }, [totalsByEnv]);
+
+
   // Group placements bucketed by sectionId (including "default" lane).
   const placementsBySection = useMemo(() => {
     const def: GroupPlacement[] = [];
@@ -653,6 +753,10 @@ export function ZoneDetailView() {
       color={p.color}
       icon={p.icon}
       envs={p.envs}
+      resourceCount={
+        envCounts.kind === "ready" ? resourceCountForGroup(p.envs) : undefined
+      }
+      resourceCountError={envCounts.kind === "error"}
       selection={
         p.kind === "custom"
           ? {
@@ -718,6 +822,13 @@ export function ZoneDetailView() {
           <Text className={styles.meta}>
             {groupsInZone.length} group{groupsInZone.length === 1 ? "" : "s"} ·{" "}
             {totalEnvs} env{totalEnvs === 1 ? "" : "s"}
+            {rollupState.kind === "ready" && totalEnvs > 0 && (
+              <>
+                {" · "}
+                {totalResources.toLocaleString()} resource
+                {totalResources === 1 ? "" : "s"}
+              </>
+            )}
           </Text>
         </div>
         <div className={styles.headerActions}>
@@ -765,6 +876,16 @@ export function ZoneDetailView() {
           />
         </MessageBar>
       )}
+
+      <ResourceRollupCard
+        state={rollupState}
+        description="Counts of every resource type across all environments inside the groups placed in this zone."
+        emptyMessage={
+          totalEnvs === 0
+            ? "Add a group with environments to this zone to see resource counts."
+            : "No resources found across these environments."
+        }
+      />
 
       <DndContext
         sensors={sensors}

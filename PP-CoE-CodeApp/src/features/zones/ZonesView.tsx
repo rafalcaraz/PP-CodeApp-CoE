@@ -53,8 +53,11 @@ import {
   type DragEndEvent,
 } from "@dnd-kit/core";
 import {
+  countResourcesByTypeForEnvironments,
   listEnvironmentGroups,
+  listEnvironments,
   type EnvironmentGroupRow,
+  type EnvironmentRow,
 } from "../../data/inventory";
 import {
   addSection,
@@ -219,6 +222,16 @@ export function ZonesView() {
     kind: "loading",
     rows: [],
   });
+  // All envs in the tenant, fetched once. Used to derive the env-id
+  // set per zone (so we can fire one resource-count query per zone).
+  // Null while loading; we silently skip per-zone counts if loading
+  // fails (the meta line just omits the resource bit).
+  const [allEnvs, setAllEnvs] = useState<EnvironmentRow[] | null>(null);
+  // Per-zone resource totals. `undefined` = not yet fetched / loading,
+  // `null` = failed or zero-env zone, `number` = ready.
+  const [zoneResourceCounts, setZoneResourceCounts] = useState<
+    Record<string, number | null | undefined>
+  >({});
   const [zoneEditorOpen, setZoneEditorOpen] = useState(false);
   const [editingZone, setEditingZone] = useState<Zone | null>(null);
   const [zoneToDelete, setZoneToDelete] = useState<Zone | null>(null);
@@ -239,13 +252,19 @@ export function ZonesView() {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const res = await listEnvironmentGroups();
+      const [groupsRes, envsRes] = await Promise.all([
+        listEnvironmentGroups(),
+        listEnvironments(),
+      ]);
       if (cancelled) return;
-      if (res.ok) {
-        setEnvGroups({ kind: "ready", rows: res.data });
+      if (groupsRes.ok) {
+        setEnvGroups({ kind: "ready", rows: groupsRes.data });
       } else {
-        setEnvGroups({ kind: "error", rows: [], error: res.error });
+        setEnvGroups({ kind: "error", rows: [], error: groupsRes.error });
       }
+      // Best-effort — failure here just means we don't show per-zone
+      // resource counts on the board; the rest of the UI works fine.
+      setAllEnvs(envsRes.ok ? envsRes.data : []);
     })();
     return () => {
       cancelled = true;
@@ -314,6 +333,81 @@ export function ZonesView() {
     }
     return { byZone, unassigned, matchCount, totalCount: allItems.length };
   }, [zones, assignments, envGroups.rows, standardGroups, searchQuery, navigate]);
+
+  // Per-zone env-id set. Built from the assignment map: each MS env
+  // group placed in a zone contributes the envs whose
+  // `environmentGroupId` matches it; each Standard custom group
+  // placed in a zone contributes its `envIds`. Memoized into a
+  // stable-sorted "fingerprint" string per zone so the fetch effect
+  // doesn't loop on identity-changed but value-equal Sets.
+  const envIdsKeyByZone = useMemo(() => {
+    const out: Record<string, string> = {};
+    if (allEnvs === null) return out;
+    const envsByGroupId = new Map<string, EnvironmentRow[]>();
+    for (const e of allEnvs) {
+      if (!e.environmentGroupId) continue;
+      const list = envsByGroupId.get(e.environmentGroupId) ?? [];
+      list.push(e);
+      envsByGroupId.set(e.environmentGroupId, list);
+    }
+    for (const zone of zones) {
+      const envIds = new Set<string>();
+      // MS env groups placed in this zone
+      for (const msGroup of envGroups.rows) {
+        const placement = assignments[refToKey(msRef(msGroup.id))];
+        if (placement?.zoneId !== zone.id) continue;
+        for (const env of envsByGroupId.get(msGroup.id) ?? []) {
+          envIds.add(env.id);
+        }
+      }
+      // Standard custom groups placed in this zone
+      for (const g of standardGroups) {
+        const placement = assignments[refToKey(customRef(g.id))];
+        if (placement?.zoneId !== zone.id) continue;
+        for (const id of g.envIds) envIds.add(id);
+      }
+      out[zone.id] = [...envIds].sort().join("|");
+    }
+    return out;
+  }, [zones, assignments, envGroups.rows, standardGroups, allEnvs]);
+
+  // Fire (or refire) the per-zone roll-up query whenever any zone's
+  // env-id fingerprint changes. Each zone gets its own cache slot so
+  // adding a group to one zone doesn't invalidate counts for others.
+  useEffect(() => {
+    if (allEnvs === null) return;
+    let cancelled = false;
+    void (async () => {
+      for (const [zoneId, key] of Object.entries(envIdsKeyByZone)) {
+        if (cancelled) return;
+        const envIds = key ? key.split("|") : [];
+        if (envIds.length === 0) {
+          setZoneResourceCounts((prev) =>
+            prev[zoneId] === null ? prev : { ...prev, [zoneId]: null },
+          );
+          continue;
+        }
+        // Mark as loading (undefined) so the column shows the "…" hint
+        // instead of stale numbers from before a group was added.
+        setZoneResourceCounts((prev) => ({ ...prev, [zoneId]: undefined }));
+        const res = await countResourcesByTypeForEnvironments(envIds);
+        if (cancelled) return;
+        if (!res.ok) {
+          setZoneResourceCounts((prev) => ({ ...prev, [zoneId]: null }));
+          continue;
+        }
+        const total = res.data.reduce((sum, row) => sum + row.count, 0);
+        setZoneResourceCounts((prev) => ({ ...prev, [zoneId]: total }));
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // We intentionally key on the stringified fingerprint map so the
+    // effect only fires when an individual zone's env composition
+    // actually changes — not on every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [JSON.stringify(envIdsKeyByZone), allEnvs === null]);
 
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
@@ -519,6 +613,7 @@ export function ZonesView() {
                     bySection: {},
                   }
                 }
+                resourceCount={zoneResourceCounts[zone.id]}
                 onEdit={openEditZone}
                 onDelete={setZoneToDelete}
                 onAddSection={addSection}
