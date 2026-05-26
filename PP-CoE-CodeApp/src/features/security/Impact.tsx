@@ -726,6 +726,7 @@ function AcpResultView({
     result.summary.byType["microsoft.copilotstudio/agents"] ?? 0;
 
   const hasOperationFilter = Boolean(result.ranAgainst.operationId);
+  const hasAnyUsedAs = result.rows.some((r) => r.usedAs);
 
   const columns: TableColumnDefinition<AcpImpactRow>[] = useMemo(
     () => {
@@ -754,20 +755,30 @@ function AcpResultView({
           ),
         }),
       ];
-      if (hasOperationFilter) {
+      if (hasOperationFilter || hasAnyUsedAs) {
         base.push(
           createTableColumn<AcpImpactRow>({
             columnId: "usedAs",
             compare: (a, b) => a.usedAs.localeCompare(b.usedAs),
             renderHeaderCell: () => "Used as",
-            renderCell: (row) =>
-              row.usedAs ? (
-                <Badge appearance="tint" color="informative">
-                  {row.usedAs}
+            renderCell: (row) => {
+              if (row.usedAs) {
+                const color = row.usedAs === "Knowledge" ? "subtle" : "informative";
+                return (
+                  <Badge appearance="tint" color={color}>
+                    {row.usedAs}
+                  </Badge>
+                );
+              }
+              const isAgent = row.type.includes("botcomponents");
+              return isAgent ? (
+                <Badge appearance="outline" color="subtle">
+                  connector-only
                 </Badge>
               ) : (
                 "—"
-              ),
+              );
+            },
           })
         );
       }
@@ -810,7 +821,7 @@ function AcpResultView({
       );
       return base;
     },
-    [navigate, hasOperationFilter]
+    [navigate, hasOperationFilter, hasAnyUsedAs]
   );
 
   function exportCsv() {

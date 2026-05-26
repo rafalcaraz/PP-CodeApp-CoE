@@ -329,8 +329,7 @@ export function readPublishedConnectorIds(item: ResourceItem): string[] {
  *  Only `powerPlatformConnectors[].operations[]` carries operation data;
  *  plain `connectors[]` (app-builder) does not. */
 function readPublishedOperationsForConnector(
-  item: ResourceItem,
-  _publishedSlugs: string[]
+  item: ResourceItem
 ): Map<string, string[]> {
   const result = new Map<string, string[]>();
   const props = (item.properties ?? {}) as Record<string, unknown>;
@@ -415,7 +414,7 @@ export function extractUsedConnectors(items: ResourceItem[]): UsedConnector[] {
       }
     }
     // Collect operations for this connector from the item.
-    const ops = readPublishedOperationsForConnector(item, raw);
+    const ops = readPublishedOperationsForConnector(item);
     for (const [bareSlug, opIds] of ops) {
       const bucket = byBareSlug.get(bareSlug);
       if (bucket) {
@@ -498,7 +497,7 @@ export function buildZoneMoveImpactResult(args: {
   // Not configured → every connector is implicitly fine (no ACP
   // restriction). Surface used connectors for context but flag zero
   // at-risk.
-  let atRiskConnectors: AtRiskConnector[] = [];
+  const atRiskConnectors: AtRiskConnector[] = [];
   if (targetAcpState !== "not-configured") {
     const allowSet = bareFormAllowSet(snapshot);
     // Build a lookup for ACP entries so we can check action-level rules.
