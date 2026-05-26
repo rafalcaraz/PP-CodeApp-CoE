@@ -1,0 +1,185 @@
+{
+  "name": "00000000-0000-0000-0000-000000000001",
+  "id": "/providers/Microsoft.PowerApps/apps/00000000-0000-0000-0000-000000000001",
+  "type": "Microsoft.PowerApps/apps",
+  "tags": {
+    "primaryDeviceWidth": "1366",
+    "primaryDeviceHeight": "768",
+    "supportsPortrait": "true",
+    "supportsLandscape": "true",
+    "primaryFormFactor": "Tablet",
+    "showStatusBar": "false",
+    "publisherVersion": "3.25073.12",
+    "minimumRequiredApiVersion": "2.2.0",
+    "hasComponent": "false",
+    "hasUnlockedComponent": "false",
+    "isUnifiedRootApp": "false",
+    "sienaVersion": "20250808T023621Z-3.25073.12.0",
+    "coauthoringEnabled": "true",
+    "multipleWritersEnabled": "true",
+    "acceptedCoauthoringTerms": "true"
+  },
+  "properties": {
+    "appVersion": "2025-08-08T02:36:21Z",
+    "lastDraftVersion": "2025-08-08T02:36:21Z",
+    "lifeCycleId": "Published",
+    "status": "Ready",
+    "createdByClientVersion": {
+      "major": 3,
+      "minor": 25073,
+      "build": 12,
+      "revision": 0,
+      "majorRevision": 0,
+      "minorRevision": 0
+    },
+    "minClientVersion": {
+      "major": 3,
+      "minor": 25073,
+      "build": 12,
+      "revision": 0,
+      "majorRevision": 0,
+      "minorRevision": 0
+    },
+    "owner": {
+      "id": "00000000-0000-0000-0000-000000000002",
+      "displayName": "Fixture App 1",
+      "email": "fixture-1@contoso.example",
+      "type": "User",
+      "tenantId": "11111111-1111-1111-1111-111111111111",
+      "userPrincipalName": "fixture-2@contoso.example"
+    },
+    "createdBy": {
+      "id": "00000000-0000-0000-0000-000000000002",
+      "displayName": "Fixture App 2",
+      "email": "fixture-3@contoso.example",
+      "type": "User",
+      "tenantId": "11111111-1111-1111-1111-111111111111",
+      "userPrincipalName": "fixture-4@contoso.example"
+    },
+    "lastModifiedBy": {
+      "id": "00000000-0000-0000-0000-000000000002",
+      "displayName": "Fixture App 3",
+      "email": "fixture-5@contoso.example",
+      "type": "User",
+      "tenantId": "11111111-1111-1111-1111-111111111111",
+      "userPrincipalName": "fixture-6@contoso.example"
+    },
+    "additionalAuthors": [],
+    "lastPublishedBy": {
+      "id": "00000000-0000-0000-0000-000000000002",
+      "displayName": "Fixture App 4",
+      "email": "fixture-7@contoso.example",
+      "type": "User",
+      "tenantId": "11111111-1111-1111-1111-111111111111",
+      "userPrincipalName": "fixture-8@contoso.example"
+    },
+    "backgroundColor": "RGBA(0,176,240,1)",
+    "backgroundImageUri": "https://blob.example/fixture",
+    "teamsColorIconUrl": "https://blob.example/fixture",
+    "teamsOutlineIconUrl": "https://blob.example/fixture",
+    "displayName": "Fixture App 5",
+    "description": "",
+    "aiGeneratedDescription": "Streamline environment group management by viewing group details, initiating duplication processes, and accessing administrative portals. Empower users to efficiently oversee and replicate environment groups for improved operational control and organization.",
+    "commitMessage": "",
+    "appUris": {
+      "documentUri": {
+        "value": "https://blob.example/fixture",
+        "readonlyValue": "https://blob.example/fixture"
+      },
+      "imageUris": [],
+      "additionalUris": [
+        {
+          "isSolutionAware": true,
+          "value": "https://blob.example/fixture",
+          "readonlyValue": "https://blob.example/fixture"
+        }
+      ]
+    },
+    "createdTime": "2025-08-07T17:39:02.1475549Z",
+    "lastModifiedTime": "2025-08-08T02:39:53.4649332Z",
+    "lastPublishTime": "2025-08-08T02:39:48.8542872Z",
+    "sharedGroupsCount": 0,
+    "sharedUsersCount": 0,
+    "appOpenProtocolUri": "ms-apps:///providers/Microsoft.PowerApps/apps/00000000-0000-0000-0000-000000000001?environmentName=00000000-0000-0000-0000-000000000006",
+    "appOpenUri": "https://blob.example/fixture",
+    "appPlayUri": "https://blob.example/fixture",
+    "appPlayEmbeddedUri": "https://blob.example/fixture",
+    "appPlayTeamsUri": "https://blob.example/fixture",
+    "connectionReferences": [
+      {
+        "iconUri": "https://conn-afd-prod-endpoint-bmc9bqahasf3grgk.b01.azurefd.net/v1.0.1766/1.0.1766.4330/logicflows/icon.png",
+        "displayName": "Fixture App 6",
+        "apiTier": "Standard",
+        "isOnPremiseConnection": false,
+        "isCustomApiConnection": false,
+        "bypassConsent": false,
+        "id": "/providers/microsoft.powerapps/apis/shared_logicflows",
+        "runtimePolicyName": null,
+        "executionRestrictions": null,
+        "sharedConnectionId": null
+      },
+      {
+        "iconUri": "https://defaulticons.powerapps.com/defaulticons/api-dedicated.png",
+        "displayName": "Fixture App 7",
+        "apiTier": "Standard",
+        "isOnPremiseConnection": false,
+        "isCustomApiConnection": true,
+        "bypassConsent": false,
+        "id": "/providers/microsoft.powerapps/apis/shared_special-2dpowerplatapi-5fa96b4025f69d1bda-5f217524a46b4bfe17",
+        "runtimePolicyName": null,
+        "executionRestrictions": null,
+        "sharedConnectionId": null
+      }
+    ],
+    "userAppMetadata": {
+      "favorite": "NotSpecified",
+      "includeInAppsList": true
+    },
+    "isFeaturedApp": false,
+    "bypassConsent": false,
+    "isHeroApp": false,
+    "environment": {
+      "id": "/providers/Microsoft.PowerApps/environments/00000000-0000-0000-0000-000000000006",
+      "name": "00000000-0000-0000-0000-000000000006",
+      "location": "unitedstates"
+    },
+    "almMode": "Solution",
+    "performanceOptimizationEnabled": true,
+    "unauthenticatedWebPackageHint": "00000000-0000-0000-0000-000000000007",
+    "canConsumeAppPass": true,
+    "enableModernRuntimeMode": false,
+    "executionRestrictions": {
+      "isTeamsOnly": false,
+      "dataLossPreventionEvaluationResult": {
+        "status": "Compliant",
+        "lastEvaluationDate": "2026-05-22T20:41:07.3752616Z",
+        "violations": [],
+        "violationsByPolicy": [],
+        "violationErrorMessage": "The app uses the following connectors: shared_logicflows, shared_special-2dpowerplatapi-5fa96b4025f69d1bda-5f217524a46b4bfe17."
+      },
+      "httpActionRestriction": {
+        "appUsesSharepointHttpAction": false,
+        "enforcementStrategy": "Legacy",
+        "evaluationTime": "2026-05-22T20:41:07.3751768Z"
+      }
+    },
+    "appPlanClassification": "Premium",
+    "usesPremiumApi": false,
+    "usesOnlyGrandfatheredPremiumApis": true,
+    "usesCustomApi": true,
+    "usesOnPremiseGateway": false,
+    "usesPcfExternalServiceUsage": false,
+    "isCustomizable": true,
+    "chatPaneCopilotEnabled": true,
+    "draftingCopilotEnabled": true,
+    "canvasGalleryFilteringCopilotEnabled": true,
+    "appCopilotReference": {
+      "botSchemaName": ""
+    },
+    "appVersionSource": "Studio"
+  },
+  "logicalName": "msftcsa_envgroupmanager_45b47",
+  "appLocation": "unitedstates",
+  "isAppComponentLibrary": false,
+  "appType": "ClassicCanvasApp"
+}

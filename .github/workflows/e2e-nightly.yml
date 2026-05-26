@@ -1,0 +1,109 @@
+name: E2E (nightly)
+
+# Nightly E2E + visual regression. Runs against the deployed app
+# using the storage state stashed as a repo secret.
+#
+# Setup checklist (one-time):
+#   1. Locally: `npm run e2e:auth` to create storageState.json
+#   2. Base64-encode the file and add it as a repo secret named
+#      `E2E_STORAGE_STATE_B64`:
+#         [Convert]::ToBase64String([System.IO.File]::ReadAllBytes(
+#           "PP-CoE-CodeApp/tests/e2e/.auth/storageState.json"
+#         )) | Set-Clipboard
+#   3. Add the deployed app URL as `E2E_BASE_URL` (env var, NOT secret —
+#      no sensitive data, easier to update).
+#   4. Re-run this workflow when cookies expire (manual workflow_dispatch).
+#
+# Without these secrets the workflow skips with a friendly message
+# instead of failing red — keeps the badge green on forks.
+
+on:
+  schedule:
+    # 09:00 UTC daily — 2am Pacific, after the user's typical work day
+    - cron: "0 9 * * *"
+  workflow_dispatch: {}
+  # Also run on push to main as a safety net.
+  push:
+    branches: [main]
+    paths:
+      - "PP-CoE-CodeApp/src/**"
+      - "PP-CoE-CodeApp/tests/e2e/**"
+      - "PP-CoE-CodeApp/playwright.config.ts"
+      - ".github/workflows/e2e-nightly.yml"
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: PP-CoE-CodeApp
+    steps:
+      - name: Check for auth secret
+        id: precheck
+        env:
+          STATE_B64: ${{ secrets.E2E_STORAGE_STATE_B64 }}
+        run: |
+          if [ -z "$STATE_B64" ]; then
+            echo "::warning::E2E_STORAGE_STATE_B64 secret not configured — skipping E2E."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+        working-directory: .
+
+      - name: Checkout
+        if: steps.precheck.outputs.skip != 'true'
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        if: steps.precheck.outputs.skip != 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: PP-CoE-CodeApp/package-lock.json
+
+      - name: Install dependencies
+        if: steps.precheck.outputs.skip != 'true'
+        run: npm ci
+
+      - name: Install Playwright browsers
+        if: steps.precheck.outputs.skip != 'true'
+        run: npx playwright install --with-deps chromium
+
+      - name: Restore auth state
+        if: steps.precheck.outputs.skip != 'true'
+        env:
+          STATE_B64: ${{ secrets.E2E_STORAGE_STATE_B64 }}
+        run: |
+          mkdir -p tests/e2e/.auth
+          printf '%s' "$STATE_B64" | base64 -d > tests/e2e/.auth/storageState.json
+
+      - name: Smoke (anonymous)
+        if: steps.precheck.outputs.skip != 'true'
+        env:
+          # Build + serve locally — fast, deterministic. No auth needed
+          # for the anonymous smoke project so we can run it even
+          # without the deployed-app URL being configured.
+          E2E_BASE_URL: http://localhost:5173
+        run: |
+          npm run build
+          npx vite preview --port 5173 &
+          npx wait-on http://localhost:5173 --timeout 30000
+          npx playwright test --project=smoke-anon
+
+      - name: Smoke + visual (authenticated)
+        if: steps.precheck.outputs.skip != 'true' && env.E2E_BASE_URL != ''
+        env:
+          E2E_BASE_URL: ${{ vars.E2E_BASE_URL }}
+        run: |
+          npx playwright test --project=smoke --project=visual
+
+      - name: Upload Playwright HTML report
+        if: failure() && steps.precheck.outputs.skip != 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: PP-CoE-CodeApp/playwright-report
+          retention-days: 14
