@@ -38,6 +38,7 @@ export {
   type CatalogGroup,
   ADMIN_APPS_HIDE_PREFIXES,
   OBSERVED_GROUP,
+  OBSERVED_EMPTY_SENTINEL_PATH,
 } from "./catalog/merge";
 export {
   emptyObservedSchema,

@@ -104,4 +104,18 @@ describe("groupCatalog", () => {
     expect(observedGroup).toBeDefined();
     expect(observedGroup?.entries.some((e) => e.path === "properties.newField")).toBe(true);
   });
+
+  it("omits the OBSERVED_GROUP when there are no observed entries by default", () => {
+    const catalog = mergePropertyCatalog(CURATED, undefined);
+    const groups = groupCatalog(catalog);
+    expect(groups.find((g) => g.label === OBSERVED_GROUP)).toBeUndefined();
+  });
+
+  it("emits an empty OBSERVED_GROUP when alwaysIncludeObservedGroup is set", () => {
+    const catalog = mergePropertyCatalog(CURATED, undefined);
+    const groups = groupCatalog(catalog, { alwaysIncludeObservedGroup: true });
+    const observedGroup = groups.find((g) => g.label === OBSERVED_GROUP);
+    expect(observedGroup).toBeDefined();
+    expect(observedGroup?.entries).toEqual([]);
+  });
 });

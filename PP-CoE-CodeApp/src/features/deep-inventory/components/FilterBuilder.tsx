@@ -182,6 +182,7 @@ function FilterRow({ clause, catalogGroups, onChange, onRemove }: FilterRowProps
 
 function PropertyOptionGroup({ group }: { group: CatalogGroup }) {
   const styles = useStyles();
+  const isObserved = group.label === "Discovered fields";
   return (
     <>
       <Option
@@ -192,6 +193,18 @@ function PropertyOptionGroup({ group }: { group: CatalogGroup }) {
       >
         <span className={styles.groupLabel}>{group.label}</span>
       </Option>
+      {isObserved && group.entries.length === 0 && (
+        <Option
+          key={`${group.label}-empty`}
+          value={`${group.label}-empty`}
+          text="Run a scan to populate"
+          disabled
+        >
+          <span className={styles.empty}>
+            Run a scan — discovered fields will appear here.
+          </span>
+        </Option>
+      )}
       {group.entries.map((entry) => (
         <Option key={entry.path} value={entry.path} text={labelFor(entry)}>
           {labelFor(entry)}

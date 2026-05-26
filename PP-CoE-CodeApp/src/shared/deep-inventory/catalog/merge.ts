@@ -40,6 +40,13 @@ export const SPARSE_PRESENCE_THRESHOLD_PCT = 5;
 /** Group label used for observed (non-curated) properties in the UI. */
 export const OBSERVED_GROUP = "Discovered fields";
 
+/** Sentinel entry rendered when the observed group exists but has no
+ *  entries yet (e.g. before the first scan). The UI displays it as a
+ *  disabled help option so users understand the section will populate
+ *  once introspection has data. Sentinel paths start with `__` so
+ *  they can't collide with a real path. */
+export const OBSERVED_EMPTY_SENTINEL_PATH = "__observed_empty__";
+
 export interface MergeOptions {
   /** When true, observed entries with `inferredType === "object"` or
    *  `"array"` are excluded entirely. The picker can't usefully
@@ -167,9 +174,18 @@ export interface CatalogGroup {
  *  1. Curated groups in the order they're first encountered in the
  *     input catalog.
  *  2. "Other curated" if any ungrouped curated entries exist.
- *  3. `OBSERVED_GROUP`.
+ *  3. `OBSERVED_GROUP`. Always emitted as long as the introspector
+ *     has *seen* anything for this source — when the source has been
+ *     scanned but produced zero non-curated discovered paths the
+ *     section is empty; before any scan has run, the section is
+ *     omitted unless `alwaysIncludeObservedGroup` is set. The UI
+ *     uses this flag to render an empty-state hint inside the group
+ *     so users discover that the section exists.
  */
-export function groupCatalog(catalog: PropertyCatalog): CatalogGroup[] {
+export function groupCatalog(
+  catalog: PropertyCatalog,
+  options: { alwaysIncludeObservedGroup?: boolean } = {}
+): CatalogGroup[] {
   const curatedGroups = new Map<string, PropertyCatalogEntry[]>();
   const otherCurated: PropertyCatalogEntry[] = [];
   const observed: PropertyCatalogEntry[] = [];
@@ -201,7 +217,7 @@ export function groupCatalog(catalog: PropertyCatalog): CatalogGroup[] {
   if (otherCurated.length > 0) {
     out.push({ label: "Other curated", entries: otherCurated });
   }
-  if (observed.length > 0) {
+  if (observed.length > 0 || options.alwaysIncludeObservedGroup) {
     out.push({ label: OBSERVED_GROUP, entries: observed });
   }
   return out;

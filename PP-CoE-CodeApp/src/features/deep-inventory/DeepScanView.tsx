@@ -68,6 +68,7 @@ import { ScanProgress } from "./components/ScanProgress";
 import { ResultsTable } from "./components/ResultsTable";
 import { rowsForCsv } from "./components/csvShaper";
 import { DriftBanner } from "./components/DriftBanner";
+import { ObservedSchemaPanel } from "./components/ObservedSchemaPanel";
 import { ErrorPane } from "../../components/Status";
 import { downloadCsv, rowsToCsv } from "../../utils/csv";
 
@@ -148,7 +149,10 @@ export function DeepScanView() {
     // observedTick → bump invalidates the memo after each scan.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sourceId, observedTick]);
-  const catalogGroups = useMemo(() => groupCatalog(catalog), [catalog]);
+  const catalogGroups = useMemo(
+    () => groupCatalog(catalog, { alwaysIncludeObservedGroup: true }),
+    [catalog]
+  );
 
   // ── Scan spec (scope / filters / columns) ────────────────────────
   const [scope, setScope] = useState<DeepScanScope>({ kind: "tenant" });
@@ -433,6 +437,12 @@ export function DeepScanView() {
           </div>
         </Card>
       )}
+
+      <ObservedSchemaPanel
+        sourceId={sourceId}
+        refreshKey={observedTick}
+        onCleared={() => setObservedTick((t) => t + 1)}
+      />
     </div>
   );
 }
