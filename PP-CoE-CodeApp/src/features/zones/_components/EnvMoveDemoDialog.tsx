@@ -21,8 +21,16 @@
  *   - some not allowed → list at-risk connectors + affected resources
  *   - env has no resources → nothing to evaluate
  *
+ * Dismiss-button behavior tracks the analysis:
+ *   - "Analyzing…" (disabled) while the fetch is in flight, so the
+ *     user can't dismiss before they've seen what they'd be moving.
+ *   - "Got it" once the analysis comes back clean (no ACP, all
+ *     allowed, or empty env).
+ *   - "Proceed anyway" once at-risk connectors are surfaced — flips
+ *     the language from neutral acknowledgment to risk acceptance.
+ *
  * Action: a primary "Open target group in PPAC" deep link so the user
- * can do the move manually right now. Plus a "Got it" dismiss.
+ * can do the move manually right now.
  */
 
 import { useEffect, useState } from "react";
@@ -165,11 +173,74 @@ export function EnvMoveDemoDialog({
   const navigate = useNavigate();
   const ready = env !== null && source !== null && target !== null;
 
+  // Lifted impact state so the dialog actions (Got it / Proceed anyway)
+  // can react to it. Stored alongside the (envId, targetGroupId) key
+  // it was computed against so a stale result from a previous target
+  // doesn't leak into the new analysis between user actions.
+  //
+  // No synchronous setState in the effect body — `setAnalysisResult`
+  // is only called inside the async fetch's resolution callback. The
+  // "currently analyzing" status is derived (not stored), via the
+  // `effectiveImpactState` calc below.
+  const analysisKey =
+    env && target ? `${env.id}::${target.groupId}` : null;
+  const [analysisResult, setAnalysisResult] = useState<
+    { key: string; state: ImpactFetchState } | null
+  >(null);
+
+  useEffect(() => {
+    if (!open || !env || !target || !analysisKey) return;
+    const key = analysisKey;
+    let cancelled = false;
+    void (async () => {
+      const res = await analyzeZoneMoveAcpImpact(
+        env.id,
+        env.displayName,
+        target.groupId,
+        target.groupDisplayName,
+      );
+      if (cancelled) return;
+      const next: ImpactFetchState = res.ok
+        ? { kind: "ready", data: res.data }
+        : { kind: "error", message: res.error };
+      setAnalysisResult({ key, state: next });
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [open, env, target, analysisKey]);
+
+  // Derived state — loading until the async fetch reports for the
+  // *current* (envId, targetGroupId) key.
+  const impactState: ImpactFetchState =
+    analysisResult && analysisResult.key === analysisKey
+      ? analysisResult.state
+      : { kind: "loading" };
+
+  const isAnalyzing = impactState.kind === "loading";
+  const hasAtRisk =
+    impactState.kind === "ready" &&
+    impactState.data.atRiskConnectors.length > 0;
+  // Button label flips to "Proceed anyway" the moment we know there's
+  // at-risk connectors, signaling the user is acknowledging risk
+  // instead of just dismissing a neutral preview.
+  const dismissLabel = isAnalyzing
+    ? "Analyzing…"
+    : hasAtRisk
+      ? "Proceed anyway"
+      : "Got it";
+  // While analyzing, the dismiss button is non-actionable — the user
+  // hasn't seen the connector impact yet and could miss a blocker.
+  // Once results are in (or errored), they can dismiss either way.
+  const dismissDisabled = isAnalyzing;
+
   return (
     <Dialog
       open={open}
       onOpenChange={(_, data) => {
-        if (!data.open) onDismiss();
+        // Don't close the dialog while the analysis is still running —
+        // the user might dismiss a result they never saw.
+        if (!data.open && !isAnalyzing) onDismiss();
       }}
     >
       <DialogSurface className={styles.surface}>
@@ -229,16 +300,8 @@ export function EnvMoveDemoDialog({
                   page where you can add or move the environment.
                 </Caption1>
 
-                {/* Mounting the impact section lazily and keying it on
-                    (envId, targetGroupId) keeps the fetch effect free of
-                    synchronous setState resets (which the
-                    `react-hooks/set-state-in-effect` rule flags). When
-                    the user reopens the dialog or switches drop targets,
-                    the section remounts with a fresh loading state. */}
                 <ConnectorImpactSection
-                  key={`${env.id}::${target.groupId}`}
-                  env={env}
-                  target={target}
+                  state={impactState}
                   onNavigateToImpact={() => {
                     onDismiss();
                     navigate("/security/impact");
@@ -248,8 +311,12 @@ export function EnvMoveDemoDialog({
             ) : null}
           </DialogContent>
           <DialogActions>
-            <Button appearance="secondary" onClick={onDismiss}>
-              Got it
+            <Button
+              appearance="secondary"
+              onClick={onDismiss}
+              disabled={dismissDisabled}
+            >
+              {dismissLabel}
             </Button>
             {target && (
               <Button
@@ -276,8 +343,7 @@ export function EnvMoveDemoDialog({
 // ---------------------------------------------------------------------------
 
 interface ConnectorImpactSectionProps {
-  env: EnvironmentRow;
-  target: EnvMoveDemoTarget;
+  state: ImpactFetchState;
   onNavigateToImpact: () => void;
 }
 
@@ -294,39 +360,16 @@ type ImpactFetchState =
  * being a generic "here's what would happen" and start being a
  * specific "here's what would break if you moved THIS env".
  *
- * Designed to be mounted by `EnvMoveDemoDialog` with a key on
- * (envId, targetGroupId). The parent's keying handles "reset on
- * input change" so this component's effect can stay pure-fetch
- * (no synchronous setState in the effect body).
+ * Stateless. The parent owns the fetch lifecycle so the dialog action
+ * buttons can react to the result (the dismiss button flips from
+ * "Got it" → "Proceed anyway" when at-risk connectors are found, and
+ * is disabled while analyzing).
  */
 function ConnectorImpactSection({
-  env,
-  target,
+  state,
   onNavigateToImpact,
 }: ConnectorImpactSectionProps) {
   const styles = useStyles();
-  const [state, setState] = useState<ImpactFetchState>({ kind: "loading" });
-
-  useEffect(() => {
-    let cancelled = false;
-    void (async () => {
-      const res = await analyzeZoneMoveAcpImpact(
-        env.id,
-        env.displayName,
-        target.groupId,
-        target.groupDisplayName,
-      );
-      if (cancelled) return;
-      if (!res.ok) {
-        setState({ kind: "error", message: res.error });
-        return;
-      }
-      setState({ kind: "ready", data: res.data });
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [env, target]);
 
   return (
     <div className={styles.impactSection}>

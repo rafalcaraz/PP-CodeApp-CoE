@@ -238,3 +238,138 @@ describe("row dedup", () => {
     expect(result.data.rows[1].displayName).toBe("Third");
   });
 });
+
+// ---------------------------------------------------------------------------
+// runQueryAllPages — multi-page drain via listEnvironments()
+//
+// Pins the fix for the Environment-table pagination bug surfaced on the
+// Zones board (MS env groups showing "0 envs" despite real membership):
+// when the connector silently re-serves page 1 if only `SkipToken` is
+// sent, the drain helper must advance via `Skip = rowsLoaded` to avoid
+// dropping every page past the first.
+// ---------------------------------------------------------------------------
+
+describe("runQueryAllPages — multi-page Environment drain", () => {
+  function envItem(id: string, displayName: string, groupId?: string) {
+    return {
+      name: id,
+      type: "microsoft.powerplatform/environments",
+      location: "us",
+      properties: {
+        displayName,
+        environmentType: "Sandbox",
+        isManaged: false,
+        ...(groupId ? { environmentGroupId: groupId } : {}),
+      },
+    };
+  }
+
+  it("sends Skip = rowsLoaded on the second page (not Skip = 0)", async () => {
+    // Page 1: 2 envs + a skipToken. Page 2: 1 env + no skipToken.
+    queryResourcesMock
+      .mockResolvedValueOnce({
+        success: true,
+        data: {
+          totalRecords: 3,
+          skipToken: "token-page-2",
+          data: [envItem("env-1", "Env 1"), envItem("env-2", "Env 2")],
+        },
+      })
+      .mockResolvedValueOnce({
+        success: true,
+        data: {
+          totalRecords: 3,
+          skipToken: null,
+          data: [envItem("env-3", "Env 3")],
+        },
+      });
+
+    const { listEnvironments } = await import("./inventory");
+    const result = await listEnvironments();
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.data).toHaveLength(3);
+    expect(result.data.map((e) => e.id).sort()).toEqual([
+      "env-1",
+      "env-2",
+      "env-3",
+    ]);
+
+    // Verify the second call advanced Skip past page 1's row count —
+    // this is the safety net that keeps drain working when the
+    // connector ignores SkipToken for the Environment table.
+    expect(queryResourcesMock).toHaveBeenCalledTimes(2);
+    // QueryResources signature: (apiVersion, body) — body is arg[1].
+    const secondCallBody = queryResourcesMock.mock.calls[1][1] as {
+      Options: { Top: number; Skip: number; SkipToken: string };
+    };
+    expect(secondCallBody.Options.Skip).toBe(2);
+    expect(secondCallBody.Options.SkipToken).toBe("token-page-2");
+  });
+
+  it("recovers all envs across MS env groups when the connector ignores SkipToken (silently re-serves page 1)", async () => {
+    // Simulates the user-reported regression: tenant has envs spread
+    // across multiple MS env groups, but the connector silently
+    // re-serves page 1 on every SkipToken call. Without Skip-as-cursor
+    // we'd only ever see page 1, so envs in groups that only appear on
+    // later pages would never be discovered.
+    //
+    // With the fix, the connector handler can use `Skip` to figure out
+    // which slice the caller actually wants. We model that by
+    // returning different items based on the Skip value in the body.
+    queryResourcesMock.mockImplementation((_apiVersion: string, body: {
+      Options?: { Skip?: number };
+    }) => {
+      const skip = body?.Options?.Skip ?? 0;
+      if (skip === 0) {
+        return Promise.resolve({
+          success: true,
+          data: {
+            totalRecords: 4,
+            skipToken: "looks-like-paging-works",
+            data: [
+              envItem("env-A", "Env A", "group-red"),
+              envItem("env-B", "Env B", "group-red"),
+            ],
+          },
+        });
+      }
+      if (skip === 2) {
+        return Promise.resolve({
+          success: true,
+          data: {
+            totalRecords: 4,
+            skipToken: null,
+            data: [
+              envItem("env-C", "Env C", "group-red"),
+              envItem("env-D", "Env D", "group-yellow"),
+            ],
+          },
+        });
+      }
+      // Any other Skip → return empty (defensive).
+      return Promise.resolve({
+        success: true,
+        data: { totalRecords: 4, skipToken: null, data: [] },
+      });
+    });
+
+    const { listEnvironments } = await import("./inventory");
+    const result = await listEnvironments();
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.data).toHaveLength(4);
+    // Membership in MS env groups is now correctly derivable —
+    // previously env-C and env-D would have been missing entirely
+    // and `group-yellow` would have shown "0 envs" despite having one.
+    const redMembers = result.data.filter(
+      (e) => e.environmentGroupId === "group-red",
+    );
+    const yellowMembers = result.data.filter(
+      (e) => e.environmentGroupId === "group-yellow",
+    );
+    expect(redMembers).toHaveLength(3);
+    expect(yellowMembers).toHaveLength(1);
+  });
+});
+
