@@ -29,9 +29,11 @@ PP-CoE-CodeApp/src/
 │  ├─ zones/
 │  ├─ security/                   # Comparator + Impact + DLP*
 │  ├─ queries/
+│  ├─ deep-inventory/             # tenant-scan UI (admin-apps fanout, filter + column builder)
 │  └─ settings/
 ├─ shared/
 │  ├─ inventory-core/             # clause builders, executor, cache, ResourceType, DataResult
+│  ├─ deep-inventory/             # property catalog (curated + observed), source registry, runner
 │  ├─ ui/                         # ResourceListPage, detail/*, Status, RawJsonAccordion, EnvironmentPicker
 │  ├─ portal-actions/             # action registry + bar
 │  ├─ copilot-chat/               # global floating MCS assistant
@@ -82,6 +84,7 @@ and the diff is obvious in code review.
 | Portal-action buttons on detail pages | `PP-CoE-CodeApp/docs/portal-actions.md` |
 | Environment-group rule renderers | `PP-CoE-CodeApp/docs/governance-rules-catalog.md` + `PP-CoE-CodeApp/docs/admin-payload-samples.md` |
 | Admin-connector enrichment (per-record `Get_*` calls) | `PP-CoE-CodeApp/docs/admin-connector-inventory.md` + `admin-payload-samples.md` |
+| **Tenant scans** (deep-inventory fanout across envs — `embeddedApp.type`, `usesPremiumApi`, etc.) | `PP-CoE-CodeApp/src/shared/deep-inventory/index.ts` is the public barrel; curated properties live in `catalog/curated.<source>.ts`. The runner streams events; the UI is `features/deep-inventory/DeepScanView.tsx`. Adding a queryable property = appending one entry to the curated registry (one-line change). |
 | The Copilot Studio assistant chat | `PP-CoE-CodeApp/docs/copilot-studio-integration.md` |
 | Anything under `src/generated/` | `PP-CoE-CodeApp/docs/connector-generator-fixup.md` (the generator is auto-healed by `postinstall` — don't hand-edit) |
 | Dashboards / KPI / chart tiles | `PP-CoE-CodeApp/src/features/dashboards/_components/TileView.tsx` is the entry point; chart tiles must stay `source: "builder"`, raw clauses only work with KPI/Table viz |
