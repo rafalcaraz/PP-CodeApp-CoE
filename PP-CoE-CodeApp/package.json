@@ -34,7 +34,7 @@
     "recharts": "^3.8.1"
   },
   "devDependencies": {
-    "@eslint/js": "^9.39.1",
+    "@eslint/js": "^10.0.1",
     "@microsoft/power-apps-vite": "^1.0.2",
     "@playwright/test": "^1.60.0",
     "@testing-library/jest-dom": "6.6.3",
