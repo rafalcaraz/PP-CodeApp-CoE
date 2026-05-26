@@ -138,8 +138,24 @@ describe("EnvironmentGroupDetail smoke", () => {
     vi.mocked(getEnvironmentGroupGovernance).mockResolvedValue({
       ok: true,
       data: {
-        rulesets: { ok: true, data: { rulesets: [], raw: {} } as never },
-        policies: { ok: true, data: { policies: [], raw: {} } as never },
+        rulesets: {
+          ok: true,
+          data: {
+            matching: { value: [] },
+            all: { value: [] },
+            totalInTenant: 0,
+            raw: {},
+          } as never,
+        },
+        policies: {
+          ok: true,
+          data: {
+            assignments: { value: [] },
+            policies: [],
+            policyErrors: {},
+            raw: { assignments: {}, policies: {} },
+          } as never,
+        },
       },
     });
     renderGroupDetail();

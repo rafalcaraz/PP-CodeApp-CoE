@@ -1,0 +1,105 @@
+{
+  "envId": "00000000-0000-0000-0000-000000000001",
+  "isManaged": true,
+  "environmentGroupId": "",
+  "appliedCount": 1,
+  "totalPolicies": 49,
+  "trace": [
+    {
+      "policyId": "00000000-0000-0000-0000-000000000002",
+      "displayName": "Fixture User 1",
+      "environmentType": "OnlyEnvironments",
+      "applies": true,
+      "reason": "included",
+      "targetEnvIdRaw": "00000000-0000-0000-0000-000000000001",
+      "targetEnvIdNormalized": "00000000-0000-0000-0000-000000000001",
+      "policyEnvIdsRaw": [
+        "/providers/Microsoft.BusinessAppPlatform/scopes/admin/environments/00000000-0000-0000-0000-000000000001"
+      ],
+      "policyEnvIdsNormalized": [
+        "00000000-0000-0000-0000-000000000001"
+      ]
+    },
+    {
+      "policyId": "00000000-0000-0000-0000-000000000003",
+      "displayName": "Fixture User 2",
+      "environmentType": "OnlyEnvironments",
+      "applies": false,
+      "reason": "none",
+      "targetEnvIdRaw": "00000000-0000-0000-0000-000000000001",
+      "targetEnvIdNormalized": "00000000-0000-0000-0000-000000000001",
+      "policyEnvIdsRaw": [
+        "/providers/Microsoft.BusinessAppPlatform/scopes/admin/environments/00000000-0000-0000-0000-000000000004"
+      ],
+      "policyEnvIdsNormalized": [
+        "00000000-0000-0000-0000-000000000004"
+      ]
+    },
+    {
+      "policyId": "00000000-0000-0000-0000-000000000005",
+      "displayName": "Fixture User 3",
+      "environmentType": "OnlyEnvironments",
+      "applies": false,
+      "reason": "none",
+      "targetEnvIdRaw": "00000000-0000-0000-0000-000000000001",
+      "targetEnvIdNormalized": "00000000-0000-0000-0000-000000000001",
+      "policyEnvIdsRaw": [
+        "/providers/Microsoft.BusinessAppPlatform/scopes/admin/environments/00000000-0000-0000-0000-000000000006"
+      ],
+      "policyEnvIdsNormalized": [
+        "00000000-0000-0000-0000-000000000006"
+      ]
+    },
+    {
+      "policyId": "00000000-0000-0000-0000-000000000007",
+      "displayName": "Fixture User 4",
+      "environmentType": "OnlyEnvironments",
+      "applies": false,
+      "reason": "none",
+      "targetEnvIdRaw": "00000000-0000-0000-0000-000000000001",
+      "targetEnvIdNormalized": "00000000-0000-0000-0000-000000000001",
+      "policyEnvIdsRaw": [
+        "/providers/Microsoft.BusinessAppPlatform/scopes/admin/environments/00000000-0000-0000-0000-000000000008"
+      ],
+      "policyEnvIdsNormalized": [
+        "00000000-0000-0000-0000-000000000008"
+      ]
+    },
+    {
+      "policyId": "00000000-0000-0000-0000-000000000009",
+      "displayName": "Fixture User 5",
+      "environmentType": "OnlyEnvironments",
+      "applies": false,
+      "reason": "none",
+      "targetEnvIdRaw": "00000000-0000-0000-0000-000000000001",
+      "targetEnvIdNormalized": "00000000-0000-0000-0000-000000000001",
+      "policyEnvIdsRaw": [
+        "/providers/Microsoft.BusinessAppPlatform/scopes/admin/environments/00000000-0000-0000-0000-000000000010"
+      ],
+      "policyEnvIdsNormalized": [
+        "00000000-0000-0000-0000-000000000010"
+      ]
+    },
+    {
+      "policyId": "00000000-0000-0000-0000-000000000011",
+      "displayName": "Fixture User 6",
+      "environmentType": "OnlyEnvironments",
+      "applies": false,
+      "reason": "none",
+      "targetEnvIdRaw": "00000000-0000-0000-0000-000000000001",
+      "targetEnvIdNormalized": "00000000-0000-0000-0000-000000000001",
+      "policyEnvIdsRaw": [
+        "/providers/Microsoft.BusinessAppPlatform/scopes/admin/environments/00000000-0000-0000-0000-000000000012",
+        "/providers/Microsoft.BusinessAppPlatform/scopes/admin/environments/00000000-0000-0000-0000-000000000013",
+        "/providers/Microsoft.BusinessAppPlatform/scopes/admin/environments/00000000-0000-0000-0000-000000000014",
+        "/providers/Microsoft.BusinessAppPlatform/scopes/admin/environments/00000000-0000-0000-0000-000000000015"
+      ],
+      "policyEnvIdsNormalized": [
+        "00000000-0000-0000-0000-000000000012",
+        "00000000-0000-0000-0000-000000000013",
+        "00000000-0000-0000-0000-000000000014",
+        "00000000-0000-0000-0000-000000000015"
+      ]
+    }
+  ]
+}
