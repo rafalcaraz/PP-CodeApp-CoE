@@ -1,33 +1,42 @@
 /**
  * Filter builder — ordered list of `DeepFilterClause` rows.
  *
- * Each row picks a property from the catalog, then renders the filter
+ * Each row picks a property from the catalog (via a typeahead-enabled
+ * Combobox so the user can either narrow by typing or paste a full
+ * dotted path that isn't in the catalog), then renders the filter
  * controls appropriate to that property's `FilterSpec.kind`:
  *
  *  - `boolean` → tri-state dropdown (True / False / Either)
- *  - `enum`    → multi-select (uses curated `values` when present,
- *                 observed enum values otherwise; falls back to a
- *                 free-text input when neither is available)
+ *  - `enum`    → multi-select Combobox with typeahead (uses curated
+ *                 `values` when present, observed enum values
+ *                 otherwise; falls back to a free-text input when
+ *                 neither is available)
  *  - `string`  → contains / equals / startsWith / endsWith inputs
  *  - `number`  → number input + numeric comparator dropdown
  *  - `date`    → ISO date input + comparator
  *  - `exists`  → present / missing dropdown
  *
- * Keeps the row count UI tight so admins can stack 3–4 clauses
- * without the layout sprawling. Add / remove buttons live inline.
+ * Property picker is intentionally `freeform={true}` so an operator
+ * can type *any* dotted path — useful for ad-hoc scans against fields
+ * that haven't surfaced in the observed catalog yet (e.g. a freshly-
+ * shipped admin field). Freeform paths default to `FilterSpec.kind =
+ * 'string'`; the user picks the op as usual.
  */
 
 import {
   Button,
+  Combobox,
   Dropdown,
   Input,
   Option,
+  OptionGroup,
   Switch,
   Text,
   makeStyles,
   tokens,
 } from "@fluentui/react-components";
 import { AddRegular, DeleteRegular } from "@fluentui/react-icons";
+import { useMemo, useState } from "react";
 import type {
   CatalogGroup,
   DeepFilterClause,
@@ -149,22 +158,12 @@ function FilterRow({ clause, catalogGroups, onChange, onRemove }: FilterRowProps
 
   return (
     <div className={styles.row}>
-      <Dropdown
-        placeholder="Pick a property…"
-        value={entry ? labelFor(entry) : clause.path}
-        selectedOptions={[clause.path]}
-        onOptionSelect={(_e, data) => {
-          const path = data.optionValue;
-          if (!path) return;
-          const next = findEntry(catalogGroups, path);
-          if (!next) return;
-          onChange(defaultClauseFor(next));
-        }}
-      >
-        {catalogGroups.map((group) => (
-          <PropertyOptionGroup key={group.label} group={group} />
-        ))}
-      </Dropdown>
+      <PropertyCombobox
+        catalogGroups={catalogGroups}
+        clause={clause}
+        entry={entry}
+        onChange={onChange}
+      />
 
       <OpDropdown entry={entry} clause={clause} onChange={onChange} />
 
@@ -180,19 +179,99 @@ function FilterRow({ clause, catalogGroups, onChange, onRemove }: FilterRowProps
   );
 }
 
+// ─── property picker (Combobox with typeahead + freeform) ───────────
+
+interface PropertyComboboxProps {
+  catalogGroups: CatalogGroup[];
+  clause: DeepFilterClause;
+  entry: PropertyCatalogEntry | undefined;
+  onChange: (next: DeepFilterClause) => void;
+}
+
+function PropertyCombobox({
+  catalogGroups,
+  clause,
+  entry,
+  onChange,
+}: PropertyComboboxProps) {
+  const styles = useStyles();
+  // The Combobox needs both a controlled text value (what the user
+  // typed) and a selectedOptions array (which entry is highlighted).
+  // We track the typed text locally so the user can backspace +
+  // retype without losing focus.
+  const initialText = entry ? labelFor(entry) : clause.path;
+  const [text, setText] = useState(initialText);
+
+  // Reset the displayed text whenever the underlying clause path
+  // changes from outside (e.g. user clicked an option).
+  const expectedText = entry ? labelFor(entry) : clause.path;
+  if (text !== expectedText && text === initialText) {
+    setText(expectedText);
+  }
+
+  const filtered = useMemo(
+    () => filterCatalogGroups(catalogGroups, text),
+    [catalogGroups, text]
+  );
+  const hasMatches = filtered.some((g) => g.entries.length > 0);
+
+  return (
+    <Combobox
+      freeform
+      placeholder="Pick or type a property path…"
+      value={text}
+      selectedOptions={[clause.path]}
+      onChange={(e) => setText((e.target as HTMLInputElement).value)}
+      onOptionSelect={(_e, data) => {
+        const path = data.optionValue;
+        if (!path || path.endsWith("-label") || path.endsWith("-empty")) return;
+        const next = findEntry(catalogGroups, path);
+        if (next) {
+          setText(labelFor(next));
+          onChange(defaultClauseFor(next));
+        } else {
+          // Freeform path the user typed and selected — keep the
+          // existing op + value, just swap the path. New paths
+          // default to a `string` filter kind (string contains).
+          setText(path);
+          onChange({ ...clause, path });
+        }
+      }}
+      onBlur={() => {
+        // If the user typed a freeform path and didn't pick an
+        // option, commit the typed text as the new path so the row
+        // reflects what they see.
+        const trimmed = text.trim();
+        if (!trimmed) return;
+        if (trimmed === clause.path) return;
+        const matched = findEntry(catalogGroups, trimmed);
+        if (matched) {
+          onChange(defaultClauseFor(matched));
+        } else {
+          onChange({ ...clause, path: trimmed });
+        }
+      }}
+    >
+      {!hasMatches && (
+        <Option key="__no_match__" value="__no_match__" text="No match" disabled>
+          <span className={styles.empty}>
+            No matching property — press Enter to use "{text}" as a freeform path.
+          </span>
+        </Option>
+      )}
+      {filtered.map((group) => (
+        <PropertyOptionGroup key={group.label} group={group} />
+      ))}
+    </Combobox>
+  );
+}
+
 function PropertyOptionGroup({ group }: { group: CatalogGroup }) {
   const styles = useStyles();
   const isObserved = group.label === "Discovered fields";
+  if (group.entries.length === 0 && !isObserved) return null;
   return (
-    <>
-      <Option
-        key={`${group.label}-label`}
-        value={`${group.label}-label`}
-        text={group.label}
-        disabled
-      >
-        <span className={styles.groupLabel}>{group.label}</span>
-      </Option>
+    <OptionGroup label={group.label}>
       {isObserved && group.entries.length === 0 && (
         <Option
           key={`${group.label}-empty`}
@@ -213,7 +292,7 @@ function PropertyOptionGroup({ group }: { group: CatalogGroup }) {
           )}
         </Option>
       ))}
-    </>
+    </OptionGroup>
   );
 }
 
@@ -300,39 +379,76 @@ function ValueControl({
   }
 
   if (kind === "enum") {
-    const options = enumValuesFor(entry);
-    if (options.length === 0) {
-      // No known values yet — render free-form input so the user
-      // can still type one.
-      return <PlainInput clause={clause} onChange={onChange} />;
-    }
-    const selected = normalizeMulti(clause.value);
-    return (
-      <Dropdown
-        multiselect={clause.op === "in" || clause.op === "notIn"}
-        value={selected.join(", ") || "Pick value…"}
-        selectedOptions={selected}
-        onOptionSelect={(_e, data) => {
-          const next = data.selectedOptions;
-          onChange({
-            ...clause,
-            value:
-              clause.op === "in" || clause.op === "notIn"
-                ? next
-                : (next[0] ?? ""),
-          });
-        }}
-      >
-        {options.map((v) => (
-          <Option key={v} value={v} text={v}>
-            {v}
-          </Option>
-        ))}
-      </Dropdown>
-    );
+    return <EnumValueCombobox entry={entry} clause={clause} onChange={onChange} />;
   }
 
   return <PlainInput clause={clause} onChange={onChange} />;
+}
+
+interface EnumValueComboboxProps {
+  entry: PropertyCatalogEntry | undefined;
+  clause: DeepFilterClause;
+  onChange: (next: DeepFilterClause) => void;
+}
+
+function EnumValueCombobox({ entry, clause, onChange }: EnumValueComboboxProps) {
+  const options = enumValuesFor(entry);
+  const isMulti = clause.op === "in" || clause.op === "notIn";
+  const selected = normalizeMulti(clause.value);
+  const [text, setText] = useState(isMulti ? selected.join(", ") : (selected[0] ?? ""));
+
+  // Keep the visible text in sync with the underlying value when it
+  // changes from outside (clause swap).
+  const expected = isMulti ? selected.join(", ") : (selected[0] ?? "");
+  if (text !== expected && (text === "" || expected === "")) {
+    setText(expected);
+  }
+
+  // Allow free typing when there are no known values (observed
+  // string-kind property with no cap; or curated enum with no
+  // values).
+  if (options.length === 0) {
+    return <PlainInput clause={clause} onChange={onChange} />;
+  }
+
+  const filtered = options.filter((v) => v.toLowerCase().includes(text.toLowerCase()));
+
+  return (
+    <Combobox
+      freeform
+      multiselect={isMulti}
+      placeholder="Pick value…"
+      value={text}
+      selectedOptions={selected}
+      onChange={(e) => setText((e.target as HTMLInputElement).value)}
+      onOptionSelect={(_e, data) => {
+        const next = data.selectedOptions;
+        onChange({
+          ...clause,
+          value: isMulti ? next : (next[0] ?? ""),
+        });
+        // For single-select, commit the picked label so the input
+        // shows the canonical value. For multi-select, the chip
+        // rendering inside the combobox handles display.
+        if (!isMulti) setText(next[0] ?? "");
+      }}
+      onBlur={() => {
+        // Freeform commit for single-select only (multi-select is
+        // chip-based, freeform commits aren't meaningful).
+        if (isMulti) return;
+        const trimmed = text.trim();
+        if (!trimmed) return;
+        if (trimmed === selected[0]) return;
+        onChange({ ...clause, value: trimmed });
+      }}
+    >
+      {filtered.map((v) => (
+        <Option key={v} value={v} text={v}>
+          {v}
+        </Option>
+      ))}
+    </Combobox>
+  );
 }
 
 function PlainInput({
@@ -431,4 +547,26 @@ function defaultClauseFor(entry: PropertyCatalogEntry): DeepFilterClause {
     default:
       return { path: entry.path, op: "contains", value: "" };
   }
+}
+
+/** Filter the catalog groups by a typed query. Substring-match,
+ *  case-insensitive, against both label and raw path. Returns the
+ *  same group shape but with entries pruned. Empty query returns
+ *  the input unchanged. */
+function filterCatalogGroups(
+  groups: CatalogGroup[],
+  query: string
+): CatalogGroup[] {
+  const trimmed = query.trim().toLowerCase();
+  if (!trimmed) return groups;
+  return groups
+    .map((group) => ({
+      label: group.label,
+      entries: group.entries.filter((entry) => {
+        const label = labelFor(entry).toLowerCase();
+        const path = entry.path.toLowerCase();
+        return label.includes(trimmed) || path.includes(trimmed);
+      }),
+    }))
+    .filter((g) => g.entries.length > 0 || g.label === "Discovered fields");
 }
