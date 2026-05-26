@@ -16,6 +16,7 @@ import {
   listStandardGroups,
   pruneIneligibleEnvs,
   removeEnvFromStandardGroup,
+  setStandardGroupDlpPolicy,
   updateStandardGroup,
 } from "./standardGroups";
 
@@ -204,5 +205,91 @@ describe("standardGroups — backwards compat", () => {
   it("returns [] when the blob is non-JSON", () => {
     localStorage.setItem("ppcoe.standardGroups.v1", "{not json");
     expect(listStandardGroups()).toEqual([]);
+  });
+
+  it("defaults dlpPolicyId/dlpPolicyDisplayName to undefined for pre-DLP payloads", () => {
+    // Mirror a v3a payload that has envIds but no DLP fields. The
+    // reader must tolerate the absence — every screen that consumes
+    // a group treats `dlpPolicyId === undefined` as "no link".
+    localStorage.setItem(
+      "ppcoe.standardGroups.v1",
+      JSON.stringify([
+        {
+          id: "v3a-1",
+          displayName: "v3a",
+          color: "#000",
+          icon: "🎯",
+          envIds: ["env-1"],
+          createdAt: "2024-01-01T00:00:00.000Z",
+          updatedAt: "2024-01-01T00:00:00.000Z",
+        },
+      ]),
+    );
+    const [g] = listStandardGroups();
+    expect(g.dlpPolicyId).toBeUndefined();
+    expect(g.dlpPolicyDisplayName).toBeUndefined();
+  });
+});
+
+describe("setStandardGroupDlpPolicy", () => {
+  function newGroup() {
+    return createStandardGroup({
+      displayName: "G",
+      color: "#000",
+      icon: "🎯",
+    });
+  }
+
+  it("links a DLP policy and caches the display name", () => {
+    const g = newGroup();
+    const linked = setStandardGroupDlpPolicy(g.id, {
+      id: "pol-1",
+      displayName: "Tenant default DLP",
+    });
+    expect(linked?.dlpPolicyId).toBe("pol-1");
+    expect(linked?.dlpPolicyDisplayName).toBe("Tenant default DLP");
+    // Persists across reads.
+    expect(getStandardGroup(g.id)?.dlpPolicyId).toBe("pol-1");
+  });
+
+  it("trims and tolerates a missing display name", () => {
+    const g = newGroup();
+    setStandardGroupDlpPolicy(g.id, { id: "pol-1", displayName: "  " });
+    expect(getStandardGroup(g.id)?.dlpPolicyDisplayName).toBeUndefined();
+    setStandardGroupDlpPolicy(g.id, { id: "pol-1" });
+    expect(getStandardGroup(g.id)?.dlpPolicyDisplayName).toBeUndefined();
+  });
+
+  it("overwrites an existing link (one policy per group)", () => {
+    const g = newGroup();
+    setStandardGroupDlpPolicy(g.id, { id: "pol-1", displayName: "First" });
+    setStandardGroupDlpPolicy(g.id, { id: "pol-2", displayName: "Second" });
+    const stored = getStandardGroup(g.id);
+    expect(stored?.dlpPolicyId).toBe("pol-2");
+    expect(stored?.dlpPolicyDisplayName).toBe("Second");
+  });
+
+  it("clears the link when passed null", () => {
+    const g = newGroup();
+    setStandardGroupDlpPolicy(g.id, { id: "pol-1", displayName: "First" });
+    setStandardGroupDlpPolicy(g.id, null);
+    const stored = getStandardGroup(g.id);
+    expect(stored?.dlpPolicyId).toBeUndefined();
+    expect(stored?.dlpPolicyDisplayName).toBeUndefined();
+  });
+
+  it("returns null for an unknown group id and writes nothing", () => {
+    const before = listStandardGroups();
+    expect(
+      setStandardGroupDlpPolicy("nope", { id: "pol-1", displayName: "X" }),
+    ).toBeNull();
+    expect(listStandardGroups()).toEqual(before);
+  });
+
+  it("does not disturb other groups", () => {
+    const g1 = newGroup();
+    const g2 = newGroup();
+    setStandardGroupDlpPolicy(g1.id, { id: "pol-1", displayName: "P1" });
+    expect(getStandardGroup(g2.id)?.dlpPolicyId).toBeUndefined();
   });
 });
