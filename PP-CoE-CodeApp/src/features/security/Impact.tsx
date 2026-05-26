@@ -46,10 +46,10 @@ import {
   getEnvironmentGroupAcpStatus,
   type EnvironmentGroupAcpStatus,
 } from "../../data/dlpPolicies";
-import { type DlpImpactRow } from "../../data/dlpImpact";
 import {
   queryAcpImpact,
   type AcpImpactResult,
+  type AcpImpactRow,
 } from "../../data/acpImpact";
 import { EmptyPane, ErrorPane, LoadingPane } from "../../components/Status";
 import { downloadCsv, rowsToCsv } from "../../utils/csv";
@@ -167,7 +167,7 @@ const useAcpStyles = makeStyles({
   },
   pickerRow: {
     display: "grid",
-    gridTemplateColumns: "1fr 1fr auto",
+    gridTemplateColumns: "1fr 1fr auto auto",
     alignItems: "end",
     gap: tokens.spacingHorizontalL,
   },
@@ -179,6 +179,11 @@ const useAcpStyles = makeStyles({
     fontWeight: tokens.fontWeightSemibold,
   },
   combobox: { width: "100%" },
+  operationInputWrap: {
+    display: "flex",
+    flexDirection: "column",
+  },
+  operationInput: { minWidth: "160px" },
   analyzeButtonWrap: { paddingBottom: "1px" },
   summaryRow: {
     display: "flex",
@@ -293,6 +298,7 @@ function AcpImpactView() {
   const [groupsError, setGroupsError] = useState<string | null>(null);
   const [groupId, setGroupId] = useState<string | undefined>();
   const [connectorSlug, setConnectorSlug] = useState<string | undefined>();
+  const [operationId, setOperationId] = useState<string>("");
 
   // Auto-loaded when a group is selected — surfaces the current
   // allow-list as suggestions in the connector picker.
@@ -349,6 +355,7 @@ function AcpImpactView() {
   function changeGroup(id: string | undefined) {
     setGroupId(id);
     setConnectorSlug(undefined);
+    setOperationId("");
     setResult(null);
     setAnalyzeError(null);
     setTableSearch("");
@@ -398,7 +405,8 @@ function AcpImpactView() {
       const res = await queryAcpImpact(
         group.id,
         group.displayName || group.id,
-        connectorSlug
+        connectorSlug,
+        operationId.trim() || undefined
       );
       if (!res.ok) {
         setAnalyzeError(res.error);
@@ -414,13 +422,15 @@ function AcpImpactView() {
     <div className={styles.root}>
       <MessageBar intent="info">
         <MessageBarBody>
-          <MessageBarTitle>What this V1 covers</MessageBarTitle>
+          <MessageBarTitle>What this covers</MessageBarTitle>
           Pick an environment group, then a connector. The query lists
           every app / flow / agent in any environment in that group
           that currently uses the connector — these are the resources
           that would lose access if the connector were removed from
           the group's <code>ConnectorManagement</code> allow-list (or
-          if the group flipped to ACP-only mode without it). Suggestions
+          if the group flipped to ACP-only mode without it). Optionally
+          filter by a specific operation (e.g. <code>GetItems</code>)
+          to see only resources that use that exact action. Suggestions
           in the connector picker come from the group's current
           allow-list; you can also type any slug to simulate adding +
           immediately removing one.
@@ -453,6 +463,18 @@ function AcpImpactView() {
               disabled={!groupId}
               groupName={group?.displayName ?? group?.id ?? ""}
             />
+            <div className={styles.operationInputWrap}>
+              <label className={styles.pickerLabel}>
+                Operation (optional)
+              </label>
+              <Input
+                placeholder="e.g. GetItems"
+                value={operationId}
+                onChange={(_e, data: InputOnChangeData) => setOperationId(data.value)}
+                disabled={!connectorSlug}
+                className={styles.operationInput}
+              />
+            </div>
             <div className={styles.analyzeButtonWrap}>
               <Button
                 appearance="primary"
@@ -703,68 +725,103 @@ function AcpResultView({
   const agents =
     result.summary.byType["microsoft.copilotstudio/agents"] ?? 0;
 
-  const columns: TableColumnDefinition<DlpImpactRow>[] = useMemo(
-    () => [
-      createTableColumn<DlpImpactRow>({
-        columnId: "displayName",
-        compare: (a, b) => a.displayName.localeCompare(b.displayName),
-        renderHeaderCell: () => "Name",
-        renderCell: (row) =>
-          row.detailHref ? (
-            <Link onClick={() => navigate(row.detailHref)}>
-              {row.displayName || row.id}
-            </Link>
-          ) : (
-            row.displayName || row.id
+  const hasOperationFilter = Boolean(result.ranAgainst.operationId);
+  const hasAnyUsedAs = result.rows.some((r) => r.usedAs);
+
+  const columns: TableColumnDefinition<AcpImpactRow>[] = useMemo(
+    () => {
+      const base: TableColumnDefinition<AcpImpactRow>[] = [
+        createTableColumn<AcpImpactRow>({
+          columnId: "displayName",
+          compare: (a, b) => a.displayName.localeCompare(b.displayName),
+          renderHeaderCell: () => "Name",
+          renderCell: (row) =>
+            row.detailHref ? (
+              <Link onClick={() => navigate(row.detailHref)}>
+                {row.displayName || row.id}
+              </Link>
+            ) : (
+              row.displayName || row.id
+            ),
+        }),
+        createTableColumn<AcpImpactRow>({
+          columnId: "type",
+          compare: (a, b) => a.type.localeCompare(b.type),
+          renderHeaderCell: () => "Type",
+          renderCell: (row) => (
+            <Badge appearance="outline" color="informative">
+              {resourceTypeShort(row.type as ResourceTypeValue)}
+            </Badge>
           ),
-      }),
-      createTableColumn<DlpImpactRow>({
-        columnId: "type",
-        compare: (a, b) => a.type.localeCompare(b.type),
-        renderHeaderCell: () => "Type",
-        renderCell: (row) => (
-          <Badge appearance="outline" color="informative">
-            {resourceTypeShort(row.type as ResourceTypeValue)}
-          </Badge>
-        ),
-      }),
-      createTableColumn<DlpImpactRow>({
-        columnId: "environment",
-        compare: (a, b) =>
-          (a.environmentName || a.environmentId).localeCompare(
-            b.environmentName || b.environmentId
-          ),
-        renderHeaderCell: () => "Environment",
-        renderCell: (row) =>
-          row.environmentId ? (
-            <Link
-              onClick={() =>
-                navigate(`/environments/${encodeURIComponent(row.environmentId)}`)
+        }),
+      ];
+      if (hasOperationFilter || hasAnyUsedAs) {
+        base.push(
+          createTableColumn<AcpImpactRow>({
+            columnId: "usedAs",
+            compare: (a, b) => a.usedAs.localeCompare(b.usedAs),
+            renderHeaderCell: () => "Used as",
+            renderCell: (row) => {
+              if (row.usedAs) {
+                const color = row.usedAs === "Knowledge" ? "subtle" : "informative";
+                return (
+                  <Badge appearance="tint" color={color}>
+                    {row.usedAs}
+                  </Badge>
+                );
               }
-            >
-              {row.environmentName || row.environmentId}
-            </Link>
-          ) : (
-            "—"
-          ),
-      }),
-      createTableColumn<DlpImpactRow>({
-        columnId: "owner",
-        compare: (a, b) =>
-          (a.ownerDisplayName || a.ownerId).localeCompare(
-            b.ownerDisplayName || b.ownerId
-          ),
-        renderHeaderCell: () => "Owner",
-        renderCell: (row) => row.ownerDisplayName || row.ownerId || "—",
-      }),
-      createTableColumn<DlpImpactRow>({
-        columnId: "lastModifiedAt",
-        compare: (a, b) => a.lastModifiedAt.localeCompare(b.lastModifiedAt),
-        renderHeaderCell: () => "Modified",
-        renderCell: (row) => formatDate(row.lastModifiedAt),
-      }),
-    ],
-    [navigate]
+              const isAgent = row.type.includes("botcomponents");
+              return isAgent ? (
+                <Badge appearance="outline" color="subtle">
+                  connector-only
+                </Badge>
+              ) : (
+                "—"
+              );
+            },
+          })
+        );
+      }
+      base.push(
+        createTableColumn<AcpImpactRow>({
+          columnId: "environment",
+          compare: (a, b) =>
+            (a.environmentName || a.environmentId).localeCompare(
+              b.environmentName || b.environmentId
+            ),
+          renderHeaderCell: () => "Environment",
+          renderCell: (row) =>
+            row.environmentId ? (
+              <Link
+                onClick={() =>
+                  navigate(`/environments/${encodeURIComponent(row.environmentId)}`)
+                }
+              >
+                {row.environmentName || row.environmentId}
+              </Link>
+            ) : (
+              "—"
+            ),
+        }),
+        createTableColumn<AcpImpactRow>({
+          columnId: "owner",
+          compare: (a, b) =>
+            (a.ownerDisplayName || a.ownerId).localeCompare(
+              b.ownerDisplayName || b.ownerId
+            ),
+          renderHeaderCell: () => "Owner",
+          renderCell: (row) => row.ownerDisplayName || row.ownerId || "—",
+        }),
+        createTableColumn<AcpImpactRow>({
+          columnId: "lastModifiedAt",
+          compare: (a, b) => a.lastModifiedAt.localeCompare(b.lastModifiedAt),
+          renderHeaderCell: () => "Modified",
+          renderCell: (row) => formatDate(row.lastModifiedAt),
+        })
+      );
+      return base;
+    },
+    [navigate, hasOperationFilter, hasAnyUsedAs]
   );
 
   function exportCsv() {
@@ -773,6 +830,7 @@ function AcpResultView({
         id: r.id,
         type: r.type,
         displayName: r.displayName,
+        ...(hasOperationFilter ? { usedAs: r.usedAs } : {}),
         environmentId: r.environmentId,
         environmentName: r.environmentName,
         ownerId: r.ownerId,
@@ -816,6 +874,9 @@ function AcpResultView({
             <strong>{result.ranAgainst.groupDisplayName}</strong>'s ACP
             allow-list ({result.ranAgainst.effectiveEnvCount} environment
             {result.ranAgainst.effectiveEnvCount === 1 ? "" : "s"} in scope).
+            {result.ranAgainst.operationId && (
+              <>{" "}Filtered to operation: <code>{result.ranAgainst.operationId}</code>.</>
+            )}
           </Text>
         </div>
 
@@ -867,9 +928,9 @@ function AcpResultView({
                 )}
               </DataGridRow>
             </DataGridHeader>
-            <DataGridBody<DlpImpactRow>>
+            <DataGridBody<AcpImpactRow>>
               {({ item, rowId }) => (
-                <DataGridRow<DlpImpactRow> key={rowId}>
+                <DataGridRow<AcpImpactRow> key={rowId}>
                   {({ renderCell }) => (
                     <DataGridCell>{renderCell(item)}</DataGridCell>
                   )}

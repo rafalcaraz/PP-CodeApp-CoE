@@ -464,7 +464,7 @@ function toImpactRow(item: ResourceItem): DlpImpactRow {
   // Agents typically use `lastPublishedAt` instead of `lastModifiedAt`.
   const modified =
     readStr(item, "lastModifiedAt") || readStr(item, "lastPublishedAt");
-  return {
+  const row: DlpImpactRow = {
     id,
     type,
     displayName: readStr(item, "displayName"),
@@ -475,6 +475,23 @@ function toImpactRow(item: ResourceItem): DlpImpactRow {
     lastModifiedAt: modified,
     detailHref: detailHrefFor(type, id),
   };
+  // Stash raw connector arrays for downstream enrichment (e.g. ACP
+  // impact's per-operation filtering). Non-enumerable so it doesn't
+  // pollute serialization or table rendering.
+  const props = (item.properties ?? {}) as Record<string, unknown>;
+  const rawConnectors = Array.isArray(props.powerPlatformConnectors)
+    ? props.powerPlatformConnectors
+    : Array.isArray(props.connectors)
+    ? props.connectors
+    : undefined;
+  if (rawConnectors) {
+    Object.defineProperty(row, "_rawConnectors", {
+      value: rawConnectors,
+      enumerable: false,
+      writable: false,
+    });
+  }
+  return row;
 }
 
 /**

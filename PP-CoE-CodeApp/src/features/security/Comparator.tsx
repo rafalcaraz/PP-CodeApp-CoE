@@ -26,6 +26,8 @@ import {
 import {
   ArrowSwapRegular,
   CheckmarkCircleFilled,
+  ChevronDownRegular,
+  ChevronRightRegular,
   WarningFilled,
 } from "@fluentui/react-icons";
 import { listEnvironmentGroups, type EnvironmentGroupRow } from "../../data/inventory";
@@ -36,6 +38,7 @@ import {
 import {
   diffAcpStatuses,
   extractAcpSnapshot,
+  type AcpActionsDiff,
   type AcpConnectorRow,
   type AcpDiffResult,
   type AcpMode,
@@ -276,6 +279,50 @@ const useAcpStyles = makeStyles({
     flexWrap: "wrap",
     gap: tokens.spacingHorizontalXXS,
   },
+  expandToggle: {
+    cursor: "pointer",
+    display: "inline-flex",
+    alignItems: "center",
+    gap: tokens.spacingHorizontalXXS,
+    color: tokens.colorBrandForeground1,
+    fontSize: tokens.fontSizeBase200,
+    border: "none",
+    background: "none",
+    padding: 0,
+  },
+  actionDetailRow: {
+    backgroundColor: tokens.colorNeutralBackground3,
+  },
+  actionDetailCell: {
+    padding: `${tokens.spacingVerticalS} ${tokens.spacingHorizontalM}`,
+    fontSize: tokens.fontSizeBase200,
+  },
+  actionDiffGrid: {
+    display: "grid",
+    gridTemplateColumns: "auto 1fr",
+    gap: `${tokens.spacingVerticalXXS} ${tokens.spacingHorizontalM}`,
+    alignItems: "baseline",
+  },
+  actionRemoved: {
+    color: tokens.colorPaletteRedForeground1,
+    fontFamily: tokens.fontFamilyMonospace,
+    fontSize: tokens.fontSizeBase200,
+  },
+  actionAdded: {
+    color: tokens.colorPaletteGreenForeground1,
+    fontFamily: tokens.fontFamilyMonospace,
+    fontSize: tokens.fontSizeBase200,
+  },
+  actionCommon: {
+    color: tokens.colorNeutralForeground3,
+    fontFamily: tokens.fontFamilyMonospace,
+    fontSize: tokens.fontSizeBase200,
+  },
+  actionLabel: {
+    fontWeight: tokens.fontWeightSemibold,
+    fontSize: tokens.fontSizeBase200,
+    whiteSpace: "nowrap",
+  },
 });
 
 function modeAppearance(
@@ -429,16 +476,16 @@ function AcpComparatorView() {
     <div className={styles.root}>
       <MessageBar intent="info">
         <MessageBarBody>
-          <MessageBarTitle>What this V1 covers</MessageBarTitle>
-          The diff compares the <strong>allow-list membership</strong> and{" "}
+          <MessageBarTitle>What this covers</MessageBarTitle>
+          The diff compares the <strong>allow-list membership</strong>,{" "}
           per-connector <strong>AllowedActionsMode</strong> /{" "}
-          <strong>AllowedConnectionTypesMode</strong> from the
-          {" "}<code>ConnectorManagement</code> rule, plus the{" "}
+          <strong>AllowedConnectionTypesMode</strong>, and the{" "}
+          <strong>per-action allowed sets</strong> (which specific operations
+          are permitted under <code>SomeAllowed</code>) from the{" "}
+          <code>ConnectorManagement</code> rule, plus the{" "}
           <strong>ACP-only mode</strong> flag from{" "}
-          <code>AdvancedConnectorPoliciesOnly</code>. Per-action set diffs
-          (which specific operations are allowed under{" "}
-          <code>SomeAllowed</code>) are listed in the row drawer but{" "}
-          <strong>not yet diffed</strong> — those land in a follow-up.
+          <code>AdvancedConnectorPoliciesOnly</code>. Expand a row to see
+          which operations were added or removed.
         </MessageBarBody>
       </MessageBar>
 
@@ -634,6 +681,11 @@ function AcpDiffView({
           tone={s.modeChanged > 0 ? "warn" : undefined}
         />
         <Kpi
+          label="Actions changed"
+          value={s.actionsChanged}
+          tone={s.actionsChanged > 0 ? "warn" : undefined}
+        />
+        <Kpi
           label="ACP-only mode"
           value={s.acpOnlySame ? "Same" : "Different"}
           tone={s.acpOnlySame ? "ok" : "warn"}
@@ -718,26 +770,9 @@ function AcpDiffView({
               </tr>
             </thead>
             <tbody>
-              {visibleRows.map((c) => {
-                const same = !c.membershipDiffers && !c.modeDiffers;
-                return (
-                  <tr key={c.id} className={same ? undefined : styles.rowDiff}>
-                    <td className={styles.td}>
-                      <div className={styles.connectorName}>{c.name}</div>
-                      <div className={styles.connectorId}>{c.id}</div>
-                    </td>
-                    <td className={styles.td}>
-                      <ModeCell mode={c.modeA} connTypesMode={c.connTypesModeA} />
-                    </td>
-                    <td className={styles.td}>
-                      <ModeCell mode={c.modeB} connTypesMode={c.connTypesModeB} />
-                    </td>
-                    <td className={styles.td}>
-                      <StatusCell row={c} />
-                    </td>
-                  </tr>
-                );
-              })}
+              {visibleRows.map((c) => (
+                <ConnectorDiffRow key={c.id} row={c} />
+              ))}
             </tbody>
           </table>
         )}
@@ -809,10 +844,113 @@ function StatusCell({ row }: { row: AcpConnectorRow }) {
       </span>
     );
   }
+  const label = row.actionsDiffer ? "Actions differ" : "Mode differs";
   return (
     <span className={styles.changeCell}>
       <WarningFilled style={{ color: tokens.colorPaletteDarkOrangeForeground1 }} />
-      <span>Mode differs</span>
+      <span>{label}</span>
     </span>
+  );
+}
+
+/** A connector row that optionally expands to show per-action diff. */
+function ConnectorDiffRow({ row }: { row: AcpConnectorRow }) {
+  const styles = useAcpStyles();
+  const [expanded, setExpanded] = useState(false);
+  const same = !row.membershipDiffers && !row.modeDiffers;
+  const hasActionDetail = row.actionsDiffer && row.actionsDiff !== null;
+
+  return (
+    <>
+      <tr className={same ? undefined : styles.rowDiff}>
+        <td className={styles.td}>
+          <div className={styles.connectorName}>
+            {hasActionDetail && (
+              <button
+                className={styles.expandToggle}
+                onClick={() => setExpanded(!expanded)}
+                aria-expanded={expanded}
+                aria-label={`${expanded ? "Collapse" : "Expand"} action details for ${row.name}`}
+              >
+                {expanded ? <ChevronDownRegular /> : <ChevronRightRegular />}
+              </button>
+            )}{" "}
+            {row.name}
+          </div>
+          <div className={styles.connectorId}>{row.id}</div>
+        </td>
+        <td className={styles.td}>
+          <ModeCell mode={row.modeA} connTypesMode={row.connTypesModeA} />
+        </td>
+        <td className={styles.td}>
+          <ModeCell mode={row.modeB} connTypesMode={row.connTypesModeB} />
+        </td>
+        <td className={styles.td}>
+          <StatusCell row={row} />
+        </td>
+      </tr>
+      {expanded && hasActionDetail && (
+        <tr className={styles.actionDetailRow}>
+          <td colSpan={4} className={styles.actionDetailCell}>
+            <ActionsDiffDetail diff={row.actionsDiff!} modeA={row.modeA} modeB={row.modeB} />
+          </td>
+        </tr>
+      )}
+    </>
+  );
+}
+
+/** Renders the per-action set diff inside the expanded row. */
+function ActionsDiffDetail({
+  diff,
+  modeA,
+  modeB,
+}: {
+  diff: AcpActionsDiff;
+  modeA: AcpMode | null;
+  modeB: AcpMode | null;
+}) {
+  const styles = useAcpStyles();
+
+  const modeTransition =
+    modeA === "AllAllowed" && modeB !== "AllAllowed"
+      ? "Restricted: AllAllowed → SomeAllowed"
+      : modeA !== "AllAllowed" && modeB === "AllAllowed"
+      ? "Opened: SomeAllowed → AllAllowed"
+      : null;
+
+  return (
+    <div className={styles.actionDiffGrid}>
+      {modeTransition && (
+        <>
+          <span className={styles.actionLabel}>Mode change:</span>
+          <span>{modeTransition}</span>
+        </>
+      )}
+      {diff.removedInB.length > 0 && (
+        <>
+          <span className={styles.actionLabel}>Removed in B:</span>
+          <span className={styles.actionRemoved}>
+            {diff.removedInB.map((op) => `−${op}`).join(", ")}
+          </span>
+        </>
+      )}
+      {diff.addedInB.length > 0 && (
+        <>
+          <span className={styles.actionLabel}>Added in B:</span>
+          <span className={styles.actionAdded}>
+            {diff.addedInB.map((op) => `+${op}`).join(", ")}
+          </span>
+        </>
+      )}
+      {diff.common.length > 0 && (
+        <>
+          <span className={styles.actionLabel}>
+            {modeTransition ? "Operations:" : "Common:"}
+          </span>
+          <span className={styles.actionCommon}>{diff.common.join(", ")}</span>
+        </>
+      )}
+    </div>
   );
 }

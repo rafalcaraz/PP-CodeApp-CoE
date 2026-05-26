@@ -20,10 +20,10 @@
  *     `dlpPolicies.ts`)
  *
  * V1 scope: connector-membership diff + per-connector
- * `AllowedActionsMode` / `AllowedConnectionTypesMode` comparison. The
- * per-action set diff (`AllowedActions[]`) is **deferred** to a follow-
- * up — action lists are long (50+ per connector) and need their own
- * drill-down UI; see `docs/roadmap.md`.
+ * `AllowedActionsMode` / `AllowedConnectionTypesMode` comparison.
+ * V2 adds per-action set diffs (`AllowedActions[]`) — computing
+ * added/removed operations between two ACP snapshots and surfacing
+ * them as expandable drill-down rows in the Comparator UI.
  */
 
 import type { Policy } from "../generated/models/PowerPlatformforAdminsV2Model";
@@ -191,6 +191,16 @@ export function extractAcpSnapshot(policies: Policy[]): AcpSnapshot {
 // Diff
 // ---------------------------------------------------------------------------
 
+/** Per-action set diff when both sides are `SomeAllowed`. */
+export interface AcpActionsDiff {
+  /** Operations allowed on A but not B. */
+  removedInB: string[];
+  /** Operations allowed on B but not A. */
+  addedInB: string[];
+  /** Operations allowed on both sides. */
+  common: string[];
+}
+
 export interface AcpConnectorRow {
   id: string;
   name: string;
@@ -207,8 +217,15 @@ export interface AcpConnectorRow {
   /** Convenience flags for the table renderer. */
   membershipDiffers: boolean;
   modeDiffers: boolean;
-  /** Action lists on each side. Surface for now; the V2 per-action
-   *  diff will pivot off these. */
+  /** True when both sides are present AND the action lists differ
+   *  (either mode changed to/from SomeAllowed, or the SomeAllowed
+   *  action sets are not identical). */
+  actionsDiffer: boolean;
+  /** Structured diff of the allowed-actions lists. `null` when not
+   *  meaningful (connector absent from one side, or both are
+   *  `AllAllowed`). */
+  actionsDiff: AcpActionsDiff | null;
+  /** Action lists on each side (raw). */
   actionsA: string[];
   actionsB: string[];
 }
@@ -218,8 +235,11 @@ export interface AcpDiffSummary {
   aOnly: number;
   bOnly: number;
   inBoth: number;
-  /** Connectors in both lists but with at least one mode differing. */
+  /** Connectors in both lists but with at least one mode or action-set differing. */
   modeChanged: number;
+  /** Connectors in both lists where the per-action allowed sets differ
+   *  (subset of `modeChanged`). */
+  actionsChanged: number;
   acpOnlySame: boolean;
   configuredSame: boolean;
   configuredA: boolean;
@@ -233,6 +253,61 @@ export interface AcpDiffResult {
   /** Sorted: diff rows (a-only, b-only, mode-changed) first; matching
    *  rows after, alphabetized. */
   connectors: AcpConnectorRow[];
+}
+
+/** Compute the structured per-action diff between two connector entries.
+ *  Returns `null` when the diff is not meaningful (connector absent from
+ *  one side, or both sides are `AllAllowed`). */
+export function diffActions(
+  modeA: AcpMode | null,
+  modeB: AcpMode | null,
+  actionsA: string[],
+  actionsB: string[]
+): AcpActionsDiff | null {
+  // Not present on one side → membership diff is the story, not actions.
+  if (modeA === null || modeB === null) return null;
+  // Both AllAllowed → no action-level restriction at all.
+  if (modeA === "AllAllowed" && modeB === "AllAllowed") return null;
+
+  // At least one side is SomeAllowed (or Unknown, treated as restricted).
+  // Treat AllAllowed as "all operations" — represented as an empty set
+  // meaning "no restrictions" rather than "no operations".
+  const setA = modeA === "AllAllowed" ? null : new Set(actionsA);
+  const setB = modeB === "AllAllowed" ? null : new Set(actionsB);
+
+  // AllAllowed → SomeAllowed: everything not in B's list is "removed"
+  // (but we can't enumerate "all" — surface B's list as the new state).
+  if (setA === null && setB !== null) {
+    return {
+      removedInB: [], // Can't enumerate what was removed from "all"
+      addedInB: [],
+      common: Array.from(setB).sort(),
+    };
+  }
+  // SomeAllowed → AllAllowed: everything was "added" (restrictions lifted).
+  if (setA !== null && setB === null) {
+    return {
+      removedInB: [],
+      addedInB: [], // Can't enumerate "all" that was added
+      common: Array.from(setA).sort(),
+    };
+  }
+  // Both SomeAllowed — proper set diff.
+  const removedInB: string[] = [];
+  const common: string[] = [];
+  for (const op of setA!) {
+    if (setB!.has(op)) common.push(op);
+    else removedInB.push(op);
+  }
+  const addedInB: string[] = [];
+  for (const op of setB!) {
+    if (!setA!.has(op)) addedInB.push(op);
+  }
+  return {
+    removedInB: removedInB.sort(),
+    addedInB: addedInB.sort(),
+    common: common.sort(),
+  };
 }
 
 /** Compute the full diff between two `AcpSnapshot`s. Pure. */
@@ -259,9 +334,20 @@ export function diffAcpStatuses(a: AcpSnapshot, b: AcpSnapshot): AcpDiffResult {
     const connTypesModeB = eb ? eb.allowedConnectionTypesMode : null;
 
     const membershipDiffers = presentInA !== presentInB;
+
+    const actionsAList = ea?.allowedActions ?? [];
+    const actionsBList = eb?.allowedActions ?? [];
+    const actionsDiff = diffActions(modeA, modeB, actionsAList, actionsBList);
+    const actionsDiffer =
+      presentInA && presentInB &&
+      (actionsDiff !== null &&
+        (actionsDiff.removedInB.length > 0 ||
+         actionsDiff.addedInB.length > 0 ||
+         modeA !== modeB));
+
     const modeDiffers =
       presentInA && presentInB &&
-      (modeA !== modeB || connTypesModeA !== connTypesModeB);
+      (modeA !== modeB || connTypesModeA !== connTypesModeB || actionsDiffer);
 
     if (membershipDiffers) {
       if (presentInA) aOnly++;
@@ -282,8 +368,10 @@ export function diffAcpStatuses(a: AcpSnapshot, b: AcpSnapshot): AcpDiffResult {
       connTypesModeB,
       membershipDiffers,
       modeDiffers,
-      actionsA: ea?.allowedActions ?? [],
-      actionsB: eb?.allowedActions ?? [],
+      actionsDiffer,
+      actionsDiff,
+      actionsA: actionsAList,
+      actionsB: actionsBList,
     });
   }
 
@@ -302,6 +390,7 @@ export function diffAcpStatuses(a: AcpSnapshot, b: AcpSnapshot): AcpDiffResult {
       bOnly,
       inBoth,
       modeChanged,
+      actionsChanged: connectors.filter((c) => c.actionsDiffer).length,
       acpOnlySame: a.acpOnly === b.acpOnly,
       configuredSame: a.configured === b.configured,
       configuredA: a.configured,
