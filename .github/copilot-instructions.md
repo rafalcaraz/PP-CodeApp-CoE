@@ -163,6 +163,34 @@ npm run dev          # local dev server on :5173, accessed via Power Apps player
 CI runs lint + typecheck + build + tests on every push/PR via
 `.github/workflows/ppcoecodeapp-ci.yml`.
 
+### Session start: install deps in the background if missing
+
+Worktrees start without `node_modules`. Running `npx`, `npm test`, or
+`npm run build` before install completes hangs silently (especially
+`npx vitest run` — it goes into a no-output resolution loop that looks
+indistinguishable from a stuck test). Real-world cost of getting this
+wrong has been 5–10 minutes per session.
+
+**The right pattern on session start:**
+
+1. Check once: `Test-Path PP-CoE-CodeApp/node_modules`.
+2. If missing, kick off `npm ci` (preferred over `npm install` —
+   uses the lockfile, doesn't mutate it) in the **background** with
+   `mode: "async"` from the `PP-CoE-CodeApp/` directory, then continue
+   with planning / exploration / file reads in parallel.
+3. By the time you need the first `npm`-backed command (test, lint,
+   build), install will be done or nearly done — wait on it then.
+
+**If you forget step 1** and a command hangs with zero output for
+more than ~30 seconds, abort it immediately and check
+`Test-Path node_modules` + `Get-Command npx`. Do not poll a silent
+command for minutes — the failure mode is silent stall, not slow
+progress.
+
+The `postinstall` hook (`scripts/fixup-generated-connectors.mjs`) is
+idempotent and cheap (~200ms); running install in an already-installed
+worktree is a no-op-with-overhead but never harmful.
+
 ## Testing
 
 - Unit tests live next to the code they test (`*.test.ts` / `*.test.tsx`).
@@ -172,6 +200,35 @@ CI runs lint + typecheck + build + tests on every push/PR via
 - For the full testing playbook (decision tree, four test categories, `vi.hoisted` pattern, golden-oracle pattern, common gotchas), see `PP-CoE-CodeApp/tests/TESTING.md`.
 - **Always run `npm run build` before pushing test-heavy changes.** `tsc -b` (project-references build mode, used in CI) is stricter than `npx tsc --noEmit` and catches type errors in test files that `--noEmit` skips (most commonly: `as TargetType` casts that need `as unknown as TargetType`, and spread-with-defaults that produce duplicate-key warnings).
 - E2E (Playwright) tests need a deployed app URL to work reliably — the local-dev player wrapper has cross-origin iframe limitations. See `PP-CoE-CodeApp/tests/e2e/README.md`.
+
+### Scope test runs to the files you changed (default; full suite on request only)
+
+Full `npm run test:run` runs all ~370 tests in 70–90 seconds. Scoped
+runs against the files you actually changed run in 5–10 seconds.
+Default to scoped; the user runs the full suite themselves or
+explicitly asks for one.
+
+**Default workflow when making changes:**
+
+1. Identify which test files exercise the code you changed (the
+   sibling `<file>.test.ts(x)` and any cross-cutting tests under
+   `src/test/` for shared modules).
+2. Run only those: `npm run test:run -- src/data/foo.test.ts src/features/bar/Baz.test.tsx`.
+3. Iterate until green.
+4. **Promote to full suite only when** (a) you changed something
+   cross-cutting (e.g. `inventory.ts`, `shared/` modules, anything
+   re-exported through a feature's `index.ts`), (b) the user
+   explicitly asks for a full run, or (c) you're about to commit a
+   refactor that touches many files. Otherwise, trust CI to catch the
+   long-tail.
+5. Always run `npm run lint` and `npx tsc --noEmit` regardless of
+   scoping — both are cheap (<30s combined) and catch the
+   highest-leverage breakage class (imports, types, hook rules).
+
+This trades a tiny bit of paranoia (a regression in an unrelated
+file slipping through to CI) for meaningful iteration-loop speed. CI
+is the safety net for the unscoped suite; local runs are for
+confirming the change you just made works.
 
 ## What NOT to do
 
