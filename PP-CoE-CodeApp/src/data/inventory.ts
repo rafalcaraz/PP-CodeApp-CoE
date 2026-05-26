@@ -396,7 +396,21 @@ async function runQuery(
   }
 }
 
-/** Run a query and follow skipToken to exhaustion, capped at `pageCap` pages. */
+/** Run a query and follow skipToken to exhaustion, capped at `pageCap` pages.
+ *
+ *  Sends BOTH `SkipToken` AND `Skip = rowsLoaded` on every request. The
+ *  `QueryResources` connector is unreliable about `SkipToken` —
+ *  specifically the Environment table (and at least a few other surfaces
+ *  in some tenants) silently re-serves page 1 when only `SkipToken` is
+ *  passed. The explicit `Skip` offset acts as a belt-and-suspenders
+ *  cursor that keeps paging advancing even when the token cursor is
+ *  ignored. `listEnvironmentsPage` uses the same pattern at the
+ *  per-page-helper level; this function mirrors it for the
+ *  drain-all-pages helpers (`listEnvironments`, `listEnvironmentGroups`,
+ *  `listResourcesInEnvironment`, …) which previously sent `Skip: 0`
+ *  on every iteration and could silently miss everything past page 1
+ *  on the Environment table (visible in the Zones board as MS env
+ *  groups showing "0 envs" despite real membership). */
 async function runQueryAllPages(
   clauses: Clause[],
   pageSize = 500,
@@ -405,10 +419,16 @@ async function runQueryAllPages(
   const all: ResourceItem[] = [];
   let skipToken = "";
   let previousToken: string | undefined;
+  let skip = 0;
   for (let page = 0; page < pageCap; page++) {
-    const res = await runQuery(clauses, { Top: pageSize, Skip: 0, SkipToken: skipToken });
+    const res = await runQuery(clauses, {
+      Top: pageSize,
+      Skip: skip,
+      SkipToken: skipToken,
+    });
     if (!res.ok) return res;
     all.push(...res.data.items);
+    skip += res.data.items.length;
     if (!res.data.skipToken) break;
     // Defensive guard: if the backend returns the SAME skipToken twice
     // in a row, pagination is stuck and we'd otherwise loop until pageCap
