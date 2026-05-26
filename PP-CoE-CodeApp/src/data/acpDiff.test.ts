@@ -15,6 +15,7 @@ import { describe, it, expect } from "vitest";
 import {
   extractAcpSnapshot,
   diffAcpStatuses,
+  diffActions,
   type AcpSnapshot,
 } from "./acpDiff";
 import type { Policy } from "../generated/models/PowerPlatformforAdminsV2Model";
@@ -279,5 +280,118 @@ describe("diffAcpStatuses", () => {
     );
     expect(result.connectors[0].actionsA).toEqual(["X", "Y"]);
     expect(result.connectors[0].actionsB).toEqual(["Y", "Z"]);
+  });
+
+  it("flags `actionsDiffer` when SomeAllowed action lists diverge", () => {
+    const result = diffAcpStatuses(
+      snap(true, false, [
+        { id: "shared_a", mode: "SomeAllowed", actions: ["X", "Y"] },
+      ]),
+      snap(true, false, [
+        { id: "shared_a", mode: "SomeAllowed", actions: ["Y", "Z"] },
+      ]),
+    );
+    expect(result.connectors[0].actionsDiffer).toBe(true);
+    expect(result.connectors[0].actionsDiff).toEqual({
+      removedInB: ["X"],
+      addedInB: ["Z"],
+      common: ["Y"],
+    });
+  });
+
+  it("flags `actionsDiffer` when mode changes from AllAllowed to SomeAllowed", () => {
+    const result = diffAcpStatuses(
+      snap(true, false, [{ id: "shared_a", mode: "AllAllowed" }]),
+      snap(true, false, [
+        { id: "shared_a", mode: "SomeAllowed", actions: ["GetItems"] },
+      ]),
+    );
+    expect(result.connectors[0].actionsDiffer).toBe(true);
+    expect(result.connectors[0].modeDiffers).toBe(true);
+  });
+
+  it("does NOT flag `actionsDiffer` when both sides are AllAllowed", () => {
+    const result = diffAcpStatuses(
+      snap(true, false, [{ id: "shared_a", mode: "AllAllowed" }]),
+      snap(true, false, [{ id: "shared_a", mode: "AllAllowed" }]),
+    );
+    expect(result.connectors[0].actionsDiffer).toBe(false);
+    expect(result.connectors[0].actionsDiff).toBeNull();
+  });
+
+  it("does NOT flag `actionsDiffer` when SomeAllowed lists are identical", () => {
+    const result = diffAcpStatuses(
+      snap(true, false, [
+        { id: "shared_a", mode: "SomeAllowed", actions: ["A", "B"] },
+      ]),
+      snap(true, false, [
+        { id: "shared_a", mode: "SomeAllowed", actions: ["A", "B"] },
+      ]),
+    );
+    expect(result.connectors[0].actionsDiffer).toBe(false);
+    expect(result.connectors[0].modeDiffers).toBe(false);
+  });
+
+  it("counts `actionsChanged` in the summary", () => {
+    const result = diffAcpStatuses(
+      snap(true, false, [
+        { id: "shared_a", mode: "SomeAllowed", actions: ["X"] },
+        { id: "shared_b", mode: "SomeAllowed", actions: ["Y"] },
+      ]),
+      snap(true, false, [
+        { id: "shared_a", mode: "SomeAllowed", actions: ["X", "Z"] },
+        { id: "shared_b", mode: "SomeAllowed", actions: ["Y"] },
+      ]),
+    );
+    expect(result.summary.actionsChanged).toBe(1);
+  });
+});
+
+describe("diffActions — pure helper", () => {
+  it("returns null when either side is absent (null mode)", () => {
+    expect(diffActions(null, "AllAllowed", [], [])).toBeNull();
+    expect(diffActions("SomeAllowed", null, ["X"], [])).toBeNull();
+  });
+
+  it("returns null when both sides are AllAllowed", () => {
+    expect(diffActions("AllAllowed", "AllAllowed", [], [])).toBeNull();
+  });
+
+  it("computes proper set diff for two SomeAllowed lists", () => {
+    const result = diffActions(
+      "SomeAllowed",
+      "SomeAllowed",
+      ["GetItems", "PostItem", "PatchItem"],
+      ["GetItems", "DeleteItem", "PatchItem"],
+    );
+    expect(result).toEqual({
+      removedInB: ["PostItem"],
+      addedInB: ["DeleteItem"],
+      common: ["GetItems", "PatchItem"],
+    });
+  });
+
+  it("handles AllAllowed → SomeAllowed (new restrictions)", () => {
+    const result = diffActions(
+      "AllAllowed",
+      "SomeAllowed",
+      [],
+      ["GetItems", "PostItem"],
+    );
+    expect(result).not.toBeNull();
+    expect(result!.common).toEqual(["GetItems", "PostItem"]);
+    expect(result!.removedInB).toEqual([]);
+    expect(result!.addedInB).toEqual([]);
+  });
+
+  it("handles SomeAllowed → AllAllowed (restrictions lifted)", () => {
+    const result = diffActions(
+      "SomeAllowed",
+      "AllAllowed",
+      ["GetItems", "PostItem"],
+      [],
+    );
+    expect(result).not.toBeNull();
+    expect(result!.common).toEqual(["GetItems", "PostItem"]);
   });
 });

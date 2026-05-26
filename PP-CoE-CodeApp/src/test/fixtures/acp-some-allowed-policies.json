@@ -1,0 +1,80 @@
+{
+  "_description": "Two ACP policies with SomeAllowed action-level restrictions. Used to test action-level diff logic. Connectors: shared_sql has different allowed actions on each policy (simulates two groups with different restrictions), shared_sharepointonline has AllAllowed on one and SomeAllowed on the other.",
+  "groupA": [
+    {
+      "ruleSets": [
+        {
+          "id": "ConnectorManagement",
+          "version": "1.0",
+          "inputs": {
+            "AllowedConnectorList": [
+              {
+                "AllowedConnector": "/providers/Microsoft.PowerApps/apis/shared_sql",
+                "AllowedActionsMode": "SomeAllowed",
+                "AllowedActions": ["GetItems", "PostItem", "GetItem", "PatchItem"],
+                "AllowedConnectionTypesMode": "AllAllowed"
+              },
+              {
+                "AllowedConnector": "/providers/Microsoft.PowerApps/apis/shared_sharepointonline",
+                "AllowedActionsMode": "AllAllowed",
+                "AllowedConnectionTypesMode": "AllAllowed"
+              },
+              {
+                "AllowedConnector": "/providers/Microsoft.PowerApps/apis/shared_office365users",
+                "AllowedActionsMode": "SomeAllowed",
+                "AllowedActions": ["SearchUserV2", "MyProfile_V2", "UserProfile_V2"],
+                "AllowedConnectionTypesMode": "AllAllowed"
+              }
+            ]
+          }
+        },
+        {
+          "id": "AdvancedConnectorPoliciesOnly",
+          "version": "1.0",
+          "inputs": {
+            "EnableAdvancedConnectorPoliciesOnly": true
+          }
+        }
+      ]
+    }
+  ],
+  "groupB": [
+    {
+      "ruleSets": [
+        {
+          "id": "ConnectorManagement",
+          "version": "1.0",
+          "inputs": {
+            "AllowedConnectorList": [
+              {
+                "AllowedConnector": "/providers/Microsoft.PowerApps/apis/shared_sql",
+                "AllowedActionsMode": "SomeAllowed",
+                "AllowedActions": ["GetItems", "GetItem", "DeleteItem"],
+                "AllowedConnectionTypesMode": "AllAllowed"
+              },
+              {
+                "AllowedConnector": "/providers/Microsoft.PowerApps/apis/shared_sharepointonline",
+                "AllowedActionsMode": "SomeAllowed",
+                "AllowedActions": ["GetFileMetadata", "GetFileContent", "CreateFile"],
+                "AllowedConnectionTypesMode": "AllAllowed"
+              },
+              {
+                "AllowedConnector": "/providers/Microsoft.PowerApps/apis/shared_office365users",
+                "AllowedActionsMode": "SomeAllowed",
+                "AllowedActions": ["SearchUserV2", "MyProfile_V2", "UserProfile_V2"],
+                "AllowedConnectionTypesMode": "AllAllowed"
+              }
+            ]
+          }
+        },
+        {
+          "id": "AdvancedConnectorPoliciesOnly",
+          "version": "1.0",
+          "inputs": {
+            "EnableAdvancedConnectorPoliciesOnly": true
+          }
+        }
+      ]
+    }
+  ]
+}
