@@ -34,14 +34,10 @@ import fs from "node:fs";
 import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const REPO_ROOT = path.resolve(__dirname, "..");
-const STORAGE_STATE = path.join(
-  REPO_ROOT,
-  "PP-CoE-CodeApp/tests/e2e/.auth/storageState.json",
-);
+const APP_ROOT = path.resolve(__dirname, "..");
+const STORAGE_STATE = path.join(APP_ROOT, "tests/e2e/.auth/storageState.json");
 const RAW_DIR =
-  process.env.CAPTURE_OUT ??
-  path.join(REPO_ROOT, "PP-CoE-CodeApp/docs/fixtures-raw");
+  process.env.CAPTURE_OUT ?? path.join(APP_ROOT, "docs/fixtures-raw");
 const BASE_URL = process.env.E2E_BASE_URL ?? "http://localhost:5173";
 
 if (!fs.existsSync(STORAGE_STATE)) {
