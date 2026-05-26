@@ -26,7 +26,7 @@ function policy(overrides: Partial<PolicyV2> = {}): PolicyV2 {
     environments: [],
     connectorGroups: [],
     ...(overrides as object),
-  } as PolicyV2;
+  } as unknown as PolicyV2;
 }
 
 function connector(
@@ -293,7 +293,7 @@ describe("resolveDlpScope", () => {
         { id: "/providers/Microsoft.BusinessAppPlatform/scopes/admin/environments/abc123" },
         { name: "DEF-456" },
       ],
-    } as Partial<PolicyV2>);
+    } as unknown as Partial<PolicyV2>);
     expect(resolveDlpScope(p)).toEqual({
       mode: "include",
       envIds: ["abc123", "def-456"],
@@ -305,7 +305,7 @@ describe("resolveDlpScope", () => {
     const p = policy({
       environmentType: "SingleEnvironment",
       environments: [{ name: "solo-env" }],
-    } as Partial<PolicyV2>);
+    } as unknown as Partial<PolicyV2>);
     expect(resolveDlpScope(p).mode).toBe("include");
   });
 
@@ -313,7 +313,7 @@ describe("resolveDlpScope", () => {
     const p = policy({
       environmentType: "ExceptEnvironments",
       environments: [{ name: "skip-me" }],
-    } as Partial<PolicyV2>);
+    } as unknown as Partial<PolicyV2>);
     expect(resolveDlpScope(p)).toEqual({
       mode: "exclude",
       envIds: ["skip-me"],
@@ -330,7 +330,7 @@ describe("resolveDlpScope", () => {
     const p = policy({
       environmentType: "OnlyEnvironments",
       environments: [{ name: "" }, { id: "" }, { name: "real-env" }],
-    } as Partial<PolicyV2>);
+    } as unknown as Partial<PolicyV2>);
     expect(resolveDlpScope(p).envIds).toEqual(["real-env"]);
   });
 });

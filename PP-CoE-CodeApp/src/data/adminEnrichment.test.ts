@@ -150,7 +150,7 @@ describe("getAppAdminDetails", () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     // Spot-check fields the UI actually reads off the admin app details.
-    const data = result.data.data as typeof appAdmin;
+    const data = result.data.data as unknown as typeof appAdmin;
     expect(data.properties.displayName).toBeTruthy();
     expect(data.properties.appPlanClassification).toBe("Premium");
     expect(data.properties.owner.email).toMatch(/@contoso\.example$/);

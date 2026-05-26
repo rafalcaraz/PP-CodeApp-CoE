@@ -19,25 +19,12 @@ type Policy = PolicyV2;
 
 function policy(overrides: Partial<Policy> = {}): Policy {
   return {
-    policyDefinition: {
-      name: "p1",
-      displayName: "Policy 1",
-      defaultConnectorsClassification: "General",
-      connectorGroups: [],
-      environmentType: "AllEnvironments",
-      environments: [],
-    },
-    ...(overrides as object),
-    // PolicyV2 nests under policyDefinition in some shapes; the diff
-    // reads flat fields directly. Spread overrides at the top level so
-    // tests can pass `{ defaultConnectorsClassification: "Blocked" }`
-    // and have it land where the diff actually looks.
     defaultConnectorsClassification: "General",
     environmentType: "AllEnvironments",
     environments: [],
     connectorGroups: [],
-    ...(overrides as Policy),
-  } as Policy;
+    ...overrides,
+  } as unknown as Policy;
 }
 
 function connector(
