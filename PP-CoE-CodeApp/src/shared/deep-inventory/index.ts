@@ -59,7 +59,7 @@ export {
 
 // ── Runner / sources / cache ─────────────────────────────────────────
 export { runDeepScan, type ScopeResolver, MAX_CONCURRENT_SCOPE_UNITS } from "./runner";
-export { SOURCES, getSource } from "./sources";
+export { SOURCES, getSource, ADMIN_APPS_EXCLUDE_PREFIXES } from "./sources";
 export {
   cacheClear,
   cacheClearSource,

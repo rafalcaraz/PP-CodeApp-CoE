@@ -103,4 +103,5 @@ export {
   getPath,
   OBSERVED_GROUP,
   OBSERVED_EMPTY_SENTINEL_PATH,
+  ADMIN_APPS_EXCLUDE_PREFIXES,
 } from "../../shared/deep-inventory";

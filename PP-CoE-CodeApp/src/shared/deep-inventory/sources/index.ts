@@ -18,6 +18,8 @@ export const SOURCES: Record<DeepSourceId, DeepSource> = {
   "admin-apps": adminAppsSource,
 };
 
+export { ADMIN_APPS_EXCLUDE_PREFIXES } from "./adminApps";
+
 /** Convenience accessor that throws when the id is unknown. Use this
  *  at the runner / UI boundary to fail loud on typos. */
 export function getSource(id: DeepSourceId): DeepSource {

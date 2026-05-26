@@ -155,30 +155,53 @@ function readNested(record: DeepRecord, path: string[]): unknown {
   return cur;
 }
 
+/** Public list of paths the `admin-apps` source filters out of the
+ *  observed schema (and the merged catalog). Centralized so both the
+ *  flattener-at-write-time and the merger-at-display-time use the
+ *  same list — that way already-cached entries from before a new
+ *  prefix was added still get hidden in the UI without forcing the
+ *  user to clear their observed schema.
+ *
+ *  Heuristic for adding a prefix here: the path either (a) carries
+ *  per-save / per-user noise that pollutes the catalog without ever
+ *  being a useful filter (signed URIs, version bags), or (b)
+ *  expands into hundreds of sibling leaves that aren't queryable
+ *  fleet-level (Dataverse table dumps, canvas component refs). */
+export const ADMIN_APPS_EXCLUDE_PREFIXES: string[] = [
+  // Per-save signed blob URIs — rotate on every edit.
+  "properties.appUris",
+  "properties.appPlayUri",
+  "properties.appPlayEmbeddedUri",
+  "properties.appPlayTeamsUri",
+  "properties.appOpenUri",
+  "properties.appOpenProtocolUri",
+  "properties.backgroundImageUri",
+  "properties.unauthenticatedWebPackageHint",
+  // Version sub-objects (major/minor/build/revision × every record).
+  "properties.createdByClientVersion",
+  "properties.minClientVersion",
+  // Maker-internal payload bags. `databaseReferences` alone can
+  // explode into hundreds of `default.cds.dataSources.<TableName>.{
+  // entitySetName,isHidden,logicalName}` leaves on any model-driven
+  // or CDS-backed canvas app — none of which are queryable
+  // fleet-level. Same story for `componentReferences`.
+  "properties.databaseReferences",
+  "properties.componentReferences",
+  // Per-user state, not a fleet concept.
+  "properties.userAppMetadata",
+  // Tag bags that rotate per save.
+  "tags.sienaVersion",
+  "tags.publisherVersion",
+  "tags.minimumRequiredApiVersion",
+];
+
 /** Public `admin-apps` source instance. The runner imports this from
  *  `sources/index.ts` and wires it up by `DeepSourceId`. */
 export const adminAppsSource: DeepSource = {
   id: "admin-apps",
   label: "Apps (admin scope)",
   flattenOptions: {
-    excludePrefixes: [
-      // Per-save signed URIs and version bags rotate on every edit
-      // and would dominate the observed catalog with noise. Same list
-      // as `ADMIN_APPS_HIDE_PREFIXES` in `merge.ts`, but applied at
-      // flatten time so the noise never reaches the introspector
-      // either.
-      "properties.appUris",
-      "properties.appPlayUri",
-      "properties.appPlayEmbeddedUri",
-      "properties.appPlayTeamsUri",
-      "properties.appOpenUri",
-      "properties.appOpenProtocolUri",
-      "properties.backgroundImageUri",
-      "properties.unauthenticatedWebPackageHint",
-      "tags.sienaVersion",
-      "tags.publisherVersion",
-      "tags.minimumRequiredApiVersion",
-    ],
+    excludePrefixes: ADMIN_APPS_EXCLUDE_PREFIXES,
   },
   fetch: fetchAdminAppsPages,
   identify: identifyAdminApp,

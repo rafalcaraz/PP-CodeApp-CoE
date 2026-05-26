@@ -60,6 +60,7 @@ import {
   runDeepScan,
   SOURCES,
   getSource,
+  ADMIN_APPS_EXCLUDE_PREFIXES,
 } from "./data";
 import { ScopePicker } from "./components/ScopePicker";
 import { FilterBuilder } from "./components/FilterBuilder";
@@ -145,7 +146,13 @@ export function DeepScanView() {
   const [observedTick, setObservedTick] = useState(0);
   const catalog = useMemo(() => {
     const observed = loadObservedSchema(sourceId);
-    return mergePropertyCatalog(CURATED_ADMIN_APPS, observed);
+    // Mirror the source's flatten-time exclude prefixes at the merge
+    // layer too. That way any paths that were introspected & cached
+    // BEFORE a new exclude was added still drop out of the picker
+    // without forcing the user to clear their localStorage cache.
+    const hidePrefixes =
+      sourceId === "admin-apps" ? ADMIN_APPS_EXCLUDE_PREFIXES : undefined;
+    return mergePropertyCatalog(CURATED_ADMIN_APPS, observed, { hidePrefixes });
     // observedTick → bump invalidates the memo after each scan.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sourceId, observedTick]);

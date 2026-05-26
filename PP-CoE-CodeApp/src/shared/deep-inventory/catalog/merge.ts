@@ -61,9 +61,11 @@ export interface MergeOptions {
   hidePrefixes?: string[];
 }
 
-/** Default exclusion list for the `admin-apps` source. Hides paths
- *  whose values rotate every save (auto-generated tags, signed URIs),
- *  so they don't dominate the picker. */
+/** @deprecated Use `ADMIN_APPS_EXCLUDE_PREFIXES` from
+ *  `shared/deep-inventory/sources/adminApps.ts` instead — that's the
+ *  single source of truth for both flatten-time exclusion and
+ *  merge-time hiding. This re-export kept temporarily for any
+ *  external callers; remove once nothing references it. */
 export const ADMIN_APPS_HIDE_PREFIXES: string[] = [
   "properties.appUris",
   "properties.appPlayUri",
@@ -72,6 +74,12 @@ export const ADMIN_APPS_HIDE_PREFIXES: string[] = [
   "properties.appOpenUri",
   "properties.appOpenProtocolUri",
   "properties.backgroundImageUri",
+  "properties.unauthenticatedWebPackageHint",
+  "properties.createdByClientVersion",
+  "properties.minClientVersion",
+  "properties.databaseReferences",
+  "properties.componentReferences",
+  "properties.userAppMetadata",
   "tags.sienaVersion",
   "tags.publisherVersion",
   "tags.minimumRequiredApiVersion",
