@@ -6,5 +6,12 @@
  * boundary rules; see `.github/copilot-instructions.md`.
  */
 export { connectorsRoutes } from "./routes";
-export { listConnectorsForEnv } from "./data";
-export type { ConnectorRow } from "./data";
+export {
+  loadCatalog,
+  useConnectorCatalog,
+} from "../../shared/connector-catalog";
+export type {
+  ConnectorEntry,
+  ConnectorCatalog,
+  Classification,
+} from "../../shared/connector-catalog";

@@ -1,4 +1,4 @@
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, useEffect } from "react";
 import {
   FluentProvider,
   webLightTheme,
@@ -13,6 +13,7 @@ import { AdminAccessGate } from "./components/AdminAccessGate";
 import { LoadingPane } from "./components/Status";
 import { HomeRedirect } from "./app/HomeRedirect";
 import { FeatureFlagsProvider, useFeatureFlag } from "./featureFlags";
+import { loadCatalog } from "./shared/connector-catalog";
 
 // ---------------------------------------------------------------------------
 // Feature-slice routing.
@@ -65,6 +66,13 @@ const useStyles = makeStyles({
 
 function AppShell() {
   const styles = useStyles();
+  // Bootstrap the tenant connector catalog once on mount. Used by the
+  // Apps and Flows lists to flag premium resources. Fire-and-forget —
+  // the catalog hook re-renders consumers when it lands. Hydrates from
+  // localStorage instantly if the cached snapshot is < 24h old.
+  useEffect(() => {
+    void loadCatalog();
+  }, []);
   return (
     <div className={styles.app}>
       <TopBar />

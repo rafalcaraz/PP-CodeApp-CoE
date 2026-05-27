@@ -24,6 +24,7 @@ import {
 import { ResourceListPage } from "../../components/ResourceListPage";
 import { EnvironmentPicker } from "../../components/EnvironmentPicker";
 import { useDebouncedValue } from "../../hooks/useDebouncedValue";
+import { useConnectorCatalog } from "../../shared/connector-catalog";
 
 const useStyles = makeStyles({
   search: {
@@ -50,6 +51,7 @@ const TYPE_OPTIONS: { value: ResourceTypeValue; label: string }[] = [
 export function AppsList() {
   const styles = useStyles();
   const navigate = useNavigate();
+  const { classify } = useConnectorCatalog();
   const [types, setTypes] = useState<ResourceTypeValue[]>([]);
   const [envId, setEnvId] = useState<string | undefined>(undefined);
   const [queryInput, setQueryInput] = useState("");
@@ -121,12 +123,50 @@ export function AppsList() {
         renderCell: (row) => row.ownerDisplayName || row.ownerId || "—",
       }),
       createTableColumn<AppRow>({
+        columnId: "premium",
+        renderHeaderCell: () => "Tier",
+        renderCell: (row) => {
+          // Roll the row's connectors up to a single tier. Any Premium
+          // wins; otherwise any Unknown (i.e. a custom connector not in
+          // the OOB catalog) wins; else Standard. The catalog hook
+          // re-renders the whole grid when the snapshot loads, so the
+          // badge flips from `—` to a real value with no extra wiring.
+          if (row.connectors.length === 0) return "—";
+          let sawPremium = false;
+          let sawUnknown = false;
+          for (const c of row.connectors) {
+            const t = classify(c.connectorId).tier;
+            if (t === "Premium") sawPremium = true;
+            else if (t === "Unknown") sawUnknown = true;
+          }
+          if (sawPremium) {
+            return (
+              <Badge appearance="filled" color="warning">
+                Premium
+              </Badge>
+            );
+          }
+          if (sawUnknown) {
+            return (
+              <Badge appearance="outline" color="warning" title="Uses a connector not in the OOB catalog — likely custom (treated as Premium for licensing).">
+                Premium (custom)
+              </Badge>
+            );
+          }
+          return (
+            <Badge appearance="outline" color="informative">
+              Standard
+            </Badge>
+          );
+        },
+      }),
+      createTableColumn<AppRow>({
         columnId: "lastModifiedAt",
         renderHeaderCell: () => "Modified",
         renderCell: (row) => formatDate(row.lastModifiedAt),
       }),
     ],
-    [navigate]
+    [navigate, classify]
   );
 
   const onTypeSelect = (_e: unknown, data: { selectedOptions: string[] }) => {
