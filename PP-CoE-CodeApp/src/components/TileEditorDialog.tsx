@@ -6,6 +6,7 @@ import {
   Input,
   Dropdown,
   Option,
+  OptionGroup,
   Combobox,
   Button,
   Badge,
@@ -27,14 +28,25 @@ import {
 } from "@fluentui/react-icons";
 import {
   ALL_RESOURCE_TYPES,
-  COMMON_FIELD_SUGGESTIONS,
-  DATE_FIELD_SUGGESTIONS,
+  ResourceType,
   resourceTypeShort,
   type QueryFilter,
   type QueryFilterOp,
   type ResourceTypeValue,
 } from "../data/inventory";
-import type { DashboardTile, TileTableColumn, TileTimeBucket, TileVizType } from "../data/dashboards";
+import {
+  getFieldSuggestions,
+  groupFields,
+  type FieldPickerIntent,
+  type InventoryField,
+} from "../data/inventory.fields";
+import type {
+  DashboardTile,
+  TileLineMode,
+  TileTableColumn,
+  TileTimeBucket,
+  TileVizType,
+} from "../data/dashboards";
 import { listSavedQueries, type SavedQuery } from "../data/savedQueries";
 import { TileView } from "./TileView";
 
@@ -152,13 +164,18 @@ const OPERATORS: { value: QueryFilterOp; label: string }[] = [
   { value: "==", label: "equals" },
   { value: "!=", label: "not equals" },
   { value: "contains", label: "contains" },
+  { value: "!contains", label: "does not contain" },
   { value: "startswith", label: "starts with" },
+  { value: "!startswith", label: "does not start with" },
   { value: "endswith", label: "ends with" },
+  { value: "!endswith", label: "does not end with" },
   { value: "in~", label: "in" },
   { value: ">", label: ">" },
   { value: ">=", label: ">=" },
   { value: "<", label: "<" },
   { value: "<=", label: "<=" },
+  { value: "isempty", label: "is empty (array)" },
+  { value: "!isempty", label: "is non-empty (array)" },
   { value: "lastNdays", label: "in last (days)" },
 ];
 
@@ -167,13 +184,19 @@ const VIZ_TYPES: { value: TileVizType; label: string; hint: string }[] = [
   { value: "table", label: "Table", hint: "Top N rows from the query." },
   { value: "bar", label: "Bar chart", hint: "Grouped counts by a chosen field." },
   { value: "pie", label: "Pie chart", hint: "Distribution by a chosen field." },
-  { value: "line", label: "Line chart", hint: "Trend over time — counts bucketed by day/week/month." },
+  { value: "line", label: "Line chart", hint: "Trend over time — creations per bucket, or running total." },
+  { value: "combo", label: "Combo (bars + line)", hint: "Bars = created per bucket, line = running total. Both stories in one tile." },
 ];
 
 const BUCKET_OPTIONS: { value: TileTimeBucket; label: string }[] = [
   { value: "day", label: "Day" },
   { value: "week", label: "Week" },
   { value: "month", label: "Month" },
+];
+
+const LINE_MODE_OPTIONS: { value: TileLineMode; label: string; hint: string }[] = [
+  { value: "delta", label: "Per bucket (creations)", hint: "Count of records *created* in each bucket." },
+  { value: "cumulative", label: "Cumulative (running total)", hint: "Running total of records that existed by the end of each bucket." },
 ];
 
 /** Heuristic: filter values for these field paths are dates, so render a small
@@ -183,19 +206,34 @@ function isDateField(field: string): boolean {
   return f.endsWith("at") || f.endsWith("date") || f.endsWith("on");
 }
 
-const ORDER_FIELD_SUGGESTIONS = [
-  "properties.lastModifiedAt",
-  "properties.createdAt",
-  "properties.displayName",
-  "name",
-  "location",
-];
-
 interface TileEditorDialogProps {
   open: boolean;
   initialTile: DashboardTile;
   onClose: () => void;
   onSave: (tile: DashboardTile) => void;
+}
+
+/** Renders an `InventoryField[]` as Fluent `<OptionGroup>` sections.
+ *  Used by every field-picker Combobox in this dialog so they all share
+ *  the same grouped-by-source UX. */
+function FieldOptions({ fields }: { fields: InventoryField[] }) {
+  const groups = useMemo(() => groupFields(fields), [fields]);
+  return (
+    <>
+      {groups.map((g) => (
+        <OptionGroup key={g.label} label={g.label}>
+          {g.fields.map((f) => (
+            <Option key={f.path} value={f.path} text={f.path}>
+              {f.label}
+              <span style={{ marginLeft: 8, opacity: 0.6, fontSize: "0.85em" }}>
+                {f.path}
+              </span>
+            </Option>
+          ))}
+        </OptionGroup>
+      ))}
+    </>
+  );
 }
 
 export function TileEditorDialog({ open, initialTile, onClose, onSave }: TileEditorDialogProps) {
@@ -335,6 +373,21 @@ export function TileEditorDialog({ open, initialTile, onClose, onSave }: TileEdi
       ? "All resource types"
       : tile.spec.resourceTypes.map(resourceTypeShort).join(", ");
 
+  // Memoize field suggestions per intent so the editor's four field
+  // pickers all share resource-type-aware options without re-computing
+  // on every render.
+  const suggestionsFor = useMemo(() => {
+    const make = (intent: FieldPickerIntent) =>
+      getFieldSuggestions(tile.spec.resourceTypes, intent);
+    return {
+      groupBy: make("groupBy"),
+      filter: make("filter"),
+      sort: make("sort"),
+      column: make("column"),
+      dateField: make("dateField"),
+    };
+  }, [tile.spec.resourceTypes]);
+
   const vizMeta = VIZ_TYPES.find((v) => v.value === tile.viz.type);
   const availableVizTypes = isRaw
     ? VIZ_TYPES.filter((v) => v.value === "kpi" || v.value === "table")
@@ -464,17 +517,107 @@ export function TileEditorDialog({ open, initialTile, onClose, onSave }: TileEdi
               </div>
 
               {tile.viz.type === "kpi" && (
-                <div className={styles.row}>
-                  <Text className={styles.label}>KPI label</Text>
-                  <Input
-                    style={{ flex: 1, minWidth: 240 }}
-                    placeholder="Total"
-                    value={tile.viz.kpiLabel ?? ""}
-                    onChange={(_e, data: InputOnChangeData) =>
-                      setViz({ kpiLabel: data.value })
-                    }
-                  />
-                </div>
+                <>
+                  <div className={styles.row}>
+                    <Text className={styles.label}>KPI label</Text>
+                    <Input
+                      style={{ flex: 1, minWidth: 240 }}
+                      placeholder="Total"
+                      value={tile.viz.kpiLabel ?? ""}
+                      onChange={(_e, data: InputOnChangeData) =>
+                        setViz({ kpiLabel: data.value })
+                      }
+                    />
+                  </div>
+                  {/* KPI trend (D2) — opt-in mini chart + percent change
+                      under the big number. Toggle on by picking a date
+                      field; clear the field to turn it off. */}
+                  <div className={styles.row}>
+                    <Text className={styles.label}>Trend date field</Text>
+                    <Combobox
+                      style={{ flex: 1, minWidth: 280 }}
+                      placeholder="(none — disables trend)"
+                      value={tile.viz.kpiTrend?.dateField ?? ""}
+                      freeform
+                      onChange={(e) => {
+                        const v = (e.target as HTMLInputElement).value;
+                        setViz({
+                          kpiTrend: v.trim()
+                            ? { ...(tile.viz.kpiTrend ?? {}), dateField: v }
+                            : undefined,
+                        });
+                      }}
+                      onOptionSelect={(_e, data) => {
+                        const v = data.optionValue ?? "";
+                        setViz({
+                          kpiTrend: v
+                            ? { ...(tile.viz.kpiTrend ?? {}), dateField: v }
+                            : undefined,
+                        });
+                      }}
+                    >
+                      <FieldOptions fields={suggestionsFor.dateField} />
+                    </Combobox>
+                    <Text className={styles.helper}>
+                      Adds a sparkline + % change under the number.
+                    </Text>
+                  </div>
+                  {tile.viz.kpiTrend?.dateField && (
+                    <div className={styles.row}>
+                      <Text className={styles.label}>Trend window</Text>
+                      <Input
+                        type="number"
+                        style={{ width: 100 }}
+                        value={String(tile.viz.kpiTrend.lookbackDays ?? 30)}
+                        onChange={(_e, data) =>
+                          setViz({
+                            kpiTrend: {
+                              ...tile.viz.kpiTrend!,
+                              lookbackDays: Math.max(
+                                1,
+                                Math.min(3650, Number(data.value) || 30)
+                              ),
+                            },
+                          })
+                        }
+                      />
+                      <Text className={styles.label}>days</Text>
+                      <Dropdown
+                        style={{ minWidth: 200 }}
+                        value={
+                          (tile.viz.kpiTrend.show ?? "both") === "sparkline"
+                            ? "Sparkline only"
+                            : (tile.viz.kpiTrend.show ?? "both") === "percent"
+                            ? "% change only"
+                            : "Sparkline + % change"
+                        }
+                        selectedOptions={[tile.viz.kpiTrend.show ?? "both"]}
+                        onOptionSelect={(_e, data) =>
+                          setViz({
+                            kpiTrend: {
+                              ...tile.viz.kpiTrend!,
+                              show:
+                                (data.optionValue as
+                                  | "sparkline"
+                                  | "percent"
+                                  | "both") ?? "both",
+                            },
+                          })
+                        }
+                      >
+                        <Option value="both" text="Sparkline + % change">
+                          Sparkline + % change
+                        </Option>
+                        <Option value="sparkline" text="Sparkline only">
+                          Sparkline only
+                        </Option>
+                        <Option value="percent" text="% change only">
+                          % change only
+                        </Option>
+                      </Dropdown>
+                    </div>
+                  )}
+                </>
               )}
 
               {(tile.viz.type === "bar" || tile.viz.type === "pie") && (
@@ -491,11 +634,7 @@ export function TileEditorDialog({ open, initialTile, onClose, onSave }: TileEdi
                       }
                       onOptionSelect={(_e, data) => setViz({ groupBy: data.optionValue ?? "" })}
                     >
-                      {COMMON_FIELD_SUGGESTIONS.map((s) => (
-                        <Option key={s} value={s} text={s}>
-                          {s}
-                        </Option>
-                      ))}
+                      <FieldOptions fields={suggestionsFor.groupBy} />
                     </Combobox>
                   </div>
                   <div className={styles.row}>
@@ -562,11 +701,7 @@ export function TileEditorDialog({ open, initialTile, onClose, onSave }: TileEdi
                             updateTableColumn(idx, { field: data.optionValue ?? "" })
                           }
                         >
-                          {COMMON_FIELD_SUGGESTIONS.map((s) => (
-                            <Option key={s} value={s} text={s}>
-                              {s}
-                            </Option>
-                          ))}
+                          <FieldOptions fields={suggestionsFor.column} />
                         </Combobox>
                         <Input
                           placeholder="Header (optional)"
@@ -601,7 +736,7 @@ export function TileEditorDialog({ open, initialTile, onClose, onSave }: TileEdi
                 </>
               )}
 
-              {tile.viz.type === "line" && (
+              {(tile.viz.type === "line" || tile.viz.type === "combo") && (
                 <>
                   <div className={styles.row}>
                     <Text className={styles.label}>Date field</Text>
@@ -615,13 +750,39 @@ export function TileEditorDialog({ open, initialTile, onClose, onSave }: TileEdi
                       }
                       onOptionSelect={(_e, data) => setViz({ dateField: data.optionValue ?? "" })}
                     >
-                      {DATE_FIELD_SUGGESTIONS.map((s) => (
-                        <Option key={s} value={s} text={s}>
-                          {s}
-                        </Option>
-                      ))}
+                      <FieldOptions fields={suggestionsFor.dateField} />
                     </Combobox>
                   </div>
+                  {tile.viz.type === "line" && (
+                    <div className={styles.row}>
+                      <Text className={styles.label}>Mode</Text>
+                      <Dropdown
+                        style={{ minWidth: 240 }}
+                        value={
+                          LINE_MODE_OPTIONS.find(
+                            (m) => m.value === (tile.viz.lineMode ?? "delta")
+                          )?.label ?? "Per bucket (creations)"
+                        }
+                        selectedOptions={[tile.viz.lineMode ?? "delta"]}
+                        onOptionSelect={(_e, data) =>
+                          setViz({
+                            lineMode: (data.optionValue as TileLineMode) ?? "delta",
+                          })
+                        }
+                      >
+                        {LINE_MODE_OPTIONS.map((m) => (
+                          <Option key={m.value} value={m.value} text={m.label}>
+                            {m.label}
+                          </Option>
+                        ))}
+                      </Dropdown>
+                      <Text className={styles.helper}>
+                        {LINE_MODE_OPTIONS.find(
+                          (m) => m.value === (tile.viz.lineMode ?? "delta")
+                        )?.hint}
+                      </Text>
+                    </div>
+                  )}
                   <div className={styles.row}>
                     <Text className={styles.label}>Bucket</Text>
                     <Dropdown
@@ -690,11 +851,80 @@ export function TileEditorDialog({ open, initialTile, onClose, onSave }: TileEdi
                   >
                     Add filter
                   </Button>
+                  {/* "Hide first-party" one-click preset — only meaningful
+                      when scoped to Copilot Studio agents alone (the
+                      `msdyn_` schema-name prefix is agent-specific). Mirrors
+                      `agentScope()` in dashboardTemplates.ts so users can
+                      author the same filter from the visual builder. */}
+                  {tile.spec.resourceTypes.length === 1 &&
+                    tile.spec.resourceTypes[0] === ResourceType.CopilotStudioAgent &&
+                    !tile.spec.filters.some(
+                      (f) =>
+                        f.field === "properties.schemaName" &&
+                        f.op === "!startswith" &&
+                        f.value === "msdyn_"
+                    ) && (
+                      <Button
+                        appearance="subtle"
+                        size="small"
+                        onClick={() =>
+                          setTile((prev) => ({
+                            ...prev,
+                            spec: {
+                              ...prev.spec,
+                              filters: [
+                                ...prev.spec.filters,
+                                {
+                                  field: "properties.schemaName",
+                                  op: "!startswith",
+                                  value: "msdyn_",
+                                },
+                              ],
+                            },
+                          }))
+                        }
+                      >
+                        + Hide first-party (msdyn_)
+                      </Button>
+                    )}
+                  {/* "Autonomous agents" one-click preset — non-empty
+                      `triggers` array means the agent fires on events
+                      (rather than being a purely conversational agent).
+                      Same conditional shape as the msdyn_ chip above. */}
+                  {tile.spec.resourceTypes.length === 1 &&
+                    tile.spec.resourceTypes[0] === ResourceType.CopilotStudioAgent &&
+                    !tile.spec.filters.some(
+                      (f) =>
+                        f.field === "properties.triggers" && f.op === "!isempty"
+                    ) && (
+                      <Button
+                        appearance="subtle"
+                        size="small"
+                        onClick={() =>
+                          setTile((prev) => ({
+                            ...prev,
+                            spec: {
+                              ...prev.spec,
+                              filters: [
+                                ...prev.spec.filters,
+                                {
+                                  field: "properties.triggers",
+                                  op: "!isempty",
+                                  value: "",
+                                },
+                              ],
+                            },
+                          }))
+                        }
+                      >
+                        + Autonomous agents (has triggers)
+                      </Button>
+                    )}
                 </div>
                 {tile.spec.filters.map((f, idx) => (
                   <div key={idx} className={styles.filterRow}>
                     <Combobox
-                      placeholder="Field"
+                      placeholder="Pick or type any path (e.g. properties.anyNewField)"
                       value={f.field}
                       freeform
                       onChange={(e) =>
@@ -704,11 +934,7 @@ export function TileEditorDialog({ open, initialTile, onClose, onSave }: TileEdi
                         updateFilter(idx, { field: data.optionValue ?? "" })
                       }
                     >
-                      {COMMON_FIELD_SUGGESTIONS.map((s) => (
-                        <Option key={s} value={s} text={s}>
-                          {s}
-                        </Option>
-                      ))}
+                      <FieldOptions fields={suggestionsFor.filter} />
                     </Combobox>
                     <Dropdown
                       value={OPERATORS.find((o) => o.value === f.op)?.label ?? f.op}
@@ -732,11 +958,14 @@ export function TileEditorDialog({ open, initialTile, onClose, onSave }: TileEdi
                           ? "v1, v2, v3"
                           : f.op === "lastNdays"
                           ? "30"
+                          : f.op === "isempty" || f.op === "!isempty"
+                          ? "(no value needed)"
                           : isDateField(f.field)
                           ? "YYYY-MM-DD"
                           : "Value"
                       }
                       value={f.value}
+                      disabled={f.op === "isempty" || f.op === "!isempty"}
                       onChange={(_e, data: InputOnChangeData) =>
                         updateFilter(idx, { value: data.value })
                       }
@@ -752,6 +981,13 @@ export function TileEditorDialog({ open, initialTile, onClose, onSave }: TileEdi
                 {tile.spec.filters.length === 0 && (
                   <Text className={styles.helper}>No filters.</Text>
                 )}
+                <Text className={styles.helper}>
+                  Tip: the field picker is a hint list, not a whitelist —
+                  you can type any path the connector understands (e.g.
+                  a new <code>properties.*</code> field Microsoft ships
+                  tomorrow) without waiting for the suggestions catalog
+                  to catch up.
+                </Text>
                 {tile.spec.filters.some(
                   (f) => isDateField(f.field) && f.op !== "lastNdays" && f.op !== "in~"
                 ) && (
@@ -774,11 +1010,7 @@ export function TileEditorDialog({ open, initialTile, onClose, onSave }: TileEdi
                   }
                   onOptionSelect={(_e, data) => setSpec({ orderField: data.optionValue ?? "" })}
                 >
-                  {ORDER_FIELD_SUGGESTIONS.map((s) => (
-                    <Option key={s} value={s} text={s}>
-                      {s}
-                    </Option>
-                  ))}
+                  <FieldOptions fields={suggestionsFor.sort} />
                 </Combobox>
                 <Dropdown
                   style={{ minWidth: 120 }}

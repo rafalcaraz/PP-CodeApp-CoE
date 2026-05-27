@@ -11,7 +11,7 @@
 import { ResourceType, type QuerySpec, type ResourceTypeValue } from "./inventory";
 import type { Clause } from "../generated/models/PowerPlatformforAdminsV2Model";
 
-export type TileVizType = "kpi" | "table" | "bar" | "pie" | "line";
+export type TileVizType = "kpi" | "table" | "bar" | "pie" | "line" | "combo";
 
 /** A table column definition for table-viz tiles. */
 export interface TileTableColumn {
@@ -24,6 +24,12 @@ export interface TileTableColumn {
 /** Time bucket size for line-chart tiles. */
 export type TileTimeBucket = "day" | "week" | "month";
 
+/** Mode for line-chart tiles. `delta` (default) plots the count per bucket —
+ *  e.g. agents *created this week*. `cumulative` plots the running total
+ *  through each bucket — e.g. *total* agents that existed as of the end of
+ *  each week. Stock-vs-flow. Ignored for non-line viz types. */
+export type TileLineMode = "delta" | "cumulative";
+
 export interface TileViz {
   type: TileVizType;
   /** For chart viz: field whose distinct values become categories.
@@ -31,6 +37,20 @@ export interface TileViz {
   groupBy?: string;
   /** For KPI viz: label under the number. Defaults to "Total". */
   kpiLabel?: string;
+  /** For KPI viz: when set, an additional cumulative trend is fetched and
+   *  rendered under the big number — as a sparkline (`"sparkline"`),
+   *  a percent-change badge (`"percent"`), or both (`"both"`). Reuses the
+   *  same data path as the cumulative line tile. */
+  kpiTrend?: {
+    /** Date field to bucket on. e.g. "properties.createdAt". */
+    dateField: string;
+    /** Lookback window in days. Defaults to 30. */
+    lookbackDays?: number;
+    /** Bucket size. Defaults to "day" for short windows; "week" for longer. */
+    bucket?: TileTimeBucket;
+    /** What to display under the number. Defaults to "both". */
+    show?: "sparkline" | "percent" | "both";
+  };
   /** For table viz: max rows to display. Defaults to 10. */
   tableRows?: number;
   /** For table viz: ordered list of columns to render. If unset, the renderer
@@ -38,13 +58,16 @@ export interface TileViz {
   tableColumns?: TileTableColumn[];
   /** Optional: cap categories shown in charts (others bucketed as "Other"). */
   maxCategories?: number;
-  /** For line viz: date field to bucket on X axis.
+  /** For line / combo viz: date field to bucket on X axis.
    *  e.g. "properties.createdAt", "properties.lastModifiedAt". */
   dateField?: string;
-  /** For line viz: time bucket size. Defaults to "week". */
+  /** For line / combo viz: time bucket size. Defaults to "week". */
   bucket?: TileTimeBucket;
-  /** For line viz: lookback window in days from today. Defaults to 90. */
+  /** For line / combo viz: lookback window in days from today. Defaults to 90. */
   lookbackDays?: number;
+  /** For line viz: `delta` (default) plots creations per bucket; `cumulative`
+   *  plots the running total. Ignored for `combo` (which always renders both). */
+  lineMode?: TileLineMode;
 }
 
 /** Display footprint hint for the auto-flow grid. */

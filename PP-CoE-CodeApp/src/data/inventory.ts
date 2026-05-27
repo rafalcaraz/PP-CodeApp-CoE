@@ -2133,12 +2133,17 @@ export type QueryFilterOp =
   | ">="
   | "<="
   | "contains"
+  | "!contains"
   | "startswith"
+  | "!startswith"
   | "endswith"
+  | "!endswith"
   | "in~"
   | "has"
   | "has_any"
-  | "lastNdays";
+  | "lastNdays"
+  | "isempty"
+  | "!isempty";
 
 export interface QueryFilter {
   field: string;
@@ -2244,6 +2249,24 @@ function translateFilter(
     const n = Math.max(1, Math.floor(Number(f.value) || 0));
     if (!n) return [];
     return [where(field, ">", [`ago(${n}d)`])];
+  }
+
+  // Array emptiness: `extend __cnt_<sanitized> = iif(isnull(field), 0,
+  // array_length(field))` then `where __cnt_... == 0` (empty) or `> 0`
+  // (non-empty). Wrapping in iif() avoids an array_length(null) error
+  // when the field is missing from the payload entirely (which happens
+  // for older agents where `triggers` / `flows` weren't yet returned).
+  // The `value` field is ignored for these operators.
+  if (f.op === "isempty" || f.op === "!isempty") {
+    const alias =
+      "__cnt_" + field.replace(/[^A-Za-z0-9]/g, "_").replace(/_+/g, "_");
+    const out: Clause[] = [];
+    if (!emittedExtends.has(alias)) {
+      emittedExtends.add(alias);
+      out.push(extend(alias, `iif(isnull(${field}), 0, array_length(${field}))`));
+    }
+    out.push(where(alias, f.op === "isempty" ? "==" : ">", ["0"]));
+    return out;
   }
 
   if (isSentinelField(field)) {
@@ -2658,5 +2681,112 @@ export async function runTimeSeriesAggregate(
           : String(rawDate);
       return { date, value };
     }),
+  };
+}
+
+/** Pure helper: given a baseline count and an ordered delta series, compute
+ *  the running-total ("cumulative") series. Exposed for unit tests so we
+ *  don't have to mock the inventory connector to verify the math.
+ *
+ *  `baseline` is the count of records strictly before the first bucket's
+ *  start. `deltas` is the in-window per-bucket count. The returned array
+ *  has the same length as `deltas`, with `total[i] = baseline + sum(delta[0..i])`. */
+export function computeCumulative<T extends { date: string; value: number }>(
+  baseline: number,
+  deltas: T[]
+): Array<{ date: string; delta: number; total: number }> {
+  const out: Array<{ date: string; delta: number; total: number }> = [];
+  let running = Math.max(0, Math.floor(baseline) || 0);
+  for (const d of deltas) {
+    const delta = typeof d.value === "number" ? d.value : Number(d.value) || 0;
+    running += delta;
+    out.push({ date: d.date, delta, total: running });
+  }
+  return out;
+}
+
+/** Server-side cumulative ("running total") time series for trend tiles.
+ *
+ *  Builds two queries:
+ *    1. Reuse `runTimeSeriesAggregate` for the in-window per-bucket counts
+ *       (the deltas).
+ *    2. Issue ONE additional cheap query for the baseline: count of records
+ *       matching `spec` whose `dateField` is strictly before
+ *       `now - lookbackDays`. We can't compute the baseline from the
+ *       in-window deltas alone — they only cover the lookback window.
+ *
+ *  Returns one row per in-window bucket with both `delta` (what was created
+ *  *this* bucket) and `total` (running total of records that existed at the
+ *  end of this bucket). The combo-chart tile uses both series; the
+ *  cumulative-line tile picks `total`; the delta tile uses the existing
+ *  `runTimeSeriesAggregate` and ignores this helper entirely.
+ *
+ *  Both queries flow through the same LRU cache as everything else
+ *  (`cacheOpts.cacheTtlMs`).
+ */
+export async function runCumulativeSeries(
+  spec: QuerySpec,
+  dateField: string,
+  bucket: "day" | "week" | "month",
+  lookbackDays: number,
+  cacheOpts?: RunQueryOpts
+): Promise<
+  DataResult<Array<{ date: string; delta: number; total: number }>>
+> {
+  const field = dateField.trim();
+  if (!field) {
+    return { ok: true, data: [] };
+  }
+  const lookback = Math.max(1, Math.floor(lookbackDays || 90));
+
+  // 1. Delta series — reuse the existing helper verbatim.
+  const deltaRes = await runTimeSeriesAggregate(
+    spec,
+    field,
+    bucket,
+    lookback,
+    cacheOpts
+  );
+  if (!deltaRes.ok) return deltaRes;
+
+  // 2. Baseline — count of records strictly before the window start.
+  //    `count where dateField <= ago(lookback days)`. We deliberately
+  //    use `<=` so that records dated exactly at the window edge are
+  //    counted in the baseline and NOT double-counted in the first delta
+  //    bucket (whose lower bound is `> ago(Nd)` in `runTimeSeriesAggregate`).
+  const baselineClauses: Clause[] = [];
+  if (spec.resourceTypes.length === 1) {
+    baselineClauses.push(where("type", "==", [`'${spec.resourceTypes[0]}'`]));
+  } else if (spec.resourceTypes.length > 1) {
+    baselineClauses.push(
+      where(
+        "type",
+        "in~",
+        spec.resourceTypes.map((t) => `'${t}'`)
+      )
+    );
+  }
+
+  const baselineEmittedExtends = new Set<string>();
+  for (const f of spec.filters) {
+    for (const c of translateFilter(f, baselineEmittedExtends)) {
+      baselineClauses.push(c);
+    }
+  }
+  baselineClauses.push(where(field, "<=", [`ago(${lookback}d)`]));
+
+  // Single-row aggregate via runRawQuery — totalRecords carries the count.
+  const baselineRes = await runRawQuery(
+    baselineClauses,
+    { Top: 1 },
+    cacheOpts
+  );
+  if (!baselineRes.ok) return baselineRes;
+
+  const baseline = Math.max(0, Math.floor(baselineRes.data.totalRecords || 0));
+
+  return {
+    ok: true,
+    data: computeCumulative(baseline, deltaRes.data),
   };
 }
