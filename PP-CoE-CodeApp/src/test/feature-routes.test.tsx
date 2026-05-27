@@ -27,6 +27,7 @@ import { dashboardsRoutes } from "../features/dashboards";
 import { zonesRoutes } from "../features/zones";
 import { securityRoutes } from "../features/security";
 import { queriesRoutes } from "../features/queries";
+import { connectorsRoutes } from "../features/connectors";
 import { deepInventoryRoutes } from "../features/deep-inventory";
 import { settingsRoutes } from "../features/settings";
 
@@ -103,6 +104,11 @@ const FEATURES: Array<{
     name: "queries",
     routes: queriesRoutes,
     expectedPaths: ["/queries"],
+  },
+  {
+    name: "connectors",
+    routes: connectorsRoutes,
+    expectedPaths: ["/connectors"],
   },
   {
     name: "deep-inventory",
