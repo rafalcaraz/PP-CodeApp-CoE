@@ -52,6 +52,26 @@ describe("extractSkipToken", () => {
   });
 });
 
+describe("isRateLimitError", () => {
+  it("detects status: 429 on structured errors", () => {
+    expect(__test.isRateLimitError({ status: 429 })).toBe(true);
+    expect(__test.isRateLimitError({ status: 503 })).toBe(false);
+  });
+
+  it("detects '429' / 'rate limit' / 'throttle' / 'too many requests' in message strings", () => {
+    expect(__test.isRateLimitError("HTTP 429")).toBe(true);
+    expect(__test.isRateLimitError({ message: "Rate limit exceeded" })).toBe(true);
+    expect(__test.isRateLimitError({ message: "throttled by service" })).toBe(true);
+    expect(__test.isRateLimitError("Too many requests")).toBe(true);
+  });
+
+  it("returns false for unrelated errors", () => {
+    expect(__test.isRateLimitError(null)).toBe(false);
+    expect(__test.isRateLimitError({ message: "Forbidden", status: 403 })).toBe(false);
+    expect(__test.isRateLimitError("Internal error")).toBe(false);
+  });
+});
+
 describe("adminAppsSource.fetch", () => {
   const unit: ScopeUnit = { envId: "env-1", envName: "Env 1" };
   const signal = new AbortController().signal;
@@ -94,7 +114,7 @@ describe("adminAppsSource.fetch", () => {
     expect(getAdminAppsMock).toHaveBeenCalledTimes(2);
   });
 
-  it("throws when the connector returns success=false", async () => {
+  it("throws when the connector returns success=false (non-429)", async () => {
     getAdminAppsMock.mockResolvedValueOnce({
       success: false,
       error: { message: "Forbidden", status: 403 },
@@ -104,7 +124,40 @@ describe("adminAppsSource.fetch", () => {
         void _page;
       }
     }).rejects.toThrow(/Forbidden/);
+    expect(getAdminAppsMock).toHaveBeenCalledTimes(1);
   });
+
+  it("retries on 429 with backoff and succeeds when the connector recovers", async () => {
+    getAdminAppsMock
+      .mockResolvedValueOnce({
+        success: false,
+        error: { status: 429, message: "Too many requests" },
+      })
+      .mockResolvedValueOnce({
+        success: true,
+        data: { value: [{ name: "app-after-retry" }] },
+      });
+    const records = [];
+    for await (const page of adminAppsSource.fetch(unit, signal)) {
+      records.push(...page.records);
+    }
+    expect(records).toHaveLength(1);
+    expect(getAdminAppsMock).toHaveBeenCalledTimes(2);
+  }, 10_000);
+
+  it("eventually throws when 429s persist past the retry budget", async () => {
+    getAdminAppsMock.mockResolvedValue({
+      success: false,
+      error: { status: 429, message: "Too many requests" },
+    });
+    await expect(async () => {
+      for await (const _page of adminAppsSource.fetch(unit, signal)) {
+        void _page;
+      }
+    }).rejects.toThrow(/Too many requests/);
+    // Initial attempt + 3 retries = 4 calls.
+    expect(getAdminAppsMock).toHaveBeenCalledTimes(4);
+  }, 20_000);
 
   it("stops paging when the connector returns a repeating skiptoken", async () => {
     getAdminAppsMock

@@ -61,6 +61,15 @@ export {
 export { runDeepScan, type ScopeResolver, MAX_CONCURRENT_SCOPE_UNITS } from "./runner";
 export { SOURCES, getSource, ADMIN_APPS_EXCLUDE_PREFIXES } from "./sources";
 export {
+  subscribeToScan,
+  getScanSnapshot,
+  startScan,
+  cancelScan,
+  resetScan,
+  isScanRunning,
+  type ScanSnapshot,
+} from "./scanStore";
+export {
   cacheClear,
   cacheClearSource,
   DEFAULT_CACHE_TTL_MS,

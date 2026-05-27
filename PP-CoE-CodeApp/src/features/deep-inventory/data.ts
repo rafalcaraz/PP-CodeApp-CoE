@@ -104,4 +104,11 @@ export {
   OBSERVED_GROUP,
   OBSERVED_EMPTY_SENTINEL_PATH,
   ADMIN_APPS_EXCLUDE_PREFIXES,
+  subscribeToScan,
+  getScanSnapshot,
+  startScan,
+  cancelScan,
+  resetScan,
+  isScanRunning,
+  type ScanSnapshot,
 } from "../../shared/deep-inventory";

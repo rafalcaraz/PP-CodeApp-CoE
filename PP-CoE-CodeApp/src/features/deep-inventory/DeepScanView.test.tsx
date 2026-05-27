@@ -24,13 +24,11 @@ const { runDeepScanMock } = vi.hoisted(() => ({
   runDeepScanMock: vi.fn(),
 }));
 
-vi.mock("./data", async () => {
-  const actual = await vi.importActual<typeof import("./data")>("./data");
-  return {
-    ...actual,
-    runDeepScan: runDeepScanMock,
-  };
-});
+// Mock the runner itself so the scan store (which is what the view
+// now talks to) gets our fake event stream when it calls runDeepScan.
+vi.mock("../../shared/deep-inventory/runner", () => ({
+  runDeepScan: runDeepScanMock,
+}));
 
 vi.mock("../../data/inventory", () => ({
   listEnvironments: vi.fn().mockResolvedValue({
@@ -50,10 +48,14 @@ vi.mock("../../components/EnvironmentPicker", () => ({
 }));
 
 import { DeepScanView } from "./DeepScanView";
+import { resetScan } from "../../shared/deep-inventory";
 
 beforeEach(() => {
   runDeepScanMock.mockReset();
   localStorage.clear();
+  // The scan store is module-level state; reset it so each test
+  // starts with a clean snapshot regardless of prior tests.
+  resetScan();
 });
 
 function renderView() {

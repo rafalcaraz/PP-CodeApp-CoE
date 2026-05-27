@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useSyncExternalStore } from "react";
 import {
   makeStyles,
   tokens,
@@ -6,9 +6,16 @@ import {
   Avatar,
   Button,
   Tooltip,
+  Spinner,
 } from "@fluentui/react-components";
 import { PersonSearchRegular } from "@fluentui/react-icons";
+import { useNavigate } from "react-router-dom";
 import { useUserLookup } from "../hooks/useUserLookup";
+import {
+  getScanSnapshot,
+  subscribeToScan,
+  type ScanSnapshot,
+} from "../shared/deep-inventory";
 
 const useStyles = makeStyles({
   root: {
@@ -42,7 +49,35 @@ const useStyles = makeStyles({
       color: tokens.colorNeutralForegroundOnBrand,
     },
   },
+  scanPill: {
+    color: tokens.colorNeutralForegroundOnBrand,
+    backgroundColor: "transparent",
+    border: `1px solid ${tokens.colorBrandStroke2}`,
+    paddingInline: tokens.spacingHorizontalM,
+    minWidth: "auto",
+    ":hover": {
+      color: tokens.colorNeutralForegroundOnBrand,
+      backgroundColor: tokens.colorBrandBackgroundHover,
+    },
+  },
+  scanCount: {
+    color: tokens.colorNeutralForegroundOnBrand,
+    marginInlineStart: tokens.spacingHorizontalXS,
+    fontSize: tokens.fontSizeBase200,
+  },
 });
+
+/** Subscribe to the shared deep-scan store. Bridges the module-level
+ *  store (`shared/deep-inventory/scanStore.ts`) into React's
+ *  re-render machinery so the top-bar pill stays in sync even when
+ *  the scan started from a now-unmounted view. */
+function useScanSnapshot(): ScanSnapshot {
+  return useSyncExternalStore(
+    subscribeToScan,
+    getScanSnapshot,
+    getScanSnapshot
+  );
+}
 
 /**
  * Top app chrome. Owns the global Ctrl+K / Cmd+K hotkey that opens the
@@ -52,6 +87,8 @@ const useStyles = makeStyles({
 export function TopBar() {
   const styles = useStyles();
   const openLookup = useUserLookup();
+  const navigate = useNavigate();
+  const snapshot = useScanSnapshot();
 
   // Global hotkey: Cmd+K (macOS) / Ctrl+K (Windows/Linux). Skipped when
   // the user is typing in an input/textarea/contenteditable so we don't
@@ -85,6 +122,26 @@ export function TopBar() {
         </Text>
       </div>
       <div className={styles.actions}>
+        {snapshot.kind === "running" && (
+          <Tooltip
+            content="A tenant scan is running. Click to view progress."
+            relationship="label"
+          >
+            <Button
+              appearance="subtle"
+              className={styles.scanPill}
+              icon={<Spinner size="tiny" />}
+              onClick={() => navigate("/tenant-scans")}
+            >
+              Scanning{" "}
+              <span className={styles.scanCount}>
+                {snapshot.progress.scopeUnitsDone}/
+                {snapshot.progress.scopeUnitsTotal} envs ·{" "}
+                {snapshot.progress.matches} matches
+              </span>
+            </Button>
+          </Tooltip>
+        )}
         <Tooltip
           content="Look up user by GUID (Ctrl+K)"
           relationship="label"

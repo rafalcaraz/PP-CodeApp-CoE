@@ -81,6 +81,75 @@ function formatError(err: unknown): string {
   return String(err);
 }
 
+/** Detect a 429 / throttle / "too many requests" failure. The
+ *  connector surfaces rate limits inconsistently — sometimes a
+ *  structured `{ status: 429 }`, sometimes a free-form message with
+ *  the code embedded. Mirrors the heuristic in `data/inventory.ts`
+ *  so per-source retry behavior stays consistent across the app. */
+function isRateLimitError(err: unknown): boolean {
+  if (!err) return false;
+  if (typeof err === "object") {
+    const e = err as Record<string, unknown>;
+    if (typeof e.status === "number" && e.status === 429) return true;
+    const msg =
+      typeof e.message === "string"
+        ? e.message
+        : typeof e === "string"
+          ? e
+          : "";
+    if (msg && /(\b429\b|rate ?limit|throttle|too many requests)/i.test(msg)) {
+      return true;
+    }
+  }
+  if (typeof err === "string") {
+    return /(\b429\b|rate ?limit|throttle|too many requests)/i.test(err);
+  }
+  return false;
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+/** Max retry attempts for a single page request before surfacing
+ *  the error as a scope-unit failure. */
+const MAX_RETRIES_PER_PAGE = 3;
+/** Base backoff in ms; each retry multiplies by 2 (500 → 1000 → 2000)
+ *  plus 0-500ms jitter to spread parallel retries. */
+const BASE_BACKOFF_MS = 500;
+
+async function fetchPageWithRetry(
+  envId: string,
+  skipToken: string | undefined,
+  signal: AbortSignal
+): Promise<{ success: true; data: ResourceArrayPowerApp } | { success: false; error: unknown }> {
+  let lastError: unknown = null;
+  for (let attempt = 0; attempt <= MAX_RETRIES_PER_PAGE; attempt++) {
+    if (signal.aborted) {
+      return { success: false, error: new Error("Aborted") };
+    }
+    const result = await PowerPlatformforAdminsV2Service.Get_AdminApps(
+      envId,
+      API_VERSION,
+      PAGE_SIZE,
+      skipToken
+    );
+    if (result.success) {
+      return { success: true, data: result.data ?? {} };
+    }
+    // Throttle? Back off and try again.
+    if (isRateLimitError(result.error) && attempt < MAX_RETRIES_PER_PAGE) {
+      const backoff = BASE_BACKOFF_MS * Math.pow(2, attempt) + Math.random() * 500;
+      await sleep(backoff);
+      lastError = result.error;
+      continue;
+    }
+    // Non-throttle failure, or out of attempts — propagate.
+    return { success: false, error: result.error };
+  }
+  return { success: false, error: lastError };
+}
+
 async function* fetchAdminAppsPages(
   scopeUnit: ScopeUnit,
   signal: AbortSignal
@@ -91,12 +160,7 @@ async function* fetchAdminAppsPages(
   for (let page = 0; page < MAX_PAGES_PER_ENV; page++) {
     if (signal.aborted) return;
 
-    const result = await PowerPlatformforAdminsV2Service.Get_AdminApps(
-      scopeUnit.envId,
-      API_VERSION,
-      PAGE_SIZE,
-      skipToken
-    );
+    const result = await fetchPageWithRetry(scopeUnit.envId, skipToken, signal);
 
     if (signal.aborted) return;
 
@@ -104,7 +168,7 @@ async function* fetchAdminAppsPages(
       throw new Error(formatError(result.error));
     }
 
-    const data: ResourceArrayPowerApp = result.data ?? {};
+    const data = result.data;
     const records = (data.value ?? []) as unknown as DeepRecord[];
     const nextToken = extractSkipToken(data.nextLink);
 
@@ -216,4 +280,4 @@ export const adminAppsSource: DeepSource = {
 // Exposed for tests so they can exercise the skiptoken parsing
 // without setting up a fake connector response. NOT part of the
 // public API outside this folder.
-export const __test = { extractSkipToken };
+export const __test = { extractSkipToken, isRateLimitError };

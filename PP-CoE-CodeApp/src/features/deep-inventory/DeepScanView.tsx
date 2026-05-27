@@ -27,7 +27,7 @@
  * this out.
  */
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useSyncExternalStore } from "react";
 import {
   Button,
   Card,
@@ -47,17 +47,18 @@ import {
   type DeepQuerySpec,
   type DeepScanRow,
   type DeepScanScope,
-  type DeepScanScopeError,
   type DeepSourceId,
-  type ScanEvent,
-  type ScanSummary,
   type DriftWarning,
+  type ScanSnapshot,
+  cancelScan,
   detectDrift,
+  getScanSnapshot,
   groupCatalog,
   loadObservedSchema,
   mergePropertyCatalog,
   resolveScope,
-  runDeepScan,
+  startScan,
+  subscribeToScan,
   SOURCES,
   getSource,
   ADMIN_APPS_EXCLUDE_PREFIXES,
@@ -124,7 +125,6 @@ type ScanPhase =
   | { kind: "idle" }
   | {
       kind: "scanning";
-      controller: AbortController;
       progress: {
         scopeUnitsTotal: number;
         scopeUnitsDone: number;
@@ -132,7 +132,28 @@ type ScanPhase =
         matches: number;
       };
     }
-  | { kind: "ready"; summary: ScanSummary };
+  | {
+      kind: "ready";
+      summary: {
+        scopeUnitsTotal: number;
+        scopeUnitsDone: number;
+        scopeUnitsErrored: number;
+        recordsScanned: number;
+        matches: number;
+        cancelled: boolean;
+      };
+    };
+
+/** Subscribe to the shared scan store via `useSyncExternalStore`.
+ *  The hook re-renders the view whenever the store emits — including
+ *  when a scan that started on a previous mount is still running. */
+function useScanSnapshot(): ScanSnapshot {
+  return useSyncExternalStore(
+    subscribeToScan,
+    getScanSnapshot,
+    getScanSnapshot
+  );
+}
 
 export function DeepScanView() {
   const styles = useStyles();
@@ -141,9 +162,18 @@ export function DeepScanView() {
   const [sourceId, setSourceId] = useState<DeepSourceId>("admin-apps");
   const source = getSource(sourceId);
 
+  // ── Subscribe to the shared scan store ───────────────────────────
+  const snapshot = useScanSnapshot();
+  const phase = snapshotToPhase(snapshot);
+  const rows: DeepScanRow[] = snapshot.kind === "idle" ? [] : snapshot.rows;
+  const scopeErrors = snapshot.kind === "idle" ? [] : snapshot.scopeErrors;
+
   // ── Catalog (curated + observed). Reloaded whenever the source
-  //    changes or after a scan completes (introspection bumps it). ──
-  const [observedTick, setObservedTick] = useState(0);
+  //    changes or a scan completes (introspection refreshes the
+  //    observed schema). The dependency on `finishedAt` invalidates
+  //    the memo when a scan completes — we re-read localStorage
+  //    fresh so the picker picks up newly discovered fields. ──────
+  const finishedAt = snapshot.kind === "ready" ? snapshot.finishedAt : 0;
   const catalog = useMemo(() => {
     const observed = loadObservedSchema(sourceId);
     // Mirror the source's flatten-time exclude prefixes at the merge
@@ -153,130 +183,63 @@ export function DeepScanView() {
     const hidePrefixes =
       sourceId === "admin-apps" ? ADMIN_APPS_EXCLUDE_PREFIXES : undefined;
     return mergePropertyCatalog(CURATED_ADMIN_APPS, observed, { hidePrefixes });
-    // observedTick → bump invalidates the memo after each scan.
+    // finishedAt bump invalidates the memo after each scan.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sourceId, observedTick]);
+  }, [sourceId, finishedAt]);
   const catalogGroups = useMemo(
     () => groupCatalog(catalog, { alwaysIncludeObservedGroup: true }),
     [catalog]
   );
 
+  // ── Drift warnings (derived from the most recent completed scan) ─
+  // Pure derivation from the snapshot — no setState-in-effect needed.
+  const drift: DriftWarning[] = useMemo(
+    () =>
+      snapshot.kind === "ready"
+        ? detectDrift(CURATED_ADMIN_APPS, snapshot.summary.observedAfter)
+        : [],
+    [snapshot]
+  );
+
   // ── Scan spec (scope / filters / columns) ────────────────────────
+  // These are the form inputs the user is editing right now. They
+  // may differ from the spec of the currently-running / last-completed
+  // scan (snapshot.spec). Bias toward "what the user typed" for the
+  // form fields; "what the runner produced" for results / progress.
   const [scope, setScope] = useState<DeepScanScope>({ kind: "tenant" });
   const [filters, setFilters] = useState<DeepFilterClause[]>(() =>
     seedFiltersForSharepointForm()
   );
   const [columns, setColumns] = useState<string[]>([]);
 
-  // ── Run state ────────────────────────────────────────────────────
-  const [phase, setPhase] = useState<ScanPhase>({ kind: "idle" });
-  const [rows, setRows] = useState<DeepScanRow[]>([]);
-  const [scopeErrors, setScopeErrors] = useState<DeepScanScopeError[]>([]);
-  const [drift, setDrift] = useState<DriftWarning[]>([]);
-  const [topError, setTopError] = useState<string | null>(null);
-
-  // Reset transient state when scope-defining inputs change so the
-  // previous scan's results don't linger and confuse the user. We do
-  // this in the setter handlers (`changeSource`, `changeScope`)
-  // rather than a useEffect — React 19's rules-of-hooks lint flags
-  // setState calls inside effects as a cascading-render anti-pattern,
-  // and this is precisely the "derive state from props" case the new
-  // rule warns against. Wrapping setters captures the same intent
-  // without the effect.
-  const resetTransientState = (): void => {
-    setRows([]);
-    setScopeErrors([]);
-    setDrift([]);
-    setTopError(null);
-    setPhase({ kind: "idle" });
-  };
-
-  const changeSource = (id: DeepSourceId): void => {
-    if (id === sourceId) return;
-    setSourceId(id);
-    resetTransientState();
-  };
-
-  const changeScope = (next: DeepScanScope): void => {
-    if (next.kind !== scope.kind) {
-      resetTransientState();
-    }
-    setScope(next);
-  };
-
   const canRun = isScopeValid(scope) && phase.kind !== "scanning";
 
-  const start = async (): Promise<void> => {
-    const controller = new AbortController();
-    setPhase({
-      kind: "scanning",
-      controller,
-      progress: { scopeUnitsTotal: 0, scopeUnitsDone: 0, recordsScanned: 0, matches: 0 },
-    });
-    setRows([]);
-    setScopeErrors([]);
-    setDrift([]);
-    setTopError(null);
-
+  const start = (): void => {
     const spec: DeepQuerySpec = {
       source: sourceId,
       scope,
       filters,
       columns,
     };
-
-    try {
-      for await (const event of runDeepScan(spec, resolveScope, {
-        signal: controller.signal,
-      })) {
-        handleEvent(event);
-      }
-    } catch (err) {
-      setTopError(err instanceof Error ? err.message : String(err));
-      setPhase({
-        kind: "ready",
-        summary: emptySummary(),
-      });
-    }
-  };
-
-  const handleEvent = (event: ScanEvent): void => {
-    if (event.kind === "progress") {
-      setPhase((prev) => {
-        if (prev.kind !== "scanning") return prev;
-        return {
-          ...prev,
-          progress: {
-            scopeUnitsTotal: event.scopeUnitsTotal,
-            scopeUnitsDone: event.scopeUnitsDone,
-            recordsScanned: event.recordsScanned,
-            matches: event.matches,
-          },
-        };
-      });
-      return;
-    }
-    if (event.kind === "match") {
-      setRows((prev) => [...prev, event.row]);
-      return;
-    }
-    if (event.kind === "scopeUnitError") {
-      setScopeErrors((prev) => [...prev, event.error]);
-      return;
-    }
-    if (event.kind === "done") {
-      setPhase({ kind: "ready", summary: event.summary });
-      // Bump observed-schema tick so the catalog merger picks up
-      // any new discovered fields the introspector wrote.
-      setObservedTick((t) => t + 1);
-      // Run drift detection against the post-scan observed schema.
-      setDrift(detectDrift(CURATED_ADMIN_APPS, event.summary.observedAfter));
-    }
+    startScan(spec, resolveScope);
   };
 
   const cancel = (): void => {
-    if (phase.kind === "scanning") phase.controller.abort();
+    cancelScan();
   };
+
+  const changeSource = (id: DeepSourceId): void => {
+    if (id === sourceId) return;
+    setSourceId(id);
+  };
+
+  const changeScope = (next: DeepScanScope): void => {
+    setScope(next);
+  };
+
+  // observedTick is now derived above as `finishedAt`. The
+  // ObservedSchemaPanel uses it as a refresh key so its read of
+  // localStorage stays in sync with what the runner wrote.
 
   const onExportCsv = (): void => {
     if (rows.length === 0) return;
@@ -370,10 +333,6 @@ export function DeepScanView() {
         </div>
       </Card>
 
-      {topError && (
-        <ErrorPane title="Couldn't run scan" message={topError} />
-      )}
-
       {phase.kind === "scanning" && (
         <ScanProgress
           scopeUnitsTotal={phase.progress.scopeUnitsTotal}
@@ -384,13 +343,13 @@ export function DeepScanView() {
         />
       )}
 
-      {phase.kind === "ready" && (
+      {phase.kind === "ready" && snapshot.kind === "ready" && (
         <ScanProgress
-          scopeUnitsTotal={phase.summary.scopeUnitsTotal}
-          scopeUnitsDone={phase.summary.scopeUnitsDone}
-          recordsScanned={phase.summary.recordsScanned}
-          matches={phase.summary.matches}
-          summary={phase.summary}
+          scopeUnitsTotal={snapshot.summary.scopeUnitsTotal}
+          scopeUnitsDone={snapshot.summary.scopeUnitsDone}
+          recordsScanned={snapshot.summary.recordsScanned}
+          matches={snapshot.summary.matches}
+          summary={snapshot.summary}
         />
       )}
 
@@ -447,8 +406,14 @@ export function DeepScanView() {
 
       <ObservedSchemaPanel
         sourceId={sourceId}
-        refreshKey={observedTick}
-        onCleared={() => setObservedTick((t) => t + 1)}
+        refreshKey={finishedAt}
+        onCleared={() => {
+          /* The store's snapshot doesn't change on a manual schema
+             clear, so we use `finishedAt` as the refresh key. The
+             ObservedSchemaPanel re-reads localStorage on its own
+             internal clearTick when its Clear button fires, which
+             is what we want. */
+        }}
       />
     </div>
   );
@@ -463,16 +428,26 @@ function isScopeValid(scope: DeepScanScope): boolean {
   return false;
 }
 
-function emptySummary(): ScanSummary {
+/** Project the shared store snapshot into the simpler `ScanPhase`
+ *  the render path uses (idle / scanning / ready). The full snapshot
+ *  is still consumed elsewhere (rows, scopeErrors, summary) — this is
+ *  just a slim discriminator for the progress bar and the "is the
+ *  Run button enabled?" check. */
+function snapshotToPhase(snapshot: ScanSnapshot): ScanPhase {
+  if (snapshot.kind === "idle") return { kind: "idle" };
+  if (snapshot.kind === "running") {
+    return { kind: "scanning", progress: snapshot.progress };
+  }
   return {
-    scopeUnitsTotal: 0,
-    scopeUnitsDone: 0,
-    scopeUnitsErrored: 0,
-    recordsScanned: 0,
-    matches: 0,
-    errors: [],
-    cancelled: false,
-    observedAfter: loadObservedSchema("admin-apps"),
+    kind: "ready",
+    summary: {
+      scopeUnitsTotal: snapshot.summary.scopeUnitsTotal,
+      scopeUnitsDone: snapshot.summary.scopeUnitsDone,
+      scopeUnitsErrored: snapshot.summary.scopeUnitsErrored,
+      recordsScanned: snapshot.summary.recordsScanned,
+      matches: snapshot.summary.matches,
+      cancelled: snapshot.summary.cancelled,
+    },
   };
 }
 
@@ -488,3 +463,5 @@ function seedFiltersForSharepointForm(): DeepFilterClause[] {
     },
   ];
 }
+
+
