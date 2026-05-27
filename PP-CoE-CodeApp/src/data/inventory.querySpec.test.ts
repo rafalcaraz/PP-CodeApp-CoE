@@ -333,3 +333,114 @@ describe("buildClausesFromSpec — limit semantics", () => {
     expect(clauses.find((c) => c.$type === "take")).toBeUndefined();
   });
 });
+
+describe("buildClausesFromSpec — isempty / !isempty on arrays", () => {
+  // `properties.triggers` (autonomous-agent signal) and `properties.flows`
+  // are arrays; KQL doesn't have a direct "is empty array" operator, so
+  // we emit an extend(array_length) shim then where == 0 / > 0.
+
+  it("translates !isempty into extend(array_length) + where > 0", () => {
+    const clauses = buildClausesFromSpec(
+      spec({
+        filters: [
+          { field: "properties.triggers", op: "!isempty", value: "" },
+        ],
+      }),
+    ) as unknown as Array<Record<string, unknown>>;
+    const extendClause = clauses.find((c) => c.$type === "extend") as
+      | { FieldName: string; Expression: string }
+      | undefined;
+    expect(extendClause).toBeDefined();
+    expect(extendClause!.FieldName).toBe("__cnt_properties_triggers");
+    expect(extendClause!.Expression).toBe(
+      "iif(isnull(properties.triggers), 0, array_length(properties.triggers))",
+    );
+    const whereClause = clauses.find(
+      (c) =>
+        c.$type === "where" &&
+        (c as { FieldName?: string }).FieldName === "__cnt_properties_triggers",
+    ) as { Operator: string; Values: string[] };
+    expect(whereClause.Operator).toBe(">");
+    expect(whereClause.Values).toEqual(["0"]);
+  });
+
+  it("translates isempty into extend(array_length) + where == 0", () => {
+    const clauses = buildClausesFromSpec(
+      spec({
+        filters: [
+          { field: "properties.flows", op: "isempty", value: "" },
+        ],
+      }),
+    ) as unknown as Array<Record<string, unknown>>;
+    const whereClause = clauses.find(
+      (c) =>
+        c.$type === "where" &&
+        (c as { FieldName?: string }).FieldName === "__cnt_properties_flows",
+    ) as { Operator: string; Values: string[] };
+    expect(whereClause.Operator).toBe("==");
+    expect(whereClause.Values).toEqual(["0"]);
+  });
+
+  it("ignores the value field (arrays don't compare to a value)", () => {
+    const withValue = buildClausesFromSpec(
+      spec({
+        filters: [
+          {
+            field: "properties.triggers",
+            op: "!isempty",
+            value: "ignored-noise",
+          },
+        ],
+      }),
+    ) as unknown as Array<Record<string, unknown>>;
+    const withoutValue = buildClausesFromSpec(
+      spec({
+        filters: [
+          { field: "properties.triggers", op: "!isempty", value: "" },
+        ],
+      }),
+    ) as unknown as Array<Record<string, unknown>>;
+    expect(withValue).toEqual(withoutValue);
+  });
+
+  it("emits the extend shim only once when the same field is targeted twice", () => {
+    const clauses = buildClausesFromSpec(
+      spec({
+        filters: [
+          { field: "properties.triggers", op: "!isempty", value: "" },
+          { field: "properties.triggers", op: "isempty", value: "" },
+        ],
+      }),
+    ) as unknown as Array<Record<string, unknown>>;
+    const extendClauses = clauses.filter((c) => c.$type === "extend");
+    expect(extendClauses).toHaveLength(1);
+    // Both where clauses against the alias survive though.
+    const whereClauses = clauses.filter(
+      (c) =>
+        c.$type === "where" &&
+        (c as { FieldName?: string }).FieldName === "__cnt_properties_triggers",
+    );
+    expect(whereClauses).toHaveLength(2);
+  });
+
+  it("sanitises path characters in the alias", () => {
+    const clauses = buildClausesFromSpec(
+      spec({
+        filters: [
+          {
+            field: "properties.capabilitiesCounts.distinctFlows",
+            op: "!isempty",
+            value: "",
+          },
+        ],
+      }),
+    ) as unknown as Array<Record<string, unknown>>;
+    const extendClause = clauses.find((c) => c.$type === "extend") as
+      | { FieldName: string }
+      | undefined;
+    // Dots collapsed to single underscores, no double underscores.
+    expect(extendClause?.FieldName).toBe(
+      "__cnt_properties_capabilitiesCounts_distinctFlows",
+    );
+  });
+});

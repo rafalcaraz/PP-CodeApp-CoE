@@ -2141,7 +2141,9 @@ export type QueryFilterOp =
   | "in~"
   | "has"
   | "has_any"
-  | "lastNdays";
+  | "lastNdays"
+  | "isempty"
+  | "!isempty";
 
 export interface QueryFilter {
   field: string;
@@ -2247,6 +2249,24 @@ function translateFilter(
     const n = Math.max(1, Math.floor(Number(f.value) || 0));
     if (!n) return [];
     return [where(field, ">", [`ago(${n}d)`])];
+  }
+
+  // Array emptiness: `extend __cnt_<sanitized> = iif(isnull(field), 0,
+  // array_length(field))` then `where __cnt_... == 0` (empty) or `> 0`
+  // (non-empty). Wrapping in iif() avoids an array_length(null) error
+  // when the field is missing from the payload entirely (which happens
+  // for older agents where `triggers` / `flows` weren't yet returned).
+  // The `value` field is ignored for these operators.
+  if (f.op === "isempty" || f.op === "!isempty") {
+    const alias =
+      "__cnt_" + field.replace(/[^A-Za-z0-9]/g, "_").replace(/_+/g, "_");
+    const out: Clause[] = [];
+    if (!emittedExtends.has(alias)) {
+      emittedExtends.add(alias);
+      out.push(extend(alias, `iif(isnull(${field}), 0, array_length(${field}))`));
+    }
+    out.push(where(alias, f.op === "isempty" ? "==" : ">", ["0"]));
+    return out;
   }
 
   if (isSentinelField(field)) {

@@ -286,6 +286,8 @@ const OPERATORS: { value: QueryFilterOp; label: string }[] = [
   { value: ">=", label: ">=" },
   { value: "<", label: "<" },
   { value: "<=", label: "<=" },
+  { value: "isempty", label: "is empty (array)" },
+  { value: "!isempty", label: "is non-empty (array)" },
 ];
 
 /** Connector ID suggestions used by the value Combobox when the user has
@@ -938,7 +940,7 @@ export function QueriesView() {
                         )}
                         <div className={styles.fieldRow}>
                         <Combobox
-                          placeholder="Field path (e.g. properties.displayName)"
+                          placeholder="Pick or type any path (e.g. properties.anyNewField)"
                           value={friendlyFilterField(f.field)}
                           freeform
                           onChange={(e) =>

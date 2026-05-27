@@ -523,16 +523,26 @@ Also applies (similar shape) to `microsoft.powerautomate/agentflows` and
 
 - **Richest schema of any resource type.** Major buckets:
   - **Identity / wiring:** `schemaName`, `entraAppId`, `titleId`, `createdIn`
-    (`"Copilot Studio"`), `authentication` (`"Microsoft Entra"`, …).
+    (`"Copilot Studio"`), `authentication` (`"Microsoft Entra"`, …),
+    `isCLIAgent` (bool — true for CLI-authored agents).
   - **Behavior:** `model` (e.g. `"Claude Sonnet 4.5"`), `orchestration`
     (`"Generative"`, …), `instructionsCharactersCount`,
     `isWebSearchEnabledForKnowledge`.
+  - **Composition (arrays — empty for most agents):**
+    - `triggers` — **non-empty ⇒ autonomous (event-driven) agent.**
+      Empty array on classic conversational agents.
+    - `flows` — Power Automate flows wired in as tools. Non-empty means
+      the agent invokes flows. Distinct from `powerPlatformConnectors`,
+      which are connector references; this is the resolved flow list.
   - **Distribution:** `channels` (string array — e.g. `"Teams"`,
     `"Microsoft 365 Copilot"`, `"Direct Line Channels"`),
     `sharedWithEditors` (`{userCount, groupCount}`), `sharedWithViewers`
     (`{userCount, groupCount, entireTenant}`).
-  - **Roll-ups:** `capabilitiesCounts.distinctPowerPlatformConnectors`,
-    `capabilitiesCounts.distinctPowerPlatformConnectorsOperations`.
+  - **Roll-ups (`capabilitiesCounts`):**
+    `distinctPowerPlatformConnectors`,
+    `distinctPowerPlatformConnectorsOperations`, **`distinctFlows`**
+    (server-side count of the `flows` array — prefer this to
+    `array_length(flows)` for filtering since it's a flat scalar).
   - **Lifecycle:** `lastPublishedAt`, `publishState`/`state`,
     `isManaged`, `isQuarantined`.
 - **Connector operations are RICH for agents** (vs. apps/flows which often
@@ -545,6 +555,11 @@ Also applies (similar shape) to `microsoft.powerautomate/agentflows` and
   - Some operations have **no `operationId`** at all — e.g. when a connector
     is used as a Knowledge source without invoking a specific op. The
     UI renders these as `(no operation — connector only)`.
+- **Top-level ARM fields are present but empty** for Power Platform
+  resources: `kind`, `resourceGroup`, `subscriptionId`, `managedBy`,
+  `sku`, `plan`, `tags`, `identity`, `zones`, `extendedLocation`. Don't
+  add these to picker suggestions — they're inherited from the generic
+  ARM resource envelope and carry no PP-specific signal.
 
 ---
 

@@ -173,6 +173,9 @@ const COPILOT_STUDIO_AGENT_FIELDS: InventoryField[] = [
   { path: "properties.orchestration", label: "Orchestration", kind: "string", group: "Behavior", help: "e.g. 'Generative'." },
   { path: "properties.instructionsCharactersCount", label: "Instructions length (chars)", kind: "number", group: "Behavior" },
   { path: "properties.isWebSearchEnabledForKnowledge", label: "Web search enabled", kind: "boolean", group: "Behavior" },
+  { path: "properties.isCLIAgent", label: "Is CLI agent", kind: "boolean", group: "Behavior", help: "True for agents authored via the Copilot Studio CLI." },
+  { path: "properties.triggers", label: "Triggers (raw array)", kind: "array", group: "Composition", help: "Non-empty ⇒ autonomous (event-driven) agent. Use 'is non-empty' filter to find them." },
+  { path: "properties.flows", label: "Flows (raw array)", kind: "array", group: "Composition", help: "Power Automate flows wired in as tools. Prefer 'capabilitiesCounts.distinctFlows' for numeric filtering." },
   { path: "properties.channels", label: "Channels", kind: "array", group: "Distribution", help: "Array of strings: Teams, Microsoft 365 Copilot, Direct Line Channels, …" },
   { path: "properties.sharedWithEditors.userCount", label: "Editors (user count)", kind: "number", group: "Sharing" },
   { path: "properties.sharedWithEditors.groupCount", label: "Editors (group count)", kind: "number", group: "Sharing" },
@@ -181,6 +184,7 @@ const COPILOT_STUDIO_AGENT_FIELDS: InventoryField[] = [
   { path: "properties.sharedWithViewers.entireTenant", label: "Shared with entire tenant", kind: "boolean", group: "Sharing" },
   { path: "properties.capabilitiesCounts.distinctPowerPlatformConnectors", label: "Distinct connectors", kind: "number", group: "Connectors" },
   { path: "properties.capabilitiesCounts.distinctPowerPlatformConnectorsOperations", label: "Distinct connector operations", kind: "number", group: "Connectors" },
+  { path: "properties.capabilitiesCounts.distinctFlows", label: "Distinct flows", kind: "number", group: "Composition", help: "Server-side count of the flows array — flat scalar, safe for group-by / sort." },
   { path: "properties.powerPlatformConnectors", label: "Connectors (raw array)", kind: "array", group: "Connectors" },
 ];
 

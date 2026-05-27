@@ -174,6 +174,8 @@ const OPERATORS: { value: QueryFilterOp; label: string }[] = [
   { value: ">=", label: ">=" },
   { value: "<", label: "<" },
   { value: "<=", label: "<=" },
+  { value: "isempty", label: "is empty (array)" },
+  { value: "!isempty", label: "is non-empty (array)" },
   { value: "lastNdays", label: "in last (days)" },
 ];
 
@@ -885,11 +887,44 @@ export function TileEditorDialog({ open, initialTile, onClose, onSave }: TileEdi
                         + Hide first-party (msdyn_)
                       </Button>
                     )}
+                  {/* "Autonomous agents" one-click preset — non-empty
+                      `triggers` array means the agent fires on events
+                      (rather than being a purely conversational agent).
+                      Same conditional shape as the msdyn_ chip above. */}
+                  {tile.spec.resourceTypes.length === 1 &&
+                    tile.spec.resourceTypes[0] === ResourceType.CopilotStudioAgent &&
+                    !tile.spec.filters.some(
+                      (f) =>
+                        f.field === "properties.triggers" && f.op === "!isempty"
+                    ) && (
+                      <Button
+                        appearance="subtle"
+                        size="small"
+                        onClick={() =>
+                          setTile((prev) => ({
+                            ...prev,
+                            spec: {
+                              ...prev.spec,
+                              filters: [
+                                ...prev.spec.filters,
+                                {
+                                  field: "properties.triggers",
+                                  op: "!isempty",
+                                  value: "",
+                                },
+                              ],
+                            },
+                          }))
+                        }
+                      >
+                        + Autonomous agents (has triggers)
+                      </Button>
+                    )}
                 </div>
                 {tile.spec.filters.map((f, idx) => (
                   <div key={idx} className={styles.filterRow}>
                     <Combobox
-                      placeholder="Field"
+                      placeholder="Pick or type any path (e.g. properties.anyNewField)"
                       value={f.field}
                       freeform
                       onChange={(e) =>
@@ -923,11 +958,14 @@ export function TileEditorDialog({ open, initialTile, onClose, onSave }: TileEdi
                           ? "v1, v2, v3"
                           : f.op === "lastNdays"
                           ? "30"
+                          : f.op === "isempty" || f.op === "!isempty"
+                          ? "(no value needed)"
                           : isDateField(f.field)
                           ? "YYYY-MM-DD"
                           : "Value"
                       }
                       value={f.value}
+                      disabled={f.op === "isempty" || f.op === "!isempty"}
                       onChange={(_e, data: InputOnChangeData) =>
                         updateFilter(idx, { value: data.value })
                       }
@@ -943,6 +981,13 @@ export function TileEditorDialog({ open, initialTile, onClose, onSave }: TileEdi
                 {tile.spec.filters.length === 0 && (
                   <Text className={styles.helper}>No filters.</Text>
                 )}
+                <Text className={styles.helper}>
+                  Tip: the field picker is a hint list, not a whitelist —
+                  you can type any path the connector understands (e.g.
+                  a new <code>properties.*</code> field Microsoft ships
+                  tomorrow) without waiting for the suggestions catalog
+                  to catch up.
+                </Text>
                 {tile.spec.filters.some(
                   (f) => isDateField(f.field) && f.op !== "lastNdays" && f.op !== "in~"
                 ) && (

@@ -48,6 +48,11 @@ describe("FIELDS_BY_RESOURCE_TYPE", () => {
       "properties.lastPublishedAt",
       "properties.isWebSearchEnabledForKnowledge",
       "properties.entraAppId",
+      // Added in the schema-audit follow-up:
+      "properties.isCLIAgent",
+      "properties.triggers",
+      "properties.flows",
+      "properties.capabilitiesCounts.distinctFlows",
     ]) {
       expect(paths).toContain(required);
     }
