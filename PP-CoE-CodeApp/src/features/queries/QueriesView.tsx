@@ -68,6 +68,8 @@ import {
 } from "../../data/savedQueries";
 import { LoadingPane } from "../../components/Status";
 import { downloadCsv, rowsToCsv } from "../../utils/csv";
+import { useConnectorCatalog } from "../../shared/connector-catalog";
+import { buildDynamicQueryTemplates } from "./dynamicTemplates";
 
 const useStyles = makeStyles({
   root: {
@@ -402,6 +404,7 @@ type BuilderMode = "basic" | "advanced";
 
 export function QueriesView() {
   const styles = useStyles();
+  const { catalog: connectorCatalog } = useConnectorCatalog();
   const [spec, setSpec] = useState<QuerySpec>(DEFAULT_SPEC);
   const [mode, setMode] = useState<BuilderMode>("basic");
   const [advancedText, setAdvancedText] = useState("");
@@ -791,7 +794,14 @@ export function QueriesView() {
         <Divider />
         <div className={styles.cardBody}>
           <div className={styles.templates}>
-            {QUERY_TEMPLATES.map((tpl) => (
+            {[
+              // Dynamic, catalog-aware templates first — they reflect the
+              // tenant's actual premium-connector list, so they're the
+              // most useful "I just want the answer" starting point.
+              // Hidden until the catalog loads to avoid empty/disabled UI.
+              ...buildDynamicQueryTemplates(connectorCatalog),
+              ...QUERY_TEMPLATES,
+            ].map((tpl) => (
               <Card
                 key={tpl.id}
                 className={styles.templateCard}

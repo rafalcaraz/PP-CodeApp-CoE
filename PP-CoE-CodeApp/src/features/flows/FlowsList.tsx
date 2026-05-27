@@ -24,6 +24,7 @@ import {
 import { ResourceListPage } from "../../components/ResourceListPage";
 import { EnvironmentPicker } from "../../components/EnvironmentPicker";
 import { useDebouncedValue } from "../../hooks/useDebouncedValue";
+import { useConnectorCatalog } from "../../shared/connector-catalog";
 
 const useStyles = makeStyles({
   search: {
@@ -80,6 +81,7 @@ function statusBadgeColor(
 export function FlowsList() {
   const styles = useStyles();
   const navigate = useNavigate();
+  const { classify } = useConnectorCatalog();
   const [types, setTypes] = useState<ResourceTypeValue[]>([]);
   const [envId, setEnvId] = useState<string | undefined>(undefined);
   const [statusFilter, setStatusFilter] = useState<string>("");
@@ -188,12 +190,55 @@ export function FlowsList() {
         renderCell: (row) => row.ownerDisplayName || row.ownerId || "—",
       }),
       createTableColumn<FlowRow>({
+        columnId: "premium",
+        renderHeaderCell: () => "Tier",
+        renderCell: (row) => {
+          // Roll the flow's connectors (and its trigger connector) up
+          // to a single tier. Any Premium wins; otherwise any Unknown
+          // (a custom connector not in the OOB catalog) wins; else
+          // Standard. Catalog hook re-renders the grid when the
+          // snapshot loads so the badge fills in with no extra wiring.
+          const ids = new Set<string>();
+          for (const c of row.connectors) {
+            if (c.connectorId) ids.add(c.connectorId);
+          }
+          if (row.trigger?.connectorId) ids.add(row.trigger.connectorId);
+          if (ids.size === 0) return "—";
+          let sawPremium = false;
+          let sawUnknown = false;
+          for (const id of ids) {
+            const t = classify(id).tier;
+            if (t === "Premium") sawPremium = true;
+            else if (t === "Unknown") sawUnknown = true;
+          }
+          if (sawPremium) {
+            return (
+              <Badge appearance="filled" color="warning">
+                Premium
+              </Badge>
+            );
+          }
+          if (sawUnknown) {
+            return (
+              <Badge appearance="outline" color="warning" title="Uses a connector not in the OOB catalog — likely custom (treated as Premium for licensing).">
+                Premium (custom)
+              </Badge>
+            );
+          }
+          return (
+            <Badge appearance="outline" color="informative">
+              Standard
+            </Badge>
+          );
+        },
+      }),
+      createTableColumn<FlowRow>({
         columnId: "lastModifiedAt",
         renderHeaderCell: () => "Modified",
         renderCell: (row) => formatDate(row.lastModifiedAt),
       }),
     ],
-    [navigate]
+    [navigate, classify]
   );
 
   const onTypeSelect = (_e: unknown, data: { selectedOptions: string[] }) => {
