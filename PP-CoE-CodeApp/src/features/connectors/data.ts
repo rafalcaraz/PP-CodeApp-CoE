@@ -120,11 +120,16 @@ export async function listConnectorsForEnv(
   if (!environmentId) {
     return { ok: false, error: "Environment id is required." };
   }
-  // ListConnectors signature: (environmentId, $filter, api_version)
-  // We pass an empty filter to get every connector available in the env.
+  // ListConnectors signature: (environmentId, $filter, api_version).
+  // Despite the path-level environmentId, the connector also requires
+  // `environment eq '<envId>'` in $filter — otherwise it returns
+  // HTTP 400 / MissingEnvironmentFilter. This matches what the CoE
+  // Starter Kit's `Admin | Sync Template v3 (Connectors)` flow sends
+  // (see research notes on `Get-Connectors`).
+  const $filter = `environment eq '${environmentId}'`;
   const result = await PowerPlatformforAdminsV2Service.ListConnectors(
     environmentId,
-    "",
+    $filter,
     API_VERSION,
   );
   if (!result.success) {
