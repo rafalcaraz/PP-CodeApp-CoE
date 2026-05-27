@@ -15,6 +15,7 @@
  */
 import { describe, it, expect } from "vitest";
 import {
+  buildDuplicatePolicyBody,
   evaluateDlpCoverage,
   normalizeEnvIdForScope,
   policyAppliesToEnvironment,
@@ -277,5 +278,150 @@ describe("evaluateDlpCoverage — golden oracle from captured trace", () => {
       a.displayName.localeCompare(b.displayName),
     );
     expect(tail).toEqual(sorted);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// buildDuplicatePolicyBody — DLP Duplicator request shape
+// ---------------------------------------------------------------------------
+
+describe("buildDuplicatePolicyBody", () => {
+  const source: PolicyV2 = {
+    name: "source-policy-guid",
+    displayName: "Source Policy",
+    defaultConnectorsClassification: "General",
+    connectorGroups: [
+      {
+        classification: "Confidential",
+        connectors: [
+          {
+            id: "/providers/Microsoft.PowerApps/apis/shared_office365",
+            name: "shared_office365",
+            _type: "Microsoft.PowerApps/apis",
+          },
+        ],
+      },
+      {
+        classification: "General",
+        connectors: [
+          {
+            id: "/providers/Microsoft.PowerApps/apis/shared_twitter",
+            name: "shared_twitter",
+            _type: "Microsoft.PowerApps/apis",
+          },
+        ],
+      },
+    ],
+    environmentType: "AllEnvironments",
+    environments: [],
+    createdBy: {},
+    createdTime: "",
+    lastModifiedBy: {},
+    lastModifiedTime: "",
+    isLegacySchemaVersion: false,
+  };
+
+  const ENV_A = "aaaaaaaa-1111-2222-3333-444444444444";
+  const ENV_B = "bbbbbbbb-1111-2222-3333-444444444444";
+
+  it("forces environmentType to OnlyEnvironments", () => {
+    const body = buildDuplicatePolicyBody(source, {
+      displayName: "Copy of Source",
+      environmentIds: [ENV_A],
+    });
+    expect(body.environmentType).toBe("OnlyEnvironments");
+  });
+
+  it("uses the caller-provided displayName (trimmed)", () => {
+    const body = buildDuplicatePolicyBody(source, {
+      displayName: "  My Copy  ",
+      environmentIds: [ENV_A],
+    });
+    expect(body.displayName).toBe("My Copy");
+  });
+
+  it("copies defaultConnectorsClassification from source", () => {
+    const body = buildDuplicatePolicyBody(
+      { ...source, defaultConnectorsClassification: "Blocked" },
+      { displayName: "X", environmentIds: [ENV_A] },
+    );
+    expect(body.defaultConnectorsClassification).toBe("Blocked");
+  });
+
+  it("defaults defaultConnectorsClassification to General when source is missing it", () => {
+    const body = buildDuplicatePolicyBody(
+      { ...source, defaultConnectorsClassification: "" as unknown as string },
+      { displayName: "X", environmentIds: [ENV_A] },
+    );
+    expect(body.defaultConnectorsClassification).toBe("General");
+  });
+
+  it("deep-clones connectorGroups so caller mutations don't poison the source", () => {
+    const body = buildDuplicatePolicyBody(source, {
+      displayName: "X",
+      environmentIds: [ENV_A],
+    });
+    expect(body.connectorGroups).toEqual(source.connectorGroups);
+    // Mutate the clone — original must be untouched.
+    body.connectorGroups![0].connectors[0].name = "mutated";
+    expect(source.connectorGroups[0].connectors[0].name).toBe(
+      "shared_office365",
+    );
+  });
+
+  it("emits the connector-expected environment shape for each picked id", () => {
+    const body = buildDuplicatePolicyBody(source, {
+      displayName: "X",
+      environmentIds: [ENV_A, ENV_B],
+    });
+    expect(body.environments).toEqual([
+      {
+        id: `/providers/Microsoft.BusinessAppPlatform/scopes/admin/environments/${ENV_A}`,
+        name: ENV_A,
+        _type: "Microsoft.BusinessAppPlatform/scopes/environments",
+      },
+      {
+        id: `/providers/Microsoft.BusinessAppPlatform/scopes/admin/environments/${ENV_B}`,
+        name: ENV_B,
+        _type: "Microsoft.BusinessAppPlatform/scopes/environments",
+      },
+    ]);
+  });
+
+  it("filters out blank / whitespace-only environment ids", () => {
+    const body = buildDuplicatePolicyBody(source, {
+      displayName: "X",
+      environmentIds: [ENV_A, "", "  ", ENV_B],
+    });
+    expect(body.environments).toHaveLength(2);
+    expect(body.environments![0].name).toBe(ENV_A);
+    expect(body.environments![1].name).toBe(ENV_B);
+  });
+
+  it("throws when displayName is empty / whitespace", () => {
+    expect(() =>
+      buildDuplicatePolicyBody(source, {
+        displayName: "   ",
+        environmentIds: [ENV_A],
+      }),
+    ).toThrow(/displayName/);
+  });
+
+  it("throws when no environment ids are provided", () => {
+    expect(() =>
+      buildDuplicatePolicyBody(source, {
+        displayName: "X",
+        environmentIds: [],
+      }),
+    ).toThrow(/environment/i);
+  });
+
+  it("throws when all environment ids are blank", () => {
+    expect(() =>
+      buildDuplicatePolicyBody(source, {
+        displayName: "X",
+        environmentIds: ["", "   "],
+      }),
+    ).toThrow(/environment/i);
   });
 });
