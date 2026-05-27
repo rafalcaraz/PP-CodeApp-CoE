@@ -27,6 +27,7 @@ import { dashboardsRoutes } from "../features/dashboards";
 import { zonesRoutes } from "../features/zones";
 import { securityRoutes } from "../features/security";
 import { queriesRoutes } from "../features/queries";
+import { deepInventoryRoutes } from "../features/deep-inventory";
 import { settingsRoutes } from "../features/settings";
 
 type RouteProps = { path: string; element: ReactElement };
@@ -78,8 +79,11 @@ const FEATURES: Array<{
     routes: zonesRoutes,
     expectedPaths: [
       "/zones",
+      "/zones/reporting",
       "/zones/:zoneId",
+      "/zones/:zoneId/reporting",
       "/zones/custom-groups/:groupId",
+      "/zones/custom-groups/:groupId/reporting",
     ],
   },
   {
@@ -96,6 +100,11 @@ const FEATURES: Array<{
     name: "queries",
     routes: queriesRoutes,
     expectedPaths: ["/queries"],
+  },
+  {
+    name: "deep-inventory",
+    routes: deepInventoryRoutes,
+    expectedPaths: ["/tenant-scans"],
   },
   {
     name: "settings",
