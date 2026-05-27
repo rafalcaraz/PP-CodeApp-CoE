@@ -40,8 +40,6 @@ const useStyles = makeStyles({
     display: "flex",
     flexDirection: "column",
     gap: tokens.spacingVerticalL,
-    height: "100%",
-    minHeight: 0,
   },
   backRow: {
     display: "flex",
@@ -90,10 +88,6 @@ const useStyles = makeStyles({
     display: "flex",
     flexDirection: "column",
     gap: tokens.spacingVerticalL,
-    overflowY: "auto",
-    paddingInline: tokens.spacingHorizontalXS,
-    flex: 1,
-    minHeight: 0,
   },
 });
 
