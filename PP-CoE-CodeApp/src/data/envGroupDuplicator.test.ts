@@ -101,6 +101,17 @@ describe("buildDuplicateRuleSetBody", () => {
   it("throws when newGroupId is empty", () => {
     expect(() => buildDuplicateRuleSetBody(SOURCE, "")).toThrow(/newGroupId/);
   });
+
+  it("emits `hasStagedChanges: true` — the server requires it to actually apply the ruleset", () => {
+    // Regression: without this flag the create succeeds but the rules
+    // never take effect on the group (verified live; the Power
+    // Automate reference flow has to inject the same field).
+    const body = buildDuplicateRuleSetBody(SOURCE, NEW_GROUP_ID) as Record<
+      string,
+      unknown
+    >;
+    expect(body.hasStagedChanges).toBe(true);
+  });
 });
 
 // ---------------------------------------------------------------------------

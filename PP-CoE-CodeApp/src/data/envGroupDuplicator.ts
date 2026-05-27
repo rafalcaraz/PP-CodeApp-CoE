@@ -164,14 +164,30 @@ export async function createRuleBasedPolicy(
 /** Assign an existing rule-based policy to an env group. Backed by
  *  `CreateEnviornmentGroupRuleBasedAssignment` (note: typo on the
  *  connector side — `Enviornment` not `Environment` — we preserve
- *  the connector's operation name and shield callers from it). */
+ *  the connector's operation name and shield callers from it).
+ *
+ *  Wire body shape: `{ policyId, tenantId, resourceId }` — the
+ *  connector's declared `PolicyAssignmentRequest` type only exposes
+ *  `assignmentOverrides[]`, but the actual API requires the policy/
+ *  tenant/resource triple in the body for the assignment to succeed.
+ *  Verified live (Power Automate reference flow uses the same body).
+ *  Without these fields the call appears to succeed but the policy
+ *  is never actually applied to the group. */
 export async function assignRuleBasedPolicyToGroup(
   policyId: string,
   groupId: string,
-  body: PolicyAssignmentRequest = {},
+  tenantId: string,
 ): Promise<DataResult<RuleAssignment>> {
   if (!policyId) return { ok: false, error: "policyId is required." };
   if (!groupId) return { ok: false, error: "groupId is required." };
+  if (!tenantId) return { ok: false, error: "tenantId is required." };
+  // The connector type is too narrow (declares only `assignmentOverrides`);
+  // cast through `unknown` so we can send the wire-required triple.
+  const body = {
+    policyId,
+    tenantId,
+    resourceId: groupId,
+  } as unknown as PolicyAssignmentRequest;
   try {
     const result =
       await PowerPlatformforAdminsV2Service.CreateEnviornmentGroupRuleBasedAssignment(
@@ -209,6 +225,17 @@ export async function assignRuleBasedPolicyToGroup(
  *     duplication is by design scoped to the new group, not the same
  *     individual envs the source happened to reference.
  *
+ * What gets added:
+ *   - `hasStagedChanges: true` — REQUIRED on every ruleset body for the
+ *     server to actually *apply* the ruleset to the group. Without this
+ *     flag the create succeeds (HTTP 200) but the rules silently never
+ *     take effect — the group looks empty in PPAC. Verified live: the
+ *     Power Automate flow that does the same operation has to inject
+ *     this via `addProperty(item(), 'hasStagedChanges', true)` before
+ *     POSTing each ruleset. The official connector schema does not
+ *     declare the field, so we cast through `unknown` to satisfy the
+ *     too-narrow generated type.
+ *
  * What's omitted:
  *   - `id` — server-assigned on CreateRuleSet, ignored on the body.
  *   - `lastModified` — server-managed.
@@ -230,7 +257,11 @@ export function buildDuplicateRuleSetBody(
       values: [{ id: newGroupId, type: "EnvironmentGroup" }],
     },
     parameters,
-  };
+    // Wire-required flag not declared on the connector's RuleSetDto;
+    // see doc comment above. Cast keeps the public return type aligned
+    // with the generated TS.
+    ...({ hasStagedChanges: true } as object),
+  } as RuleSetDto;
 }
 
 /**
@@ -418,10 +449,15 @@ export async function duplicateEnvironmentGroup(
   // group. If create fails, skip assign (no point assigning a
   // non-existent policy). If assign fails the policy still exists as
   // an orphan — surfaced with its id so an admin can clean up.
+  //
+  // tenantId for the assignment body comes from the source policy
+  // (every Model B policy carries a `tenantId` field). All source
+  // policies share the same tenantId since they're tenant-scoped.
   const policyOutcomes: ClonedPolicyOutcome[] = [];
   for (const source of sourcePolicies) {
     const sourcePolicyId = source.id ?? "";
     const sourcePolicyName = source.name ?? "";
+    const tenantId = source.tenantId ?? "";
     let outcome: ClonedPolicyOutcome = {
       sourcePolicyId,
       sourcePolicyName,
@@ -439,10 +475,14 @@ export async function duplicateEnvironmentGroup(
         if (!newId) {
           outcome.assignError =
             "Policy created but the connector returned no id; cannot assign.";
+        } else if (!tenantId) {
+          outcome.assignError =
+            "Source policy is missing tenantId; cannot build the assignment body.";
         } else {
           const assignRes = await assignRuleBasedPolicyToGroup(
             newId,
             newGroup.id,
+            tenantId,
           );
           if (!assignRes.ok) {
             outcome.assignError = assignRes.error;
