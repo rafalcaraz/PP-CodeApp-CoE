@@ -76,6 +76,41 @@ function toRow(item: GetConnectorByIdResponse): ConnectorRow {
   };
 }
 
+/** Best-effort error message extractor. Mirrors the same shape-tolerant
+ *  pattern used by `shared/deep-inventory/sources/adminApps.ts` so the
+ *  full HTTP status / message / requestId all surface to the UI instead
+ *  of collapsing to "ListConnectors failed". */
+function formatError(err: unknown): string {
+  if (!err) return "Unknown error";
+  if (err instanceof Error) return err.message || err.name || "Error";
+  if (typeof err === "string") return err;
+  if (typeof err === "object") {
+    const e = err as Record<string, unknown>;
+    const parts: string[] = [];
+    if (typeof e.message === "string" && e.message) parts.push(e.message);
+    if (typeof e.status === "number") parts.push(`HTTP ${e.status}`);
+    if (typeof e.statusCode === "number") parts.push(`HTTP ${e.statusCode}`);
+    if (typeof e.code === "string" && e.code) parts.push(`code ${e.code}`);
+    if (typeof e.requestId === "string" && e.requestId)
+      parts.push(`requestId ${e.requestId}`);
+    // Many connector errors nest the real message under `.error.message`.
+    const inner = e.error as Record<string, unknown> | undefined;
+    if (inner && typeof inner === "object") {
+      if (typeof inner.message === "string" && inner.message)
+        parts.push(inner.message);
+      if (typeof inner.code === "string" && inner.code)
+        parts.push(`inner code ${inner.code}`);
+    }
+    if (parts.length > 0) return parts.join(" — ");
+    try {
+      return JSON.stringify(err);
+    } catch {
+      return String(err);
+    }
+  }
+  return String(err);
+}
+
 /** Calls `ListConnectors` for a single environment and returns a lean
  *  row shape + the raw response (so the view can dump the full payload
  *  into a debug accordion). */
@@ -93,13 +128,15 @@ export async function listConnectorsForEnv(
     API_VERSION,
   );
   if (!result.success) {
-    const msg =
-      result.error instanceof Error
-        ? result.error.message
-        : typeof result.error === "string"
-          ? result.error
-          : "ListConnectors failed";
-    return { ok: false, error: msg };
+    // Surface the raw error in the console so the full object (with any
+    // nested cause / fetch response) is inspectable while we're still
+    // hardening this end-to-end. Cheap and Power-Apps-player-safe.
+    console.error("[connectors] ListConnectors failed", {
+      environmentId,
+      apiVersion: API_VERSION,
+      error: result.error,
+    });
+    return { ok: false, error: formatError(result.error) };
   }
   const raw = result.data ?? {};
   const rows = (raw.value ?? []).map(toRow);
