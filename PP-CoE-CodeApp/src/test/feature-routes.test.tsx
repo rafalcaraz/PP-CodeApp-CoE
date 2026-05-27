@@ -95,6 +95,7 @@ const FEATURES: Array<{
       "/security/dlp-impact",
       "/security/impact",
       "/security/dlp-duplicator",
+      "/security/env-group-duplicator",
       "/security/duplicator",
     ],
   },

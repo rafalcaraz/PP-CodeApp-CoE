@@ -8,13 +8,15 @@ import {
   type SelectTabData,
   type SelectTabEvent,
 } from "@fluentui/react-components";
-import { EmptyPane, LoadingPane } from "../../components/Status";
+import { LoadingPane } from "../../components/Status";
 
-// Lazy-load the DLP subview so the shared shell stays light in the
-// default-tab path. The environment-group subview is a small inline
-// placeholder until Stage 2 implements it.
+// Lazy-load both subviews so the shared shell stays light in the
+// default-tab path.
 const DlpDuplicator = lazy(() =>
   import("./DlpDuplicator").then((m) => ({ default: m.DlpDuplicator })),
+);
+const EnvGroupDuplicator = lazy(() =>
+  import("./EnvGroupDuplicator").then((m) => ({ default: m.EnvGroupDuplicator })),
 );
 
 // ---------------------------------------------------------------------------
@@ -89,7 +91,7 @@ export function Duplicator() {
   const subtitle =
     subject === "dlp"
       ? "Clone an existing DLP policy onto a new set of environments. Connector buckets and the default classification are copied verbatim."
-      : "Clone an existing environment group's rules onto a new group.";
+      : "Clone an existing environment group's governance rulesets onto a new group with a new name and description.";
 
   return (
     <div className={styles.root}>
@@ -115,17 +117,11 @@ export function Duplicator() {
           <DlpDuplicator />
         </Suspense>
       )}
-      {subject === "env-group" && <EnvironmentGroupDuplicatorPlaceholder />}
+      {subject === "env-group" && (
+        <Suspense fallback={<LoadingPane label="Loading env-group duplicator…" />}>
+          <EnvGroupDuplicator />
+        </Suspense>
+      )}
     </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Environment group duplicator — placeholder until Stage 2 lands
-// ---------------------------------------------------------------------------
-
-function EnvironmentGroupDuplicatorPlaceholder() {
-  return (
-    <EmptyPane message="Environment group duplication is coming in the next stage. It will clone the source group's rules (the Power Platform for Admins V2 connector exposes `GetEnvironmentGroupRuleSet` / `SetEnvironmentGroupRuleSet`) onto a new group with just a new name and description." />
   );
 }

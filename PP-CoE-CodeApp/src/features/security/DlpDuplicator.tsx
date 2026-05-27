@@ -330,6 +330,19 @@ export function DlpDuplicator() {
         </MessageBarBody>
       </MessageBar>
 
+      <MessageBar intent="warning">
+        <MessageBarBody>
+          <MessageBarTitle>Not copied</MessageBarTitle>
+          <strong>Endpoint filtering</strong> rules and{" "}
+          <strong>custom connector</strong> patterns are <em>not</em> copied
+          as part of duplication — <code>ListPoliciesV2</code> /{" "}
+          <code>GetPolicyV2</code> don't return them, so we can't replay
+          them onto the new policy. After the new policy is created,
+          open it in the admin center and re-apply those rules manually
+          if the source had any.
+        </MessageBarBody>
+      </MessageBar>
+
       {/* Created-policy confirmation. Stays visible until the user dismisses
           (by picking another source / leaving the page) so they can grab the
           PPAC link without racing the spinner. */}

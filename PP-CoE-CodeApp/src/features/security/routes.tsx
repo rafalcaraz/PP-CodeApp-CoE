@@ -29,6 +29,7 @@ export function securityRoutes() {
     <Route key="security-impact-dlp" path="/security/dlp-impact" element={<Impact />} />,
     <Route key="security-impact" path="/security/impact" element={<Impact />} />,
     <Route key="security-duplicator-dlp" path="/security/dlp-duplicator" element={<Duplicator />} />,
+    <Route key="security-duplicator-envgroup" path="/security/env-group-duplicator" element={<Duplicator />} />,
     <Route key="security-duplicator" path="/security/duplicator" element={<Duplicator />} />,
   ];
 }
