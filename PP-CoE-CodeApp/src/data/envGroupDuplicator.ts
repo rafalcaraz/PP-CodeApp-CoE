@@ -35,7 +35,7 @@ import type {
   RuleSetDto,
 } from "../generated/models/PowerPlatformforAdminsV2Model";
 import type { DataResult } from "./inventory";
-import { listEnvironmentsPage } from "./inventory";
+import { listEnvironmentsInGroup, listEnvironmentsPage } from "./inventory";
 import {
   getEnvironmentGroupEffectivePolicies,
   getEnvironmentGroupRulesets,
@@ -442,15 +442,22 @@ export async function duplicateEnvironmentGroup(
   //
   // CreateRuleSet's path requires a real env id (any tenant env will
   // do — the body's environmentFilter is what actually scopes the
-  // ruleset). Fetch one up front; if the tenant has zero envs we
-  // can't clone rulesets at all and mark every ruleset outcome as
-  // failed with a clear explanation.
+  // ruleset). Try the source group's envs first (they're known to
+  // have a working route since the source's existing rulesets were
+  // posted against them), then fall back to any tenant env. If both
+  // come up empty we mark every ruleset outcome failed with a clear
+  // explanation.
   const rulesetOutcomes: ClonedRuleSetOutcome[] = [];
   let pathEnvId = "";
   if (sourceRulesets.length > 0) {
-    const envsPage = await listEnvironmentsPage();
-    if (envsPage.ok && envsPage.data.rows.length > 0) {
-      pathEnvId = envsPage.data.rows[0].id;
+    const sourceEnvs = await listEnvironmentsInGroup(input.sourceGroupId);
+    if (sourceEnvs.ok && sourceEnvs.data.length > 0) {
+      pathEnvId = sourceEnvs.data[0].id;
+    } else {
+      const envsPage = await listEnvironmentsPage();
+      if (envsPage.ok && envsPage.data.rows.length > 0) {
+        pathEnvId = envsPage.data.rows[0].id;
+      }
     }
   }
   for (const source of sourceRulesets) {
