@@ -187,6 +187,12 @@ const ZONES_SECTION: NavSection = {
       icon: <GridDotsRegular />,
       path: "/zones",
     },
+    {
+      key: "zones-reporting",
+      label: "Zone reporting",
+      icon: <ChartMultipleRegular />,
+      path: "/zones/reporting",
+    },
   ],
 };
 
