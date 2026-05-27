@@ -10,6 +10,7 @@ import {
   Button,
   Dropdown,
   Option,
+  OptionGroup,
   Input,
   Combobox,
   Spinner,
@@ -41,7 +42,6 @@ import {
 } from "@fluentui/react-icons";
 import {
   ALL_RESOURCE_TYPES,
-  COMMON_FIELD_SUGGESTIONS,
   CONNECTOR_FIELD,
   KNOWN_CONNECTORS,
   OPERATION_FIELD,
@@ -58,6 +58,12 @@ import {
   type QuerySpec,
   type ResourceTypeValue,
 } from "../../data/inventory";
+import {
+  getFieldSuggestions,
+  groupFields,
+  type FieldPickerIntent,
+  type InventoryField,
+} from "../../data/inventory.fields";
 import type { Clause } from "../../generated/models/PowerPlatformforAdminsV2Model";
 import {
   createSavedQuery,
@@ -268,8 +274,11 @@ const OPERATORS: { value: QueryFilterOp; label: string }[] = [
   { value: "==", label: "equals" },
   { value: "!=", label: "not equals" },
   { value: "contains", label: "contains" },
+  { value: "!contains", label: "does not contain" },
   { value: "startswith", label: "starts with" },
+  { value: "!startswith", label: "does not start with" },
   { value: "endswith", label: "ends with" },
+  { value: "!endswith", label: "does not end with" },
   { value: "in~", label: "in (comma-sep)" },
   { value: "has", label: "has token" },
   { value: "has_any", label: "has any token (comma-sep)" },
@@ -283,22 +292,35 @@ const OPERATORS: { value: QueryFilterOp; label: string }[] = [
  *  selected the CONNECTOR_FIELD sentinel as the filter field. */
 const KNOWN_CONNECTOR_IDS = Object.keys(KNOWN_CONNECTORS).sort();
 
-const ORDER_FIELD_SUGGESTIONS = [
-  "properties.lastModifiedAt",
-  "properties.createdAt",
-  "properties.displayName",
-  "properties.lastPublishedAt",
-  "properties.environmentId",
-  "name",
-  "location",
-];
-
 interface ResultRow {
   name: string;
   type: string;
   displayName: string;
   environmentId: string;
   raw: unknown;
+}
+
+/** Renders an `InventoryField[]` as Fluent `<OptionGroup>` sections.
+ *  Mirrors the helper in `TileEditorDialog.tsx` so both views surface
+ *  the same grouped, type-scoped field options. */
+function FieldOptions({ fields }: { fields: InventoryField[] }) {
+  const groups = useMemo(() => groupFields(fields), [fields]);
+  return (
+    <>
+      {groups.map((g) => (
+        <OptionGroup key={g.label} label={g.label}>
+          {g.fields.map((f) => (
+            <Option key={f.path} value={f.path} text={f.path}>
+              {f.label}
+              <span style={{ marginLeft: 8, opacity: 0.6, fontSize: "0.85em" }}>
+                {f.path}
+              </span>
+            </Option>
+          ))}
+        </OptionGroup>
+      ))}
+    </>
+  );
 }
 
 function toResultRow(item: Record<string, unknown>): ResultRow {
@@ -693,6 +715,15 @@ export function QueriesView() {
       ? "All resource types"
       : spec.resourceTypes.map(resourceTypeShort).join(", ");
 
+  const suggestionsFor = useMemo(() => {
+    const make = (intent: FieldPickerIntent) =>
+      getFieldSuggestions(spec.resourceTypes, intent);
+    return {
+      filter: make("filter"),
+      sort: make("sort"),
+    };
+  }, [spec.resourceTypes]);
+
   return (
     <div className={styles.root}>
       <div className={styles.header}>
@@ -917,11 +948,7 @@ export function QueriesView() {
                             updateFilter(idx, { field: data.optionValue ?? "" })
                           }
                         >
-                          {COMMON_FIELD_SUGGESTIONS.map((s) => (
-                            <Option key={s} value={s} text={friendlyFilterField(s)}>
-                              {friendlyFilterField(s)}
-                            </Option>
-                          ))}
+                          <FieldOptions fields={suggestionsFor.filter} />
                         </Combobox>
                         <Dropdown
                           value={OPERATORS.find((o) => o.value === f.op)?.label ?? f.op}
@@ -1026,11 +1053,7 @@ export function QueriesView() {
                     updateSpec({ orderField: data.optionValue ?? "" })
                   }
                 >
-                  {ORDER_FIELD_SUGGESTIONS.map((s) => (
-                    <Option key={s} value={s} text={s}>
-                      {s}
-                    </Option>
-                  ))}
+                  <FieldOptions fields={suggestionsFor.sort} />
                 </Combobox>
                 <Dropdown
                   style={{ minWidth: 120 }}

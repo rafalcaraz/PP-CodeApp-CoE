@@ -24,6 +24,7 @@ import {
   Bar,
   LineChart,
   Line,
+  ComposedChart,
   XAxis,
   YAxis,
   Tooltip,
@@ -35,6 +36,7 @@ import {
   DASHBOARD_CACHE_TTL_MS,
   friendlyConnectorName,
   runAggregateCount,
+  runCumulativeSeries,
   runRawQuery,
   runTimeSeriesAggregate,
   shortResourceType,
@@ -75,6 +77,33 @@ const useStyles = makeStyles({
     color: tokens.colorNeutralForeground3,
     fontSize: tokens.fontSizeBase300,
     textAlign: "center",
+  },
+  kpiTrendRow: {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    gap: tokens.spacingVerticalXS,
+    width: "100%",
+    marginTop: tokens.spacingVerticalS,
+  },
+  kpiSparkline: {
+    width: "85%",
+    maxWidth: "240px",
+    height: "44px",
+  },
+  kpiPercentUp: {
+    color: tokens.colorPaletteGreenForeground2,
+    fontWeight: tokens.fontWeightSemibold,
+    fontSize: tokens.fontSizeBase300,
+  },
+  kpiPercentDown: {
+    color: tokens.colorPaletteRedForeground2,
+    fontWeight: tokens.fontWeightSemibold,
+    fontSize: tokens.fontSizeBase300,
+  },
+  kpiPercentFlat: {
+    color: tokens.colorNeutralForeground3,
+    fontSize: tokens.fontSizeBase300,
   },
   chartHost: {
     width: "100%",
@@ -162,6 +191,10 @@ interface QueryState {
   chart: ChartDatum[];
   /** Time-series buckets — populated for line tiles. */
   series: SeriesDatum[];
+  /** Optional cumulative series for the KPI trend (sparkline / percent).
+   *  Populated only when `tile.viz.kpiTrend` is configured. Empty
+   *  otherwise. */
+  trend: SeriesDatum[];
   error: string;
 }
 
@@ -175,6 +208,13 @@ interface SeriesDatum {
   date: string;
   /** Human-friendly label for the X axis tick. */
   label: string;
+  /** "Per-bucket" count (e.g. *created this week*). Same as `value` for
+   *  legacy delta tiles. */
+  delta: number;
+  /** Running total through this bucket. Equal to `delta` (no baseline)
+   *  when the tile is a pure delta line. */
+  total: number;
+  /** Back-compat alias used by the pure-delta line tile. Mirrors `delta`. */
   value: number;
 }
 
@@ -258,6 +298,7 @@ export function TileView({ tile, editable, onEdit, onDelete, onDuplicate, classN
     total: 0,
     chart: [],
     series: [],
+    trend: [],
     error: "",
   });
 
@@ -274,10 +315,20 @@ export function TileView({ tile, editable, onEdit, onDelete, onDuplicate, classN
       cacheTtlMs: DASHBOARD_CACHE_TTL_MS,
       forceFresh: (refreshKey ?? 0) > 0,
     };
+    // Shorthand for "no data of this shape" so each branch below can
+    // populate only what it cares about. Saves repeating empty arrays
+    // across nine setState() calls.
+    const EMPTY_DATA: Pick<QueryState, "items" | "total" | "chart" | "series" | "trend"> = {
+      items: [],
+      total: 0,
+      chart: [],
+      series: [],
+      trend: [],
+    };
     const setError = (error: string) =>
-      setState({ phase: "error", items: [], total: 0, chart: [], series: [], error });
+      setState({ phase: "error", ...EMPTY_DATA, error });
     (async () => {
-      setState({ phase: "loading", items: [], total: 0, chart: [], series: [], error: "" });
+      setState({ phase: "loading", ...EMPTY_DATA, error: "" });
 
       const isRaw = tile.source === "raw" && Array.isArray(tile.clauses);
 
@@ -290,12 +341,41 @@ export function TileView({ tile, editable, onEdit, onDelete, onDuplicate, classN
           setError(res.error);
           return;
         }
+
+        // Optional KPI trend (D2): fetch a cumulative series alongside.
+        // Doesn't block the KPI render — if the trend query fails we
+        // surface the count without the sparkline and swallow the error.
+        let trend: SeriesDatum[] = [];
+        if (!isRaw && tile.viz.kpiTrend?.dateField) {
+          const trendBucket = tile.viz.kpiTrend.bucket ?? "day";
+          const trendLookback = Math.max(
+            1,
+            Math.floor(tile.viz.kpiTrend.lookbackDays ?? 30)
+          );
+          const trendRes = await runCumulativeSeries(
+            tile.spec,
+            tile.viz.kpiTrend.dateField,
+            trendBucket,
+            trendLookback,
+            cacheOpts
+          );
+          if (cancelled) return;
+          if (trendRes.ok) {
+            trend = trendRes.data.map((d) => ({
+              date: d.date,
+              label: formatBucketLabel(d.date, trendBucket),
+              delta: d.delta,
+              total: d.total,
+              value: d.delta,
+            }));
+          }
+        }
+
         setState({
           phase: "ready",
-          items: [],
+          ...EMPTY_DATA,
           total: res.data.totalRecords,
-          chart: [],
-          series: [],
+          trend,
           error: "",
         });
         return;
@@ -312,10 +392,9 @@ export function TileView({ tile, editable, onEdit, onDelete, onDuplicate, classN
         }
         setState({
           phase: "ready",
+          ...EMPTY_DATA,
           items: res.data.items as Array<Record<string, unknown>>,
           total: res.data.totalRecords,
-          chart: [],
-          series: [],
           error: "",
         });
         return;
@@ -333,21 +412,47 @@ export function TileView({ tile, editable, onEdit, onDelete, onDuplicate, classN
         return;
       }
 
-      if (tile.viz.type === "line") {
+      if (tile.viz.type === "line" || tile.viz.type === "combo") {
         const field = tile.viz.dateField?.trim() ?? "";
         if (!field) {
-          setState({
-            phase: "ready",
-            items: [],
-            total: 0,
-            chart: [],
-            series: [],
-            error: "",
-          });
+          setState({ phase: "ready", ...EMPTY_DATA, error: "" });
           return;
         }
         const bucket = tile.viz.bucket ?? "week";
         const lookback = Math.max(1, Math.floor(tile.viz.lookbackDays ?? 90));
+        // Combo always needs both deltas + cumulative totals; cumulative
+        // line needs the running total; pure delta line only needs the
+        // existing aggregate. Pick the cheapest path that satisfies the
+        // tile.
+        const wantsCumulative =
+          tile.viz.type === "combo" ||
+          (tile.viz.type === "line" && tile.viz.lineMode === "cumulative");
+        if (wantsCumulative) {
+          const res = await runCumulativeSeries(tile.spec, field, bucket, lookback, cacheOpts);
+          if (cancelled) return;
+          if (!res.ok) {
+            setError(res.error);
+            return;
+          }
+          const series: SeriesDatum[] = res.data.map((d) => ({
+            date: d.date,
+            label: formatBucketLabel(d.date, bucket),
+            delta: d.delta,
+            total: d.total,
+            value: d.delta,
+          }));
+          setState({
+            phase: "ready",
+            ...EMPTY_DATA,
+            // For combo / cumulative tiles, the header total reflects the
+            // *final* running total — that's the most informative single
+            // number for "how many of X do we have now".
+            total: series.length > 0 ? series[series.length - 1].total : 0,
+            series,
+            error: "",
+          });
+          return;
+        }
         const res = await runTimeSeriesAggregate(tile.spec, field, bucket, lookback, cacheOpts);
         if (cancelled) return;
         if (!res.ok) {
@@ -357,13 +462,14 @@ export function TileView({ tile, editable, onEdit, onDelete, onDuplicate, classN
         const series: SeriesDatum[] = res.data.map((d) => ({
           date: d.date,
           label: formatBucketLabel(d.date, bucket),
+          delta: d.value,
+          total: d.value,
           value: d.value,
         }));
         setState({
           phase: "ready",
-          items: [],
+          ...EMPTY_DATA,
           total: series.reduce((s, r) => s + r.value, 0),
-          chart: [],
           series,
           error: "",
         });
@@ -372,14 +478,7 @@ export function TileView({ tile, editable, onEdit, onDelete, onDuplicate, classN
 
       // bar | pie — server-side aggregation
       if (!tile.viz.groupBy) {
-        setState({
-          phase: "ready",
-          items: [],
-          total: 0,
-          chart: [],
-          series: [],
-          error: "",
-        });
+        setState({ phase: "ready", ...EMPTY_DATA, error: "" });
         return;
       }
       const res = await runAggregateCount(tile.spec, tile.viz.groupBy, {}, cacheOpts);
@@ -394,10 +493,9 @@ export function TileView({ tile, editable, onEdit, onDelete, onDuplicate, classN
       }));
       setState({
         phase: "ready",
-        items: [],
+        ...EMPTY_DATA,
         total: labeled.reduce((s, r) => s + r.value, 0),
         chart: collapseOther(labeled, tile.viz.maxCategories),
-        series: [],
         error: "",
       });
     })();
@@ -416,6 +514,10 @@ export function TileView({ tile, editable, onEdit, onDelete, onDuplicate, classN
     tile.viz.dateField,
     tile.viz.bucket,
     tile.viz.lookbackDays,
+    tile.viz.lineMode,
+    tile.viz.kpiTrend?.dateField,
+    tile.viz.kpiTrend?.lookbackDays,
+    tile.viz.kpiTrend?.bucket,
     refreshKey,
   ]);
 
@@ -470,10 +572,60 @@ function TileBody({ tile, state }: { tile: DashboardTile; state: QueryState }) {
   const viz = tile.viz;
 
   if (viz.type === "kpi") {
+    const trend = state.trend;
+    const showTrend = viz.kpiTrend && trend.length >= 2;
+    const showSparkline =
+      showTrend && (viz.kpiTrend?.show ?? "both") !== "percent";
+    const showPercent =
+      showTrend && (viz.kpiTrend?.show ?? "both") !== "sparkline";
+    // Percent change uses the first vs last buckets of the cumulative
+    // series — they represent the running total at window start and now.
+    let pctText = "";
+    let pctClass = styles.kpiPercentFlat;
+    if (showPercent) {
+      const first = trend[0].total;
+      const last = trend[trend.length - 1].total;
+      const diff = last - first;
+      const pct = first > 0 ? (diff / first) * 100 : diff > 0 ? 100 : 0;
+      const rounded = Math.round(pct * 10) / 10;
+      const arrow = rounded > 0 ? "↑" : rounded < 0 ? "↓" : "→";
+      const lookback = viz.kpiTrend?.lookbackDays ?? 30;
+      pctText = `${arrow} ${Math.abs(rounded).toLocaleString()}% over ${lookback}d`;
+      pctClass =
+        rounded > 0
+          ? styles.kpiPercentUp
+          : rounded < 0
+          ? styles.kpiPercentDown
+          : styles.kpiPercentFlat;
+    }
     return (
       <div className={styles.kpi}>
         <Text className={styles.kpiValue}>{state.total.toLocaleString()}</Text>
         <Text className={styles.kpiLabel}>{viz.kpiLabel || "Total"}</Text>
+        {showTrend && (
+          <div className={styles.kpiTrendRow}>
+            {showSparkline && (
+              <div className={styles.kpiSparkline}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart
+                    data={trend}
+                    margin={{ top: 4, right: 4, bottom: 4, left: 4 }}
+                  >
+                    <Line
+                      type="monotone"
+                      dataKey="total"
+                      stroke={PALETTE[0]}
+                      strokeWidth={2}
+                      dot={false}
+                      isAnimationActive={false}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+            {showPercent && <Text className={pctClass}>{pctText}</Text>}
+          </div>
+        )}
       </div>
     );
   }
@@ -525,8 +677,64 @@ function TileBody({ tile, state }: { tile: DashboardTile; state: QueryState }) {
     );
   }
 
-  // Line chart — uses server-side time-series aggregate
+  // Line chart — uses server-side time-series aggregate. Two modes:
+  // `delta` (default) plots `value` (per-bucket creations); `cumulative`
+  // plots `total` (running total) and switches the tooltip label.
   if (viz.type === "line") {
+    if (!viz.dateField) {
+      return (
+        <div className={styles.empty}>
+          Set a Date field on this tile to chart it.
+        </div>
+      );
+    }
+    const series = state.series;
+    if (series.length === 0) {
+      return (
+        <div className={styles.empty}>
+          No data in the last {viz.lookbackDays ?? 90} days.
+        </div>
+      );
+    }
+    const isCumulative = viz.lineMode === "cumulative";
+    const dataKey = isCumulative ? "total" : "value";
+    const tooltipLabel = isCumulative ? "Total" : "Created";
+    return (
+      <div className={styles.chartHost}>
+        <ResponsiveContainer width="100%" height={280}>
+          <LineChart data={series} margin={{ top: 8, right: 16, bottom: 24, left: 8 }}>
+            <CartesianGrid strokeDasharray="3 3" />
+            <XAxis
+              dataKey="label"
+              tick={{ fontSize: 11 }}
+              interval="preserveStartEnd"
+              minTickGap={20}
+            />
+            <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
+            <Tooltip
+              formatter={(value) => {
+                const n = typeof value === "number" ? value : Number(value) || 0;
+                return [n.toLocaleString(), tooltipLabel];
+              }}
+            />
+            <Line
+              type="monotone"
+              dataKey={dataKey}
+              stroke={PALETTE[0]}
+              strokeWidth={2}
+              dot={{ r: 3 }}
+              activeDot={{ r: 5 }}
+            />
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
+    );
+  }
+
+  // Combo chart — bars = per-bucket creations (left axis), line = running
+  // total (right axis). Uses recharts ComposedChart. Always renders both
+  // series; no mode toggle.
+  if (viz.type === "combo") {
     if (!viz.dateField) {
       return (
         <div className={styles.empty}>
@@ -545,7 +753,7 @@ function TileBody({ tile, state }: { tile: DashboardTile; state: QueryState }) {
     return (
       <div className={styles.chartHost}>
         <ResponsiveContainer width="100%" height={280}>
-          <LineChart data={series} margin={{ top: 8, right: 16, bottom: 24, left: 8 }}>
+          <ComposedChart data={series} margin={{ top: 8, right: 16, bottom: 24, left: 8 }}>
             <CartesianGrid strokeDasharray="3 3" />
             <XAxis
               dataKey="label"
@@ -553,22 +761,57 @@ function TileBody({ tile, state }: { tile: DashboardTile; state: QueryState }) {
               interval="preserveStartEnd"
               minTickGap={20}
             />
-            <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
-            <Tooltip
-              formatter={(value) => {
-                const n = typeof value === "number" ? value : Number(value) || 0;
-                return [n.toLocaleString(), "Count"];
+            <YAxis
+              yAxisId="left"
+              allowDecimals={false}
+              tick={{ fontSize: 11 }}
+              label={{
+                value: "Created",
+                angle: -90,
+                position: "insideLeft",
+                style: { fontSize: 11, fill: "#797775" },
               }}
             />
+            <YAxis
+              yAxisId="right"
+              orientation="right"
+              allowDecimals={false}
+              tick={{ fontSize: 11 }}
+              label={{
+                value: "Total",
+                angle: 90,
+                position: "insideRight",
+                style: { fontSize: 11, fill: "#797775" },
+              }}
+            />
+            <Tooltip
+              formatter={(value, name) => {
+                const n = typeof value === "number" ? value : Number(value) || 0;
+                const label = name === "total" ? "Total" : "Created";
+                return [n.toLocaleString(), label];
+              }}
+            />
+            <Legend
+              wrapperStyle={{ fontSize: 11 }}
+              formatter={(name) => (name === "total" ? "Total" : "Created")}
+            />
+            <Bar
+              yAxisId="left"
+              dataKey="delta"
+              fill={PALETTE[1]}
+              name="delta"
+            />
             <Line
+              yAxisId="right"
               type="monotone"
-              dataKey="value"
+              dataKey="total"
               stroke={PALETTE[0]}
               strokeWidth={2}
               dot={{ r: 3 }}
               activeDot={{ r: 5 }}
+              name="total"
             />
-          </LineChart>
+          </ComposedChart>
         </ResponsiveContainer>
       </div>
     );
