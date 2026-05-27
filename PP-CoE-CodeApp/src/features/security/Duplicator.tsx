@@ -1,5 +1,8 @@
 import { lazy, Suspense, useState } from "react";
 import {
+  MessageBar,
+  MessageBarBody,
+  MessageBarTitle,
   Tab,
   TabList,
   Text,
@@ -10,13 +13,11 @@ import {
 } from "@fluentui/react-components";
 import { LoadingPane } from "../../components/Status";
 
-// Lazy-load both subviews so the shared shell stays light in the
-// default-tab path.
+// Lazy-load the DLP subview so the shared shell stays light in the
+// default-tab path. The environment-group subview is a "coming soon"
+// placeholder for now (see the stub below for the rationale).
 const DlpDuplicator = lazy(() =>
   import("./DlpDuplicator").then((m) => ({ default: m.DlpDuplicator })),
-);
-const EnvGroupDuplicator = lazy(() =>
-  import("./EnvGroupDuplicator").then((m) => ({ default: m.EnvGroupDuplicator })),
 );
 
 // ---------------------------------------------------------------------------
@@ -91,7 +92,7 @@ export function Duplicator() {
   const subtitle =
     subject === "dlp"
       ? "Clone an existing DLP policy onto a new set of environments. Connector buckets and the default classification are copied verbatim."
-      : "Clone an existing environment group's governance rulesets onto a new group with a new name and description.";
+      : "Clone an existing environment group along with its governance rules. (Coming soon.)";
 
   return (
     <div className={styles.root}>
@@ -117,11 +118,52 @@ export function Duplicator() {
           <DlpDuplicator />
         </Suspense>
       )}
-      {subject === "env-group" && (
-        <Suspense fallback={<LoadingPane label="Loading env-group duplicator…" />}>
-          <EnvGroupDuplicator />
-        </Suspense>
-      )}
+      {subject === "env-group" && <EnvironmentGroupDuplicatorPlaceholder />}
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Environment group duplicator — coming soon
+//
+// An earlier prototype attempted to clone an env group's governance
+// rules (Model A `parameters`-bucket rulesets surfaced under "Rules"
+// on the env-group detail page) using the standard
+// `PowerPlatformforAdminsV2` connector. It turned out the connector
+// has no working endpoint to create a ruleset on an env group:
+//   - `CreateRuleSet` declares an env-scoped URL
+//     (`/governance/environments/{envId}/environmentGroups/{groupId}/ruleSets`)
+//     that the real API never routes — 404 "Resource not found"
+//     regardless of which env id is supplied.
+//   - `UpdateRuleSet` is strict-update only and 404s on unknown ids
+//     (Cosmos `ItemNotFound`).
+//   - The real working endpoint is
+//     `POST /governance/environmentGroups/{groupId}/ruleSets`, which
+//     has no connector wrap.
+// Model B rule-based policies (e.g. ACPs) can be cloned end-to-end
+// via `CreateRuleBasedPolicy` + `CreateEnviornmentGroupRuleBasedAssignment`,
+// but cloning a group's rules in isolation without the Model A path
+// would only give a partial result and produce confusion. Until we
+// either:
+//   a) ship a custom connector for the missing endpoint, or
+//   b) Microsoft adds a working wrap to the standard connector,
+// this tab stays a placeholder. The DLP duplicator on the sibling
+// tab is fully functional today.
+// ---------------------------------------------------------------------------
+
+function EnvironmentGroupDuplicatorPlaceholder() {
+  return (
+    <MessageBar intent="info">
+      <MessageBarBody>
+        <MessageBarTitle>Coming soon</MessageBarTitle>
+        Cloning an environment group along with its rules isn't supported
+        yet. The standard Power Platform for Admins V2 connector doesn't
+        expose a working endpoint to create governance rulesets on a
+        group, so a full duplication isn't possible without a custom
+        connector. In the meantime, use the <strong>DLP policies</strong>{" "}
+        tab to duplicate DLP policies, and recreate environment groups
+        manually in the Power Platform admin center.
+      </MessageBarBody>
+    </MessageBar>
   );
 }
