@@ -253,11 +253,17 @@ export function buildDuplicatePolicyBody(
       "General") as ManagedPolicyV2["defaultConnectorsClassification"],
     connectorGroups,
     environmentType: "OnlyEnvironments",
+    // The generated `ManagedPolicyV2.environments[]` type claims `_type`
+    // is required, but `CreatePolicyV2` rejects the request with
+    // `InvalidRequestContent` (ApiPolicyAzureResourceReference has no
+    // `_type` member) the moment we send it. The server only wants
+    // `id` + `name` on write. We cast through `unknown` because the
+    // generator's type is wrong but auto-healing the connector model
+    // would be out of scope here — see docs/connector-generator-fixup.md.
     environments: envIds.map((envId) => ({
       id: `/providers/Microsoft.BusinessAppPlatform/scopes/admin/environments/${envId}`,
       name: envId,
-      _type: "Microsoft.BusinessAppPlatform/scopes/environments",
-    })),
+    })) as unknown as ManagedPolicyV2["environments"],
   };
 }
 

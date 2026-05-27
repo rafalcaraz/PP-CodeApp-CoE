@@ -378,14 +378,28 @@ describe("buildDuplicatePolicyBody", () => {
       {
         id: `/providers/Microsoft.BusinessAppPlatform/scopes/admin/environments/${ENV_A}`,
         name: ENV_A,
-        _type: "Microsoft.BusinessAppPlatform/scopes/environments",
       },
       {
         id: `/providers/Microsoft.BusinessAppPlatform/scopes/admin/environments/${ENV_B}`,
         name: ENV_B,
-        _type: "Microsoft.BusinessAppPlatform/scopes/environments",
       },
     ]);
+  });
+
+  it("does NOT emit `_type` on environment entries — CreatePolicyV2 rejects it", () => {
+    // Regression: the read-shape (`PolicyV2.environments[]`) includes
+    // `_type` (generator artifact for the over-the-wire `type` field),
+    // but the write-shape rejects it with HTTP 400 InvalidRequestContent
+    // ("Could not find member '_type' on object of type
+    // 'ApiPolicyAzureResourceReference'"). Pin that we don't send it.
+    const body = buildDuplicatePolicyBody(source, {
+      displayName: "X",
+      environmentIds: [ENV_A],
+    });
+    for (const e of body.environments ?? []) {
+      expect(e).not.toHaveProperty("_type");
+      expect(e).not.toHaveProperty("type");
+    }
   });
 
   it("filters out blank / whitespace-only environment ids", () => {
