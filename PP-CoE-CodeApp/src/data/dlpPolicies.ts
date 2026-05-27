@@ -25,6 +25,7 @@
 
 import { PowerPlatformforAdminsService } from "../generated";
 import type {
+  ManagedPolicyV2,
   PolicyV2,
   ResourceArray_PolicyV2,
 } from "../generated/models/PowerPlatformforAdminsModel";
@@ -164,6 +165,117 @@ export async function listDlpPolicies(
   } catch (err) {
     return { ok: false, error: formatError(err) };
   }
+}
+
+// ---------------------------------------------------------------------------
+// Create / duplicate
+// ---------------------------------------------------------------------------
+
+/**
+ * Create a new DLP policy.
+ *
+ * Backed by the legacy connector's `CreatePolicyV2` operation. The body
+ * is a `ManagedPolicyV2` — the write-shape sibling of `PolicyV2`. On
+ * success returns the freshly-created `PolicyV2` (with its server-issued
+ * `name` GUID, `createdBy`, timestamps, etc.).
+ *
+ * Used today by the DLP Duplicator page. Callers that want to mirror an
+ * existing policy should use `buildDuplicatePolicyBody` to construct the
+ * request payload rather than hand-rolling it — that helper centralizes
+ * the field-copy rules so the same shape rolls out the door every time.
+ */
+export async function createDlpPolicy(
+  body: ManagedPolicyV2
+): Promise<DataResult<PolicyV2>> {
+  try {
+    const result = await PowerPlatformforAdminsService.CreatePolicyV2(body);
+    if (!result.success) {
+      return { ok: false, error: formatError(result.error) };
+    }
+    if (!result.data) {
+      return { ok: false, error: "Connector returned no policy data." };
+    }
+    return { ok: true, data: result.data };
+  } catch (err) {
+    return { ok: false, error: formatError(err) };
+  }
+}
+
+/**
+ * Pure: build the `ManagedPolicyV2` body for duplicating an existing
+ * `PolicyV2` into a new policy scoped to a specific list of environments.
+ *
+ * What gets copied verbatim:
+ *   - `defaultConnectorsClassification` — the catch-all bucket
+ *   - `connectorGroups[]` — the full bucket → connector mapping, including
+ *     each entry's `_type` (the connector kind discriminator the connector
+ *     round-trips)
+ *
+ * What gets overridden:
+ *   - `displayName` — the new policy's name (caller picks)
+ *   - `environmentType` — forced to `OnlyEnvironments` for Stage 1. The
+ *     UI does not yet expose the `AllEnvironments` / `ExceptEnvironments` /
+ *     `SingleEnvironment` modes; we keep the contract narrow so the page
+ *     can guarantee scope safety (no accidental tenant-wide policies from
+ *     a "copy" action).
+ *   - `environments[]` — set to the caller-provided list of env GUIDs.
+ *     Each entry is shaped the way the connector expects: bare GUID in
+ *     `name`, ARM-style URI in `id`, fixed `_type` discriminator. This
+ *     mirrors the read-shape we see come back on `GetPolicyV2`.
+ *
+ * Returned object is safe to pass directly to `createDlpPolicy`.
+ */
+export function buildDuplicatePolicyBody(
+  source: PolicyV2,
+  opts: { displayName: string; environmentIds: string[] }
+): ManagedPolicyV2 {
+  const displayName = opts.displayName.trim();
+  if (!displayName) {
+    throw new Error("displayName is required.");
+  }
+  const envIds = (opts.environmentIds ?? [])
+    .map((id) => id?.trim())
+    .filter((id): id is string => Boolean(id));
+  if (envIds.length === 0) {
+    throw new Error("At least one environment is required.");
+  }
+
+  // Deep-clone the connector groups so callers can mutate the result
+  // without poisoning the source object. JSON round-trip is enough — the
+  // shape is flat data, no functions, no dates.
+  const connectorGroups = source.connectorGroups
+    ? (JSON.parse(JSON.stringify(source.connectorGroups)) as ManagedPolicyV2["connectorGroups"])
+    : [];
+
+  return {
+    displayName,
+    defaultConnectorsClassification: (source.defaultConnectorsClassification ||
+      "General") as ManagedPolicyV2["defaultConnectorsClassification"],
+    connectorGroups,
+    environmentType: "OnlyEnvironments",
+    // Wire shape for `environments[]` on `CreatePolicyV2`:
+    //   { id: ARM-path, name: bare GUID, type: "Microsoft.BusinessAppPlatform/scopes/environments" }
+    //
+    // Two pitfalls the generator hides:
+    //   1. The connector spec marks `id`, `type`, and `name` all REQUIRED.
+    //      Omitting `type` produces `DLPPolicyEnvironmentReferenceInvalid`
+    //      because the server can't resolve the reference without the
+    //      discriminator.
+    //   2. The generated TS interface renames the field to `_type` (TS
+    //      reserved-word workaround), but the connector client passes
+    //      keys through literally — so `_type` on the request body
+    //      gets rejected with `InvalidRequestContent` ("Could not find
+    //      member '_type'"). We must use the on-wire key `type`.
+    //
+    // We cast through `unknown` because the generated `ManagedPolicyV2`
+    // type expects `_type`; auto-healing the connector model is out of
+    // scope here (see `docs/connector-generator-fixup.md`).
+    environments: envIds.map((envId) => ({
+      id: `/providers/Microsoft.BusinessAppPlatform/scopes/admin/environments/${envId}`,
+      name: envId,
+      type: "Microsoft.BusinessAppPlatform/scopes/environments",
+    })) as unknown as ManagedPolicyV2["environments"],
+  };
 }
 
 // ---------------------------------------------------------------------------
