@@ -35,6 +35,7 @@ import { dashboardsRoutes } from "./features/dashboards";
 import { zonesRoutes } from "./features/zones";
 import { securityRoutes } from "./features/security";
 import { queriesRoutes } from "./features/queries";
+import { deepInventoryRoutes } from "./features/deep-inventory";
 import { settingsRoutes } from "./features/settings";
 
 const CopilotChatLauncher = lazy(() =>
@@ -84,6 +85,7 @@ function AppShell() {
               {flowsRoutes()}
               {agentsRoutes()}
               {queriesRoutes()}
+              {deepInventoryRoutes()}
               {settingsRoutes()}
               {securityRoutes()}
               {zonesRoutes()}

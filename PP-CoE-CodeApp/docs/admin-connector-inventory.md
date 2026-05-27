@@ -44,11 +44,29 @@ in the main inventory store.
 - Lets us add new admin connectors (consent prompts, governance review)
   one at a time, only when there's a concrete user-facing reason.
 
+> **Exception — explicit tenant scans.** The **Tenant scans** feature
+> (`/tenant-scans`, source at `src/shared/deep-inventory/`) deliberately
+> fans `Get_AdminApps` out across every environment in scope, with
+> bounded concurrency (4 envs in flight) and a 10-minute per-env LRU
+> cache. It's exempt from the "no fan-out" half of the rule because:
+>
+> 1. It's still **user-initiated** — the user picks the scope and
+>    clicks "Run scan"; nothing fans out passively.
+> 2. The concurrency cap + cache keep total connector load comparable
+>    to a single dashboard refresh.
+> 3. The use case ("find every app whose `embeddedApp.type` is
+>    `SharepointFormApp`") genuinely needs cross-env scanning — the
+>    base inventory graph doesn't carry these fields.
+>
+> See `src/shared/deep-inventory/runner.ts` for the orchestration and
+> `src/shared/deep-inventory/catalog/` for the curated / observed
+> property catalog that drives the filter and column picker.
+
 ## Current connector wiring
 
 | Connector | Connection ref id | Status | Methods used today |
 | --- | --- | --- | --- |
-| **Power Platform for Admins V2** (`powerplatformadminv2`) | `aaedf328-30da-4325-8925-c2d33cce2d38` | ✅ Wired in `power.config.json` | `QueryResources` (bulk inventory via `src/data/inventory.ts`); `GetEnvironmentByIdForUser`, `Get_AdminApp`, `GetEnvironmentGroup`, `ListEnvironmentGroupRoleAssignments`, `GetRuleSet`, `ListRuleAssignmentsByEnvironmentGroupId`, `GetRuleBasedPolicyByID` (supplemental enrichments via `src/data/adminEnrichment.ts`) |
+| **Power Platform for Admins V2** (`powerplatformadminv2`) | `aaedf328-30da-4325-8925-c2d33cce2d38` | ✅ Wired in `power.config.json` | `QueryResources` (bulk inventory via `src/data/inventory.ts`); `GetEnvironmentByIdForUser`, `Get_AdminApp`, `Get_AdminApps`, `GetEnvironmentGroup`, `ListEnvironmentGroupRoleAssignments`, `GetRuleSet`, `ListRuleAssignmentsByEnvironmentGroupId`, `GetRuleBasedPolicyByID` (supplemental enrichments via `src/data/adminEnrichment.ts` and the deep-inventory scan runner at `src/shared/deep-inventory/`) |
 | PowerApps for Admins (`shared_powerappsforadmins`) | — | ❌ Not yet added | — |
 | Power Automate for Admins (`shared_powerautomateforadmins`) | — | ❌ Not yet added | — |
 | Power Automate Management (`shared_flowmanagement`) | — | ❌ Not yet added | — |
@@ -129,7 +147,7 @@ string parameter — omitted below for brevity.
 
 | Op | Signature | Notes |
 | --- | --- | --- |
-| `Get_AdminApps` | `(environmentId, $top?, $skiptoken?)` | Admin-scope app list in an env. |
+| `Get_AdminApps` ✅ | `(environmentId, $top?, $skiptoken?)` | Admin-scope app list in an env. Shipped as the per-env fetcher for the **Tenant scans** feature (`/tenant-scans`); fans out across the chosen scope (tenant / env-group / single env) to find apps by deep payload fields (`embeddedApp.type`, `usesPremiumApi`, `usesOnPremiseGateway`, DLP status, etc.). Source impl at `src/shared/deep-inventory/sources/adminApps.ts`; the streaming runner that orchestrates the fan-out lives in `src/shared/deep-inventory/runner.ts`. |
 | `Get_AdminApp` ✅ | `(environmentId, app)` | **The original "Get App As Admin"** — owner, sharing, ASP, suspension reason, last-modified-by, launch URL, document URI, device targeting tags, Siena/publisher versions. Shipped as the "Admin details (supplemental)" card on `views/AppDetail.tsx` for canvas / code / app-builder apps (model-driven is gated out via `isAppAdminDetailsSupported`); wrapper in `src/data/adminEnrichment.ts#getAppAdminDetails`. |
 
 > **Gap.** Per-app **role assignments** (`GetAppRoleAssignmentAsAdmin`)
