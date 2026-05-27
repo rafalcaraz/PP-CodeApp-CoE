@@ -10,8 +10,18 @@ const ZonesView = lazy(() =>
 const ZoneDetailView = lazy(() =>
   import("./ZoneDetailView").then((m) => ({ default: m.ZoneDetailView })),
 );
+const ZoneReportingView = lazy(() =>
+  import("./ZoneReportingView").then((m) => ({
+    default: m.ZoneReportingView,
+  })),
+);
 const StandardCustomGroupDetailView = lazy(() =>
   import("./StandardCustomGroupDetailView").then((m) => ({ default: m.StandardCustomGroupDetailView })),
+);
+const CustomGroupReportingView = lazy(() =>
+  import("./CustomGroupReportingView").then((m) => ({
+    default: m.CustomGroupReportingView,
+  })),
 );
 
 /**
@@ -25,6 +35,16 @@ export function zonesRoutes() {
   return [
     <Route key="zones-ZonesView--zones" path="/zones" element={<ZonesView />} />,
     <Route key="zones-ZoneDetailView--zones--zoneId" path="/zones/:zoneId" element={<ZoneDetailView />} />,
+    <Route
+      key="zones-ZoneReportingView--zones--zoneId--reporting"
+      path="/zones/:zoneId/reporting"
+      element={<ZoneReportingView />}
+    />,
     <Route key="zones-StandardCustomGroupDetailView--zones-custom-groups--groupId" path="/zones/custom-groups/:groupId" element={<StandardCustomGroupDetailView />} />,
+    <Route
+      key="zones-CustomGroupReportingView--zones-custom-groups--groupId--reporting"
+      path="/zones/custom-groups/:groupId/reporting"
+      element={<CustomGroupReportingView />}
+    />,
   ];
 }

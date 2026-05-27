@@ -414,18 +414,23 @@ async function runQuery(
 async function runQueryAllPages(
   clauses: Clause[],
   pageSize = 500,
-  pageCap = 25
+  pageCap = 25,
+  cacheOpts?: RunQueryOpts
 ): Promise<DataResult<ResourceItem[]>> {
   const all: ResourceItem[] = [];
   let skipToken = "";
   let previousToken: string | undefined;
   let skip = 0;
   for (let page = 0; page < pageCap; page++) {
-    const res = await runQuery(clauses, {
-      Top: pageSize,
-      Skip: skip,
-      SkipToken: skipToken,
-    });
+    const res = await runQuery(
+      clauses,
+      {
+        Top: pageSize,
+        Skip: skip,
+        SkipToken: skipToken,
+      },
+      cacheOpts
+    );
     if (!res.ok) return res;
     all.push(...res.data.items);
     skip += res.data.items.length;
@@ -1467,9 +1472,23 @@ function chunkEnvIds(envIds: string[]): string[][] {
   return out;
 }
 
+/** Synthetic field name used to materialize a string-cast version of
+ *  `properties.environmentId` so it can be used as a `summarize by`
+ *  grouping key. The connector exposes `properties.environmentId` as a
+ *  dynamic-typed column, and the Azure Resource Graph backend refuses
+ *  to group by `dynamic` without an explicit cast — surfacing as a
+ *  400 with "Summarize group key '…' is of a 'dynamic' type" otherwise.
+ *  See `countResourcesByTypeForGroup` for the same workaround. */
+const ENV_ID_KEY_FIELD = "envIdKey";
+
 /** Build the canonical `where + summarize` clause list used by both env-
  *  scoped roll-up helpers. Factored out so the test surface is a single
- *  pure function and the two callers stay in lockstep. */
+ *  pure function and the two callers stay in lockstep.
+ *
+ *  When grouping by environment id, we first `extend` a `tostring()`
+ *  cast onto a synthetic column (`envIdKey`) so the summarize-by
+ *  succeeds against the connector. The non-env-id grouping case skips
+ *  the extend since `type` is already a string column. */
 export function buildEnvScopedRollupClauses(
   envIdChunk: string[],
   groupBy: ("type" | "properties.environmentId")[]
@@ -1483,12 +1502,24 @@ export function buildEnvScopedRollupClauses(
     envValues.length === 1
       ? where("properties.environmentId", "==", envValues)
       : where("properties.environmentId", "in~", envValues);
-  return [
-    where("type", "in~", resourceTypes),
-    envClause,
-    summarize("count", "resourceCount", groupBy),
+
+  const needsEnvIdCast = groupBy.includes("properties.environmentId");
+  // Translate the public `properties.environmentId` group key to the
+  // synthetic string-cast column so the summarize-by succeeds. Callers
+  // never see the synthetic name; we translate it back on the way out.
+  const summarizeBy = groupBy.map((g) =>
+    g === "properties.environmentId" ? ENV_ID_KEY_FIELD : g,
+  );
+
+  const clauses: Clause[] = [where("type", "in~", resourceTypes), envClause];
+  if (needsEnvIdCast) {
+    clauses.push(extend(ENV_ID_KEY_FIELD, "tostring(properties.environmentId)"));
+  }
+  clauses.push(
+    summarize("count", "resourceCount", summarizeBy),
     orderBy({ resourceCount: "desc" }),
-  ];
+  );
+  return clauses;
 }
 
 /**
@@ -1500,9 +1531,15 @@ export function buildEnvScopedRollupClauses(
  * Chunks `envIds` into ~50-per-batch queries to stay under the connector
  * URI budget on large zones, then merges the per-chunk count rows back
  * into a single `{ type, count }[]`.
+ *
+ * Pass `cacheOpts.cacheTtlMs: DASHBOARD_CACHE_TTL_MS` for board / detail
+ * surfaces — these aggregates are expensive and tenants commonly hit
+ * the connector's per-tenant 429 ceiling when they re-fire on every
+ * navigation.
  */
 export async function countResourcesByTypeForEnvironments(
-  envIds: string[]
+  envIds: string[],
+  cacheOpts?: RunQueryOpts
 ): Promise<DataResult<ResourceCountRow[]>> {
   if (envIds.length === 0) return { ok: true, data: [] };
 
@@ -1510,7 +1547,7 @@ export async function countResourcesByTypeForEnvironments(
   const merged = new Map<string, number>();
   for (const chunk of chunks) {
     const clauses = buildEnvScopedRollupClauses(chunk, ["type"]);
-    const res = await runQueryAllPages(clauses);
+    const res = await runQueryAllPages(clauses, 500, 25, cacheOpts);
     if (!res.ok) return res;
     for (const item of res.data) {
       const raw = item as unknown as Record<string, unknown>;
@@ -1541,15 +1578,16 @@ export interface EnvResourceCountRow {
 /**
  * Two-dimensional roll-up: count of each resource type, per environment,
  * across an arbitrary env-ID list. Designed for the Zone Detail lane
- * headers — one round-trip per chunk lets us derive both per-group
- * subtotals (sum by group's env IDs) and the zone-wide total without N
- * separate queries.
+ * headers AND the Zones board per-column counters — one round-trip
+ * surfaces enough data for the consumer to derive both per-group
+ * subtotals (sum by group's env IDs) and the zone-wide by-type
+ * totals (sum across the env axis) without firing a second query.
  *
- * Returned rows are unsorted; consumers bucket by `environmentId` and
- * apply their own ordering.
+ * Returned rows are unsorted; consumers bucket and sum themselves.
  */
 export async function countResourcesByEnvAndType(
-  envIds: string[]
+  envIds: string[],
+  cacheOpts?: RunQueryOpts
 ): Promise<DataResult<EnvResourceCountRow[]>> {
   if (envIds.length === 0) return { ok: true, data: [] };
 
@@ -1560,16 +1598,18 @@ export async function countResourcesByEnvAndType(
       "type",
       "properties.environmentId",
     ]);
-    const res = await runQueryAllPages(clauses);
+    const res = await runQueryAllPages(clauses, 500, 25, cacheOpts);
     if (!res.ok) return res;
     for (const item of res.data) {
       const raw = item as unknown as Record<string, unknown>;
       const props = (item.properties ?? {}) as Record<string, unknown>;
-      // `properties.environmentId` is a dotted grouping field — the
-      // connector may project it back at either the top level or
-      // inside `properties`. Read both, tolerantly (same shape rule
-      // we use everywhere else for summarize output).
+      // The grouping key is now the synthetic `envIdKey` column we
+      // extend()-ed in the clause builder (tostring cast of
+      // properties.environmentId). Fall back to the legacy shapes
+      // tolerantly so the function still works if the connector ever
+      // accepts the dynamic group-by directly.
       const envIdVal =
+        (raw[ENV_ID_KEY_FIELD] as string | undefined) ??
         (raw.environmentId as string | undefined) ??
         (props.environmentId as string | undefined) ??
         (raw["properties.environmentId"] as string | undefined) ??
@@ -1584,6 +1624,24 @@ export async function countResourcesByEnvAndType(
   }
   return { ok: true, data: out };
 }
+
+/** Fold a per-(env, type) result down to per-type totals, sorted
+ *  desc by count — the same shape `countResourcesByTypeForEnvironments`
+ *  returns. Used so callers that already have the by-env-and-type
+ *  rollup (Zone Detail, Zones board) can derive the by-type rollup
+ *  client-side without firing a second connector query. */
+export function rollupByType(
+  rows: EnvResourceCountRow[]
+): ResourceCountRow[] {
+  const merged = new Map<string, number>();
+  for (const row of rows) {
+    merged.set(row.type, (merged.get(row.type) ?? 0) + row.count);
+  }
+  return [...merged.entries()]
+    .map(([type, count]) => ({ type, count }))
+    .sort((a, b) => b.count - a.count);
+}
+
 
 /** Map a raw inventory type string to a friendly label. */
 export function friendlyResourceType(type: string): string {

@@ -58,12 +58,6 @@ interface Props {
   color?: string;
   icon?: string;
   envs: EnvironmentRow[];
-  /** Total resources across all envs in this lane. Number = ready,
-   *  `undefined` = still loading, render a dim placeholder. */
-  resourceCount?: number;
-  /** When true, the zone-level rollup failed; the lane header skips
-   *  the resource bit entirely instead of showing a misleading "0". */
-  resourceCountError?: boolean;
   /** When provided AND a custom group, env rows are selectable. */
   selection?: {
     isSelected: (envId: string) => boolean;
@@ -196,8 +190,6 @@ export function GroupEnvLane({
   color,
   icon,
   envs,
-  resourceCount,
-  resourceCountError,
   selection,
   onRemoveEnv,
   customActions,
@@ -315,19 +307,6 @@ export function GroupEnvLane({
           )}
           <Text className={styles.meta}>
             {envs.length} env{envs.length === 1 ? "" : "s"}
-            {!resourceCountError && (
-              <>
-                {" · "}
-                {resourceCount === undefined ? (
-                  <span style={{ opacity: 0.6 }}>… resources</span>
-                ) : (
-                  <>
-                    {resourceCount.toLocaleString()} resource
-                    {resourceCount === 1 ? "" : "s"}
-                  </>
-                )}
-              </>
-            )}
             {isMs && (
               <>
                 {" · "}

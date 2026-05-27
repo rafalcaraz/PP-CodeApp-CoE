@@ -69,11 +69,35 @@ describe("buildEnvScopedRollupClauses", () => {
     expect(typeWhere?.Values).not.toContain(`'${ResourceType.AppBuilderApp}'`);
   });
 
-  it("forwards the grouping field list verbatim to summarize", () => {
+  it("does NOT emit the env-id extend cast when only grouping by type", () => {
+    const clauses = buildEnvScopedRollupClauses(["env-1"], ["type"]) as unknown as Array<Record<string, unknown>>;
+    expect(clauses.find((c) => c.$type === "extend")).toBeUndefined();
+    const summarize = clauses.find((c) => c.$type === "summarize") as
+      | {
+          SummarizeClauseExpression: { FieldList: string[] };
+        }
+      | undefined;
+    expect(summarize?.SummarizeClauseExpression.FieldList).toEqual(["type"]);
+  });
+
+  it("emits an extend(envIdKey = tostring(...)) when grouping by env id", () => {
+    // The connector rejects `summarize by properties.environmentId`
+    // with a 400 because properties.environmentId is dynamic-typed.
+    // The fix is to materialize a string-cast column first and group
+    // by THAT — this test pins both halves of the workaround so a
+    // future "clean up" can't silently break the rollup.
     const clauses = buildEnvScopedRollupClauses(["env-1"], [
       "type",
       "properties.environmentId",
     ]) as unknown as Array<Record<string, unknown>>;
+    const extendClause = clauses.find((c) => c.$type === "extend") as
+      | { FieldName: string; Expression: string }
+      | undefined;
+    expect(extendClause).toEqual({
+      $type: "extend",
+      FieldName: "envIdKey",
+      Expression: "tostring(properties.environmentId)",
+    });
     const summarize = clauses.find((c) => c.$type === "summarize") as
       | {
           SummarizeClauseExpression: {
@@ -89,7 +113,7 @@ describe("buildEnvScopedRollupClauses", () => {
     );
     expect(summarize?.SummarizeClauseExpression.FieldList).toEqual([
       "type",
-      "properties.environmentId",
+      "envIdKey",
     ]);
   });
 
@@ -219,41 +243,54 @@ describe("countResourcesByEnvAndType", () => {
     expect(queryResourcesMock).not.toHaveBeenCalled();
   });
 
-  it("emits both grouping fields and reads environmentId from any shape", async () => {
+  it("emits both grouping fields and reads envIdKey + legacy fallbacks", async () => {
     queryResourcesMock.mockResolvedValueOnce({
       success: true,
       data: {
         data: [
-          // Shape A: top-level environmentId
+          // Shape A: synthetic envIdKey from our extend()-cast (the
+          // primary shape today)
           {
             type: ResourceType.CanvasApp,
-            environmentId: "env-a",
+            envIdKey: "env-a",
             resourceCount: 4,
           },
-          // Shape B: nested under properties
+          // Shape B: top-level environmentId (legacy fallback)
           {
             type: ResourceType.CloudFlow,
-            properties: { environmentId: "env-b", resourceCount: 9 },
+            environmentId: "env-b",
+            resourceCount: 9,
           },
-          // Shape C: dotted key (some tenants project it back as-is)
+          // Shape C: nested under properties (legacy fallback)
+          {
+            type: ResourceType.AgentFlow,
+            properties: { environmentId: "env-c", resourceCount: 5 },
+          },
+          // Shape D: dotted key (some tenants project it back as-is)
           {
             type: ResourceType.CopilotStudioAgent,
-            "properties.environmentId": "env-c",
+            "properties.environmentId": "env-d",
             resourceCount: 2,
           },
         ],
-        totalRecords: 3,
+        totalRecords: 4,
         skipToken: "",
       },
     });
 
-    const res = await countResourcesByEnvAndType(["env-a", "env-b", "env-c"]);
+    const res = await countResourcesByEnvAndType([
+      "env-a",
+      "env-b",
+      "env-c",
+      "env-d",
+    ]);
     expect(res.ok).toBe(true);
     if (!res.ok) return;
     expect(res.data).toEqual([
       { environmentId: "env-a", type: ResourceType.CanvasApp, count: 4 },
       { environmentId: "env-b", type: ResourceType.CloudFlow, count: 9 },
-      { environmentId: "env-c", type: ResourceType.CopilotStudioAgent, count: 2 },
+      { environmentId: "env-c", type: ResourceType.AgentFlow, count: 5 },
+      { environmentId: "env-d", type: ResourceType.CopilotStudioAgent, count: 2 },
     ]);
   });
 

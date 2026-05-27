@@ -51,10 +51,6 @@ interface UserZoneProps {
   kind: "zone";
   zone: Zone;
   items: ZoneColumnGroups;
-  /** Optional total resource count across all envs in all groups
-   *  placed in this zone. `undefined` while loading; `null` when the
-   *  zone has no envs OR the query failed (lane just hides the line). */
-  resourceCount?: number | null;
   onEdit: (zone: Zone) => void;
   onDelete: (zone: Zone) => void;
   onAddSection: (zoneId: string, name: string) => void;
@@ -250,11 +246,6 @@ export function ZoneColumn(props: Props) {
             {totalCount} group{totalCount === 1 ? "" : "s"}
             {zone.sections.length > 0
               ? ` · ${zone.sections.length} section${zone.sections.length === 1 ? "" : "s"}`
-              : ""}
-            {props.resourceCount !== null && props.resourceCount !== undefined
-              ? ` · ${props.resourceCount.toLocaleString()} resource${props.resourceCount === 1 ? "" : "s"}`
-              : props.resourceCount === undefined && totalCount > 0
-              ? " · … resources"
               : ""}
           </Text>
         </div>
