@@ -195,17 +195,18 @@ function PropertyCombobox({
   onChange,
 }: PropertyComboboxProps) {
   const styles = useStyles();
-  // The Combobox needs both a controlled text value (what the user
-  // typed) and a selectedOptions array (which entry is highlighted).
-  // We track the typed text locally so the user can backspace +
-  // retype without losing focus.
-  const initialText = entry ? labelFor(entry) : clause.path;
-  const [text, setText] = useState(initialText);
-
-  // Reset the displayed text whenever the underlying clause path
-  // changes from outside (e.g. user clicked an option).
   const expectedText = entry ? labelFor(entry) : clause.path;
-  if (text !== expectedText && text === initialText) {
+
+  // React-blessed pattern for "reset internal state when a prop
+  // changes": track the prop's previous value alongside the text
+  // state; when the prop changes, fire setState during render to
+  // adopt the new value. Avoids the cascading-renders lint warning
+  // that fires on setState-in-useEffect, and keeps typing responsive
+  // (setText from onChange doesn't trigger this branch).
+  const [text, setText] = useState(expectedText);
+  const [prevPath, setPrevPath] = useState(clause.path);
+  if (clause.path !== prevPath) {
+    setPrevPath(clause.path);
     setText(expectedText);
   }
 
@@ -242,7 +243,12 @@ function PropertyCombobox({
         // option, commit the typed text as the new path so the row
         // reflects what they see.
         const trimmed = text.trim();
-        if (!trimmed) return;
+        if (!trimmed) {
+          // Empty on blur → restore the current clause path so the
+          // field doesn't visually disappear.
+          setText(expectedText);
+          return;
+        }
         if (trimmed === clause.path) return;
         const matched = findEntry(catalogGroups, trimmed);
         if (matched) {
@@ -395,29 +401,39 @@ function EnumValueCombobox({ entry, clause, onChange }: EnumValueComboboxProps) 
   const options = enumValuesFor(entry);
   const isMulti = clause.op === "in" || clause.op === "notIn";
   const selected = normalizeMulti(clause.value);
-  const [text, setText] = useState(isMulti ? selected.join(", ") : (selected[0] ?? ""));
-
-  // Keep the visible text in sync with the underlying value when it
-  // changes from outside (clause swap).
   const expected = isMulti ? selected.join(", ") : (selected[0] ?? "");
-  if (text !== expected && (text === "" || expected === "")) {
+
+  // React-blessed "reset internal state on prop change" pattern —
+  // see PropertyCombobox above for the same rationale. We re-sync
+  // the visible text only when the user picks a different property
+  // (`clause.path`) or switches the op (`clause.op`). Typing into
+  // the input doesn't trigger this branch, so the user can clear
+  // and retype freely without the over-eager sync we had before.
+  const [text, setText] = useState(expected);
+  const [prevPath, setPrevPath] = useState(clause.path);
+  const [prevOp, setPrevOp] = useState(clause.op);
+  if (clause.path !== prevPath || clause.op !== prevOp) {
+    setPrevPath(clause.path);
+    setPrevOp(clause.op);
     setText(expected);
   }
 
-  // Allow free typing when there are no known values (observed
-  // string-kind property with no cap; or curated enum with no
-  // values).
+  // Free-typing fallback when the property has no known enum values
+  // (e.g. an observed string-kind property with too many distinct
+  // values, or a curated enum with no curated values list yet).
   if (options.length === 0) {
     return <PlainInput clause={clause} onChange={onChange} />;
   }
 
-  const filtered = options.filter((v) => v.toLowerCase().includes(text.toLowerCase()));
+  const filtered = options.filter((v) =>
+    v.toLowerCase().includes(text.toLowerCase())
+  );
 
   return (
     <Combobox
       freeform
       multiselect={isMulti}
-      placeholder="Pick value…"
+      placeholder="Pick or type a value…"
       value={text}
       selectedOptions={selected}
       onChange={(e) => setText((e.target as HTMLInputElement).value)}
@@ -427,21 +443,33 @@ function EnumValueCombobox({ entry, clause, onChange }: EnumValueComboboxProps) 
           ...clause,
           value: isMulti ? next : (next[0] ?? ""),
         });
-        // For single-select, commit the picked label so the input
-        // shows the canonical value. For multi-select, the chip
-        // rendering inside the combobox handles display.
+        // For single-select, snap the displayed text to the picked
+        // value. For multi-select, the chip rendering inside the
+        // Combobox handles the selection display.
         if (!isMulti) setText(next[0] ?? "");
       }}
       onBlur={() => {
-        // Freeform commit for single-select only (multi-select is
-        // chip-based, freeform commits aren't meaningful).
+        // Freeform commit for single-select only. Multi-select uses
+        // chips, so freeform commits on blur aren't meaningful.
         if (isMulti) return;
         const trimmed = text.trim();
-        if (!trimmed) return;
+        if (!trimmed) {
+          // Empty on blur → restore the last committed value so the
+          // field doesn't appear blank.
+          setText(expected);
+          return;
+        }
         if (trimmed === selected[0]) return;
         onChange({ ...clause, value: trimmed });
       }}
     >
+      {filtered.length === 0 && (
+        <Option key="__no_match__" value="__no_match__" text="No match" disabled>
+          <span>
+            No matching value — press Enter (or blur) to use "{text}" as-is.
+          </span>
+        </Option>
+      )}
       {filtered.map((v) => (
         <Option key={v} value={v} text={v}>
           {v}
