@@ -35,6 +35,7 @@ import type {
   RuleSetDto,
 } from "../generated/models/PowerPlatformforAdminsV2Model";
 import type { DataResult } from "./inventory";
+import { listEnvironmentsPage } from "./inventory";
 import {
   getEnvironmentGroupEffectivePolicies,
   getEnvironmentGroupRulesets,
@@ -102,8 +103,13 @@ export async function createEnvironmentGroup(
  *  The path requires both an environment id and a group id even though
  *  the ruleset itself is conceptually group-scoped — the body's
  *  `environmentFilter.values[]` is what actually scopes it server-side.
- *  We pass the same `groupId` for both path params; the server keys
- *  off the body, not the URL.
+ *
+ *  **`environmentId` must be a REAL env id from the tenant** — the
+ *  server validates the env exists before routing the request, so
+ *  passing the group id (or any other non-env GUID) returns HTTP 404
+ *  "Resource not found". The env doesn't need to be in the target
+ *  group; any tenant env will do (the body's `environmentFilter` is
+ *  what determines the actual scope of the ruleset).
  *
  *  Note: the older companion `UpdateRuleSet` (PUT
  *  `/governance/ruleSets/{ruleSetId}`) is **not** an upsert — it does
@@ -114,15 +120,19 @@ export async function createEnvironmentGroup(
  *  The server assigns the ruleset id; we ignore any id on the body.
  *  The returned `RuleSetDto` carries the server-assigned id. */
 export async function createRuleSet(
+  environmentId: string,
   groupId: string,
   body: RuleSetDto,
 ): Promise<DataResult<RuleSetDto>> {
+  if (!environmentId) {
+    return { ok: false, error: "environmentId is required." };
+  }
   if (!groupId) {
     return { ok: false, error: "groupId is required." };
   }
   try {
     const result = await PowerPlatformforAdminsV2Service.CreateRuleSet(
-      groupId,
+      environmentId,
       groupId,
       API_VERSION,
       body,
@@ -429,12 +439,34 @@ export async function duplicateEnvironmentGroup(
   // parallel failures, and so the server-side change log on the new
   // group reads in a sensible order. Source rulesets are typically
   // small in count (1–3) so this isn't a perf concern.
+  //
+  // CreateRuleSet's path requires a real env id (any tenant env will
+  // do — the body's environmentFilter is what actually scopes the
+  // ruleset). Fetch one up front; if the tenant has zero envs we
+  // can't clone rulesets at all and mark every ruleset outcome as
+  // failed with a clear explanation.
   const rulesetOutcomes: ClonedRuleSetOutcome[] = [];
+  let pathEnvId = "";
+  if (sourceRulesets.length > 0) {
+    const envsPage = await listEnvironmentsPage();
+    if (envsPage.ok && envsPage.data.rows.length > 0) {
+      pathEnvId = envsPage.data.rows[0].id;
+    }
+  }
   for (const source of sourceRulesets) {
     const sourceRuleSetId = source.id ?? "";
+    if (!pathEnvId) {
+      rulesetOutcomes.push({
+        sourceRuleSetId,
+        ok: false,
+        error:
+          "Couldn't find any environment in the tenant to use as the CreateRuleSet path parameter. The connector requires a real env id in the URL even though the ruleset is group-scoped.",
+      });
+      continue;
+    }
     try {
       const body = buildDuplicateRuleSetBody(source, newGroup.id);
-      const r = await createRuleSet(newGroup.id, body);
+      const r = await createRuleSet(pathEnvId, newGroup.id, body);
       rulesetOutcomes.push({
         sourceRuleSetId,
         newRuleSetId: r.ok ? r.data.id : undefined,
