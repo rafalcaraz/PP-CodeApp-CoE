@@ -404,7 +404,12 @@ export function EnvGroupDuplicator() {
             </label>
           </div>
           <label>
-            <span className={styles.pickerLabel}>Description (optional)</span>
+            <span className={styles.pickerLabel}>
+              Description{" "}
+              <span style={{ color: tokens.colorNeutralForeground3, fontWeight: 400 }}>
+                (auto-filled if blank)
+              </span>
+            </span>
             <Textarea
               className={styles.textarea}
               value={newDescription}
@@ -412,7 +417,11 @@ export function EnvGroupDuplicator() {
                 setNewDescription(data.value);
                 setDescTouched(true);
               }}
-              placeholder="What is this group for?"
+              placeholder={
+                source
+                  ? `Duplicated from ${source.displayName}`
+                  : "What is this group for?"
+              }
               disabled={!source}
               rows={3}
             />

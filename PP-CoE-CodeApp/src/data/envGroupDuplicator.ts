@@ -403,10 +403,17 @@ export async function duplicateEnvironmentGroup(
   const sourceRulesets = rulesetsResult.data.matching.value ?? [];
   const sourcePolicies = policiesResult.data.policies ?? [];
 
-  // 2. Create the new env group.
+  // 2. Create the new env group. The API requires a non-empty
+  // `description` even though the connector schema marks it optional —
+  // submitting without one returns HTTP 400 "You must provide a display
+  // name and description for the environment group." Fall back to a
+  // sensible default derived from the displayName when the caller
+  // doesn't provide one.
+  const description =
+    input.description?.trim() || `Duplicated from ${displayName}`;
   const createResult = await createEnvironmentGroup({
     displayName,
-    description: input.description?.trim() || undefined,
+    description,
   });
   if (!createResult.ok) return createResult;
   const newGroup = createResult.data;
