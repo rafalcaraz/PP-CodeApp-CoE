@@ -378,27 +378,32 @@ describe("buildDuplicatePolicyBody", () => {
       {
         id: `/providers/Microsoft.BusinessAppPlatform/scopes/admin/environments/${ENV_A}`,
         name: ENV_A,
+        type: "Microsoft.BusinessAppPlatform/scopes/environments",
       },
       {
         id: `/providers/Microsoft.BusinessAppPlatform/scopes/admin/environments/${ENV_B}`,
         name: ENV_B,
+        type: "Microsoft.BusinessAppPlatform/scopes/environments",
       },
     ]);
   });
 
-  it("does NOT emit `_type` on environment entries — CreatePolicyV2 rejects it", () => {
-    // Regression: the read-shape (`PolicyV2.environments[]`) includes
-    // `_type` (generator artifact for the over-the-wire `type` field),
-    // but the write-shape rejects it with HTTP 400 InvalidRequestContent
-    // ("Could not find member '_type' on object of type
-    // 'ApiPolicyAzureResourceReference'"). Pin that we don't send it.
+  it("uses on-wire key `type` (NOT `_type`) for the environment discriminator", () => {
+    // Regression: the schema marks id/type/name as required on
+    // CreatePolicyV2's environments[]. The generated TS renames the
+    // field to `_type` (TS reserved-word workaround), but the wire
+    // contract is `type`. Sending `_type` → InvalidRequestContent.
+    // Omitting it → DLPPolicyEnvironmentReferenceInvalid. Must be `type`.
     const body = buildDuplicatePolicyBody(source, {
       displayName: "X",
       environmentIds: [ENV_A],
     });
     for (const e of body.environments ?? []) {
-      expect(e).not.toHaveProperty("_type");
-      expect(e).not.toHaveProperty("type");
+      const raw = e as unknown as Record<string, unknown>;
+      expect(raw).not.toHaveProperty("_type");
+      expect(raw.type).toBe(
+        "Microsoft.BusinessAppPlatform/scopes/environments",
+      );
     }
   });
 

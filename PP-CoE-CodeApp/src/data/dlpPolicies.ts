@@ -253,16 +253,27 @@ export function buildDuplicatePolicyBody(
       "General") as ManagedPolicyV2["defaultConnectorsClassification"],
     connectorGroups,
     environmentType: "OnlyEnvironments",
-    // The generated `ManagedPolicyV2.environments[]` type claims `_type`
-    // is required, but `CreatePolicyV2` rejects the request with
-    // `InvalidRequestContent` (ApiPolicyAzureResourceReference has no
-    // `_type` member) the moment we send it. The server only wants
-    // `id` + `name` on write. We cast through `unknown` because the
-    // generator's type is wrong but auto-healing the connector model
-    // would be out of scope here — see docs/connector-generator-fixup.md.
+    // Wire shape for `environments[]` on `CreatePolicyV2`:
+    //   { id: ARM-path, name: bare GUID, type: "Microsoft.BusinessAppPlatform/scopes/environments" }
+    //
+    // Two pitfalls the generator hides:
+    //   1. The connector spec marks `id`, `type`, and `name` all REQUIRED.
+    //      Omitting `type` produces `DLPPolicyEnvironmentReferenceInvalid`
+    //      because the server can't resolve the reference without the
+    //      discriminator.
+    //   2. The generated TS interface renames the field to `_type` (TS
+    //      reserved-word workaround), but the connector client passes
+    //      keys through literally — so `_type` on the request body
+    //      gets rejected with `InvalidRequestContent` ("Could not find
+    //      member '_type'"). We must use the on-wire key `type`.
+    //
+    // We cast through `unknown` because the generated `ManagedPolicyV2`
+    // type expects `_type`; auto-healing the connector model is out of
+    // scope here (see `docs/connector-generator-fixup.md`).
     environments: envIds.map((envId) => ({
       id: `/providers/Microsoft.BusinessAppPlatform/scopes/admin/environments/${envId}`,
       name: envId,
+      type: "Microsoft.BusinessAppPlatform/scopes/environments",
     })) as unknown as ManagedPolicyV2["environments"],
   };
 }
