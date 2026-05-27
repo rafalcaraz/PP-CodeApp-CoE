@@ -28,10 +28,17 @@
 import { PowerPlatformforAdminsV2Service } from "../generated";
 import type {
   EnvironmentGroup,
+  Policy,
+  PolicyAssignmentRequest,
+  PolicyRequest,
+  RuleAssignment,
   RuleSetDto,
 } from "../generated/models/PowerPlatformforAdminsV2Model";
 import type { DataResult } from "./inventory";
-import { getEnvironmentGroupRulesets } from "./adminEnrichment";
+import {
+  getEnvironmentGroupEffectivePolicies,
+  getEnvironmentGroupRulesets,
+} from "./adminEnrichment";
 
 const API_VERSION = "2024-10-01";
 
@@ -133,6 +140,59 @@ export async function putRuleSet(
   }
 }
 
+/** Create a new rule-based policy (Model B). Backed by
+ *  `CreateRuleBasedPolicy`. The connector handles ID assignment —
+ *  callers pass just `name` + `ruleSets`. */
+export async function createRuleBasedPolicy(
+  body: PolicyRequest,
+): Promise<DataResult<Policy>> {
+  const name = (body.name ?? "").trim();
+  if (!name) return { ok: false, error: "Policy name is required." };
+  try {
+    const result = await PowerPlatformforAdminsV2Service.CreateRuleBasedPolicy(
+      API_VERSION,
+      body,
+    );
+    if (!result.success) {
+      return { ok: false, error: formatError(result.error) };
+    }
+    if (!result.data) {
+      return { ok: false, error: "Connector returned no policy data." };
+    }
+    return { ok: true, data: result.data };
+  } catch (err) {
+    return { ok: false, error: formatError(err) };
+  }
+}
+
+/** Assign an existing rule-based policy to an env group. Backed by
+ *  `CreateEnviornmentGroupRuleBasedAssignment` (note: typo on the
+ *  connector side — `Enviornment` not `Environment` — we preserve
+ *  the connector's operation name and shield callers from it). */
+export async function assignRuleBasedPolicyToGroup(
+  policyId: string,
+  groupId: string,
+  body: PolicyAssignmentRequest = {},
+): Promise<DataResult<RuleAssignment>> {
+  if (!policyId) return { ok: false, error: "policyId is required." };
+  if (!groupId) return { ok: false, error: "groupId is required." };
+  try {
+    const result =
+      await PowerPlatformforAdminsV2Service.CreateEnviornmentGroupRuleBasedAssignment(
+        policyId,
+        groupId,
+        API_VERSION,
+        body,
+      );
+    if (!result.success) {
+      return { ok: false, error: formatError(result.error) };
+    }
+    return { ok: true, data: result.data ?? ({} as RuleAssignment) };
+  } catch (err) {
+    return { ok: false, error: formatError(err) };
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Pure helpers
 // ---------------------------------------------------------------------------
@@ -180,6 +240,36 @@ export function buildDuplicateRuleSetBody(
   };
 }
 
+/**
+ * Pure: build the `PolicyRequest` body for cloning a Model B
+ * rule-based policy.
+ *
+ * What gets copied:
+ *   - `name` — kept verbatim. The connector allows duplicate names;
+ *     no "(Copy)" suffix is added by default. Caller can override if
+ *     they want.
+ *   - `ruleSets[]` — the full rule body (e.g. `ConnectorManagement`
+ *     with the `AllowedConnectorList` allow-list). Deep-cloned to
+ *     prevent source mutation.
+ *
+ * What gets dropped:
+ *   - `id`, `tenantId`, `lastModified`, `lastModifiedOffset`,
+ *     `ruleSetCount` — server-managed.
+ */
+export function buildDuplicatePolicyRequest(
+  source: Policy,
+  opts: { name?: string } = {},
+): PolicyRequest {
+  const name = (opts.name ?? source.name ?? "").trim();
+  if (!name) {
+    throw new Error("Policy name is required.");
+  }
+  const ruleSets = source.ruleSets
+    ? (JSON.parse(JSON.stringify(source.ruleSets)) as PolicyRequest["ruleSets"])
+    : [];
+  return { name, ruleSets };
+}
+
 // ---------------------------------------------------------------------------
 // Orchestrator
 // ---------------------------------------------------------------------------
@@ -196,14 +286,33 @@ export interface ClonedRuleSetOutcome {
   error?: string;
 }
 
+/** Outcome of cloning a single Model B rule-based policy.
+ *
+ *  `assigned` tracks the second leg (assignment to the new group)
+ *  separately from `created` (the policy creation itself), so the UI
+ *  can surface partial failures — e.g. "policy created OK but
+ *  assignment failed, here is the orphan policy id". */
+export interface ClonedPolicyOutcome {
+  sourcePolicyId: string;
+  sourcePolicyName: string;
+  /** The newly-created policy id (only set when `created` is true). */
+  newPolicyId?: string;
+  created: boolean;
+  createError?: string;
+  assigned: boolean;
+  assignError?: string;
+}
+
 /** Outcome of the whole `duplicateEnvironmentGroup` operation. The
  *  outer result is `ok: true` whenever the new group itself was
- *  created — ruleset failures are reported per-item. */
+ *  created — ruleset and policy failures are reported per-item. */
 export interface DuplicateEnvironmentGroupResult {
   /** The newly-created env group (server-shaped, with its new id). */
   newGroup: EnvironmentGroup;
-  /** One outcome per source ruleset, in source order. */
+  /** One outcome per source ruleset (Model A), in source order. */
   rulesets: ClonedRuleSetOutcome[];
+  /** One outcome per source rule-based policy (Model B), in source order. */
+  policies: ClonedPolicyOutcome[];
 }
 
 export interface DuplicateEnvironmentGroupInput {
@@ -216,15 +325,21 @@ export interface DuplicateEnvironmentGroupInput {
  * Duplicate an env group end-to-end:
  *   1. Resolve the source group's Model A rulesets (via the existing
  *      `GetRuleSetListForTenant` filter — the same path the env-group
- *      detail page uses).
+ *      detail page uses) AND Model B effective rule-based policies.
  *   2. Create the new env group.
  *   3. For each source ruleset, mint a fresh GUID and PUT it via
  *      `UpdateRuleSet` (REST upsert) rewired to the new group.
+ *   4. For each source Model B policy, create a brand-new tenant-wide
+ *      rule-based policy with the same name + ruleSets, then assign
+ *      it to the new group.
  *
  * Step 1 failures bail before any writes happen — we can't clone what
- * we can't read. Step 2 failures bail before any rulesets are written
- * — orphan rulesets would be worse than the failed group. Step 3
- * failures are per-item and reported in the result.
+ * we can't read. (Step 1 is two reads in parallel; if EITHER fails
+ * we still bail to keep the contract simple — "all or nothing on
+ * reads".) Step 2 failures bail before any rulesets or policies are
+ * written — orphan rulesets/policies would be worse than the failed
+ * group. Step 3 and step 4 failures are per-item and reported in
+ * the result.
  */
 export async function duplicateEnvironmentGroup(
   input: DuplicateEnvironmentGroupInput,
@@ -237,17 +352,27 @@ export async function duplicateEnvironmentGroup(
     return { ok: false, error: "Display name is required." };
   }
 
-  // 1. Read source rulesets first. If this fails we want to fail
-  // before creating the new group — no orphan groups from a
+  // 1. Read source rulesets AND policies first. If either fails we want
+  // to fail before creating the new group — no orphan groups from a
   // mid-flight bail.
-  const rulesetsResult = await getEnvironmentGroupRulesets(input.sourceGroupId);
+  const [rulesetsResult, policiesResult] = await Promise.all([
+    getEnvironmentGroupRulesets(input.sourceGroupId),
+    getEnvironmentGroupEffectivePolicies(input.sourceGroupId),
+  ]);
   if (!rulesetsResult.ok) {
     return {
       ok: false,
       error: `Couldn't read source group rulesets: ${rulesetsResult.error}`,
     };
   }
+  if (!policiesResult.ok) {
+    return {
+      ok: false,
+      error: `Couldn't read source group policies: ${policiesResult.error}`,
+    };
+  }
   const sourceRulesets = rulesetsResult.data.matching.value ?? [];
+  const sourcePolicies = policiesResult.data.policies ?? [];
 
   // 2. Create the new env group.
   const createResult = await createEnvironmentGroup({
@@ -268,21 +393,21 @@ export async function duplicateEnvironmentGroup(
   // and so the server-side change log on the new group reads in a
   // sensible order. Source rulesets are typically small in count
   // (1–3) so this isn't a perf concern.
-  const outcomes: ClonedRuleSetOutcome[] = [];
+  const rulesetOutcomes: ClonedRuleSetOutcome[] = [];
   for (const source of sourceRulesets) {
     const sourceRuleSetId = source.id ?? "";
     const id = newRuleSetId();
     try {
       const body = buildDuplicateRuleSetBody(source, newGroup.id, id);
       const r = await putRuleSet(id, body);
-      outcomes.push({
+      rulesetOutcomes.push({
         sourceRuleSetId,
         newRuleSetId: id,
         ok: r.ok,
         error: r.ok ? undefined : r.error,
       });
     } catch (err) {
-      outcomes.push({
+      rulesetOutcomes.push({
         sourceRuleSetId,
         newRuleSetId: id,
         ok: false,
@@ -291,5 +416,57 @@ export async function duplicateEnvironmentGroup(
     }
   }
 
-  return { ok: true, data: { newGroup, rulesets: outcomes } };
+  // 4. Per-policy clone + assign. Each policy is a two-step:
+  // CreateRuleBasedPolicy gets us a new tenant-wide policy id, then
+  // CreateEnviornmentGroupRuleBasedAssignment wires it onto the new
+  // group. If create fails, skip assign (no point assigning a
+  // non-existent policy). If assign fails the policy still exists as
+  // an orphan — surfaced with its id so an admin can clean up.
+  const policyOutcomes: ClonedPolicyOutcome[] = [];
+  for (const source of sourcePolicies) {
+    const sourcePolicyId = source.id ?? "";
+    const sourcePolicyName = source.name ?? "";
+    let outcome: ClonedPolicyOutcome = {
+      sourcePolicyId,
+      sourcePolicyName,
+      created: false,
+      assigned: false,
+    };
+    try {
+      const body = buildDuplicatePolicyRequest(source);
+      const createRes = await createRuleBasedPolicy(body);
+      if (!createRes.ok) {
+        outcome = { ...outcome, createError: createRes.error };
+      } else {
+        const newId = createRes.data.id ?? "";
+        outcome = { ...outcome, created: true, newPolicyId: newId };
+        if (!newId) {
+          outcome.assignError =
+            "Policy created but the connector returned no id; cannot assign.";
+        } else {
+          const assignRes = await assignRuleBasedPolicyToGroup(
+            newId,
+            newGroup.id,
+          );
+          if (!assignRes.ok) {
+            outcome.assignError = assignRes.error;
+          } else {
+            outcome.assigned = true;
+          }
+        }
+      }
+    } catch (err) {
+      outcome.createError = formatError(err);
+    }
+    policyOutcomes.push(outcome);
+  }
+
+  return {
+    ok: true,
+    data: {
+      newGroup,
+      rulesets: rulesetOutcomes,
+      policies: policyOutcomes,
+    },
+  };
 }

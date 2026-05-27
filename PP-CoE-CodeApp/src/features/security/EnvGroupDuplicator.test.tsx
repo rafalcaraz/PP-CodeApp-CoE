@@ -17,6 +17,7 @@ const {
   duplicateMock,
   listGroupsMock,
   getRulesetsMock,
+  getPoliciesMock,
 } = vi.hoisted(() => {
   const GROUP_A: EnvironmentGroupRow = {
     id: "group-a-guid",
@@ -31,6 +32,7 @@ const {
     duplicateMock: vi.fn(),
     listGroupsMock: vi.fn(),
     getRulesetsMock: vi.fn(),
+    getPoliciesMock: vi.fn(),
   };
 });
 
@@ -51,6 +53,7 @@ vi.mock("../../data/adminEnrichment", async () => {
   return {
     ...actual,
     getEnvironmentGroupRulesets: getRulesetsMock,
+    getEnvironmentGroupEffectivePolicies: getPoliciesMock,
   };
 });
 
@@ -78,6 +81,7 @@ describe("EnvGroupDuplicator smoke", () => {
   beforeEach(() => {
     listGroupsMock.mockReset();
     getRulesetsMock.mockReset();
+    getPoliciesMock.mockReset();
     duplicateMock.mockReset();
     listGroupsMock.mockResolvedValue({ ok: true, data: [GROUP_A] });
     getRulesetsMock.mockResolvedValue({
@@ -89,12 +93,30 @@ describe("EnvGroupDuplicator smoke", () => {
         raw: {},
       },
     });
+    getPoliciesMock.mockResolvedValue({
+      ok: true,
+      data: {
+        assignments: { value: [{ policyId: "pol-1" }] },
+        policies: [{ id: "pol-1", name: "Default Policy", ruleSets: [] }],
+        policyErrors: {},
+        raw: { assignments: {}, policies: {} },
+      },
+    });
     duplicateMock.mockResolvedValue({
       ok: true,
       data: {
         newGroup: { id: "new-grp", displayName: "Copy of Contoso Production" },
         rulesets: [
           { sourceRuleSetId: "rs-1", newRuleSetId: "new-rs-1", ok: true },
+        ],
+        policies: [
+          {
+            sourcePolicyId: "pol-1",
+            sourcePolicyName: "Default Policy",
+            newPolicyId: "new-pol-1",
+            created: true,
+            assigned: true,
+          },
         ],
       },
     });

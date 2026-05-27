@@ -25,7 +25,9 @@ import {
   type DuplicateEnvironmentGroupResult,
 } from "../../data/envGroupDuplicator";
 import {
+  getEnvironmentGroupEffectivePolicies,
   getEnvironmentGroupRulesets,
+  type EnvironmentGroupEffectivePoliciesResult,
   type EnvironmentGroupRulesetsResult,
 } from "../../data/adminEnrichment";
 import {
@@ -154,12 +156,14 @@ export function EnvGroupDuplicator() {
   const [nameTouched, setNameTouched] = useState(false);
   const [descTouched, setDescTouched] = useState(false);
 
-  // Source-rulesets preview (read on source change so the user knows
-  // what they're about to clone).
+  // Source-rulesets + source-policies preview (read on source change
+  // so the user knows what they're about to clone).
   const [rulesets, setRulesets] =
     useState<EnvironmentGroupRulesetsResult | null>(null);
-  const [rulesetsLoading, setRulesetsLoading] = useState(false);
-  const [rulesetsError, setRulesetsError] = useState<string | null>(null);
+  const [policies, setPolicies] =
+    useState<EnvironmentGroupEffectivePoliciesResult | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewError, setPreviewError] = useState<string | null>(null);
 
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -193,19 +197,29 @@ export function EnvGroupDuplicator() {
         if (!nameTouched) setNewName(`Copy of ${next.displayName}`);
         if (!descTouched && next.description) setNewDescription(next.description);
       }
-      // Refresh the rulesets preview.
-      setRulesetsLoading(true);
-      setRulesetsError(null);
+      // Refresh the source preview (both Model A rulesets and Model B
+      // policies in parallel — both are independently failable).
+      setPreviewLoading(true);
+      setPreviewError(null);
       setRulesets(null);
+      setPolicies(null);
       (async () => {
-        const r = await getEnvironmentGroupRulesets(nextId);
+        const [r, p] = await Promise.all([
+          getEnvironmentGroupRulesets(nextId),
+          getEnvironmentGroupEffectivePolicies(nextId),
+        ]);
         if (r.ok) setRulesets(r.data);
-        else setRulesetsError(r.error);
-        setRulesetsLoading(false);
+        if (p.ok) setPolicies(p.data);
+        // Surface only the first failure to keep the message bar tidy;
+        // a per-source full report isn't useful pre-submit.
+        if (!r.ok) setPreviewError(`Rulesets: ${r.error}`);
+        else if (!p.ok) setPreviewError(`Policies: ${p.error}`);
+        setPreviewLoading(false);
       })();
     } else {
       setRulesets(null);
-      setRulesetsError(null);
+      setPolicies(null);
+      setPreviewError(null);
     }
   }
 
@@ -232,6 +246,7 @@ export function EnvGroupDuplicator() {
         setDescTouched(false);
         setSourceId(undefined);
         setRulesets(null);
+        setPolicies(null);
       }
     } catch (err) {
       setSubmitError(err instanceof Error ? err.message : String(err));
@@ -247,20 +262,19 @@ export function EnvGroupDuplicator() {
       <MessageBar intent="info">
         <MessageBarBody>
           <MessageBarTitle>How duplication works</MessageBarTitle>
-          The new group copies the source's <strong>governance rulesets</strong>{" "}
-          (Model A — the <code>parameters</code>-bucket rules surfaced under
-          "Rules" on the env-group detail page). Each ruleset is re-created
-          via <code>UpdateRuleSet</code> as a REST upsert pointed at the new
-          group.
+          The new group copies <strong>both</strong> governance models from
+          the source: Model A <code>parameters</code>-bucket rulesets
+          (SolutionChecker, Sharing, Copilot, etc.) and Model B rule-based
+          policies (ConnectorManagement / ACPs, etc.). Each Model B policy
+          is cloned as a brand-new tenant-wide policy with the same name
+          and ruleSets, then assigned to the new group.
         </MessageBarBody>
       </MessageBar>
 
       <MessageBar intent="warning">
         <MessageBarBody>
           <MessageBarTitle>Not copied</MessageBarTitle>
-          <strong>Rule-based policies</strong> (Model B — those assigned via
-          <code> PolicyAssignment</code>, e.g. DLPs scoped to the group),{" "}
-          <strong>role assignments</strong>, and <strong>child groups</strong>{" "}
+          <strong>Role assignments</strong> and <strong>child groups</strong>{" "}
           are <em>not</em> cloned — the connector lacks a writable
           "create-on-group" endpoint for those. Re-apply them manually from
           the admin center after duplication.
@@ -271,12 +285,16 @@ export function EnvGroupDuplicator() {
       {result && (
         <MessageBar
           intent={
-            result.rulesets.every((r) => r.ok) ? "success" : "warning"
+            result.rulesets.every((r) => r.ok) &&
+            result.policies.every((p) => p.created && p.assigned)
+              ? "success"
+              : "warning"
           }
         >
           <MessageBarBody>
             <MessageBarTitle>
-              {result.rulesets.every((r) => r.ok)
+              {result.rulesets.every((r) => r.ok) &&
+              result.policies.every((p) => p.created && p.assigned)
                 ? "Group duplicated"
                 : "Group duplicated with warnings"}
             </MessageBarTitle>
@@ -297,6 +315,7 @@ export function EnvGroupDuplicator() {
             </div>
             {result.rulesets.length > 0 && (
               <div className={styles.resultList} style={{ marginTop: 8 }}>
+                <div className={styles.sectionSub}>Rulesets (Model A)</div>
                 {result.rulesets.map((r) => (
                   <div key={r.newRuleSetId} className={styles.resultItem}>
                     {r.ok ? (
@@ -311,6 +330,34 @@ export function EnvGroupDuplicator() {
                     </span>
                   </div>
                 ))}
+              </div>
+            )}
+            {result.policies.length > 0 && (
+              <div className={styles.resultList} style={{ marginTop: 8 }}>
+                <div className={styles.sectionSub}>Rule-based policies (Model B)</div>
+                {result.policies.map((p) => {
+                  const allGood = p.created && p.assigned;
+                  return (
+                    <div key={p.sourcePolicyId} className={styles.resultItem}>
+                      {allGood ? (
+                        <CheckmarkCircleFilled className={styles.resultOk} />
+                      ) : (
+                        <ErrorCircleFilled className={styles.resultErr} />
+                      )}
+                      <span>
+                        <strong>{p.sourcePolicyName || p.sourcePolicyId}</strong>
+                        {p.created && p.newPolicyId
+                          ? ` → new policy ${p.newPolicyId.slice(0, 8)}…`
+                          : ""}
+                        {p.createError ? ` — create failed: ${p.createError}` : ""}
+                        {p.created && !p.assigned && p.assignError
+                          ? ` — assignment failed: ${p.assignError}`
+                          : ""}
+                        {p.created && p.assigned ? " — assigned to new group" : ""}
+                      </span>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </MessageBarBody>
@@ -380,19 +427,16 @@ export function EnvGroupDuplicator() {
               From <strong>{source.displayName}</strong>
             </Text>
           </div>
-          {rulesetsError && (
-            <ErrorPane
-              title="Couldn't read source rulesets"
-              message={rulesetsError}
-            />
+          {previewError && (
+            <ErrorPane title="Couldn't read source" message={previewError} />
           )}
-          {rulesetsLoading && <LoadingPane label="Reading source rulesets…" />}
-          {!rulesetsLoading && !rulesetsError && rulesets && (
+          {previewLoading && <LoadingPane label="Reading source rules + policies…" />}
+          {!previewLoading && !previewError && (rulesets || policies) && (
             <div className={styles.summaryGrid}>
               <div className={styles.summaryItem}>
-                <span className={styles.summaryLabel}>Rulesets on source</span>
+                <span className={styles.summaryLabel}>Rulesets (Model A)</span>
                 <span className={styles.summaryValue}>
-                  {rulesets.matching.value?.length ?? 0}
+                  {rulesets?.matching.value?.length ?? 0}
                 </span>
               </div>
               <div className={styles.summaryItem}>
@@ -402,20 +446,28 @@ export function EnvGroupDuplicator() {
                 </span>
               </div>
               <div className={styles.summaryItem}>
+                <span className={styles.summaryLabel}>Policies (Model B)</span>
+                <span className={styles.summaryValue}>
+                  {policies?.policies?.length ?? 0}
+                </span>
+              </div>
+              <div className={styles.summaryItem}>
                 <span className={styles.summaryLabel}>Tenant rulesets scanned</span>
                 <span className={styles.summaryValue}>
-                  {rulesets.totalInTenant}
+                  {rulesets?.totalInTenant ?? 0}
                 </span>
               </div>
             </div>
           )}
-          {!rulesetsLoading &&
-            !rulesetsError &&
+          {!previewLoading &&
+            !previewError &&
             rulesets &&
-            (rulesets.matching.value?.length ?? 0) === 0 && (
+            policies &&
+            (rulesets.matching.value?.length ?? 0) === 0 &&
+            (policies.policies?.length ?? 0) === 0 && (
               <Badge appearance="tint" color="informative">
-                Source group has no governance rulesets — only the empty
-                group itself will be created.
+                Source group has no governance rulesets or policies — only
+                the empty group itself will be created.
               </Badge>
             )}
         </div>

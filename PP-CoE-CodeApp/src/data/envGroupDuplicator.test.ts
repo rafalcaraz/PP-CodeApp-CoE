@@ -11,10 +11,14 @@
  */
 import { describe, it, expect, vi } from "vitest";
 import {
+  buildDuplicatePolicyRequest,
   buildDuplicateRuleSetBody,
   newRuleSetId,
 } from "./envGroupDuplicator";
-import type { RuleSetDto } from "../generated/models/PowerPlatformforAdminsV2Model";
+import type {
+  Policy,
+  RuleSetDto,
+} from "../generated/models/PowerPlatformforAdminsV2Model";
 
 const SOURCE: RuleSetDto = {
   id: "source-ruleset-guid",
@@ -148,5 +152,94 @@ describe("newRuleSetId", () => {
         writable: true,
       });
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// buildDuplicatePolicyRequest — Model B clone shape
+// ---------------------------------------------------------------------------
+
+const SOURCE_POLICY: Policy = {
+  id: "src-policy-guid",
+  tenantId: "tenant-guid",
+  name: "Default Policy Name",
+  lastModified: "2026-05-22T21:09:45Z",
+  ruleSetCount: 1,
+  ruleSets: [
+    {
+      id: "ConnectorManagement",
+      version: "1.0",
+      inputs: {
+        AllowedConnectorList: [
+          {
+            AllowedConnector:
+              "/providers/Microsoft.PowerApps/apis/shared_office365users",
+            AllowedActions: ["MyProfile", "UserProfile"],
+            AllowedActionsMode: "SomeAllowed",
+            AllowedConnectionTypesMode: "AllAllowed",
+          },
+        ],
+      },
+    },
+  ],
+};
+
+describe("buildDuplicatePolicyRequest", () => {
+  it("uses the source name by default", () => {
+    const body = buildDuplicatePolicyRequest(SOURCE_POLICY);
+    expect(body.name).toBe("Default Policy Name");
+  });
+
+  it("respects a caller-provided name override (trimmed)", () => {
+    const body = buildDuplicatePolicyRequest(SOURCE_POLICY, {
+      name: "  My Custom Name  ",
+    });
+    expect(body.name).toBe("My Custom Name");
+  });
+
+  it("copies ruleSets verbatim", () => {
+    const body = buildDuplicatePolicyRequest(SOURCE_POLICY);
+    expect(body.ruleSets).toEqual(SOURCE_POLICY.ruleSets);
+  });
+
+  it("deep-clones ruleSets so caller mutations don't poison the source", () => {
+    const body = buildDuplicatePolicyRequest(SOURCE_POLICY);
+    (body.ruleSets![0].inputs as Record<string, unknown>).AllowedConnectorList = [];
+    expect(
+      (SOURCE_POLICY.ruleSets![0].inputs as Record<string, unknown>)
+        .AllowedConnectorList,
+    ).toBeDefined();
+    expect(
+      (
+        (SOURCE_POLICY.ruleSets![0].inputs as Record<string, unknown>)
+          .AllowedConnectorList as unknown[]
+      ).length,
+    ).toBe(1);
+  });
+
+  it("drops server-managed fields (id, tenantId, lastModified, ruleSetCount)", () => {
+    const body = buildDuplicatePolicyRequest(SOURCE_POLICY) as Record<
+      string,
+      unknown
+    >;
+    expect(body.id).toBeUndefined();
+    expect(body.tenantId).toBeUndefined();
+    expect(body.lastModified).toBeUndefined();
+    expect(body.ruleSetCount).toBeUndefined();
+  });
+
+  it("handles a source policy with no ruleSets", () => {
+    const body = buildDuplicatePolicyRequest({
+      id: "x",
+      name: "Empty",
+    });
+    expect(body.ruleSets).toEqual([]);
+  });
+
+  it("throws when no name can be resolved", () => {
+    expect(() =>
+      buildDuplicatePolicyRequest({ id: "x" }, { name: "" }),
+    ).toThrow(/name/i);
+    expect(() => buildDuplicatePolicyRequest({ id: "x" })).toThrow(/name/i);
   });
 });
