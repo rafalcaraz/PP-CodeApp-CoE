@@ -316,16 +316,18 @@ export function EnvGroupDuplicator() {
             {result.rulesets.length > 0 && (
               <div className={styles.resultList} style={{ marginTop: 8 }}>
                 <div className={styles.sectionSub}>Rulesets (Model A)</div>
-                {result.rulesets.map((r) => (
-                  <div key={r.newRuleSetId} className={styles.resultItem}>
+                {result.rulesets.map((r, i) => (
+                  <div key={`${r.sourceRuleSetId}-${i}`} className={styles.resultItem}>
                     {r.ok ? (
                       <CheckmarkCircleFilled className={styles.resultOk} />
                     ) : (
                       <ErrorCircleFilled className={styles.resultErr} />
                     )}
                     <span>
-                      Ruleset <code>{r.sourceRuleSetId.slice(0, 8)}…</code>{" "}
-                      → <code>{r.newRuleSetId.slice(0, 8)}…</code>
+                      Ruleset <code>{r.sourceRuleSetId.slice(0, 8)}…</code>
+                      {r.newRuleSetId
+                        ? <> → <code>{r.newRuleSetId.slice(0, 8)}…</code></>
+                        : null}
                       {r.error ? ` — ${r.error}` : ""}
                     </span>
                   </div>

@@ -66,23 +66,6 @@ function formatError(err: unknown): string {
   return String(err);
 }
 
-/** RFC 4122 v4 UUID. Uses `crypto.randomUUID()` (available in every
- *  evergreen browser the Power Apps player ships in) and falls back to
- *  a `Math.random`-backed shim only when running in an exotic test
- *  environment that doesn't expose `crypto`. Pinned standalone so we
- *  can stub it deterministically in builder tests. */
-export function newRuleSetId(): string {
-  const c = (globalThis as { crypto?: { randomUUID?: () => string } }).crypto;
-  if (c?.randomUUID) return c.randomUUID();
-  // Fallback — never hit in the player, but keeps SSR-style test
-  // runners that strip globals from blowing up.
-  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (ch) => {
-    const r = (Math.random() * 16) | 0;
-    const v = ch === "x" ? r : (r & 0x3) | 0x8;
-    return v.toString(16);
-  });
-}
-
 // ---------------------------------------------------------------------------
 // Thin connector wrappers (creation paths)
 // ---------------------------------------------------------------------------
@@ -112,29 +95,42 @@ export async function createEnvironmentGroup(
   }
 }
 
-/** PUT a ruleset by id. Backed by `UpdateRuleSet`, which is a REST
- *  upsert (`PUT /governance/ruleSets/{ruleSetId}`) — passing a fresh
- *  GUID for `ruleSetId` creates a new ruleset.
+/** Create a new ruleset via the env-group-scoped POST endpoint.
  *
- *  Wrapped so the orchestrator and any future "edit ruleset" UI share
- *  the same error normalization. */
-export async function putRuleSet(
-  ruleSetId: string,
+ *  Backed by `CreateRuleSet`, which is
+ *  `POST /governance/environments/{environmentId}/environmentGroups/{groupId}/ruleSets`.
+ *  The path requires both an environment id and a group id even though
+ *  the ruleset itself is conceptually group-scoped — the body's
+ *  `environmentFilter.values[]` is what actually scopes it server-side.
+ *  We pass the same `groupId` for both path params; the server keys
+ *  off the body, not the URL.
+ *
+ *  Note: the older companion `UpdateRuleSet` (PUT
+ *  `/governance/ruleSets/{ruleSetId}`) is **not** an upsert — it does
+ *  a strict update and 404s on unknown ids (verified live: Cosmos
+ *  `ItemNotFound`). So creates must go through CreateRuleSet, not
+ *  through a PUT to a fresh GUID.
+ *
+ *  The server assigns the ruleset id; we ignore any id on the body.
+ *  The returned `RuleSetDto` carries the server-assigned id. */
+export async function createRuleSet(
+  groupId: string,
   body: RuleSetDto,
 ): Promise<DataResult<RuleSetDto>> {
-  if (!ruleSetId) {
-    return { ok: false, error: "ruleSetId is required." };
+  if (!groupId) {
+    return { ok: false, error: "groupId is required." };
   }
   try {
-    const result = await PowerPlatformforAdminsV2Service.UpdateRuleSet(
-      ruleSetId,
+    const result = await PowerPlatformforAdminsV2Service.CreateRuleSet(
+      groupId,
+      groupId,
       API_VERSION,
       body,
     );
     if (!result.success) {
       return { ok: false, error: formatError(result.error) };
     }
-    return { ok: true, data: result.data ?? ({} as RuleSetDto) };
+    return { ok: true, data: (result.data as RuleSetDto) ?? ({} as RuleSetDto) };
   } catch (err) {
     return { ok: false, error: formatError(err) };
   }
@@ -198,7 +194,7 @@ export async function assignRuleBasedPolicyToGroup(
 // ---------------------------------------------------------------------------
 
 /**
- * Pure: build the `RuleSetDto` body to PUT for a cloned ruleset.
+ * Pure: build the `RuleSetDto` body to POST for a cloned ruleset.
  *
  * What gets copied verbatim:
  *   - `parameters[]` — the full bucket/value structure that drives the
@@ -207,23 +203,21 @@ export async function assignRuleBasedPolicyToGroup(
  *   - `environmentFilter.type` — preserves Include / Exclude semantics.
  *
  * What gets overridden:
- *   - `id` — must be the new ruleSetId the caller minted (matches the
- *     path parameter on the PUT).
  *   - `environmentFilter.values[]` — replaced with a single
  *     `{ id: <newGroupId>, type: "EnvironmentGroup" }` entry. Any
  *     `Environment`-typed entries on the source are dropped — env-group
  *     duplication is by design scoped to the new group, not the same
  *     individual envs the source happened to reference.
- *   - `lastModified` — server-managed; we omit it so the server picks
- *     the timestamp.
+ *
+ * What's omitted:
+ *   - `id` — server-assigned on CreateRuleSet, ignored on the body.
+ *   - `lastModified` — server-managed.
  */
 export function buildDuplicateRuleSetBody(
   source: RuleSetDto,
   newGroupId: string,
-  newRuleSetId: string,
 ): RuleSetDto {
   if (!newGroupId) throw new Error("newGroupId is required.");
-  if (!newRuleSetId) throw new Error("newRuleSetId is required.");
   // Deep-clone parameters via JSON round-trip — flat data, no
   // functions, no dates.
   const parameters = source.parameters
@@ -231,7 +225,6 @@ export function buildDuplicateRuleSetBody(
     : [];
   const filterType = source.environmentFilter?.type ?? "Include";
   return {
-    id: newRuleSetId,
     environmentFilter: {
       type: filterType,
       values: [{ id: newGroupId, type: "EnvironmentGroup" }],
@@ -276,12 +269,15 @@ export function buildDuplicatePolicyRequest(
 
 /** Outcome of cloning a single ruleset. Captures both success and
  *  failure paths so the UI can render a partial-success summary
- *  ("3 of 4 rulesets cloned") without losing the per-failure detail. */
+ *  ("3 of 4 rulesets cloned") without losing the per-failure detail.
+ *
+ *  `newRuleSetId` is server-assigned on success (CreateRuleSet returns
+ *  the new id in the response body) and undefined on failure. */
 export interface ClonedRuleSetOutcome {
   /** The ruleset id on the source group, for cross-referencing. */
   sourceRuleSetId: string;
-  /** The new ruleset id we PUT. */
-  newRuleSetId: string;
+  /** The new ruleset id the server assigned. Only set when `ok`. */
+  newRuleSetId?: string;
   ok: boolean;
   error?: string;
 }
@@ -327,19 +323,21 @@ export interface DuplicateEnvironmentGroupInput {
  *      `GetRuleSetListForTenant` filter — the same path the env-group
  *      detail page uses) AND Model B effective rule-based policies.
  *   2. Create the new env group.
- *   3. For each source ruleset, mint a fresh GUID and PUT it via
- *      `UpdateRuleSet` (REST upsert) rewired to the new group.
+ *   3. For each source ruleset, POST a new ruleset via `CreateRuleSet`
+ *      against the new group. The connector's POST path requires both
+ *      env id and group id; we pass the new group id for both (the
+ *      body's `environmentFilter` is what actually scopes the
+ *      ruleset server-side). NOTE: we do **not** use `UpdateRuleSet`
+ *      to create — that PUT is strict-update only and 404s on unknown
+ *      ids (Cosmos ItemNotFound), it is not an upsert.
  *   4. For each source Model B policy, create a brand-new tenant-wide
  *      rule-based policy with the same name + ruleSets, then assign
  *      it to the new group.
  *
  * Step 1 failures bail before any writes happen — we can't clone what
- * we can't read. (Step 1 is two reads in parallel; if EITHER fails
- * we still bail to keep the contract simple — "all or nothing on
- * reads".) Step 2 failures bail before any rulesets or policies are
- * written — orphan rulesets/policies would be worse than the failed
- * group. Step 3 and step 4 failures are per-item and reported in
- * the result.
+ * we can't read. Step 2 failures bail before any rulesets or policies
+ * are written. Step 3 and step 4 failures are per-item and reported
+ * in the result.
  */
 export async function duplicateEnvironmentGroup(
   input: DuplicateEnvironmentGroupInput,
@@ -388,28 +386,26 @@ export async function duplicateEnvironmentGroup(
     };
   }
 
-  // 3. Per-ruleset PUTs. Sequential (not parallel) so a malformed
-  // ruleset doesn't get drowned out by a wave of parallel failures,
-  // and so the server-side change log on the new group reads in a
-  // sensible order. Source rulesets are typically small in count
-  // (1–3) so this isn't a perf concern.
+  // 3. Per-ruleset POSTs via CreateRuleSet. Sequential (not parallel)
+  // so a malformed ruleset doesn't get drowned out by a wave of
+  // parallel failures, and so the server-side change log on the new
+  // group reads in a sensible order. Source rulesets are typically
+  // small in count (1–3) so this isn't a perf concern.
   const rulesetOutcomes: ClonedRuleSetOutcome[] = [];
   for (const source of sourceRulesets) {
     const sourceRuleSetId = source.id ?? "";
-    const id = newRuleSetId();
     try {
-      const body = buildDuplicateRuleSetBody(source, newGroup.id, id);
-      const r = await putRuleSet(id, body);
+      const body = buildDuplicateRuleSetBody(source, newGroup.id);
+      const r = await createRuleSet(newGroup.id, body);
       rulesetOutcomes.push({
         sourceRuleSetId,
-        newRuleSetId: id,
+        newRuleSetId: r.ok ? r.data.id : undefined,
         ok: r.ok,
         error: r.ok ? undefined : r.error,
       });
     } catch (err) {
       rulesetOutcomes.push({
         sourceRuleSetId,
-        newRuleSetId: id,
         ok: false,
         error: formatError(err),
       });
