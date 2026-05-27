@@ -43,7 +43,11 @@ import {
   type SearchBoxChangeEvent,
   type InputOnChangeData,
 } from "@fluentui/react-components";
-import { AddRegular, InfoRegular } from "@fluentui/react-icons";
+import {
+  AddRegular,
+  ChartMultipleRegular,
+  InfoRegular,
+} from "@fluentui/react-icons";
 import {
   DndContext,
   PointerSensor,
@@ -459,6 +463,13 @@ export function ZonesView() {
           )}
         </Text>
         <div className={styles.toolbarRight}>
+          <Button
+            appearance="subtle"
+            icon={<ChartMultipleRegular />}
+            onClick={() => navigate("/zones/reporting")}
+          >
+            Reporting
+          </Button>
           <SearchBox
             className={styles.searchBox}
             placeholder="Search groups…"

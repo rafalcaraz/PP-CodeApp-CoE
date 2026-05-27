@@ -68,6 +68,7 @@ import {
 import {
   AddRegular,
   ArrowLeftRegular,
+  ChartMultipleRegular,
   DeleteRegular,
   DismissRegular,
   EditRegular,
@@ -721,6 +722,13 @@ export function ZoneDetailView() {
           </Text>
         </div>
         <div className={styles.headerActions}>
+          <Button
+            appearance="subtle"
+            icon={<ChartMultipleRegular />}
+            onClick={() => navigate(`/zones/${zone.id}/reporting`)}
+          >
+            Reporting
+          </Button>
           <Button
             appearance="subtle"
             icon={<EditRegular />}

@@ -37,6 +37,7 @@ import {
 } from "@fluentui/react-components";
 import {
   ArrowLeftRegular,
+  ChartMultipleRegular,
   DeleteRegular,
   DismissRegular,
   EditRegular,
@@ -339,6 +340,13 @@ export function StandardCustomGroupDetailView() {
           </Text>
         </div>
         <div className={styles.headerActions}>
+          <Button
+            appearance="subtle"
+            icon={<ChartMultipleRegular />}
+            onClick={() => navigate(`/zones/custom-groups/${group.id}/reporting`)}
+          >
+            Reporting
+          </Button>
           <Button
             appearance="subtle"
             icon={<EditRegular />}
