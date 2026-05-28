@@ -67,6 +67,27 @@ const OWNER_SELECT_FIELDS = [
   "mail",
 ];
 
+/**
+ * `$select` projection for the polymorphic `/directoryObjects/getByIds`
+ * batch endpoint. Because that endpoint's response type is the base
+ * `directoryObject`, *only* base-class properties (`id`,
+ * `deletedDateTime`) can be selected without type-cast. SP-specific
+ * properties must be prefixed with the derived-type cast, otherwise
+ * Graph either silently drops them OR (more pernicious — observed in
+ * this codebase on 2026-05-28) returns an empty `value: []` for the
+ * whole call.
+ *
+ * The single-id endpoint `/servicePrincipals/{id}` doesn't need this
+ * because the response type is already pinned to `servicePrincipal`.
+ */
+const SP_TYPE_CAST = "microsoft.graph.servicePrincipal";
+const SP_SELECT_FIELDS_BATCH = [
+  "id",
+  ...SP_SELECT_FIELDS.filter((f) => f !== "id").map(
+    (f) => `${SP_TYPE_CAST}/${f}`,
+  ),
+];
+
 /** Max ids per `directoryObjects/getByIds` call. Documented Graph
  *  limit. We never batch beyond this — the resolver chunks the input
  *  into groups of this size and fires one call per chunk. */
@@ -393,7 +414,11 @@ async function fetchBatch(
   // Mark every id in this batch as "in flight" so concurrent callers
   // don't duplicate the work. Resolve them all from the same batch
   // promise.
-  const select = `$select=${SP_SELECT_FIELDS.join(",")}`;
+  //
+  // Type-cast `$select` is REQUIRED here — see SP_SELECT_FIELDS_BATCH
+  // doc. Without it Graph silently returns `value: []` for the whole
+  // batch even when valid SP Object IDs are present.
+  const select = `$select=${SP_SELECT_FIELDS_BATCH.join(",")}`;
   const batchPromise = callGraph<{ value?: RawServicePrincipal[] }>(
     "POST",
     `/directoryObjects/getByIds?${select}`,

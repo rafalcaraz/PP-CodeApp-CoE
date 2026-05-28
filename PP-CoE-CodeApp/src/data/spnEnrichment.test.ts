@@ -253,13 +253,22 @@ describe("resolveServicePrincipals (bulk)", () => {
     expect(peekServicePrincipal(SP_ID_MISSING)).toBeNull();
   });
 
-  it("calls Graph getByIds with types=['servicePrincipal']", async () => {
+  it("calls Graph getByIds with types=['servicePrincipal'] and type-cast $select", async () => {
     invokeHttpMock.mockResolvedValueOnce(okResponse({ value: [] }));
     await resolveServicePrincipals([SP_ID]);
 
     const call = invokeHttpMock.mock.calls[0][0];
     expect(call.method).toBe("POST");
     expect(call.url).toContain("/directoryObjects/getByIds");
+    // Type-cast $select is REQUIRED on /directoryObjects/getByIds —
+    // SP-derived fields without the cast cause Graph to silently
+    // return value:[] for the whole batch. Pin this contract.
+    expect(call.url).toContain(
+      "microsoft.graph.servicePrincipal/displayName",
+    );
+    expect(call.url).toContain(
+      "microsoft.graph.servicePrincipal/appOwnerOrganizationId",
+    );
     const body = JSON.parse(call.body);
     expect(body.types).toEqual(["servicePrincipal"]);
     expect(body.ids).toEqual([SP_ID]);
