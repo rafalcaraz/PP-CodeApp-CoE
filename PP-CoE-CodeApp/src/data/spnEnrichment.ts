@@ -455,9 +455,39 @@ async function fetchBatch(
       throw new Error(res.error);
     }
     const returned: RawServicePrincipal[] = res.data?.value ?? [];
+
+    // Owner-count enrichment.
+    //
+    // Why this exists: the batch's `$expand=microsoft.graph.servicePrincipal/owners(...)`
+    // returns inline `owners` arrays in some tenants and silently
+    // omits the field in others (observed 2026-05-28 — every SP came
+    // back with no `owners` despite the documented cast syntax).
+    // Without the enrichment, the page's inline "Ownerless / N owners"
+    // badge never fires because every SP has `ownerCount: null`.
+    //
+    // For every SP in the batch response that doesn't already have an
+    // inline owners array, fire a per-SP `/owners?$select=id` call in
+    // parallel. The fallback endpoint is small (id-only projection)
+    // and fast (~150ms typical). N parallel calls for N SPs — usually
+    // < 50, comfortably under any reasonable runtime limit.
+    const ownerCounts = new Map<string, number | null>();
+    await Promise.all(
+      returned.map(async (raw) => {
+        if (!raw.id) return;
+        const g = normalize(raw.id);
+        if (Array.isArray(raw.owners)) {
+          ownerCounts.set(g, raw.owners.length);
+          return;
+        }
+        const count = await fetchOwnerCount(g);
+        ownerCounts.set(g, count);
+      }),
+    );
+
     const seen = new Set<string>();
     for (const raw of returned) {
-      const ref = toServicePrincipalRef(raw);
+      const g = raw.id ? normalize(raw.id) : "";
+      const ref = toServicePrincipalRef(raw, ownerCounts.get(g));
       cache.set(ref.id, ref);
       seen.add(ref.id);
     }
@@ -482,7 +512,37 @@ async function fetchBatch(
   }
 }
 
-// ─── Per-SP owners drill-in ───────────────────────────────────────────────
+// ─── Per-SP owner-count enrichment ────────────────────────────────────────
+
+/**
+ * Fetch just the count of Entra owners assigned to a single service
+ * principal. Used by the batch resolver as a deterministic fallback
+ * when the batch's `$expand=owners(...)` didn't return inline owners
+ * (the cast-plus-expand combo on `/directoryObjects/getByIds` is flaky
+ * in some tenants — observed 2026-05-28, batch returns SPs with no
+ * `owners` field at all, even with the documented cast syntax).
+ *
+ * Uses the per-SP list endpoint with an id-only projection. For
+ * typical SPs (0–3 owners) the response is tiny. We deliberately
+ * avoid `$count` because that requires the `ConsistencyLevel: eventual`
+ * header and the advanced-query-capability gate doesn't apply
+ * uniformly to all SPs.
+ *
+ * Returns `null` on any failure so the badge falls back to the
+ * "unknown" rendering instead of showing a misleading count.
+ */
+async function fetchOwnerCount(id: string): Promise<number | null> {
+  try {
+    const res = await callGraph<{ value?: Array<{ id?: string }> }>(
+      "GET",
+      `/servicePrincipals/${encodeURIComponent(id)}/owners?$select=id`,
+    );
+    if (!res.ok || res.data === null) return null;
+    return Array.isArray(res.data.value) ? res.data.value.length : null;
+  } catch {
+    return null;
+  }
+}
 
 /**
  * Fetch the Entra-assigned owners for a single service principal.
@@ -549,7 +609,10 @@ interface RawOwner {
   deletedDateTime?: string | null;
 }
 
-function toServicePrincipalRef(raw: RawServicePrincipal): ServicePrincipalRef {
+function toServicePrincipalRef(
+  raw: RawServicePrincipal,
+  ownerCountOverride?: number | null,
+): ServicePrincipalRef {
   const id = raw.id ? normalize(raw.id) : "";
   return {
     id,
@@ -562,11 +625,19 @@ function toServicePrincipalRef(raw: RawServicePrincipal): ServicePrincipalRef {
       appOwnerOrganizationId: raw.appOwnerOrganizationId ?? null,
       servicePrincipalType: raw.servicePrincipalType ?? "",
     }),
-    // `owners` is only present when the response included
-    // `$expand=owners(...)`. Treat its absence as "unknown" (`null`)
-    // rather than 0 so the UI can distinguish "we didn't ask" from
-    // "we asked and there really are none assigned".
-    ownerCount: Array.isArray(raw.owners) ? raw.owners.length : null,
+    // Resolution order for the count:
+    //   1. Caller-provided override (used after the per-SP enrichment
+    //      pass — see `fetchOwnerCount` and its callers).
+    //   2. Inline `owners` from a $expand projection (when Graph
+    //      honored it; we don't always rely on it because the
+    //      $expand+cast combo on /directoryObjects/getByIds is flaky).
+    //   3. `null` ("unknown") — UI omits the badge in this state.
+    ownerCount:
+      ownerCountOverride !== undefined
+        ? ownerCountOverride
+        : Array.isArray(raw.owners)
+          ? raw.owners.length
+          : null,
   };
 }
 

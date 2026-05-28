@@ -232,25 +232,86 @@ describe("resolveServicePrincipal (single)", () => {
 });
 
 describe("resolveServicePrincipals (bulk)", () => {
-  it("classifies returned SPs and negative-caches missing ids in one batch call", async () => {
+  it("classifies returned SPs and negative-caches missing ids, using inline owners when present", async () => {
     invokeHttpMock.mockResolvedValueOnce(
       okResponse({
         value: [
-          rawSp(SP_ID),
-          rawSp(SP_ID_MS, { appOwnerOrganizationId: MICROSOFT_TENANT_ID }),
+          // owners present → no per-SP enrichment call needed
+          rawSp(SP_ID, { owners: [{ id: "owner-1" }, { id: "owner-2" }] }),
+          rawSp(SP_ID_MS, {
+            appOwnerOrganizationId: MICROSOFT_TENANT_ID,
+            owners: [],
+          }),
         ],
       }),
     );
 
     const result = await resolveServicePrincipals([SP_ID, SP_ID_MS, SP_ID_MISSING]);
+    // 1 batch call, no enrichment (owners inline on both returned items).
     expect(invokeHttpMock).toHaveBeenCalledTimes(1);
     expect(result.size).toBe(3);
     expect(result.get(SP_ID)!.kind).toBe("tenant");
+    expect(result.get(SP_ID)!.ownerCount).toBe(2);
     expect(result.get(SP_ID_MS)!.kind).toBe("first-party");
+    expect(result.get(SP_ID_MS)!.ownerCount).toBe(0);
     expect(result.get(SP_ID_MISSING)).toBeNull();
 
     // Subsequent lookups hit cache (including the missing one).
     expect(peekServicePrincipal(SP_ID_MISSING)).toBeNull();
+  });
+
+  it("falls back to per-SP /owners enrichment when the batch omits inline owners", async () => {
+    // Simulate the observed-in-the-wild flaky $expand+cast behavior:
+    // batch returns SP refs WITHOUT an `owners` array. Resolver should
+    // fire one /owners call per returned SP to backfill the count so
+    // the UI's "Ownerless / N owners" badge can render correctly.
+    invokeHttpMock.mockResolvedValueOnce(
+      okResponse({
+        value: [
+          rawSp(SP_ID), // no owners field
+          rawSp(SP_ID_MS, { appOwnerOrganizationId: MICROSOFT_TENANT_ID }),
+        ],
+      }),
+    );
+    // Enrichment responses: SP_ID has 3 owners, SP_ID_MS (Microsoft
+    // first-party) has 0.
+    invokeHttpMock.mockResolvedValueOnce(
+      okResponse({
+        value: [{ id: "u1" }, { id: "u2" }, { id: "u3" }],
+      }),
+    );
+    invokeHttpMock.mockResolvedValueOnce(okResponse({ value: [] }));
+
+    const result = await resolveServicePrincipals([SP_ID, SP_ID_MS]);
+    expect(invokeHttpMock).toHaveBeenCalledTimes(3); // 1 batch + 2 enrichments
+
+    // Verify the enrichment URLs target /servicePrincipals/{id}/owners.
+    const enrichmentUrls = invokeHttpMock.mock.calls
+      .slice(1)
+      .map((c) => c[0].url as string);
+    for (const url of enrichmentUrls) {
+      expect(url).toContain("/servicePrincipals/");
+      expect(url).toContain("/owners?$select=id");
+    }
+
+    expect(result.get(SP_ID)!.ownerCount).toBe(3);
+    expect(result.get(SP_ID_MS)!.ownerCount).toBe(0);
+  });
+
+  it("tolerates enrichment failures by leaving ownerCount as null (no badge instead of wrong badge)", async () => {
+    invokeHttpMock.mockResolvedValueOnce(
+      okResponse({ value: [rawSp(SP_ID)] }),
+    );
+    invokeHttpMock.mockResolvedValueOnce(
+      failResponse("HTTP 500 — Internal Server Error"),
+    );
+
+    const result = await resolveServicePrincipals([SP_ID]);
+    // Batch succeeded, enrichment failed — the SP is still classified,
+    // ownerCount falls back to null so the UI omits the badge instead
+    // of risking a misleading "Ownerless".
+    expect(result.get(SP_ID)).not.toBeNull();
+    expect(result.get(SP_ID)!.ownerCount).toBeNull();
   });
 
   it("calls Graph getByIds with types=['servicePrincipal'] and type-cast $select", async () => {
