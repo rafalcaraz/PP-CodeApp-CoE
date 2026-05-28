@@ -98,6 +98,7 @@ const FEATURES: Array<{
       "/security/dlp-duplicator",
       "/security/env-group-duplicator",
       "/security/duplicator",
+      "/security/ownerless",
     ],
   },
   {

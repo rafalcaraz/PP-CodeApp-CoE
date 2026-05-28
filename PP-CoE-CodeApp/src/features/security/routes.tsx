@@ -18,6 +18,9 @@ const Impact = lazy(() =>
 const Duplicator = lazy(() =>
   import("./Duplicator").then((m) => ({ default: m.Duplicator })),
 );
+const Ownerless = lazy(() =>
+  import("./Ownerless").then((m) => ({ default: m.Ownerless })),
+);
 
 /**
  * Returns the `<Route>` elements for the security feature.
@@ -31,5 +34,6 @@ export function securityRoutes() {
     <Route key="security-duplicator-dlp" path="/security/dlp-duplicator" element={<Duplicator />} />,
     <Route key="security-duplicator-envgroup" path="/security/env-group-duplicator" element={<Duplicator />} />,
     <Route key="security-duplicator" path="/security/duplicator" element={<Duplicator />} />,
+    <Route key="security-ownerless" path="/security/ownerless" element={<Ownerless />} />,
   ];
 }
