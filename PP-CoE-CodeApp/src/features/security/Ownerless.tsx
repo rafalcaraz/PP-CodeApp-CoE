@@ -48,12 +48,14 @@ import {
   PersonProhibitedRegular,
   PersonQuestionMarkRegular,
   PlayRegular,
+  BotRegular,
   SettingsRegular,
 } from "@fluentui/react-icons";
 import { useNavigate } from "react-router-dom";
 
 import { UserChip } from "../../components/UserChip";
 import { friendlyResourceType } from "../../data/inventory";
+import { fetchServicePrincipalOwners, type ServicePrincipalOwner } from "../../data/spnEnrichment";
 import {
   cancelScan,
   clearLastSnapshot,
@@ -76,6 +78,8 @@ import {
   formatElapsed,
   formatRelative,
   formatTypeBreakdown,
+  spKindBadgeColor,
+  spKindLabel,
 } from "./_ownerless/format";
 
 // ─── Styles ──────────────────────────────────────────────────────────────
@@ -222,6 +226,8 @@ function bucketIcon(bucket: OwnerBucket) {
   switch (bucket) {
     case "unresolved":
       return <PersonQuestionMarkRegular />;
+    case "service-principal":
+      return <BotRegular />;
     case "disabled":
       return <PersonProhibitedRegular />;
     case "guest":
@@ -238,9 +244,11 @@ function bucketBadgeColor(
 ): "danger" | "warning" | "subtle" | "success" | "informative" {
   switch (bucket) {
     case "unresolved":
-      return "warning";
-    case "disabled":
       return "danger";
+    case "service-principal":
+      return "informative";
+    case "disabled":
+      return "warning";
     case "guest":
       return "informative";
     case "active":
@@ -276,11 +284,24 @@ export function Ownerless() {
     progress.phase === "loading-inventory" ||
     progress.phase === "resolving-owners";
 
-  // Default to whichever bucket has the most owners — that's the
-  // highest-action-value tab on first paint. Falls back to `unresolved`
-  // when there are no results yet.
-  const [selectedBucket, setSelectedBucket] = useState<OwnerBucket>(
-    "unresolved",
+  // Pick whichever bucket has the most owners — that's the
+  // highest-action-value tab on first paint. Falls back to the first
+  // bucket (`unresolved`) when there are no results.
+  const pickBestBucket = (r: typeof result): OwnerBucket => {
+    if (!r) return "unresolved";
+    let best: OwnerBucket = "unresolved";
+    let bestN = -1;
+    for (const b of OWNER_BUCKETS) {
+      const n = r.buckets[b].length;
+      if (n > bestN) {
+        bestN = n;
+        best = b;
+      }
+    }
+    return best;
+  };
+  const [selectedBucket, setSelectedBucket] = useState<OwnerBucket>(() =>
+    pickBestBucket(result),
   );
   // Tracks the result identity that drove the last auto-pick so we
   // can detect a *new* scan result and snap selection to its highest-
@@ -294,18 +315,7 @@ export function Ownerless() {
     useState<typeof result>(result);
   if (result !== lastAutoPickedResult) {
     setLastAutoPickedResult(result);
-    if (result) {
-      let best: OwnerBucket = "unresolved";
-      let bestN = -1;
-      for (const b of OWNER_BUCKETS) {
-        const n = result.buckets[b].length;
-        if (n > bestN) {
-          bestN = n;
-          best = b;
-        }
-      }
-      setSelectedBucket(best);
-    }
+    if (result) setSelectedBucket(pickBestBucket(result));
   }
 
   const onSelect = (_e: SelectTabEvent, data: SelectTabData) => {
@@ -482,7 +492,9 @@ function ProgressCard({ progress }: { progress: ScanProgress }) {
   const phaseLabel =
     progress.phase === "loading-inventory"
       ? "Loading inventory…"
-      : "Resolving owners…";
+      : progress.phase === "resolving-owners"
+        ? "Resolving owners…"
+        : "Resolving service principals…";
   return (
     <div className={styles.card}>
       <div className={styles.actionBar}>
@@ -507,6 +519,12 @@ function ProgressCard({ progress }: { progress: ScanProgress }) {
           label="Owners resolved"
           value={progress.ownersResolved.toLocaleString()}
         />
+        {progress.phase === "resolving-spns" && (
+          <Metric
+            label="Service principals checked"
+            value={progress.spnsResolved.toLocaleString()}
+          />
+        )}
         {progress.noOwnerCount > 0 && (
           <Metric
             label="Rows with no owner"
@@ -642,7 +660,7 @@ function BucketTable({ entries, fromSnapshot }: BucketTableProps) {
             <Fragment key={entry.ownerId}>
               <tr>
                 <td className={`${styles.td} ${styles.ownerCell}`}>
-                  <UserChip id={entry.ownerId} />
+                  <OwnerCell entry={entry} />
                 </td>
                 <td className={`${styles.td} ${styles.numericCell}`}>
                   {entry.affectedResources.length.toLocaleString()}
@@ -703,59 +721,159 @@ function DrillIn({
     );
   }
 
-  if (entry.affectedResources.length === 0) {
-    return (
-      <div className={styles.drillContainer}>
-        <Text size={200}>No affected resources recorded for this owner.</Text>
-      </div>
-    );
-  }
+  const isSp = entry.servicePrincipal !== null;
 
   return (
     <div className={styles.drillContainer}>
-      <table className={styles.drillTable}>
-        <thead>
-          <tr>
-            <th className={styles.drillTh}>Name</th>
-            <th className={styles.drillTh}>Type</th>
-            <th className={styles.drillTh}>Environment</th>
-            <th className={styles.drillTh} aria-label="Open"></th>
-          </tr>
-        </thead>
-        <tbody>
-          {entry.affectedResources.map((r) => {
-            const path = detailPathFor(r);
-            return (
-              <tr key={`${r.environmentId}::${r.id}`}>
-                <td className={styles.drillTd}>
-                  {path ? (
-                    <Link onClick={() => navigate(path)} as="button">
-                      {r.displayName || r.id}
-                    </Link>
-                  ) : (
-                    (r.displayName || r.id)
-                  )}
-                </td>
-                <td className={styles.drillTd}>
-                  {friendlyResourceType(r.type)}
-                </td>
-                <td className={styles.drillTd}>{r.environmentId}</td>
-                <td className={styles.drillTd}>
-                  {path && (
-                    <Button
-                      appearance="subtle"
-                      size="small"
-                      icon={<OpenRegular />}
-                      onClick={() => navigate(path)}
-                      aria-label={`Open ${r.displayName || r.id}`}
-                    />
-                  )}
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
+      {isSp && <SpOwnersSection entry={entry} />}
+
+      {entry.affectedResources.length === 0 ? (
+        <Text size={200}>No affected resources recorded for this owner.</Text>
+      ) : (
+        <table className={styles.drillTable}>
+          <thead>
+            <tr>
+              <th className={styles.drillTh}>Affected resource</th>
+              <th className={styles.drillTh}>Type</th>
+              <th className={styles.drillTh}>Environment</th>
+              <th className={styles.drillTh} aria-label="Open"></th>
+            </tr>
+          </thead>
+          <tbody>
+            {entry.affectedResources.map((r) => {
+              const path = detailPathFor(r);
+              return (
+                <tr key={`${r.environmentId}::${r.id}`}>
+                  <td className={styles.drillTd}>
+                    {path ? (
+                      <Link onClick={() => navigate(path)} as="button">
+                        {r.displayName || r.id}
+                      </Link>
+                    ) : (
+                      (r.displayName || r.id)
+                    )}
+                  </td>
+                  <td className={styles.drillTd}>
+                    {friendlyResourceType(r.type)}
+                  </td>
+                  <td className={styles.drillTd}>{r.environmentId}</td>
+                  <td className={styles.drillTd}>
+                    {path && (
+                      <Button
+                        appearance="subtle"
+                        size="small"
+                        icon={<OpenRegular />}
+                        onClick={() => navigate(path)}
+                        aria-label={`Open ${r.displayName || r.id}`}
+                      />
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      )}
+    </div>
+  );
+}
+
+/** Cell renderer for the Owner column. For SP rows, shows the SP's
+ *  display name + classification badge in place of the standard
+ *  `<UserChip>`. For user / unresolved / sentinel rows, falls back to
+ *  the chip (which already handles the missing case neutrally). */
+function OwnerCell({ entry }: { entry: OwnerEntry }) {
+  const styles = useStyles();
+  const sp = entry.servicePrincipal;
+  if (sp) {
+    return (
+      <span className={styles.summaryChips}>
+        <BotRegular className={styles.bucketIcon} aria-hidden />
+        <Text weight="semibold">{sp.displayName || sp.id}</Text>
+        <Badge appearance="filled" color={spKindBadgeColor(sp.kind)} size="small">
+          {spKindLabel(sp.kind)}
+        </Badge>
+        {sp.accountEnabled === false && (
+          <Badge appearance="filled" color="warning" size="small">
+            disabled
+          </Badge>
+        )}
+      </span>
+    );
+  }
+  return <UserChip id={entry.ownerId} />;
+}
+
+/**
+ * Drill-in section that lazily fetches and renders the SP's Entra
+ * owners via `fetchServicePrincipalOwners`. Fires on first expand;
+ * caches the result in component state so subsequent re-expands of
+ * the same row don't re-fetch.
+ *
+ * User-typed owners render through the shared `<UserChip>` — which
+ * means resolving the SP owners passively populates the `aaduser`
+ * cache and lights up every other user chip across the app for free.
+ * The lookup is on-demand only (not pre-fetched during the scan) so
+ * the scan stays fast; only rows the user actually clicks pay the cost.
+ */
+function SpOwnersSection({ entry }: { entry: OwnerEntry }) {
+  const styles = useStyles();
+  const [owners, setOwners] = useState<ServicePrincipalOwner[] | null>(null);
+  // Start in loading=true since the effect will fire immediately. Initial
+  // state covers the "just-mounted, fetching" UI without needing a
+  // setState-in-effect to flip a default `false` to `true` (which
+  // trips `react-hooks/set-state-in-effect`).
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void fetchServicePrincipalOwners(entry.ownerId)
+      .then((res) => {
+        if (cancelled) return;
+        if (res.ok) {
+          setOwners(res.data);
+        } else {
+          setError(res.error);
+        }
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setError(err instanceof Error ? err.message : String(err));
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [entry.ownerId]);
+
+  return (
+    <div className={styles.drillContainer}>
+      <Text size={300} weight="semibold">
+        Service principal owners
+      </Text>
+      {loading && <Spinner size="extra-small" label="Loading owners…" labelPosition="after" />}
+      {error && (
+        <Text size={200} style={{ color: tokens.colorPaletteRedForeground1 }}>
+          Could not load owners: {error}
+        </Text>
+      )}
+      {!loading && !error && owners && owners.length === 0 && (
+        <Text size={200}>
+          No Entra owners assigned to this service principal. Common for
+          Microsoft first-party SPs — Microsoft manages them, no in-tenant
+          escalation contact exists.
+        </Text>
+      )}
+      {!loading && !error && owners && owners.length > 0 && (
+        <div className={styles.summaryChips}>
+          {owners.map((o) => (
+            <UserChip key={o.id} id={o.id} />
+          ))}
+        </div>
+      )}
     </div>
   );
 }

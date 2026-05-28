@@ -12,6 +12,7 @@ import {
   shortResourceType,
   type ResourceTypeValue,
 } from "../../../data/inventory";
+import type { SpKind } from "../../../data/spnEnrichment";
 import type { OwnerBucket, OwnerEntry } from "./types";
 
 /** Human-readable label for a bucket — drives tab text + headings. */
@@ -19,6 +20,8 @@ export function bucketLabel(bucket: OwnerBucket): string {
   switch (bucket) {
     case "unresolved":
       return "Unresolved";
+    case "service-principal":
+      return "Service principal";
     case "disabled":
       return "Disabled";
     case "guest":
@@ -38,12 +41,16 @@ export function bucketDescription(bucket: OwnerBucket): string {
   switch (bucket) {
     case "unresolved":
       return (
-        "Could not locate a current valid user for this owner GUID. " +
-        "This may be a deleted user account OR a service principal " +
-        "(e.g. a Power Platform Pipelines deployment identity). " +
-        "Use the Entra portal to disambiguate — there is no Dataverse " +
-        "virtual table for service principals, so this tool can't " +
-        "auto-split the two."
+        "Owner GUID isn't a current Entra user, nor a service principal " +
+        "the tenant can see via Microsoft Graph. Almost always a deleted " +
+        "user account — these resources need ownership reassigned."
+      );
+    case "service-principal":
+      return (
+        "Owner is an Entra service principal (Microsoft first-party " +
+        "integration, custom in-tenant SP, managed identity, etc.). " +
+        "Per-row badges show the kind; expand a row to see the SP's " +
+        "Entra owners — those are the escalation contacts when one exists."
       );
     case "disabled":
       return (
@@ -64,6 +71,47 @@ export function bucketDescription(bucket: OwnerBucket): string {
         "00000000-0000-0000-0000-…). These are system / synthesized " +
         "rows, not real ownership."
       );
+  }
+}
+
+/** Human-readable label for an SP classification kind — drives the
+ *  per-row badge text in the service-principal bucket. */
+export function spKindLabel(kind: SpKind): string {
+  switch (kind) {
+    case "first-party":
+      return "Microsoft";
+    case "managed-identity":
+      return "Managed identity";
+    case "tenant":
+      return "Tenant SP";
+    case "legacy":
+      return "Legacy";
+    case "social-idp":
+      return "Social IdP";
+    case "unknown":
+      return "Unknown SP";
+  }
+}
+
+/** Suggested Fluent v9 Badge color for each SP kind. Subtle on
+ *  informational classifications (Microsoft, managed identity),
+ *  attention on the ones that warrant owner inspection. */
+export function spKindBadgeColor(
+  kind: SpKind,
+): "subtle" | "informative" | "warning" | "brand" {
+  switch (kind) {
+    case "first-party":
+      return "subtle";
+    case "managed-identity":
+      return "subtle";
+    case "tenant":
+      return "informative";
+    case "legacy":
+      return "warning";
+    case "social-idp":
+      return "warning";
+    case "unknown":
+      return "warning";
   }
 }
 

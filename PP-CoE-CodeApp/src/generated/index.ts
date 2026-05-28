@@ -6,12 +6,14 @@
 // Models
 export * as AadusersModel from './models/AadusersModel';
 export * as CommonModels from './models/CommonModels';
+export * as HTTPwithMicrosoftEntraID_preauthorized_Model from './models/HTTPwithMicrosoftEntraID_preauthorized_Model';
 export * as MicrosoftCopilotStudioModel from './models/MicrosoftCopilotStudioModel';
 export * as PowerPlatformforAdminsModel from './models/PowerPlatformforAdminsModel';
 export * as PowerPlatformforAdminsV2Model from './models/PowerPlatformforAdminsV2Model';
 
 // Services
 export * from './services/AadusersService';
+export * from './services/HTTPwithMicrosoftEntraID_preauthorized_Service';
 export * from './services/MicrosoftCopilotStudioService';
 export * from './services/PowerPlatformforAdminsService';
 export * from './services/PowerPlatformforAdminsV2Service';

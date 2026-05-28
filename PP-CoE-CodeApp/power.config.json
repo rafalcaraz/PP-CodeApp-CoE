@@ -35,6 +35,16 @@
         "powerplatformforadmins"
       ],
       "dataSets": {}
+    },
+    "5f74384a-e9de-4f7a-a14b-0a7d803c24fa": {
+      "id": "/providers/Microsoft.PowerApps/apis/shared_webcontents",
+      "displayName": "HTTP with Microsoft Entra ID (preauthorized)",
+      "dataSources": [
+        "webcontents"
+      ],
+      "authenticationType": "EntraAuth",
+      "sharedConnectionId": "/providers/Microsoft.PowerApps/apis/shared_webcontents/connections/b0b935afcb3a445caf00c0aed03be18e",
+      "dataSets": {}
     }
   },
   "databaseReferences": {

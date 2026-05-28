@@ -33,6 +33,10 @@ import {
   type ResourceTypeValue,
   type DataResult,
 } from "../../../data/inventory";
+import {
+  resolveServicePrincipals,
+  type ServicePrincipalRef,
+} from "../../../data/spnEnrichment";
 import { resolveUsers, type UserRef } from "../../../data/userEnrichment";
 import type {
   AffectedResource,
@@ -43,7 +47,7 @@ import type {
   ScanSnapshot,
 } from "./types";
 
-const SNAPSHOT_KEY = "ppcoe.ownerScan.lastSnapshot.v1";
+const SNAPSHOT_KEY = "ppcoe.ownerScan.lastSnapshot.v2";
 const PAGE_SIZE = 500;
 
 // A well-known sentinel pattern: GUIDs whose first four blocks are all
@@ -66,26 +70,36 @@ function isSentinel(normalizedId: string): boolean {
 }
 
 /** The single, authoritative bucketing rule. Pure function so the
- *  controller test can hammer it without spinning up the full scan. */
+ *  controller test can hammer it without spinning up the full scan.
+ *
+ *  Order matters: sentinels short-circuit before SP lookup (their
+ *  pattern can't be a real SP id), then user-resolved wins, then
+ *  SP-resolved, then truly-unresolved.
+ */
 export function bucketFor(
   normalizedOwnerId: string,
   user: UserRef | null,
+  servicePrincipal: ServicePrincipalRef | null,
 ): OwnerBucket {
-  if (user === null) {
+  if (user === null && servicePrincipal === null) {
     if (isSentinel(normalizedOwnerId)) return "sentinel";
     return "unresolved";
   }
-  // `disabled` wins over `guest` because a disabled account is a more
-  // urgent action item (no one is going to log into it again) than a
-  // present-but-external guest.
-  if (user.enabled === false) return "disabled";
-  if (user.userType === "Guest") return "guest";
-  return "active";
+  if (user !== null) {
+    // `disabled` wins over `guest` because a disabled account is a more
+    // urgent action item than a present-but-external guest.
+    if (user.enabled === false) return "disabled";
+    if (user.userType === "Guest") return "guest";
+    return "active";
+  }
+  // user === null && servicePrincipal !== null
+  return "service-principal";
 }
 
 function emptyBuckets(): Record<OwnerBucket, string[]> {
   return {
     unresolved: [],
+    "service-principal": [],
     disabled: [],
     guest: [],
     active: [],
@@ -102,6 +116,7 @@ function makeIdleProgress(): ScanProgress {
     inventoryTotal: null,
     distinctOwners: 0,
     ownersResolved: 0,
+    spnsResolved: 0,
     noOwnerCount: 0,
     error: null,
   };
@@ -225,6 +240,7 @@ export async function startScan(): Promise<void> {
     inventoryTotal: null,
     distinctOwners: 0,
     ownersResolved: 0,
+    spnsResolved: 0,
     noOwnerCount: 0,
     error: null,
   });
@@ -314,10 +330,36 @@ export async function startScan(): Promise<void> {
       phase: "resolving-owners",
       distinctOwners: ownersInProgress.size,
       ownersResolved: 0,
+      spnsResolved: 0,
     });
 
     const ownerIds = Array.from(ownersInProgress.keys());
-    const resolved = await resolveUsers(ownerIds);
+    const resolvedUsers = await resolveUsers(ownerIds);
+
+    if (signal.aborted) {
+      updateProgress({ phase: "cancelled", finishedAt: Date.now() });
+      return;
+    }
+
+    // Phase: resolving-spns. Take every GUID that came back null from
+    // the user resolver, exclude sentinels (their pattern can't be a
+    // real SP Object ID), and run them through Graph as a single batch
+    // via `directoryObjects/getByIds`. One round-trip per ≤1000 GUIDs.
+    const spCandidates: string[] = [];
+    for (const ownerId of ownerIds) {
+      const user = resolvedUsers.get(ownerId) ?? null;
+      if (user === null && !isSentinel(ownerId)) spCandidates.push(ownerId);
+    }
+    updateProgress({
+      phase: "resolving-spns",
+      ownersResolved: ownerIds.length,
+      spnsResolved: 0,
+    });
+
+    const resolvedSps =
+      spCandidates.length > 0
+        ? await resolveServicePrincipals(spCandidates)
+        : new Map<string, ServicePrincipalRef | null>();
 
     if (signal.aborted) {
       updateProgress({ phase: "cancelled", finishedAt: Date.now() });
@@ -328,11 +370,13 @@ export async function startScan(): Promise<void> {
     const ownerIndex = new Map<string, OwnerEntry>();
     const buckets = emptyBuckets();
     for (const [ownerId, affectedResources] of ownersInProgress) {
-      const user = resolved.get(ownerId) ?? null;
-      const bucket = bucketFor(ownerId, user);
+      const user = resolvedUsers.get(ownerId) ?? null;
+      const servicePrincipal = resolvedSps.get(ownerId) ?? null;
+      const bucket = bucketFor(ownerId, user, servicePrincipal);
       ownerIndex.set(ownerId, {
         ownerId,
         user,
+        servicePrincipal,
         bucket,
         affectedResources,
       });
@@ -360,6 +404,7 @@ export async function startScan(): Promise<void> {
       phase: "completed",
       finishedAt: Date.now(),
       ownersResolved: ownerIds.length,
+      spnsResolved: spCandidates.length,
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
@@ -432,12 +477,13 @@ async function walkStream<R extends {
 
 function persistSnapshot(result: ScanResult): void {
   const snapshot: ScanSnapshot = {
-    version: 1,
+    version: 2,
     scannedAt: result.scannedAt,
     totalResources: result.totalResources,
     noOwnerCount: result.noOwnerCount,
     bucketCounts: {
       unresolved: result.buckets.unresolved.length,
+      "service-principal": result.buckets["service-principal"].length,
       disabled: result.buckets.disabled.length,
       guest: result.buckets.guest.length,
       active: result.buckets.active.length,
@@ -459,7 +505,7 @@ function loadSnapshot(): ScanResult | null {
   const raw = localStorage.getItem(SNAPSHOT_KEY);
   if (!raw) return null;
   const snapshot = JSON.parse(raw) as ScanSnapshot;
-  if (snapshot.version !== 1) return null;
+  if (snapshot.version !== 2) return null;
 
   const buckets = emptyBuckets();
   const ownerIndex = new Map<string, OwnerEntry>();
@@ -469,6 +515,7 @@ function loadSnapshot(): ScanResult | null {
       ownerIndex.set(ownerId, {
         ownerId,
         user: null,
+        servicePrincipal: null,
         bucket,
         // affectedResources is NOT persisted (see ScanSnapshot doc).
         // The UI must render a "Re-scan to view affected resources"

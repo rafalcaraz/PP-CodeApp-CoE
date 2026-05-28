@@ -10,13 +10,20 @@
  */
 
 import type { ResourceTypeValue } from "../../../data/inventory";
+import type {
+  ServicePrincipalRef,
+  SpKind,
+} from "../../../data/spnEnrichment";
 import type { UserRef } from "../../../data/userEnrichment";
+
+export type { ServicePrincipalRef, SpKind };
 
 /** Phases the scan can be in. */
 export type ScanPhase =
   | "idle"
   | "loading-inventory"
   | "resolving-owners"
+  | "resolving-spns"
   | "completed"
   | "cancelled"
   | "error";
@@ -24,23 +31,27 @@ export type ScanPhase =
 /**
  * Owner-health buckets, ordered by typical action priority.
  *
- *  - `unresolved` — Owner GUID isn't present in `aaduser`. Per the
- *    inventory-schema doc, this is either a deleted user OR a service
- *    principal — the two are indistinguishable from the `aaduser`
- *    table alone, and Microsoft does NOT expose a Dataverse virtual
- *    table for service principals to fall through to. Future work may
- *    add manual classification (an in-app "known SPN" allowlist) or
- *    `systemuser` + `applicationid` resolution for SPNs registered as
- *    Application Users, but neither covers every case.
+ *  - `unresolved` — Owner GUID isn't present in `aaduser` **nor** in
+ *    Graph's service-principal directory. Almost always a deleted
+ *    user account (Graph covers SPs + managed identities, so a miss
+ *    on both backends is genuine). Action: reassign the resource.
+ *  - `service-principal` — Owner GUID resolves to an Entra service
+ *    principal via Microsoft Graph. Per-row classification badges
+ *    distinguish Microsoft first-party SPs (typically informational
+ *    only) from custom tenant SPs (where the SP's own Entra owners
+ *    become the escalation contact for the resource).
  *  - `disabled`   — Owner exists in Entra but `accountEnabled = false`
  *    (often a departed employee in grace period).
  *  - `guest`      — Owner is an external guest (`userType = "Guest"`).
  *  - `active`     — Active member user. Included for completeness.
  *  - `sentinel`   — Owner GUID matches a well-known placeholder pattern
  *    (e.g. `00000000-0000-0000-0000-…`). System / synthesized rows.
+ *    Excluded from the SP resolution pass entirely — the pattern
+ *    can't be a real SP Object ID.
  */
 export type OwnerBucket =
   | "unresolved"
+  | "service-principal"
   | "disabled"
   | "guest"
   | "active"
@@ -48,6 +59,7 @@ export type OwnerBucket =
 
 export const OWNER_BUCKETS: readonly OwnerBucket[] = [
   "unresolved",
+  "service-principal",
   "disabled",
   "guest",
   "active",
@@ -69,9 +81,16 @@ export interface ScanProgress {
   inventoryTotal: number | null;
   /** Distinct owner GUIDs seen so far. */
   distinctOwners: number;
-  /** Distinct owners that have been resolved (success or definitive
-   *  null). Only meaningful during/after the `resolving-owners` phase. */
+  /** Distinct owners that have been resolved against `aaduser`
+   *  (success or definitive null). Only meaningful during/after the
+   *  `resolving-owners` phase. */
   ownersResolved: number;
+  /** Distinct owners that have been classified through Graph (success
+   *  or definitive null). Only meaningful during/after the
+   *  `resolving-spns` phase. Counts only the GUIDs sent through the
+   *  Graph pass — i.e. the subset that came back null from
+   *  `aaduser` and weren't sentinels. */
+  spnsResolved: number;
   /** Rows with no `ownerId` value at all. Tracked separately so the UI
    *  can call them out without confusing them with the `sentinel` bucket. */
   noOwnerCount: number;
@@ -91,12 +110,21 @@ export interface AffectedResource {
   type: ResourceTypeValue;
 }
 
-/** Per-owner result entry. `user === null` means "looked up, not in
- *  aaduser" — the controller folds that into the `unresolved` /
- *  `sentinel` buckets per the bucketing rules. */
+/** Per-owner result entry. Three resolution-state fields:
+ *  - `user === null && servicePrincipal === null` → couldn't classify;
+ *    falls into `unresolved` or `sentinel`.
+ *  - `user !== null` → human user; falls into `active` / `disabled` /
+ *    `guest` by the bucketing rule.
+ *  - `user === null && servicePrincipal !== null` → service principal;
+ *    falls into `service-principal`. The pre-classified `kind` field
+ *    on `servicePrincipalRef` drives the per-row badge. */
 export interface OwnerEntry {
   ownerId: string;
   user: UserRef | null;
+  /** Set only when the Graph SP resolution pass found this GUID. The
+   *  row's drill-in lazily fetches owners on demand via
+   *  `fetchServicePrincipalOwners(id)`. */
+  servicePrincipal: ServicePrincipalRef | null;
   bucket: OwnerBucket;
   affectedResources: AffectedResource[];
 }
@@ -117,13 +145,16 @@ export interface ScanResult {
   fromSnapshot: boolean;
 }
 
-/** Pared-down result persisted to localStorage. Affected resources are
- *  NOT persisted: a large tenant could easily blow past the 5 MB
- *  per-origin quota with a full per-owner list. We store enough to
- *  show a meaningful "Last scan" summary; the UI prompts a re-scan if
- *  the user wants drill-ins. */
+/** Pared-down result persisted to localStorage. Affected resources +
+ *  full SP refs are NOT persisted — both can be sizeable per tenant.
+ *  Snapshot tells you counts + per-bucket ownerId lists; on rehydrate
+ *  you get a `fromSnapshot: true` result and the UI prompts a re-scan
+ *  for drill-in details.
+ *
+ *  Version bumped to 2 when `service-principal` joined the bucket list
+ *  (Stage 3). v1 snapshots are silently ignored on load. */
 export interface ScanSnapshot {
-  version: 1;
+  version: 2;
   scannedAt: number;
   totalResources: number;
   noOwnerCount: number;

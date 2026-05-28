@@ -65,6 +65,16 @@ vi.mock("../../components/UserChip", () => ({
   ),
 }));
 
+// SpOwnersSection lazily fetches Entra owners on expand. Stub the
+// transport here so SP-bucket drill-in tests don't hit the real
+// connector and so non-SP tests stay quiet.
+const { fetchSpOwnersMock } = vi.hoisted(() => ({
+  fetchSpOwnersMock: vi.fn(),
+}));
+vi.mock("../../data/spnEnrichment", () => ({
+  fetchServicePrincipalOwners: fetchSpOwnersMock,
+}));
+
 import { Ownerless } from "./Ownerless";
 
 // ─── Fixtures ────────────────────────────────────────────────────────────
@@ -82,6 +92,7 @@ function idleProgress(): ScanProgress {
     inventoryTotal: null,
     distinctOwners: 0,
     ownersResolved: 0,
+    spnsResolved: 0,
     noOwnerCount: 0,
     error: null,
   };
@@ -93,6 +104,7 @@ function buildResult(opts: { fromSnapshot?: boolean } = {}): ScanResult {
   ownerIndex.set(OWNER_UNRESOLVED, {
     ownerId: OWNER_UNRESOLVED,
     user: null,
+    servicePrincipal: null,
     bucket: "unresolved",
     affectedResources: fromSnapshot
       ? []
@@ -119,6 +131,7 @@ function buildResult(opts: { fromSnapshot?: boolean } = {}): ScanResult {
       enabled: false,
       userType: "Member",
     },
+    servicePrincipal: null,
     bucket: "disabled",
     affectedResources: fromSnapshot
       ? []
@@ -139,6 +152,7 @@ function buildResult(opts: { fromSnapshot?: boolean } = {}): ScanResult {
       enabled: true,
       userType: "Member",
     },
+    servicePrincipal: null,
     bucket: "active",
     affectedResources: fromSnapshot
       ? []
@@ -158,6 +172,7 @@ function buildResult(opts: { fromSnapshot?: boolean } = {}): ScanResult {
     ownerIndex,
     buckets: {
       unresolved: [OWNER_UNRESOLVED],
+      "service-principal": [],
       disabled: [OWNER_DISABLED],
       guest: [],
       active: [OWNER_ACTIVE],
@@ -187,6 +202,8 @@ beforeEach(() => {
   getResultMock.mockReset();
   subscribeMock.mockReset();
   subscribeMock.mockImplementation(() => () => {});
+  fetchSpOwnersMock.mockReset();
+  fetchSpOwnersMock.mockResolvedValue({ ok: true, data: [] });
 });
 
 // ─── Tests ───────────────────────────────────────────────────────────────
@@ -261,6 +278,7 @@ describe("Ownerless — completed state", () => {
 
     // Every bucket tab is present with its count baked into the label.
     expect(screen.getByRole("tab", { name: /unresolved \(1\)/i })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: /service principal \(0\)/i })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: /disabled \(1\)/i })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: /guest \(0\)/i })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: /active \(1\)/i })).toBeInTheDocument();
@@ -328,6 +346,99 @@ describe("Ownerless — from-snapshot state", () => {
       screen.getByRole("button", { name: /clear last scan/i }),
     );
     expect(clearLastSnapshotMock).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("Ownerless — service-principal bucket (Stage 3)", () => {
+  const OWNER_SP = "66666666-6666-6666-6666-666666666666";
+  const OWNER_USER = "f89e1b16-63fb-4b09-b8e8-0a859966a74c";
+
+  function buildSpResult(): ScanResult {
+    const ownerIndex = new Map<string, OwnerEntry>();
+    ownerIndex.set(OWNER_SP, {
+      ownerId: OWNER_SP,
+      user: null,
+      servicePrincipal: {
+        id: OWNER_SP,
+        displayName: "Acme Pipelines SP",
+        appId: "9251fced-28ed-43b2-bd22-cb9e3924de8f",
+        servicePrincipalType: "Application",
+        appOwnerOrganizationId: "1557f771-4c8e-4dbd-8b80-dd00a88e833e",
+        accountEnabled: true,
+        kind: "tenant",
+      },
+      bucket: "service-principal",
+      affectedResources: [
+        {
+          id: "app-9",
+          displayName: "Pipeline-deployed App",
+          environmentId: "env-prod",
+          type: "microsoft.powerapps/canvasapps",
+        },
+      ],
+    });
+    return {
+      scannedAt: Date.now(),
+      totalResources: 1,
+      noOwnerCount: 0,
+      ownerIndex,
+      buckets: {
+        unresolved: [],
+        "service-principal": [OWNER_SP],
+        disabled: [],
+        guest: [],
+        active: [],
+        sentinel: [],
+      },
+      fromSnapshot: false,
+    };
+  }
+
+  it("renders the SP name + classification badge in the Owner cell, not a UserChip", () => {
+    getProgressMock.mockReturnValue({ ...idleProgress(), phase: "completed" });
+    getResultMock.mockReturnValue(buildSpResult());
+
+    renderPage();
+
+    // SP display name shows; no UserChip for the SP's ownerId.
+    expect(screen.getByText("Acme Pipelines SP")).toBeInTheDocument();
+    expect(screen.queryByTestId(`chip-${OWNER_SP}`)).not.toBeInTheDocument();
+    // Classification badge — "Tenant SP" exact text (the description
+    // paragraph above also mentions "in-tenant SP" which would match
+    // a looser regex).
+    expect(screen.getByText(/^Tenant SP$/)).toBeInTheDocument();
+  });
+
+  it("on expand, lazily fetches SP owners and renders them as UserChips", async () => {
+    fetchSpOwnersMock.mockResolvedValue({
+      ok: true,
+      data: [
+        { type: "user", id: OWNER_USER, displayName: "Rafael", mail: "r@x" },
+      ],
+    });
+    getProgressMock.mockReturnValue({ ...idleProgress(), phase: "completed" });
+    getResultMock.mockReturnValue(buildSpResult());
+
+    renderPage();
+
+    fireEvent.click(screen.getByRole("button", { name: /expand/i }));
+
+    // The expand triggers an effect → owners fetch → chip render.
+    await screen.findByText(/service principal owners/i);
+    expect(fetchSpOwnersMock).toHaveBeenCalledWith(OWNER_SP);
+    expect(await screen.findByTestId(`chip-${OWNER_USER}`)).toBeInTheDocument();
+  });
+
+  it("surfaces a 'no Entra owners' message for SPs with empty owners (e.g. Microsoft first-party)", async () => {
+    fetchSpOwnersMock.mockResolvedValue({ ok: true, data: [] });
+    getProgressMock.mockReturnValue({ ...idleProgress(), phase: "completed" });
+    getResultMock.mockReturnValue(buildSpResult());
+
+    renderPage();
+    fireEvent.click(screen.getByRole("button", { name: /expand/i }));
+    expect(
+      await screen.findByText(/no entra owners assigned/i),
+    ).toBeInTheDocument();
   });
 });
 

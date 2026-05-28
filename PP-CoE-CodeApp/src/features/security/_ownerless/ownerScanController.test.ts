@@ -28,11 +28,13 @@ const {
   listFlowsPageMock,
   listAgentsPageMock,
   resolveUsersMock,
+  resolveServicePrincipalsMock,
 } = vi.hoisted(() => ({
   listAppsPageMock: vi.fn(),
   listFlowsPageMock: vi.fn(),
   listAgentsPageMock: vi.fn(),
   resolveUsersMock: vi.fn(),
+  resolveServicePrincipalsMock: vi.fn(),
 }));
 
 vi.mock("../../../data/inventory", async () => {
@@ -54,6 +56,10 @@ vi.mock("../../../data/userEnrichment", () => ({
   resolveUsers: resolveUsersMock,
 }));
 
+vi.mock("../../../data/spnEnrichment", () => ({
+  resolveServicePrincipals: resolveServicePrincipalsMock,
+}));
+
 import {
   __resetForTests,
   bucketFor,
@@ -65,6 +71,7 @@ import {
   startScan,
   subscribe,
 } from "./ownerScanController";
+import type { ServicePrincipalRef } from "../../../data/spnEnrichment";
 
 // ─── Fixture helpers ──────────────────────────────────────────────────────
 
@@ -74,8 +81,22 @@ const OWNER_GUEST = "33333333-3333-3333-3333-333333333333";
 const OWNER_MISSING = "44444444-4444-4444-4444-444444444444";
 const OWNER_SENTINEL = "00000000-0000-0000-0000-5157eaa02fcd";
 const OWNER_ACTIVE_2 = "55555555-5555-5555-5555-555555555555";
+const OWNER_SP = "66666666-6666-6666-6666-666666666666";
 
-const SNAPSHOT_KEY = "ppcoe.ownerScan.lastSnapshot.v1";
+const SNAPSHOT_KEY = "ppcoe.ownerScan.lastSnapshot.v2";
+
+function spRef(id: string, overrides: Partial<ServicePrincipalRef> = {}): ServicePrincipalRef {
+  return {
+    id,
+    displayName: "Pipelines",
+    appId: "abc",
+    servicePrincipalType: "Application",
+    appOwnerOrganizationId: "1557f771-4c8e-4dbd-8b80-dd00a88e833e",
+    accountEnabled: true,
+    kind: "tenant",
+    ...overrides,
+  };
+}
 
 function userRef(id: string, overrides: Partial<UserRef> = {}): UserRef {
   return {
@@ -197,6 +218,10 @@ beforeEach(() => {
   listFlowsPageMock.mockReset();
   listAgentsPageMock.mockReset();
   resolveUsersMock.mockReset();
+  resolveServicePrincipalsMock.mockReset();
+  // Sensible default: no SPs resolved unless a test opts in. Saves
+  // every test from having to set this explicitly.
+  resolveServicePrincipalsMock.mockResolvedValue(new Map());
   __resetForTests();
 });
 
@@ -208,33 +233,58 @@ afterEach(() => {
 
 describe("bucketFor (pure rule)", () => {
   it("buckets a null result with a sentinel GUID as sentinel", () => {
-    expect(bucketFor(OWNER_SENTINEL, null)).toBe("sentinel");
+    expect(bucketFor(OWNER_SENTINEL, null, null)).toBe("sentinel");
   });
 
-  it("buckets a null result with a regular GUID as unresolved", () => {
-    expect(bucketFor(OWNER_MISSING, null)).toBe("unresolved");
+  it("buckets a null user + null SP with a regular GUID as unresolved", () => {
+    expect(bucketFor(OWNER_MISSING, null, null)).toBe("unresolved");
+  });
+
+  it("buckets a null user + resolved SP as service-principal", () => {
+    expect(bucketFor(OWNER_SP, null, spRef(OWNER_SP))).toBe(
+      "service-principal",
+    );
+  });
+
+  it("user resolution wins over SP resolution when both somehow non-null", () => {
+    expect(
+      bucketFor(
+        OWNER_ACTIVE,
+        userRef(OWNER_ACTIVE),
+        spRef(OWNER_ACTIVE),
+      ),
+    ).toBe("active");
   });
 
   it("buckets a disabled user as disabled (wins over guest)", () => {
     expect(
-      bucketFor(OWNER_DISABLED, userRef(OWNER_DISABLED, { enabled: false })),
+      bucketFor(
+        OWNER_DISABLED,
+        userRef(OWNER_DISABLED, { enabled: false }),
+        null,
+      ),
     ).toBe("disabled");
     expect(
       bucketFor(
         OWNER_DISABLED,
         userRef(OWNER_DISABLED, { enabled: false, userType: "Guest" }),
+        null,
       ),
     ).toBe("disabled");
   });
 
   it("buckets an enabled guest user as guest", () => {
     expect(
-      bucketFor(OWNER_GUEST, userRef(OWNER_GUEST, { userType: "Guest" })),
+      bucketFor(
+        OWNER_GUEST,
+        userRef(OWNER_GUEST, { userType: "Guest" }),
+        null,
+      ),
     ).toBe("guest");
   });
 
   it("buckets an enabled member as active", () => {
-    expect(bucketFor(OWNER_ACTIVE, userRef(OWNER_ACTIVE))).toBe("active");
+    expect(bucketFor(OWNER_ACTIVE, userRef(OWNER_ACTIVE), null)).toBe("active");
   });
 });
 
@@ -318,6 +368,75 @@ describe("startScan — happy path", () => {
     expect(resolveUsersMock).toHaveBeenCalledTimes(1);
     const arg = resolveUsersMock.mock.calls[0][0] as string[];
     expect(arg).toEqual([OWNER_ACTIVE]);
+  });
+});
+
+describe("startScan — SP resolution (Stage 3)", () => {
+  it("sends null-user GUIDs (excluding sentinels) to resolveServicePrincipals and buckets resolved SPs as service-principal", async () => {
+    listAppsPageMock.mockResolvedValueOnce(
+      singlePage([
+        makeAppRow("app-1", OWNER_ACTIVE),
+        makeAppRow("app-2", OWNER_SP),
+        makeAppRow("app-3", OWNER_MISSING),
+        makeAppRow("app-4", OWNER_SENTINEL),
+      ]),
+    );
+    listFlowsPageMock.mockResolvedValueOnce(emptyPage());
+    listAgentsPageMock.mockResolvedValueOnce(emptyPage());
+
+    // User resolver: ACTIVE is real, the rest miss.
+    resolveUsersMock.mockResolvedValue(
+      new Map<string, UserRef | null>([
+        [OWNER_ACTIVE, userRef(OWNER_ACTIVE)],
+        [OWNER_SP, null],
+        [OWNER_MISSING, null],
+        [OWNER_SENTINEL, null],
+      ]),
+    );
+    // SP resolver: OWNER_SP is a real SP; OWNER_MISSING isn't.
+    // Sentinel must NOT appear in the input (excluded by the controller).
+    resolveServicePrincipalsMock.mockImplementation(
+      async (ids: string[]) => {
+        expect(ids).toContain(OWNER_SP);
+        expect(ids).toContain(OWNER_MISSING);
+        expect(ids).not.toContain(OWNER_SENTINEL);
+        expect(ids).not.toContain(OWNER_ACTIVE);
+        return new Map([
+          [OWNER_SP, spRef(OWNER_SP, { kind: "first-party" })],
+          [OWNER_MISSING, null],
+        ]);
+      },
+    );
+
+    await startScan();
+
+    expect(getProgress().phase).toBe("completed");
+    expect(getProgress().spnsResolved).toBe(2);
+
+    const result = getResult();
+    expect(result!.buckets.active).toEqual([OWNER_ACTIVE]);
+    expect(result!.buckets["service-principal"]).toEqual([OWNER_SP]);
+    expect(result!.buckets.unresolved).toEqual([OWNER_MISSING]);
+    expect(result!.buckets.sentinel).toEqual([OWNER_SENTINEL]);
+
+    const spEntry = result!.ownerIndex.get(OWNER_SP);
+    expect(spEntry?.servicePrincipal?.kind).toBe("first-party");
+    expect(spEntry?.user).toBeNull();
+  });
+
+  it("skips the SP resolution call entirely when every owner resolved against aaduser", async () => {
+    listAppsPageMock.mockResolvedValueOnce(
+      singlePage([makeAppRow("app-1", OWNER_ACTIVE)]),
+    );
+    listFlowsPageMock.mockResolvedValueOnce(emptyPage());
+    listAgentsPageMock.mockResolvedValueOnce(emptyPage());
+    resolveUsersMock.mockResolvedValue(
+      new Map([[OWNER_ACTIVE, userRef(OWNER_ACTIVE)]]),
+    );
+
+    await startScan();
+    expect(resolveServicePrincipalsMock).not.toHaveBeenCalled();
+    expect(getProgress().spnsResolved).toBe(0);
   });
 });
 
