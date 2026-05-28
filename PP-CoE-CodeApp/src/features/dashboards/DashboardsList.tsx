@@ -125,7 +125,8 @@ export function DashboardsList() {
   const handleCreateFromTemplate = (templateId: string) => {
     const tpl = getDashboardTemplate(templateId);
     if (!tpl) return;
-    const d = createDashboardFromTemplate(tpl.name, tpl.description, tpl.build());
+    const layout = tpl.buildLayout?.() ?? { tiles: tpl.build() };
+    const d = createDashboardFromTemplate(tpl.name, tpl.description, layout);
     refresh();
     navigate(`/dashboards/${d.id}`);
   };

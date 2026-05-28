@@ -13,6 +13,7 @@ import {
   MenuPopover,
   MenuList,
   MenuItem,
+  MenuDivider,
 } from "@fluentui/react-components";
 import { MoreHorizontalRegular } from "@fluentui/react-icons";
 import {
@@ -41,7 +42,7 @@ import {
   runTimeSeriesAggregate,
   shortResourceType,
 } from "../data/inventory";
-import type { DashboardTile, TileTableColumn } from "../data/dashboards";
+import type { DashboardTab, DashboardTile, TileTableColumn } from "../data/dashboards";
 
 const useStyles = makeStyles({
   root: {
@@ -179,6 +180,10 @@ interface TileViewProps {
   /** Bumping this triggers a refetch that bypasses the inventory cache.
    *  The dashboard's "Refresh" button increments this. */
   refreshKey?: number;
+  /** Available tabs for the "Move to tab" submenu. Only rendered when
+   *  there are ≥2 tabs AND `onMoveToTab` is provided. */
+  tabs?: DashboardTab[];
+  onMoveToTab?: (tabId: string) => void;
 }
 
 interface QueryState {
@@ -290,7 +295,7 @@ function collapseOther(rows: ChartDatum[], maxCategories?: number): ChartDatum[]
   return [...head, { name: "Other", value: other }];
 }
 
-export function TileView({ tile, editable, onEdit, onDelete, onDuplicate, className, refreshKey }: TileViewProps) {
+export function TileView({ tile, editable, onEdit, onDelete, onDuplicate, className, refreshKey, tabs, onMoveToTab }: TileViewProps) {
   const styles = useStyles();
   const [state, setState] = useState<QueryState>({
     phase: "loading",
@@ -545,6 +550,28 @@ export function TileView({ tile, editable, onEdit, onDelete, onDuplicate, classN
                 <MenuList>
                   <MenuItem onClick={onEdit}>Edit</MenuItem>
                   <MenuItem onClick={onDuplicate}>Duplicate</MenuItem>
+                  {onMoveToTab && tabs && tabs.length > 1 && (
+                    <Menu>
+                      <MenuTrigger disableButtonEnhancement>
+                        <MenuItem>Move to tab</MenuItem>
+                      </MenuTrigger>
+                      <MenuPopover>
+                        <MenuList>
+                          {tabs
+                            .filter((t) => t.id !== tile.tabId)
+                            .map((t) => (
+                              <MenuItem
+                                key={t.id}
+                                onClick={() => onMoveToTab(t.id)}
+                              >
+                                {t.name}
+                              </MenuItem>
+                            ))}
+                        </MenuList>
+                      </MenuPopover>
+                    </Menu>
+                  )}
+                  <MenuDivider />
                   <MenuItem onClick={onDelete}>Delete</MenuItem>
                 </MenuList>
               </MenuPopover>
