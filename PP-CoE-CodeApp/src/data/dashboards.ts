@@ -11,7 +11,7 @@
 import { ResourceType, type QuerySpec, type ResourceTypeValue } from "./inventory";
 import type { Clause } from "../generated/models/PowerPlatformforAdminsV2Model";
 
-export type TileVizType = "kpi" | "table" | "bar" | "pie" | "line" | "combo";
+export type TileVizType = "kpi" | "table" | "bar" | "pie" | "line" | "combo" | "stackedBar";
 
 /** A table column definition for table-viz tiles. */
 export interface TileTableColumn {
@@ -81,12 +81,20 @@ export interface DashboardTile {
   /** Display footprint hint for the auto-flow grid. */
   size?: TileSize;
   /** Where the tile's query came from. Defaults to "builder" (visual spec).
-   *  When "raw", the tile runs `clauses` directly instead of `spec`. Only
-   *  KPI and Table viz types support "raw" — chart viz types inject their
-   *  own KQL on top of the spec and would conflict with hand-written clauses. */
-  source?: "builder" | "raw";
+   *  - "builder" — uses `spec` and lets the chart renderer inject KQL.
+   *  - "raw" — runs hand-written `clauses` directly. KPI + Table only.
+   *  - "computed" — runs a client-side aggregator from
+   *    `src/data/dashboardAggregators.ts`. The aggregator decides the
+   *    output shape (KPI total / chart buckets / table rows / stacked-bar
+   *    series), the viz config picks how to render it. Used for metrics
+   *    that need to walk nested arrays (`powerPlatformConnectors[]`,
+   *    `operations[]`) which the connector's KQL whitelist can't `mv-expand`. */
+  source?: "builder" | "raw" | "computed";
   /** Present iff `source === "raw"`. The connector contract this tile runs. */
   clauses?: Clause[];
+  /** Present iff `source === "computed"`. Identifies which aggregator from
+   *  the registry to run, plus optional parameters (e.g. top-N limit). */
+  computed?: ComputedTileSource;
   /** Bookkeeping: the ID of the saved query that seeded this tile. Used to
    *  render a "Loaded from …" label in the editor; not used at render time. */
   savedQueryId?: string;
@@ -94,6 +102,14 @@ export interface DashboardTile {
    *  the stored shape for back-compat with v2 data that predates tabs;
    *  `normalizeDashboard` guarantees a value on every read. */
   tabId?: string;
+}
+
+/** Computed-tile configuration. The aggregatorId references a function in
+ *  the dashboard-aggregator registry. Params are aggregator-specific (e.g.
+ *  `{ topN: 10 }` for the top-connectors bar). */
+export interface ComputedTileSource {
+  aggregatorId: string;
+  params?: Record<string, unknown>;
 }
 
 /** A grouping page inside a dashboard. Tabs are a pure layout concern —

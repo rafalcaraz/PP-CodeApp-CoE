@@ -5,6 +5,7 @@
  */
 import { describe, it, expect } from "vitest";
 import { DASHBOARD_TEMPLATES, getDashboardTemplate } from "./dashboardTemplates";
+import { getAggregator } from "./dashboardAggregators";
 
 describe("Copilot Studio Estate template", () => {
   const tpl = getDashboardTemplate("copilot-studio-estate")!;
@@ -14,7 +15,7 @@ describe("Copilot Studio Estate template", () => {
     expect(typeof tpl.buildLayout).toBe("function");
   });
 
-  it("buildLayout returns six tabs", () => {
+  it("buildLayout returns the ten Phase 2 tabs in order", () => {
     const layout = tpl.buildLayout!();
     expect(layout.tabs.map((t) => t.name)).toEqual([
       "Overview",
@@ -23,6 +24,10 @@ describe("Copilot Studio Estate template", () => {
       "Sharing & Governance",
       "Lifecycle",
       "Trends",
+      "Tools & Connectors",
+      "Knowledge & Grounding",
+      "Authoring quality",
+      "Authoring surface",
     ]);
   });
 
@@ -52,6 +57,35 @@ describe("Copilot Studio Estate template", () => {
     }
   });
 
+  it("every computed tile points at a registered aggregator", () => {
+    const layout = tpl.buildLayout!();
+    const computed = layout.tiles.filter((t) => t.source === "computed");
+    expect(computed.length).toBeGreaterThan(0);
+    for (const tile of computed) {
+      const aggregatorId = tile.computed?.aggregatorId;
+      expect(
+        aggregatorId,
+        `computed tile "${tile.title}" missing computed.aggregatorId`,
+      ).toBeTruthy();
+      expect(
+        getAggregator(aggregatorId!),
+        `computed tile "${tile.title}" references unknown aggregator "${aggregatorId}"`,
+      ).toBeTruthy();
+    }
+  });
+
+  it("stackedBar tiles always use source: 'computed'", () => {
+    const layout = tpl.buildLayout!();
+    for (const tile of layout.tiles) {
+      if (tile.viz.type === "stackedBar") {
+        expect(
+          tile.source,
+          `stacked-bar tile "${tile.title}" must be computed`,
+        ).toBe("computed");
+      }
+    }
+  });
+
   it("build() returns the flat tile list with tabId stripped (back-compat)", () => {
     const flat = tpl.build();
     expect(flat.length).toBeGreaterThan(0);
@@ -68,3 +102,4 @@ describe("Copilot Studio Estate template", () => {
     expect(DASHBOARD_TEMPLATES.find((t) => t.id === "copilot-studio-estate")).toBeDefined();
   });
 });
+

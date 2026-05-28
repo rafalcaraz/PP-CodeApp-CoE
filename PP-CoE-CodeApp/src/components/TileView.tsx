@@ -43,6 +43,11 @@ import {
   shortResourceType,
 } from "../data/inventory";
 import type { DashboardTab, DashboardTile, TileTableColumn } from "../data/dashboards";
+import { fetchAllCustomerAgents } from "../data/dashboardAgentSource";
+import {
+  getAggregator,
+  type StackedChartDatum,
+} from "../data/dashboardAggregators";
 
 const useStyles = makeStyles({
   root: {
@@ -200,6 +205,10 @@ interface QueryState {
    *  Populated only when `tile.viz.kpiTrend` is configured. Empty
    *  otherwise. */
   trend: SeriesDatum[];
+  /** Multi-series buckets — populated for stackedBar tiles. */
+  stackedChart: { series: string[]; data: StackedChartDatum[] };
+  /** Optional override for the KPI label (computed tiles can supply one). */
+  kpiLabelOverride?: string;
   error: string;
 }
 
@@ -304,11 +313,16 @@ export function TileView({ tile, editable, onEdit, onDelete, onDuplicate, classN
     chart: [],
     series: [],
     trend: [],
+    stackedChart: { series: [], data: [] },
     error: "",
   });
 
   const specKey = useMemo(() => JSON.stringify(tile.spec), [tile.spec]);
   const clausesKey = useMemo(() => JSON.stringify(tile.clauses ?? []), [tile.clauses]);
+  const computedKey = useMemo(
+    () => JSON.stringify(tile.computed ?? null),
+    [tile.computed],
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -323,12 +337,13 @@ export function TileView({ tile, editable, onEdit, onDelete, onDuplicate, classN
     // Shorthand for "no data of this shape" so each branch below can
     // populate only what it cares about. Saves repeating empty arrays
     // across nine setState() calls.
-    const EMPTY_DATA: Pick<QueryState, "items" | "total" | "chart" | "series" | "trend"> = {
+    const EMPTY_DATA: Pick<QueryState, "items" | "total" | "chart" | "series" | "trend" | "stackedChart"> = {
       items: [],
       total: 0,
       chart: [],
       series: [],
       trend: [],
+      stackedChart: { series: [], data: [] },
     };
     const setError = (error: string) =>
       setState({ phase: "error", ...EMPTY_DATA, error });
@@ -336,6 +351,63 @@ export function TileView({ tile, editable, onEdit, onDelete, onDuplicate, classN
       setState({ phase: "loading", ...EMPTY_DATA, error: "" });
 
       const isRaw = tile.source === "raw" && Array.isArray(tile.clauses);
+      const isComputed = tile.source === "computed" && !!tile.computed?.aggregatorId;
+
+      // ── Computed branch ─────────────────────────────────────────────────
+      // Fetches the agent universe (with msdyn_ excluded) and runs a
+      // client-side aggregator. The aggregator's discriminated output
+      // dictates which slice of QueryState we populate; the existing KPI /
+      // Table / Bar / Pie / StackedBar renderers below pick up from there.
+      if (isComputed) {
+        const aggregator = getAggregator(tile.computed!.aggregatorId);
+        if (!aggregator) {
+          setError(
+            `Unknown computed-tile aggregator "${tile.computed!.aggregatorId}". ` +
+              "The tile's computed.aggregatorId doesn't match any registered aggregator."
+          );
+          return;
+        }
+        const agentsRes = await fetchAllCustomerAgents({}, cacheOpts);
+        if (cancelled) return;
+        if (!agentsRes.ok) {
+          setError(agentsRes.error);
+          return;
+        }
+        const out = aggregator(agentsRes.data, tile.computed!.params);
+        if (cancelled) return;
+        if (out.kind === "kpi") {
+          setState({
+            phase: "ready",
+            ...EMPTY_DATA,
+            total: out.total,
+            kpiLabelOverride: out.kpiLabel,
+            error: "",
+          });
+        } else if (out.kind === "chart") {
+          setState({
+            phase: "ready",
+            ...EMPTY_DATA,
+            chart: out.buckets,
+            error: "",
+          });
+        } else if (out.kind === "table") {
+          setState({
+            phase: "ready",
+            ...EMPTY_DATA,
+            items: out.items,
+            total: out.total ?? out.items.length,
+            error: "",
+          });
+        } else if (out.kind === "stackedBar") {
+          setState({
+            phase: "ready",
+            ...EMPTY_DATA,
+            stackedChart: { series: out.series, data: out.data },
+            error: "",
+          });
+        }
+        return;
+      }
 
       if (tile.viz.type === "kpi") {
         // KPI only needs totalRecords — fetch just one row.
@@ -405,14 +477,21 @@ export function TileView({ tile, editable, onEdit, onDelete, onDuplicate, classN
         return;
       }
 
-      // Chart viz types — bar/pie/line — need server-side aggregation
-      // injected on top of the spec. That's incompatible with raw clauses
-      // (the user's hand-written payload may already aggregate, or use
-      // shapes our chart code doesn't understand). Fail fast with a hint
+      // Chart viz types — bar/pie/line/stackedBar — need server-side
+      // aggregation injected on top of the spec. That's incompatible with
+      // raw clauses (the user's hand-written payload may already aggregate,
+      // or use shapes our chart code doesn't understand) AND with stackedBar
+      // (which is exclusively a computed-source viz). Fail fast with a hint
       // rather than emit a bad KQL query.
       if (isRaw) {
         setError(
           "Advanced (raw clauses) queries don't support chart visualizations yet. Switch this tile to a KPI or Table, or load a Basic saved query instead."
+        );
+        return;
+      }
+      if (tile.viz.type === "stackedBar") {
+        setError(
+          "Stacked bar tiles must use source: \"computed\" — no server-side aggregation pattern is wired in for this viz."
         );
         return;
       }
@@ -511,6 +590,7 @@ export function TileView({ tile, editable, onEdit, onDelete, onDuplicate, classN
   }, [
     specKey,
     clausesKey,
+    computedKey,
     tile.source,
     tile.viz.type,
     tile.viz.groupBy,
@@ -628,7 +708,7 @@ function TileBody({ tile, state }: { tile: DashboardTile; state: QueryState }) {
     return (
       <div className={styles.kpi}>
         <Text className={styles.kpiValue}>{state.total.toLocaleString()}</Text>
-        <Text className={styles.kpiLabel}>{viz.kpiLabel || "Total"}</Text>
+        <Text className={styles.kpiLabel}>{state.kpiLabelOverride || viz.kpiLabel || "Total"}</Text>
         {showTrend && (
           <div className={styles.kpiTrendRow}>
             {showSparkline && (
@@ -839,6 +919,49 @@ function TileBody({ tile, state }: { tile: DashboardTile; state: QueryState }) {
               name="total"
             />
           </ComposedChart>
+        </ResponsiveContainer>
+      </div>
+    );
+  }
+
+  if (viz.type === "stackedBar") {
+    const { series, data: stackedData } = state.stackedChart;
+    if (stackedData.length === 0 || series.length === 0) {
+      return (
+        <div className={styles.empty}>No data to chart.</div>
+      );
+    }
+    // Long category labels (e.g. connectorIds) overflow horizontal X axis
+    // with multiple categories — render horizontal bars so labels lay
+    // along the Y axis where there's room to breathe.
+    return (
+      <div className={styles.chartHost}>
+        <ResponsiveContainer width="100%" height={Math.max(220, stackedData.length * 36 + 48)}>
+          <BarChart
+            data={stackedData}
+            layout="vertical"
+            margin={{ top: 8, right: 16, bottom: 8, left: 8 }}
+          >
+            <CartesianGrid strokeDasharray="3 3" />
+            <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11 }} />
+            <YAxis
+              type="category"
+              dataKey="category"
+              tick={{ fontSize: 11 }}
+              width={170}
+              interval={0}
+            />
+            <Tooltip />
+            <Legend wrapperStyle={{ fontSize: 11 }} />
+            {series.map((s, idx) => (
+              <Bar
+                key={s}
+                dataKey={s}
+                stackId="a"
+                fill={PALETTE[idx % PALETTE.length]}
+              />
+            ))}
+          </BarChart>
         </ResponsiveContainer>
       </div>
     );
