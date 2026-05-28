@@ -164,7 +164,7 @@ const NAV_SECTIONS: NavSection[] = [
   },
   {
     key: "security",
-    label: "Security",
+    label: "DLP & ACP",
     icon: <ShieldRegular />,
     defaultOpen: true,
     items: [
