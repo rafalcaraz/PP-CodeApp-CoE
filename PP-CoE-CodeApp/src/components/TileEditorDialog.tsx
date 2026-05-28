@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   makeStyles,
   tokens,
   Text,
   Input,
+  Textarea,
   Dropdown,
   Option,
   OptionGroup,
@@ -17,23 +18,35 @@ import {
   DialogContent,
   DialogActions,
   Divider,
+  Menu,
+  MenuTrigger,
+  MenuPopover,
+  MenuList,
+  MenuItem,
+  Tooltip,
   type InputOnChangeData,
 } from "@fluentui/react-components";
 import {
   AddRegular,
   ArrowDownRegular,
   ArrowUpRegular,
+  CopyRegular,
   DeleteRegular,
   DismissRegular,
+  CheckmarkCircleRegular,
+  ErrorCircleRegular,
+  CodeRegular,
 } from "@fluentui/react-icons";
 import {
   ALL_RESOURCE_TYPES,
   ResourceType,
+  buildClausesFromSpec,
   resourceTypeShort,
   type QueryFilter,
   type QueryFilterOp,
   type ResourceTypeValue,
 } from "../data/inventory";
+import type { Clause } from "../generated/models/PowerPlatformforAdminsV2Model";
 import {
   getFieldSuggestions,
   groupFields,
@@ -49,6 +62,11 @@ import type {
 } from "../data/dashboards";
 import { listSavedQueries, type SavedQuery } from "../data/savedQueries";
 import { TileView } from "./TileView";
+import {
+  validateClausesText,
+  type ValidationResult,
+} from "../data/clauseValidation";
+import { CLAUSE_TEMPLATES } from "../data/clauseSnippets";
 
 const useStyles = makeStyles({
   surface: {
@@ -158,6 +176,80 @@ const useStyles = makeStyles({
     maxHeight: "200px",
     whiteSpace: "pre",
   },
+  modeRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: tokens.spacingHorizontalS,
+    flexWrap: "wrap",
+  },
+  modeButton: {
+    minWidth: 0,
+  },
+  modeButtonActive: {
+    backgroundColor: tokens.colorBrandBackground2,
+  },
+  clausesEditorColumn: {
+    flex: "1 1 100%",
+    display: "flex",
+    flexDirection: "column",
+    gap: tokens.spacingVerticalXS,
+    minWidth: 0,
+  },
+  clausesEditorToolbar: {
+    display: "flex",
+    alignItems: "center",
+    gap: tokens.spacingHorizontalS,
+    flexWrap: "wrap",
+  },
+  clausesTextarea: {
+    fontFamily: "Consolas, 'Courier New', monospace",
+    fontSize: tokens.fontSizeBase200,
+    width: "100%",
+    "> textarea": {
+      fontFamily: "Consolas, 'Courier New', monospace",
+      fontSize: tokens.fontSizeBase200,
+      minHeight: "260px",
+      maxHeight: "440px",
+      whiteSpace: "pre",
+      overflowWrap: "normal",
+      overflowX: "auto",
+    },
+  },
+  statusRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: tokens.spacingHorizontalXS,
+    fontSize: tokens.fontSizeBase200,
+    minHeight: "20px",
+  },
+  statusOk: {
+    color: tokens.colorPaletteGreenForeground2,
+  },
+  statusError: {
+    color: tokens.colorPaletteRedForeground2,
+  },
+  statusNote: {
+    color: tokens.colorNeutralForeground3,
+  },
+  computedBanner: {
+    display: "flex",
+    flexDirection: "column",
+    gap: tokens.spacingVerticalXS,
+    padding: tokens.spacingHorizontalM,
+    backgroundColor: tokens.colorNeutralBackground2,
+    borderRadius: tokens.borderRadiusMedium,
+    border: `1px solid ${tokens.colorNeutralStroke2}`,
+  },
+  computedBannerTitle: {
+    display: "flex",
+    alignItems: "center",
+    gap: tokens.spacingHorizontalS,
+    fontWeight: tokens.fontWeightSemibold,
+  },
+  computedBannerHelper: {
+    color: tokens.colorNeutralForeground3,
+    fontSize: tokens.fontSizeBase200,
+  },
 });
 
 const OPERATORS: { value: QueryFilterOp; label: string }[] = [
@@ -236,13 +328,210 @@ function FieldOptions({ fields }: { fields: InventoryField[] }) {
   );
 }
 
+// ---------------------------------------------------------------------------
+// Advanced (clauses) editor — child component of the tile editor dialog.
+//
+// Internal state shape:
+//   - `text`: the textarea's raw string (the source of truth for what the
+//     user sees / types).
+//   - `validation`: latest parse + shape-check result, recomputed
+//     debounced after every text change.
+//
+// We push validated clauses up to the parent via `onValid`. The parent
+// keeps `tile.clauses` in sync from those. Invalid edits don't propagate —
+// the parent's Save button is disabled (via `onValidityChange`) until
+// validation passes.
+// ---------------------------------------------------------------------------
+
+interface ClausesEditorProps {
+  /** Initial textarea contents. Re-applied when this changes (e.g. parent
+   *  resets after a saved-query load or a mode conversion). */
+  initialText: string;
+  /** Called whenever validation succeeds with the new clause array. */
+  onValid: (clauses: Clause[]) => void;
+  /** Called whenever validity flips. Parent disables Save when invalid. */
+  onValidityChange: (valid: boolean) => void;
+  /** Debounce window for parse+validate. ~300ms feels responsive without
+   *  re-running the validator on every keystroke. */
+  debounceMs?: number;
+}
+
+function ClausesEditor({
+  initialText,
+  onValid,
+  onValidityChange,
+  debounceMs = 300,
+}: ClausesEditorProps) {
+  const styles = useStyles();
+  const [text, setText] = useState(initialText);
+  const [validation, setValidation] = useState<ValidationResult>({
+    ok: true,
+    clauses: [],
+    strippedComments: 0,
+  });
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  // Refs to the latest parent callbacks so the debounce effect doesn't
+  // recreate its timer on every parent re-render. Updated in a no-deps
+  // effect (runs after every commit), per the React docs' workaround for
+  // "Effect Events".
+  const onValidRef = useRef(onValid);
+  const onValidityChangeRef = useRef(onValidityChange);
+  useEffect(() => {
+    onValidRef.current = onValid;
+    onValidityChangeRef.current = onValidityChange;
+  });
+
+  // Debounced parse+validate. Runs after debounceMs of typing-quiet.
+  useEffect(() => {
+    const handle = window.setTimeout(() => {
+      const result = validateClausesText(text);
+      setValidation(result);
+      onValidityChangeRef.current(result.ok);
+      if (result.ok) {
+        onValidRef.current(result.clauses as Clause[]);
+      }
+    }, debounceMs);
+    return () => window.clearTimeout(handle);
+  }, [text, debounceMs]);
+
+  const insertAtCursor = (snippetJson: string) => {
+    const el = textareaRef.current;
+    const current = text;
+    let nextText: string;
+    if (el && typeof el.selectionStart === "number") {
+      const start = el.selectionStart;
+      const end = el.selectionEnd ?? start;
+      const before = current.slice(0, start);
+      const after = current.slice(end);
+      const needsLeadingComma = /[\]}\d"a-zA-Z_]\s*$/.test(before);
+      const needsTrailingComma = /^\s*[[{\d"a-zA-Z_]/.test(after);
+      const lead = needsLeadingComma ? ",\n" : "";
+      const trail = needsTrailingComma ? ",\n" : "";
+      nextText = before + lead + snippetJson + trail + after;
+    } else {
+      const trimmed = current.trim();
+      if (trimmed.endsWith("]")) {
+        const idx = current.lastIndexOf("]");
+        const before = current.slice(0, idx).replace(/\s*$/, "");
+        const after = current.slice(idx);
+        const needsComma = /[\]}\d"a-zA-Z_]$/.test(before);
+        nextText = before + (needsComma ? ",\n" : "\n") + snippetJson + "\n" + after;
+      } else {
+        nextText = `[\n${snippetJson}\n]`;
+      }
+    }
+    setText(nextText);
+  };
+
+  const formatJson = () => {
+    const result = validateClausesText(text);
+    if (result.ok) {
+      setText(JSON.stringify(result.clauses, null, 2));
+    }
+    // If invalid, leave the text alone — formatting would mask the user's
+    // error and confuse them.
+  };
+
+  const copyToClipboard = () => {
+    if (typeof navigator !== "undefined" && navigator.clipboard) {
+      navigator.clipboard.writeText(text).catch(() => {
+        /* clipboard denied — fail silently, no good fallback in iframe */
+      });
+    }
+  };
+
+  return (
+    <div className={styles.clausesEditorColumn}>
+      <div className={styles.clausesEditorToolbar}>
+        <Menu>
+          <MenuTrigger disableButtonEnhancement>
+            <Button size="small" icon={<AddRegular />}>
+              Insert clause
+            </Button>
+          </MenuTrigger>
+          <MenuPopover>
+            <MenuList>
+              {CLAUSE_TEMPLATES.map((tpl) => (
+                <Tooltip
+                  key={tpl.type}
+                  content={tpl.description}
+                  relationship="description"
+                >
+                  <MenuItem onClick={() => insertAtCursor(tpl.json)}>
+                    {tpl.label}
+                  </MenuItem>
+                </Tooltip>
+              ))}
+            </MenuList>
+          </MenuPopover>
+        </Menu>
+        <Button size="small" icon={<CodeRegular />} onClick={formatJson}>
+          Format JSON
+        </Button>
+        <Button size="small" icon={<CopyRegular />} onClick={copyToClipboard}>
+          Copy
+        </Button>
+      </div>
+      <Textarea
+        className={styles.clausesTextarea}
+        ref={textareaRef as React.Ref<HTMLTextAreaElement>}
+        value={text}
+        onChange={(_e, data) => setText(data.value)}
+        spellCheck={false}
+        placeholder='[\n  { "$type": "where", "FieldName": "type", "Operator": "==", "Values": ["&#39;agent&#39;"] }\n]'
+      />
+      <ClausesEditorStatus validation={validation} />
+    </div>
+  );
+}
+
+/** Single-line status row under the clauses textarea.
+ *  Always renders something (minHeight: 20px) so the layout doesn't jump
+ *  as the user types. */
+function ClausesEditorStatus({ validation }: { validation: ValidationResult }) {
+  const styles = useStyles();
+  if (!validation.ok) {
+    return (
+      <div className={`${styles.statusRow} ${styles.statusError}`}>
+        <ErrorCircleRegular />
+        <Text size={200}>{validation.message}</Text>
+      </div>
+    );
+  }
+  const count = validation.clauses.length;
+  const commentNote =
+    validation.strippedComments > 0
+      ? ` · Stripped ${validation.strippedComments} line comment${
+          validation.strippedComments === 1 ? "" : "s"
+        }`
+      : "";
+  return (
+    <div className={`${styles.statusRow} ${styles.statusOk}`}>
+      <CheckmarkCircleRegular />
+      <Text size={200}>
+        {count} clause{count === 1 ? "" : "s"}
+      </Text>
+      {commentNote && (
+        <Text size={200} className={styles.statusNote}>
+          {commentNote}
+        </Text>
+      )}
+    </div>
+  );
+}
+
 export function TileEditorDialog({ open, initialTile, onClose, onSave }: TileEditorDialogProps) {
   const styles = useStyles();
   const [tile, setTile] = useState<DashboardTile>(initialTile);
+  // Track validity of the clauses textarea. Save is disabled while invalid.
+  const [clausesValid, setClausesValid] = useState(true);
 
   // Reset internal state whenever the dialog (re)opens with a new tile.
   // The parent passes a fresh `initialTile` each open.
-  if (open && tile.id !== initialTile.id) setTile(initialTile);
+  if (open && tile.id !== initialTile.id) {
+    setTile(initialTile);
+    setClausesValid(true);
+  }
 
   // Snapshot of saved queries taken when the dialog opens. We don't poll —
   // the user can't add/delete saved queries from inside this dialog, so a
@@ -261,6 +550,7 @@ export function TileEditorDialog({ open, initialTile, onClose, onSave }: TileEdi
   );
 
   const isRaw = tile.source === "raw";
+  const isComputed = tile.source === "computed";
 
   // Debounced copy of `tile` used by the live preview so we don't fire a
   // fresh inventory query on every keystroke. ~400ms feels responsive but
@@ -277,25 +567,91 @@ export function TileEditorDialog({ open, initialTile, onClose, onSave }: TileEdi
   const setViz = (patch: Partial<DashboardTile["viz"]>) =>
     setTile((prev) => ({ ...prev, viz: { ...prev.viz, ...patch } }));
 
+  // Stable initialText for the ClausesEditor — only changes when the user
+  // does something that should reset the textarea (mode switch, saved-query
+  // load, edit-on-a-different-tile). Plain tile.clauses changes from
+  // typing in the textarea don't reset the editor; the editor owns its
+  // own text state during typing.
+  const [clausesEditorSeed, setClausesEditorSeed] = useState<string>(() =>
+    JSON.stringify(tile.clauses ?? [], null, 2),
+  );
+
+  /** Convert the current Visual builder spec into the equivalent clause
+   *  array and switch to Advanced mode. Lossless. */
+  const switchToAdvanced = () => {
+    const clauses = buildClausesFromSpec(tile.spec);
+    const text = JSON.stringify(clauses, null, 2);
+    setClausesEditorSeed(text);
+    // Chart viz types can't run on raw clauses (TileView's render-time gate).
+    // Auto-downgrade to KPI so the user isn't blocked at save time.
+    const incompatibleViz =
+      tile.viz.type !== "kpi" && tile.viz.type !== "table";
+    setTile((prev) => ({
+      ...prev,
+      source: "raw",
+      clauses,
+      viz: incompatibleViz ? { ...prev.viz, type: "kpi" } : prev.viz,
+    }));
+    setClausesValid(true);
+  };
+
+  /** Switch back to Visual builder mode. Destructive — the user's raw
+   *  clauses are dropped because the visual builder can't represent all
+   *  raw shapes (extend, complex orderBy, etc.). Confirmed via window
+   *  prompt. */
+  const switchToVisual = () => {
+    const hasClauses = (tile.clauses?.length ?? 0) > 0;
+    if (hasClauses) {
+      const ok = window.confirm(
+        "Switching to the Visual builder will discard your hand-written clauses (the visual builder can't represent every clause shape). Continue?",
+      );
+      if (!ok) return;
+    }
+    setTile((prev) => ({
+      ...prev,
+      source: "builder",
+      clauses: undefined,
+      // Keep the savedQueryId label IF it pointed at an Advanced query —
+      // otherwise it makes no sense in Visual mode. Easiest: always clear
+      // so the picker shows the next user choice cleanly.
+      savedQueryId: undefined,
+    }));
+    setClausesEditorSeed("[]");
+    setClausesValid(true);
+  };
+
   const applySavedQuery = (q: SavedQuery) => {
     if (q.source === "builder" && q.spec) {
-      // Basic saved query: prefill the visual builder. No persistent linkage —
-      // the user can edit freely from here. We DO record `savedQueryId` so
-      // the picker shows the source as a hint until they change it.
-      setTile((prev) => ({
-        ...prev,
-        spec: q.spec!,
-        source: "builder",
-        clauses: undefined,
-        savedQueryId: q.id,
-      }));
+      // Basic saved query. If we're in Advanced mode, convert via
+      // buildClausesFromSpec rather than switching modes back to Visual.
+      if (isRaw) {
+        const clauses = buildClausesFromSpec(q.spec);
+        const text = JSON.stringify(clauses, null, 2);
+        setClausesEditorSeed(text);
+        setTile((prev) => ({
+          ...prev,
+          source: "raw",
+          clauses,
+          savedQueryId: q.id,
+        }));
+        setClausesValid(true);
+      } else {
+        setTile((prev) => ({
+          ...prev,
+          spec: q.spec!,
+          source: "builder",
+          clauses: undefined,
+          savedQueryId: q.id,
+        }));
+      }
     } else {
-      // Advanced saved query: switch to raw mode. The visual builder hides;
-      // only KPI and Table viz types remain valid. Force the viz if needed.
+      // Advanced saved query: load clauses and ensure we're in Advanced mode.
       const nextVizType: TileVizType =
         tile.viz.type === "kpi" || tile.viz.type === "table"
           ? tile.viz.type
           : "kpi";
+      const text = JSON.stringify(q.clauses ?? [], null, 2);
+      setClausesEditorSeed(text);
       setTile((prev) => ({
         ...prev,
         source: "raw",
@@ -303,18 +659,14 @@ export function TileEditorDialog({ open, initialTile, onClose, onSave }: TileEdi
         savedQueryId: q.id,
         viz: { ...prev.viz, type: nextVizType },
       }));
+      setClausesValid(true);
     }
   };
 
   const disconnectSaved = () => {
-    // Return to manual builder mode. Keep whatever spec is currently in state
-    // (in case the user already edited it) but drop the raw clauses.
-    setTile((prev) => ({
-      ...prev,
-      source: "builder",
-      clauses: undefined,
-      savedQueryId: undefined,
-    }));
+    // Drop the saved-query label only. Don't change mode or clauses —
+    // the tile already owns its own copy of whatever it loaded.
+    setTile((prev) => ({ ...prev, savedQueryId: undefined }));
   };
 
   const updateFilter = (idx: number, patch: Partial<QueryFilter>) => {
@@ -413,59 +765,103 @@ export function TileEditorDialog({ open, initialTile, onClose, onSave }: TileEdi
                 />
               </div>
 
-              <div className={styles.row}>
-                <Text className={styles.label}>Start from</Text>
-                <Dropdown
-                  style={{ flex: 1, minWidth: 280 }}
-                  placeholder={
-                    savedQueries.length === 0
-                      ? "No saved queries — build below"
-                      : "Build from scratch — or pick a saved query"
-                  }
-                  disabled={savedQueries.length === 0}
-                  value={linkedSaved?.name ?? ""}
-                  selectedOptions={linkedSaved ? [linkedSaved.id] : []}
-                  onOptionSelect={(_e, data) => {
-                    const id = data.optionValue;
-                    if (!id) return;
-                    const q = savedQueries.find((s) => s.id === id);
-                    if (q) applySavedQuery(q);
-                  }}
-                >
-                  {savedQueries.map((q) => (
-                    <Option key={q.id} value={q.id} text={q.name}>
-                      {q.name}
-                      <span className={styles.helper}>
-                        {" · "}
-                        {q.source === "raw" ? "Advanced" : "Basic"}
-                      </span>
-                    </Option>
-                  ))}
-                </Dropdown>
-                {linkedSaved && (
-                  <Button
-                    size="small"
-                    appearance="subtle"
-                    icon={<DismissRegular />}
-                    onClick={disconnectSaved}
+              {!isComputed && (
+                <div className={styles.row}>
+                  <Text className={styles.label}>Start from</Text>
+                  <Dropdown
+                    style={{ flex: 1, minWidth: 280 }}
+                    placeholder={
+                      savedQueries.length === 0
+                        ? "No saved queries — build below"
+                        : "Build from scratch — or pick a saved query"
+                    }
+                    disabled={savedQueries.length === 0}
+                    value={linkedSaved?.name ?? ""}
+                    selectedOptions={linkedSaved ? [linkedSaved.id] : []}
+                    onOptionSelect={(_e, data) => {
+                      const id = data.optionValue;
+                      if (!id) return;
+                      const q = savedQueries.find((s) => s.id === id);
+                      if (q) applySavedQuery(q);
+                    }}
                   >
-                    Disconnect
-                  </Button>
-                )}
-              </div>
+                    {savedQueries.map((q) => (
+                      <Option key={q.id} value={q.id} text={q.name}>
+                        {q.name}
+                        <span className={styles.helper}>
+                          {" · "}
+                          {q.source === "raw" ? "Advanced" : "Basic"}
+                        </span>
+                      </Option>
+                    ))}
+                  </Dropdown>
+                  {linkedSaved && (
+                    <Button
+                      size="small"
+                      appearance="subtle"
+                      icon={<DismissRegular />}
+                      onClick={disconnectSaved}
+                    >
+                      Clear label
+                    </Button>
+                  )}
+                </div>
+              )}
 
-              {isRaw && (
-                <div className={styles.rawNotice}>
-                  <Badge appearance="filled" color="important" size="small">
-                    Advanced query
-                  </Badge>
-                  <Text className={styles.rawNoticeText}>
-                    This tile runs hand-written clauses from{" "}
-                    <strong>{linkedSaved?.name ?? "a saved query"}</strong>.
-                    The visual builder is hidden and only KPI / Table viz
-                    types are available. Click <strong>Disconnect</strong> to
-                    return to the visual builder.
+              {isComputed ? (
+                <div className={styles.computedBanner}>
+                  <div className={styles.computedBannerTitle}>
+                    <Badge appearance="filled" color="brand" size="small">
+                      Computed
+                    </Badge>
+                    <Text size={300}>Managed by code</Text>
+                  </div>
+                  <Text className={styles.computedBannerHelper}>
+                    Aggregator:{" "}
+                    <code>{tile.computed?.aggregatorId ?? "(unknown)"}</code>
                   </Text>
+                  <Text className={styles.computedBannerHelper}>
+                    This tile's data comes from a registered client-side
+                    aggregator. You can rename it, resize it, and move it
+                    between tabs, but the query itself is defined in code.
+                  </Text>
+                </div>
+              ) : (
+                <div className={styles.row}>
+                  <Text className={styles.label}>Mode</Text>
+                  <div className={styles.modeRow}>
+                    <Button
+                      size="small"
+                      appearance={isRaw ? "subtle" : "primary"}
+                      className={styles.modeButton}
+                      onClick={() => {
+                        if (isRaw) switchToVisual();
+                      }}
+                    >
+                      Visual builder
+                    </Button>
+                    <Button
+                      size="small"
+                      appearance={isRaw ? "primary" : "subtle"}
+                      className={styles.modeButton}
+                      onClick={() => {
+                        if (!isRaw) switchToAdvanced();
+                      }}
+                    >
+                      Advanced (clauses)
+                    </Button>
+                    {isRaw && (
+                      <Text className={styles.helper}>
+                        Hand-written clauses. KPI / Table viz only.
+                        {linkedSaved && (
+                          <>
+                            {" "}
+                            Loaded from <strong>{linkedSaved.name}</strong>.
+                          </>
+                        )}
+                      </Text>
+                    )}
+                  </div>
                 </div>
               )}
 
@@ -818,7 +1214,7 @@ export function TileEditorDialog({ open, initialTile, onClose, onSave }: TileEdi
 
               <Divider />
 
-              {!isRaw && (
+              {!isRaw && !isComputed && (
                 <>
               <div className={styles.row}>
                 <Text className={styles.label}>Resource types</Text>
@@ -1029,34 +1425,38 @@ export function TileEditorDialog({ open, initialTile, onClose, onSave }: TileEdi
                 </>
               )}
 
-              {isRaw && (
+              {isRaw && !isComputed && (
                 <div className={styles.row}>
                   <Text className={styles.label}>Clauses</Text>
-                  <pre
-                    className={styles.rawJson}
-                    style={{ flex: 1, minWidth: 280 }}
-                  >
-                    {JSON.stringify(tile.clauses ?? [], null, 2)}
-                  </pre>
+                  <ClausesEditor
+                    key={clausesEditorSeed}
+                    initialText={clausesEditorSeed}
+                    onValid={(clauses) =>
+                      setTile((prev) => ({ ...prev, clauses }))
+                    }
+                    onValidityChange={setClausesValid}
+                  />
                 </div>
               )}
 
-              <div className={styles.row}>
-                <Text className={styles.label}>Page size</Text>
-                <Input
-                  type="number"
-                  style={{ width: 100 }}
-                  value={String(tile.spec.limit)}
-                  onChange={(_e, data) =>
-                    setSpec({
-                      limit: Math.max(1, Math.min(500, Number(data.value) || 100)),
-                    })
-                  }
-                />
-                <Text className={styles.helper}>
-                  KPI tiles ignore this — they always fetch 1 row + use the total count.
-                </Text>
-              </div>
+              {!isComputed && (
+                <div className={styles.row}>
+                  <Text className={styles.label}>Page size</Text>
+                  <Input
+                    type="number"
+                    style={{ width: 100 }}
+                    value={String(tile.spec.limit)}
+                    onChange={(_e, data) =>
+                      setSpec({
+                        limit: Math.max(1, Math.min(500, Number(data.value) || 100)),
+                      })
+                    }
+                  />
+                  <Text className={styles.helper}>
+                    KPI tiles ignore this — they always fetch 1 row + use the total count.
+                  </Text>
+                </div>
+              )}
                 </div>
               </div>
 
@@ -1075,7 +1475,11 @@ export function TileEditorDialog({ open, initialTile, onClose, onSave }: TileEdi
           </DialogContent>
           <DialogActions>
             <Button appearance="secondary" onClick={onClose}>Cancel</Button>
-            <Button appearance="primary" onClick={() => onSave(tile)}>
+            <Button
+              appearance="primary"
+              onClick={() => onSave(tile)}
+              disabled={isRaw && !clausesValid}
+            >
               Save tile
             </Button>
           </DialogActions>

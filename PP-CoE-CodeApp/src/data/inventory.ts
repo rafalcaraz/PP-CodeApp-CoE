@@ -1774,7 +1774,7 @@ function toFlowRow(item: ResourceItem): FlowRow {
   };
 }
 
-function toAgentRow(item: ResourceItem): AgentRow {
+export function toAgentRow(item: ResourceItem): AgentRow {
   const raw = item as unknown as Record<string, unknown>;
   return {
     id: item.name ?? "",
