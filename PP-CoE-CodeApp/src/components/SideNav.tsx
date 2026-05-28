@@ -17,9 +17,12 @@ import {
   ChevronRightRegular,
   BranchCompareRegular,
   CopyRegular,
+  DataTrending24Regular,
   EarthRegular,
   FlowRegular,
   HomeRegular,
+  Library24Regular,
+  LockClosed24Regular,
   PeopleTeamRegular,
   PersonAccountsRegular,
   PersonQuestionMarkRegular,
@@ -27,7 +30,7 @@ import {
   SearchSquareRegular,
   ScanRegular,
   SettingsRegular,
-  ShieldRegular,
+  ShieldKeyhole24Regular,
   DataPieRegular,
   GridDotsRegular,
 } from "@fluentui/react-icons";
@@ -116,56 +119,41 @@ interface NavItem {
 
 interface NavSection {
   key: string;
-  label: string;
+  // When omitted, the section renders as a flat list of items with no
+  // collapsible header. Used for ungrouped top/bottom items like Home
+  // and Settings that don't belong under any wedge.
+  label?: string;
   icon?: React.ReactElement;
   defaultOpen?: boolean;
   items: NavItem[];
 }
 
-const NAV_SECTIONS: NavSection[] = [
+// Sections rendered above the optional Zones section. Ungrouped items
+// (Home, Settings) live in headerless sections so they don't carry a
+// collapsible group header.
+const PRE_ZONES_SECTIONS: NavSection[] = [
   {
-    key: "inventory",
-    label: "Inventory",
+    key: "home",
+    items: [{ key: "home", label: "Home", icon: <HomeRegular />, path: "/home" }],
+  },
+  {
+    key: "risk-governance",
+    label: "Risk & Governance",
+    icon: <ShieldKeyhole24Regular />,
     defaultOpen: true,
     items: [
-      { key: "home", label: "Home", icon: <HomeRegular />, path: "/home" },
-      { key: "dashboards", label: "Dashboards", icon: <DataPieRegular />, path: "/dashboards" },
       {
-        key: "environment-groups",
-        label: "Environment groups",
-        icon: <PeopleTeamRegular />,
-        path: "/environment-groups",
+        key: "ownerless",
+        label: "Ownerless resources",
+        icon: <PersonQuestionMarkRegular />,
+        path: "/security/ownerless",
       },
-      {
-        key: "environments",
-        label: "Environments",
-        icon: <EarthRegular />,
-        path: "/environments",
-      },
-      {
-        key: "pde-landscape",
-        label: "PDE landscape",
-        icon: <PersonAccountsRegular />,
-        path: "/pde-landscape",
-      },
-      { key: "apps", label: "Apps", icon: <AppsRegular />, path: "/apps" },
-      { key: "flows", label: "Flows", icon: <FlowRegular />, path: "/flows" },
-      { key: "agents", label: "Agents", icon: <BotRegular />, path: "/agents" },
-      {
-        key: "connectors",
-        label: "Connectors",
-        icon: <PlugConnectedRegular />,
-        path: "/connectors",
-      },
-      { key: "queries", label: "Queries", icon: <SearchSquareRegular />, path: "/queries" },
-      { key: "tenant-scans", label: "Tenant scans", icon: <ScanRegular />, path: "/tenant-scans" },
-      { key: "settings", label: "Settings", icon: <SettingsRegular />, path: "/settings" },
     ],
   },
   {
-    key: "security",
+    key: "dlp-acp",
     label: "DLP & ACP",
-    icon: <ShieldRegular />,
+    icon: <LockClosed24Regular />,
     defaultOpen: true,
     items: [
       {
@@ -186,12 +174,56 @@ const NAV_SECTIONS: NavSection[] = [
         icon: <CopyRegular />,
         path: "/security/duplicator",
       },
+    ],
+  },
+];
+
+const POST_ZONES_SECTIONS: NavSection[] = [
+  {
+    key: "insights",
+    label: "Insights",
+    icon: <DataTrending24Regular />,
+    defaultOpen: true,
+    items: [
+      { key: "dashboards", label: "Dashboards", icon: <DataPieRegular />, path: "/dashboards" },
       {
-        key: "ownerless",
-        label: "Ownerless resources",
-        icon: <PersonQuestionMarkRegular />,
-        path: "/security/ownerless",
+        key: "pde-landscape",
+        label: "PDE landscape",
+        icon: <PersonAccountsRegular />,
+        path: "/pde-landscape",
       },
+      { key: "tenant-scans", label: "Tenant scans", icon: <ScanRegular />, path: "/tenant-scans" },
+      { key: "queries", label: "Queries", icon: <SearchSquareRegular />, path: "/queries" },
+    ],
+  },
+  {
+    key: "resources",
+    label: "Resources",
+    icon: <Library24Regular />,
+    defaultOpen: true,
+    items: [
+      { key: "environments", label: "Environments", icon: <EarthRegular />, path: "/environments" },
+      {
+        key: "environment-groups",
+        label: "Environment groups",
+        icon: <PeopleTeamRegular />,
+        path: "/environment-groups",
+      },
+      { key: "apps", label: "Apps", icon: <AppsRegular />, path: "/apps" },
+      { key: "flows", label: "Flows", icon: <FlowRegular />, path: "/flows" },
+      { key: "agents", label: "Agents", icon: <BotRegular />, path: "/agents" },
+      {
+        key: "connectors",
+        label: "Connectors",
+        icon: <PlugConnectedRegular />,
+        path: "/connectors",
+      },
+    ],
+  },
+  {
+    key: "settings",
+    items: [
+      { key: "settings", label: "Settings", icon: <SettingsRegular />, path: "/settings" },
     ],
   },
 ];
@@ -249,8 +281,13 @@ export function SideNav() {
   // Merge in the optional Zones section when the flag is on. Building
   // the array at render time (rather than mutating a module constant)
   // keeps the feature-flag dependency localized to this component.
+  // Zones slots in between DLP & ACP and Insights so the story arc
+  // reads risk → DLP → zones → insights → resources.
   const sections = useMemo<NavSection[]>(
-    () => (zonesEnabled ? [...NAV_SECTIONS, ZONES_SECTION] : NAV_SECTIONS),
+    () =>
+      zonesEnabled
+        ? [...PRE_ZONES_SECTIONS, ZONES_SECTION, ...POST_ZONES_SECTIONS]
+        : [...PRE_ZONES_SECTIONS, ...POST_ZONES_SECTIONS],
     [zonesEnabled],
   );
 
@@ -258,7 +295,7 @@ export function SideNav() {
     const stored = loadCollapsedSections();
     // Seed with sections that opt out of defaultOpen, unless the user already
     // expanded them in a previous session.
-    for (const section of NAV_SECTIONS) {
+    for (const section of [...PRE_ZONES_SECTIONS, ZONES_SECTION, ...POST_ZONES_SECTIONS]) {
       if (section.defaultOpen === false && !stored.has(section.key)) {
         stored.add(section.key);
       }
@@ -302,27 +339,31 @@ export function SideNav() {
         <Text className={styles.brandSubtitle}>Inventory &amp; governance</Text>
       </div>
       {sections.map((section) => {
-        const isCollapsed = collapsed.has(section.key);
+        const hasHeader = Boolean(section.label);
+        // Headerless sections (Home, Settings) always render their items.
+        const isCollapsed = hasHeader && collapsed.has(section.key);
         const sectionId = `sidenav-section-${section.key}`;
         return (
           <div key={section.key} className={styles.section}>
-            <button
-              type="button"
-              className={styles.sectionHeader}
-              onClick={() => toggleSection(section.key)}
-              aria-expanded={!isCollapsed}
-              aria-controls={sectionId}
-            >
-              <span className={styles.sectionHeaderIcon} aria-hidden="true">
-                {isCollapsed ? <ChevronRightRegular /> : <ChevronDownRegular />}
-              </span>
-              {section.icon && (
+            {hasHeader && (
+              <button
+                type="button"
+                className={styles.sectionHeader}
+                onClick={() => toggleSection(section.key)}
+                aria-expanded={!isCollapsed}
+                aria-controls={sectionId}
+              >
                 <span className={styles.sectionHeaderIcon} aria-hidden="true">
-                  {section.icon}
+                  {isCollapsed ? <ChevronRightRegular /> : <ChevronDownRegular />}
                 </span>
-              )}
-              <span className={styles.sectionHeaderLabel}>{section.label}</span>
-            </button>
+                {section.icon && (
+                  <span className={styles.sectionHeaderIcon} aria-hidden="true">
+                    {section.icon}
+                  </span>
+                )}
+                <span className={styles.sectionHeaderLabel}>{section.label}</span>
+              </button>
+            )}
             {!isCollapsed && (
               <TabList
                 id={sectionId}
