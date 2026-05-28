@@ -94,6 +94,7 @@ function spRef(id: string, overrides: Partial<ServicePrincipalRef> = {}): Servic
     appOwnerOrganizationId: "1557f771-4c8e-4dbd-8b80-dd00a88e833e",
     accountEnabled: true,
     kind: "tenant",
+    ownerCount: null,
     ...overrides,
   };
 }

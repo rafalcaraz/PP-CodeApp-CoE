@@ -119,6 +119,13 @@ export interface ServicePrincipalRef {
   accountEnabled: boolean;
   /** Pre-computed classification (see `classifyServicePrincipal`). */
   kind: SpKind;
+  /** Number of Entra owners assigned to this SP, as reported by the
+   *  batch `$expand=owners($select=id)` projection. `null` when the
+   *  ref came from a code path that didn't include owners (currently
+   *  only test fixtures). 0 means the SP genuinely has no Entra
+   *  owners — common for Microsoft first-party SPs, but a noteworthy
+   *  governance flag on custom tenant SPs. */
+  ownerCount: number | null;
 }
 
 /** Lightweight owner record returned by the per-SP "owners" drill-in.
@@ -305,9 +312,12 @@ export function resolveServicePrincipal(
 
   const promise = (async () => {
     const select = `$select=${SP_SELECT_FIELDS.join(",")}`;
+    // Single-id endpoint type-pins to servicePrincipal, so no cast
+    // needed on either the select or the expand.
+    const expand = `$expand=owners($select=id)`;
     const res = await callGraph<RawServicePrincipal>(
       "GET",
-      `/servicePrincipals/${encodeURIComponent(g)}?${select}`,
+      `/servicePrincipals/${encodeURIComponent(g)}?${select}&${expand}`,
     );
     if (!res.ok) {
       // Transport error — don't cache; let the next call retry.
@@ -417,11 +427,13 @@ async function fetchBatch(
   //
   // Type-cast `$select` is REQUIRED here — see SP_SELECT_FIELDS_BATCH
   // doc. Without it Graph silently returns `value: []` for the whole
-  // batch even when valid SP Object IDs are present.
+  // batch even when valid SP Object IDs are present. Same rule
+  // applies to `$expand` for SP-specific navigation properties.
   const select = `$select=${SP_SELECT_FIELDS_BATCH.join(",")}`;
+  const expand = `$expand=${SP_TYPE_CAST}/owners($select=id)`;
   const batchPromise = callGraph<{ value?: RawServicePrincipal[] }>(
     "POST",
-    `/directoryObjects/getByIds?${select}`,
+    `/directoryObjects/getByIds?${select}&${expand}`,
     { ids: batch, types: ["servicePrincipal"] },
   );
 
@@ -518,6 +530,10 @@ interface RawServicePrincipal {
   servicePrincipalType?: string;
   appOwnerOrganizationId?: string | null;
   accountEnabled?: boolean;
+  /** Present when the response had `$expand=owners($select=id)`. Each
+   *  entry carries `@odata.type` and `id` only — that's all we need
+   *  to derive `ownerCount`. */
+  owners?: Array<{ id?: string }>;
 }
 
 interface RawServicePrincipalWithOwners extends RawServicePrincipal {
@@ -546,6 +562,11 @@ function toServicePrincipalRef(raw: RawServicePrincipal): ServicePrincipalRef {
       appOwnerOrganizationId: raw.appOwnerOrganizationId ?? null,
       servicePrincipalType: raw.servicePrincipalType ?? "",
     }),
+    // `owners` is only present when the response included
+    // `$expand=owners(...)`. Treat its absence as "unknown" (`null`)
+    // rather than 0 so the UI can distinguish "we didn't ask" from
+    // "we asked and there really are none assigned".
+    ownerCount: Array.isArray(raw.owners) ? raw.owners.length : null,
   };
 }
 

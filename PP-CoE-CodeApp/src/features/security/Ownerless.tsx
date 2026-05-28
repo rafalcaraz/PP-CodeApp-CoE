@@ -1,16 +1,12 @@
 /**
- * Ownerless Resources — Stage 1 + 2.
+ * Ownerless Resources page.
  *
  * Walks tenant inventory, buckets each distinct owner GUID by its
- * `aaduser` lookup result (owner-health), and lets the user drill
- * into the affected resources per owner.
- *
- * Service-principal disambiguation is intentionally NOT attempted —
- * Microsoft does not expose a Dataverse virtual table for service
- * principals (only `aaduser` and `aadgroup` exist), so any GUID that
- * misses on `aaduser` is surfaced in the `unresolved` bucket with
- * UI copy that explicitly calls out the ambiguity. Users disambiguate
- * via the Entra portal. See `docs/inventory-schema-samples.md`.
+ * `aaduser` lookup result (owner-health), then enriches GUIDs that
+ * came back null through Microsoft Graph (`directoryObjects/getByIds`)
+ * to identify service principals. The single "unresolved" bucket
+ * splits cleanly into `service-principal` and `unresolved` (truly
+ * orphaned).
  *
  * The actual scan runs on a module-level singleton controller in
  * `_ownerless/ownerScanController.ts` so it survives route changes
@@ -38,6 +34,7 @@ import {
 } from "@fluentui/react-components";
 import {
   ArrowClockwiseRegular,
+  ArrowDownloadRegular,
   ChevronDownRegular,
   ChevronRightRegular,
   DeleteRegular,
@@ -54,8 +51,9 @@ import {
 import { useNavigate } from "react-router-dom";
 
 import { UserChip } from "../../components/UserChip";
-import { friendlyResourceType } from "../../data/inventory";
+import { friendlyResourceType, shortResourceType } from "../../data/inventory";
 import { fetchServicePrincipalOwners, type ServicePrincipalOwner } from "../../data/spnEnrichment";
+import { downloadCsv, rowsToCsv } from "../../utils/csv";
 import {
   cancelScan,
   clearLastSnapshot,
@@ -591,6 +589,8 @@ function BucketsSection({
       <BucketHeading
         bucket={selectedBucket}
         count={activeEntries.length}
+        entries={activeEntries}
+        fromSnapshot={result.fromSnapshot}
       />
 
       {activeEntries.length === 0 ? (
@@ -610,19 +610,126 @@ function BucketsSection({
 function BucketHeading({
   bucket,
   count,
+  entries,
+  fromSnapshot,
 }: {
   bucket: OwnerBucket;
   count: number;
+  entries: OwnerEntry[];
+  fromSnapshot: boolean;
 }) {
   const styles = useStyles();
+
+  // Export is disabled (a) when the bucket is empty (nothing to
+  // emit) and (b) when the result was rehydrated from snapshot —
+  // snapshots don't persist affected-resource lists, so the CSV
+  // would have just owner rows with no resource context, which is
+  // less useful than re-scanning. Tooltip explains the disable.
+  const exportDisabledReason =
+    count === 0
+      ? "No owners in this bucket"
+      : fromSnapshot
+        ? "Re-scan first — affected resource details aren't available from the saved snapshot"
+        : null;
+
+  const onExport = () => {
+    const rows = entriesToCsvRows(entries, bucket);
+    const csv = rowsToCsv(rows);
+    downloadCsv(`ownerless-${bucket}`, csv);
+  };
+
   return (
     <div className={styles.summaryChips}>
       <Badge appearance="filled" color={bucketBadgeColor(bucket)}>
         {bucketLabel(bucket)} · {count}
       </Badge>
       <Text className={styles.subtitle}>{bucketDescription(bucket)}</Text>
+      <span className={styles.spacer} />
+      <Tooltip
+        content={
+          exportDisabledReason ??
+          `Export ${count} owner${count === 1 ? "" : "s"} + their affected resources to CSV`
+        }
+        relationship="description"
+      >
+        {/* Wrap the Button in a span so the Tooltip can still describe
+            the disabled state — Buttons disabled on focus don't fire
+            mouseenter for the tooltip without a wrapper. */}
+        <span>
+          <Button
+            appearance="subtle"
+            icon={<ArrowDownloadRegular />}
+            onClick={onExport}
+            disabled={exportDisabledReason !== null}
+          >
+            Export CSV
+          </Button>
+        </span>
+      </Tooltip>
     </div>
   );
+}
+
+/** Build one CSV row per affected resource. Owner context is
+ *  duplicated across each resource row so the export is "tabular"
+ *  and consumable in Excel / Power Query / any CSV tool the customer
+ *  uses. Owners with zero affected resources are still emitted as a
+ *  single context-only row so they don't silently disappear from
+ *  the export. */
+function entriesToCsvRows(
+  entries: OwnerEntry[],
+  bucket: OwnerBucket,
+): Array<Record<string, string | number | boolean | null>> {
+  const rows: Array<Record<string, string | number | boolean | null>> = [];
+  for (const entry of entries) {
+    const ownerDisplay =
+      entry.servicePrincipal?.displayName ??
+      entry.user?.displayName ??
+      "";
+    const ownerType: "user" | "service-principal" | "missing" =
+      entry.user ? "user"
+        : entry.servicePrincipal ? "service-principal"
+          : "missing";
+    const base = {
+      ownerBucket: bucket,
+      ownerId: entry.ownerId,
+      ownerType,
+      ownerDisplayName: ownerDisplay,
+      ownerUpn: entry.user?.upn ?? "",
+      ownerMail: entry.user?.mail ?? entry.servicePrincipal?.displayName ?? "",
+      ownerUserType: entry.user?.userType ?? "",
+      ownerAccountEnabled:
+        entry.user?.enabled ??
+        entry.servicePrincipal?.accountEnabled ??
+        null,
+      spKind: entry.servicePrincipal?.kind ?? "",
+      spAppId: entry.servicePrincipal?.appId ?? "",
+      spOwnerCount: entry.servicePrincipal?.ownerCount ?? null,
+      affectedResourceCount: entry.affectedResources.length,
+    };
+    if (entry.affectedResources.length === 0) {
+      rows.push({
+        ...base,
+        resourceId: "",
+        resourceDisplayName: "",
+        resourceType: "",
+        resourceTypeShort: "",
+        environmentId: "",
+      });
+      continue;
+    }
+    for (const r of entry.affectedResources) {
+      rows.push({
+        ...base,
+        resourceId: r.id,
+        resourceDisplayName: r.displayName,
+        resourceType: r.type,
+        resourceTypeShort: shortResourceType(r.type),
+        environmentId: r.environmentId,
+      });
+    }
+  }
+  return rows;
 }
 
 interface BucketTableProps {
@@ -793,6 +900,7 @@ function OwnerCell({ entry }: { entry: OwnerEntry }) {
         <Badge appearance="filled" color={spKindBadgeColor(sp.kind)} size="small">
           {spKindLabel(sp.kind)}
         </Badge>
+        <SpOwnerCountBadge count={sp.ownerCount} />
         {sp.accountEnabled === false && (
           <Badge appearance="filled" color="warning" size="small">
             disabled
@@ -802,6 +910,37 @@ function OwnerCell({ entry }: { entry: OwnerEntry }) {
     );
   }
   return <UserChip id={entry.ownerId} />;
+}
+
+/** Inline indicator for "does this SP have any Entra owners assigned?".
+ *  Drives a per-row escalation signal without the user having to
+ *  expand the row to check. `null` count means the resolver didn't
+ *  include the owners projection (test fixtures) — render nothing
+ *  rather than risk a misleading "Ownerless" claim. */
+function SpOwnerCountBadge({ count }: { count: number | null }) {
+  if (count === null) return null;
+  if (count === 0) {
+    return (
+      <Tooltip
+        content="No Entra owners assigned to this service principal — no escalation contact exists in your tenant. Common (and expected) for Microsoft first-party SPs; a real signal for custom tenant SPs."
+        relationship="description"
+      >
+        <Badge appearance="filled" color="danger" size="small">
+          Ownerless
+        </Badge>
+      </Tooltip>
+    );
+  }
+  return (
+    <Tooltip
+      content={`This service principal has ${count} Entra owner${count === 1 ? "" : "s"}. Expand the row to see who they are.`}
+      relationship="description"
+    >
+      <Badge appearance="outline" color="informative" size="small">
+        {count} owner{count === 1 ? "" : "s"}
+      </Badge>
+    </Tooltip>
+  );
 }
 
 /**

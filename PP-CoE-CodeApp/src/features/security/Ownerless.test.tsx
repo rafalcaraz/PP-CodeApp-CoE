@@ -68,11 +68,17 @@ vi.mock("../../components/UserChip", () => ({
 // SpOwnersSection lazily fetches Entra owners on expand. Stub the
 // transport here so SP-bucket drill-in tests don't hit the real
 // connector and so non-SP tests stay quiet.
-const { fetchSpOwnersMock } = vi.hoisted(() => ({
+const { fetchSpOwnersMock, downloadCsvMock, rowsToCsvMock } = vi.hoisted(() => ({
   fetchSpOwnersMock: vi.fn(),
+  downloadCsvMock: vi.fn(),
+  rowsToCsvMock: vi.fn(),
 }));
 vi.mock("../../data/spnEnrichment", () => ({
   fetchServicePrincipalOwners: fetchSpOwnersMock,
+}));
+vi.mock("../../utils/csv", () => ({
+  downloadCsv: downloadCsvMock,
+  rowsToCsv: rowsToCsvMock,
 }));
 
 import { Ownerless } from "./Ownerless";
@@ -204,6 +210,14 @@ beforeEach(() => {
   subscribeMock.mockImplementation(() => () => {});
   fetchSpOwnersMock.mockReset();
   fetchSpOwnersMock.mockResolvedValue({ ok: true, data: [] });
+  downloadCsvMock.mockReset();
+  rowsToCsvMock.mockReset();
+  // rowsToCsv returns a predictable string per call so tests can
+  // assert the downloadCsv invocation without re-implementing the
+  // flattener.
+  rowsToCsvMock.mockImplementation(
+    (rows: unknown[]) => `CSV[${rows.length} rows]`,
+  );
 });
 
 // ─── Tests ───────────────────────────────────────────────────────────────
@@ -332,8 +346,13 @@ describe("Ownerless — from-snapshot state", () => {
     // resources weren't persisted.
     const expandButton = screen.getByRole("button", { name: /expand/i });
     fireEvent.click(expandButton);
+    // Use the drill-in's exact "Affected-resource details" phrasing
+    // (hyphenated). The export button's disabled-tooltip mentions a
+    // similar message in non-hyphenated form, so a loose regex matches
+    // both. Anchoring on "Affected-resource details" matches only the
+    // drill-in body.
     expect(
-      screen.getByText(/aren'?t available from the saved snapshot/i),
+      screen.getByText(/affected-resource details aren'?t available/i),
     ).toBeInTheDocument();
   });
 
@@ -353,7 +372,11 @@ describe("Ownerless — service-principal bucket (Stage 3)", () => {
   const OWNER_SP = "66666666-6666-6666-6666-666666666666";
   const OWNER_USER = "f89e1b16-63fb-4b09-b8e8-0a859966a74c";
 
-  function buildSpResult(): ScanResult {
+  function buildSpResult(opts: { ownerCount?: number | null } = {}): ScanResult {
+    // `??` would collapse null to the default; tests rely on null
+    // being passed through verbatim.
+    const ownerCount =
+      opts.ownerCount === undefined ? 2 : opts.ownerCount;
     const ownerIndex = new Map<string, OwnerEntry>();
     ownerIndex.set(OWNER_SP, {
       ownerId: OWNER_SP,
@@ -366,6 +389,7 @@ describe("Ownerless — service-principal bucket (Stage 3)", () => {
         appOwnerOrganizationId: "1557f771-4c8e-4dbd-8b80-dd00a88e833e",
         accountEnabled: true,
         kind: "tenant",
+        ownerCount,
       },
       bucket: "service-principal",
       affectedResources: [
@@ -432,13 +456,92 @@ describe("Ownerless — service-principal bucket (Stage 3)", () => {
   it("surfaces a 'no Entra owners' message for SPs with empty owners (e.g. Microsoft first-party)", async () => {
     fetchSpOwnersMock.mockResolvedValue({ ok: true, data: [] });
     getProgressMock.mockReturnValue({ ...idleProgress(), phase: "completed" });
-    getResultMock.mockReturnValue(buildSpResult());
+    getResultMock.mockReturnValue(buildSpResult({ ownerCount: 0 }));
 
     renderPage();
     fireEvent.click(screen.getByRole("button", { name: /expand/i }));
     expect(
       await screen.findByText(/no entra owners assigned/i),
     ).toBeInTheDocument();
+  });
+
+  it("renders an 'Ownerless' badge inline on rows for SPs with zero Entra owners", () => {
+    getProgressMock.mockReturnValue({ ...idleProgress(), phase: "completed" });
+    getResultMock.mockReturnValue(buildSpResult({ ownerCount: 0 }));
+
+    renderPage();
+    expect(screen.getByText(/^Ownerless$/)).toBeInTheDocument();
+  });
+
+  it("renders a count badge inline on rows for SPs with at least one Entra owner", () => {
+    getProgressMock.mockReturnValue({ ...idleProgress(), phase: "completed" });
+    getResultMock.mockReturnValue(buildSpResult({ ownerCount: 3 }));
+
+    renderPage();
+    expect(screen.getByText(/^3 owners$/)).toBeInTheDocument();
+  });
+
+  it("omits the owner count badge when ownerCount is null (projection didn't ask)", () => {
+    getProgressMock.mockReturnValue({ ...idleProgress(), phase: "completed" });
+    getResultMock.mockReturnValue(buildSpResult({ ownerCount: null }));
+
+    renderPage();
+    // Neither "Ownerless" nor "N owners" badge should appear.
+    expect(screen.queryByText(/^Ownerless$/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/^\d+ owners?$/)).not.toBeInTheDocument();
+  });
+});
+
+describe("Ownerless — CSV export", () => {
+  it("disables the Export CSV button when the bucket is empty", () => {
+    getProgressMock.mockReturnValue({ ...idleProgress(), phase: "completed" });
+    getResultMock.mockReturnValue(buildResult());
+
+    renderPage();
+    fireEvent.click(screen.getByRole("tab", { name: /guest \(0\)/i }));
+    const button = screen.getByRole("button", { name: /export csv/i });
+    expect(button).toBeDisabled();
+  });
+
+  it("disables the Export CSV button when results are from snapshot", () => {
+    getProgressMock.mockReturnValue({ ...idleProgress(), phase: "idle" });
+    getResultMock.mockReturnValue(buildResult({ fromSnapshot: true }));
+
+    renderPage();
+    const button = screen.getByRole("button", { name: /export csv/i });
+    expect(button).toBeDisabled();
+  });
+
+  it("triggers a CSV download with one row per affected resource", () => {
+    getProgressMock.mockReturnValue({ ...idleProgress(), phase: "completed" });
+    getResultMock.mockReturnValue(buildResult());
+
+    renderPage();
+    fireEvent.click(screen.getByRole("button", { name: /export csv/i }));
+
+    expect(rowsToCsvMock).toHaveBeenCalledTimes(1);
+    expect(downloadCsvMock).toHaveBeenCalledTimes(1);
+
+    // Default-selected bucket is `unresolved` (1 owner, 2 affected
+    // resources) → one CSV row per resource = 2 rows.
+    const rows = rowsToCsvMock.mock.calls[0][0] as Array<Record<string, unknown>>;
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).toMatchObject({
+      ownerBucket: "unresolved",
+      resourceDisplayName: "Orphan Sales App",
+      resourceType: "microsoft.powerapps/canvasapps",
+    });
+    expect(rows[1]).toMatchObject({
+      ownerBucket: "unresolved",
+      resourceDisplayName: "Orphan Sync Flow",
+    });
+
+    // Filename stem encodes the bucket so multiple exports don't
+    // collide.
+    expect(downloadCsvMock).toHaveBeenCalledWith(
+      "ownerless-unresolved",
+      expect.stringContaining("CSV["),
+    );
   });
 });
 
