@@ -5,8 +5,8 @@
  * See `docs/inventory-schema-samples.md#owner--creator-guid-resolution`
  * for the taxonomy that drives the bucket definitions. Bucket choices
  * here intentionally mirror that taxonomy so UI copy can stay aligned
- * with the docs (and so Stage 3 SPN disambiguation can split
- * `unresolved` cleanly later).
+ * with the docs (and so future SPN classification work can extend
+ * the `unresolved` bucket without changing the existing tab shape).
  */
 
 import type { ResourceTypeValue } from "../../../data/inventory";
@@ -26,8 +26,12 @@ export type ScanPhase =
  *
  *  - `unresolved` — Owner GUID isn't present in `aaduser`. Per the
  *    inventory-schema doc, this is either a deleted user OR a service
- *    principal. Stage 3 will split this; v1 surfaces the ambiguity in
- *    UI copy.
+ *    principal — the two are indistinguishable from the `aaduser`
+ *    table alone, and Microsoft does NOT expose a Dataverse virtual
+ *    table for service principals to fall through to. Future work may
+ *    add manual classification (an in-app "known SPN" allowlist) or
+ *    `systemuser` + `applicationid` resolution for SPNs registered as
+ *    Application Users, but neither covers every case.
  *  - `disabled`   — Owner exists in Entra but `accountEnabled = false`
  *    (often a departed employee in grace period).
  *  - `guest`      — Owner is an external guest (`userType = "Guest"`).

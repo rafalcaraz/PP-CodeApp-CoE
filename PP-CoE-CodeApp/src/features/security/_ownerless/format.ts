@@ -41,7 +41,9 @@ export function bucketDescription(bucket: OwnerBucket): string {
         "Could not locate a current valid user for this owner GUID. " +
         "This may be a deleted user account OR a service principal " +
         "(e.g. a Power Platform Pipelines deployment identity). " +
-        "Stage 3 of this tool will split the two."
+        "Use the Entra portal to disambiguate — there is no Dataverse " +
+        "virtual table for service principals, so this tool can't " +
+        "auto-split the two."
       );
     case "disabled":
       return (

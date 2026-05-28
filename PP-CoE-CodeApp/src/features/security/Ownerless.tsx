@@ -5,10 +5,12 @@
  * `aaduser` lookup result (owner-health), and lets the user drill
  * into the affected resources per owner.
  *
- * Stage 3 (service-principal disambiguation) is deferred — copy on
- * the `unresolved` bucket calls out the ambiguity explicitly so
- * nobody treats this v1 as "ownerless = deleted user". See
- * `docs/inventory-schema-samples.md` for the underlying taxonomy.
+ * Service-principal disambiguation is intentionally NOT attempted —
+ * Microsoft does not expose a Dataverse virtual table for service
+ * principals (only `aaduser` and `aadgroup` exist), so any GUID that
+ * misses on `aaduser` is surfaced in the `unresolved` bucket with
+ * UI copy that explicitly calls out the ambiguity. Users disambiguate
+ * via the Entra portal. See `docs/inventory-schema-samples.md`.
  *
  * The actual scan runs on a module-level singleton controller in
  * `_ownerless/ownerScanController.ts` so it survives route changes

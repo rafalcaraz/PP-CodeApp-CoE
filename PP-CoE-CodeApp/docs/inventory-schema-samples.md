@@ -79,10 +79,20 @@ When you actually need to know which kind of identity a GUID points to:
    asset it deploys.
 2. **Check Entra → Users → Deleted users**. A hit there confirms
    deletion (within the 30-day soft-delete window).
-3. **(Future option)** Resolve through the Dataverse
-   `serviceprincipal` virtual table (also Graph-backed, symmetric to
-   `aaduser`) or `systemuser` + `applicationid`. See the roadmap entry
-   for the planned `userEnrichment` chain extension.
+3. **(Future option)** Resolve through Dataverse using
+   `systemuser` filtered by `applicationid`. This catches any service
+   principal that has been granted Dataverse access via an
+   *Application User* (which the Power Platform Pipelines deployment
+   SPN typically has been). It will **not** catch external SPNs that
+   never registered with Dataverse — for those, only a custom Microsoft
+   Graph connector to `/servicePrincipals/{id}` covers the full set.
+   See the roadmap entry for the planned `userEnrichment` chain extension.
+
+   > **Note:** Earlier drafts of this doc referenced a Dataverse
+   > `serviceprincipal` virtual table "symmetric to `aaduser`". **That
+   > table does not exist.** The Microsoft Entra ID Dataverse virtual
+   > tables feature only ships `aaduser` and `aadgroup` — there is no
+   > equivalent SPN virtual table to fall through to.
 
 ### Implications for dashboards & filters
 
