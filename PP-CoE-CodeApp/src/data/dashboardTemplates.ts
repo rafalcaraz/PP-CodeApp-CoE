@@ -527,12 +527,21 @@ function copilotStudioEstateLayout(): { tabs: DashboardTab[]; tiles: DashboardTi
       ],
       { rows: 15, columns: channelColumns, size: "large", tabId: t.channels }
     ),
-    // #9 — channel coverage matrix (combinatorial categories).
+    // #9a — dynamic per-channel agent count. Shows every distinct channel
+    // string present in the data (Teams, M365 Copilot, SharePoint, Webchat,
+    // Direct Line Channels, …) sorted by frequency. No hardcoded combos.
     computedTile(
-      "Channel coverage matrix",
-      AGGREGATOR_IDS.channelCoverageMatrix,
+      "Agents per channel (dynamic)",
+      AGGREGATOR_IDS.channelFrequencyBar,
       "bar",
-      { size: "large", tabId: t.channels }
+      { size: "large", tabId: t.channels, params: { topN: 15 } }
+    ),
+    // #9b — companion view: distribution of agents by number of channels.
+    computedTile(
+      "Channel reach distribution (agents by # of channels)",
+      AGGREGATOR_IDS.channelReachHistogram,
+      "bar",
+      { size: "medium", tabId: t.channels }
     ),
 
     // ── Sharing & Governance ─────────────────────────────────────────────

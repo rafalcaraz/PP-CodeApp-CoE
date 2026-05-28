@@ -375,44 +375,67 @@ export const knowledgeDiversityHistogram: Aggregator = (agents) => {
 // Aggregators — Reach & Channels
 // ---------------------------------------------------------------------------
 
-/** #9 — agents bucketed by channel combination. The categories are
- *  deliberately small and named for a CoE audience; combinations beyond
- *  the well-known ones roll up to "Other multi-channel". */
-export const channelCoverageMatrix: Aggregator = (agents) => {
-  const TEAMS = "Teams";
-  const M365 = "Microsoft 365 Copilot";
-  const DL = "Direct Line Channels";
-  const buckets = new Map<string, number>([
-    ["No channels", 0],
-    ["Teams only", 0],
-    ["M365 Copilot only", 0],
-    ["Direct Line only", 0],
-    ["Teams + M365", 0],
-    ["Teams + Direct Line", 0],
-    ["M365 + Direct Line", 0],
-    ["All three", 0],
-    ["Other / multi-channel", 0],
-  ]);
+/** #9a — per-channel agent count (DYNAMIC). One bucket per distinct
+ *  channel string found anywhere in the data — Teams, Microsoft 365
+ *  Copilot, Direct Line Channels, SharePoint, Webchat, Facebook, Slack,
+ *  Telegram, etc. — sorted by frequency desc so the dominant channels
+ *  rise to the top. Multi-channel agents contribute to every channel they
+ *  belong to, so the column sum exceeds the agent count when many agents
+ *  publish to multiple surfaces — that's the intended read. */
+export const channelFrequencyBar: Aggregator = (agents, params) => {
+  const topN = readNumber(params, "topN", 15);
+  const counts = new Map<string, number>();
+  let noChannels = 0;
   for (const a of agents) {
-    const ch = new Set(a.channels ?? []);
-    const has = (c: string) => ch.has(c);
-    let key: string;
-    if (ch.size === 0) key = "No channels";
-    else if (ch.size === 1 && has(TEAMS)) key = "Teams only";
-    else if (ch.size === 1 && has(M365)) key = "M365 Copilot only";
-    else if (ch.size === 1 && has(DL)) key = "Direct Line only";
-    else if (ch.size === 2 && has(TEAMS) && has(M365)) key = "Teams + M365";
-    else if (ch.size === 2 && has(TEAMS) && has(DL)) key = "Teams + Direct Line";
-    else if (ch.size === 2 && has(M365) && has(DL)) key = "M365 + Direct Line";
-    else if (ch.size === 3 && has(TEAMS) && has(M365) && has(DL)) key = "All three";
-    else key = "Other / multi-channel";
-    buckets.set(key, (buckets.get(key) ?? 0) + 1);
+    const ch = a.channels ?? [];
+    if (ch.length === 0) {
+      noChannels++;
+      continue;
+    }
+    const seen = new Set<string>();
+    for (const c of ch) {
+      const name = (c ?? "").trim();
+      if (!name) continue;
+      if (seen.has(name)) continue;
+      seen.add(name);
+      counts.set(name, (counts.get(name) ?? 0) + 1);
+    }
+  }
+  const buckets: ChartBucket[] = Array.from(counts.entries())
+    .map(([name, value]) => ({ name, value }));
+  const ranked = topNWithOther(sortByValueDesc(buckets), topN);
+  // Surface the no-channels count as a labeled bucket so the metric tells
+  // the full story (an agent in zero channels is a publishing red flag and
+  // is invisible on a frequency bar otherwise).
+  if (noChannels > 0) {
+    ranked.push({ name: "(no channels)", value: noChannels });
+  }
+  return { kind: "chart", buckets: ranked };
+};
+
+/** #9b — distribution of agents by *how many* channels they're in. Tells
+ *  you whether your tenant trends single-channel (siloed) or
+ *  multi-channel (reusable). Bucket boundaries pick out the meaningful
+ *  thresholds: 0 = unpublished surfaces; 1 = single-purpose; 2-3 = healthy
+ *  multi-channel; 4+ = sprawl. */
+export const channelReachHistogram: Aggregator = (agents) => {
+  const order = ["0", "1", "2-3", "4+"];
+  const buckets = new Map<string, number>(order.map((k) => [k, 0]));
+  for (const a of agents) {
+    // De-dupe channel strings before counting so a stray duplicate in
+    // the array doesn't inflate the bucket.
+    const distinct = new Set((a.channels ?? []).filter((c) => !!c?.trim()));
+    const n = distinct.size;
+    const bucket =
+      n === 0 ? "0"
+      : n === 1 ? "1"
+      : n <= 3 ? "2-3"
+      : "4+";
+    buckets.set(bucket, (buckets.get(bucket) ?? 0) + 1);
   }
   return {
     kind: "chart",
-    buckets: Array.from(buckets.entries())
-      .map(([name, value]) => ({ name, value }))
-      .filter((b) => b.value > 0),
+    buckets: order.map((name) => ({ name, value: buckets.get(name) ?? 0 })),
   };
 };
 
@@ -460,7 +483,11 @@ export const consentGatedAgentsTable: Aggregator = (agents) => {
   return { kind: "table", items: items as unknown as Array<Record<string, unknown>>, total: items.length };
 };
 
-/** A — most-shared agents by *individuals* (viewer users + editor users). */
+/** A — most-shared agents by *individuals* (viewer users + editor users).
+ *  Excludes tenant-wide-shared agents — those are the dominant high-reach
+ *  case and would otherwise drown out everything else. The "Tenant-wide
+ *  shared" KPI is the right surface for that signal; this table is
+ *  specifically about individually-invited reach. */
 export const mostSharedIndividualsTable: Aggregator = (agents, params) => {
   const topN = readNumber(params, "topN", 20);
   type Row = {
@@ -494,7 +521,9 @@ export const mostSharedIndividualsTable: Aggregator = (agents, params) => {
   return { kind: "table", items: items as unknown as Array<Record<string, unknown>>, total: items.length };
 };
 
-/** B — most-shared agents by *groups* (viewer groups + editor groups). */
+/** B — most-shared agents by *groups* (viewer groups + editor groups).
+ *  See `mostSharedIndividualsTable` for the rationale behind excluding
+ *  tenant-wide agents. */
 export const mostSharedGroupsTable: Aggregator = (agents, params) => {
   const topN = readNumber(params, "topN", 20);
   type Row = {
@@ -692,7 +721,8 @@ export const AGGREGATOR_IDS = {
   agentsUsingConnectorKnowledgeTable: "agents.agentsUsingConnectorKnowledgeTable",
   knowledgeDiversityHistogram: "agents.knowledgeDiversityHistogram",
   // Reach & Channels
-  channelCoverageMatrix: "agents.channelCoverageMatrix",
+  channelFrequencyBar: "agents.channelFrequencyBar",
+  channelReachHistogram: "agents.channelReachHistogram",
   // Sharing & Governance
   consentGatedAgentsTable: "agents.consentGatedAgentsTable",
   mostSharedIndividualsTable: "agents.mostSharedIndividualsTable",
@@ -715,7 +745,8 @@ const REGISTRY: Record<string, Aggregator> = {
   [AGGREGATOR_IDS.toolRichnessHistogram]: toolRichnessHistogram,
   [AGGREGATOR_IDS.agentsUsingConnectorKnowledgeTable]: agentsUsingConnectorKnowledgeTable,
   [AGGREGATOR_IDS.knowledgeDiversityHistogram]: knowledgeDiversityHistogram,
-  [AGGREGATOR_IDS.channelCoverageMatrix]: channelCoverageMatrix,
+  [AGGREGATOR_IDS.channelFrequencyBar]: channelFrequencyBar,
+  [AGGREGATOR_IDS.channelReachHistogram]: channelReachHistogram,
   [AGGREGATOR_IDS.consentGatedAgentsTable]: consentGatedAgentsTable,
   [AGGREGATOR_IDS.mostSharedIndividualsTable]: mostSharedIndividualsTable,
   [AGGREGATOR_IDS.mostSharedGroupsTable]: mostSharedGroupsTable,

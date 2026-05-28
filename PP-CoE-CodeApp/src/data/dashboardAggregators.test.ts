@@ -11,7 +11,8 @@ import {
   AGGREGATOR_IDS,
   agentsUsingConnectorKnowledgeTable,
   authoringSurfaceMix,
-  channelCoverageMatrix,
+  channelFrequencyBar,
+  channelReachHistogram,
   cleanupCandidatesTable,
   cleanupNeverPublishedCohorts,
   cleanupStalePublishedCohorts,
@@ -341,33 +342,72 @@ describe("knowledgeDiversityHistogram", () => {
 // Reach & Channels
 // ---------------------------------------------------------------------------
 
-describe("channelCoverageMatrix", () => {
-  it("buckets agents by channel combination", () => {
+describe("channelFrequencyBar", () => {
+  it("counts agents per distinct channel — DYNAMIC, no hardcoded names", () => {
+    const agents = [
+      agent({ channels: ["Teams", "Microsoft 365 Copilot"] }),
+      agent({ channels: ["Teams", "SharePoint"] }),
+      agent({ channels: ["Webchat"] }),
+      agent({ channels: ["Slack", "Telegram"] }),
+      agent({ channels: [] }),
+    ];
+    const out = channelFrequencyBar(agents);
+    if (out.kind !== "chart") throw new Error("expected chart");
+    const byName = Object.fromEntries(out.buckets.map((b) => [b.name, b.value]));
+    expect(byName["Teams"]).toBe(2);
+    expect(byName["Microsoft 365 Copilot"]).toBe(1);
+    expect(byName["SharePoint"]).toBe(1);
+    expect(byName["Webchat"]).toBe(1);
+    expect(byName["Slack"]).toBe(1);
+    expect(byName["Telegram"]).toBe(1);
+    expect(byName["(no channels)"]).toBe(1);
+  });
+
+  it("de-dupes channel strings within a single agent before counting", () => {
+    const agents = [agent({ channels: ["Teams", "Teams"] })];
+    const out = channelFrequencyBar(agents);
+    if (out.kind !== "chart") throw new Error("expected chart");
+    const teams = out.buckets.find((b) => b.name === "Teams");
+    expect(teams?.value).toBe(1);
+  });
+
+  it("collapses to Top-N + Other when distinct channels exceed N", () => {
+    const agents = Array.from({ length: 20 }, (_, i) => agent({ channels: [`ch${i}`] }));
+    const out = channelFrequencyBar(agents, { topN: 5 });
+    if (out.kind !== "chart") throw new Error("expected chart");
+    const names = out.buckets.map((b) => b.name);
+    expect(names).toContain("Other");
+  });
+
+  it("omits the (no channels) bucket when no agent is unpublished", () => {
+    const agents = [agent({ channels: ["Teams"] })];
+    const out = channelFrequencyBar(agents);
+    if (out.kind !== "chart") throw new Error("expected chart");
+    expect(out.buckets.map((b) => b.name)).not.toContain("(no channels)");
+  });
+});
+
+describe("channelReachHistogram", () => {
+  it("buckets agents by number of distinct channels", () => {
     const agents = [
       agent({ channels: [] }),
       agent({ channels: ["Teams"] }),
-      agent({ channels: ["Microsoft 365 Copilot"] }),
-      agent({ channels: ["Direct Line Channels"] }),
-      agent({ channels: ["Teams", "Microsoft 365 Copilot"] }),
-      agent({ channels: ["Teams", "Microsoft 365 Copilot", "Direct Line Channels"] }),
-      agent({ channels: ["Teams", "Webchat"] }),
+      agent({ channels: ["Teams", "M365"] }),
+      agent({ channels: ["Teams", "M365", "Slack"] }),
+      agent({ channels: ["Teams", "M365", "Slack", "Webchat"] }),
+      agent({ channels: ["A", "B", "C", "D", "E"] }),
     ];
-    const out = channelCoverageMatrix(agents);
+    const out = channelReachHistogram(agents);
     if (out.kind !== "chart") throw new Error("expected chart");
     const byName = Object.fromEntries(out.buckets.map((b) => [b.name, b.value]));
-    expect(byName["No channels"]).toBe(1);
-    expect(byName["Teams only"]).toBe(1);
-    expect(byName["M365 Copilot only"]).toBe(1);
-    expect(byName["Direct Line only"]).toBe(1);
-    expect(byName["Teams + M365"]).toBe(1);
-    expect(byName["All three"]).toBe(1);
-    expect(byName["Other / multi-channel"]).toBe(1);
+    expect(byName).toEqual({ "0": 1, "1": 1, "2-3": 2, "4+": 2 });
   });
 
-  it("omits zero-count buckets from the output", () => {
-    const out = channelCoverageMatrix([agent({ channels: ["Teams"] })]);
+  it("de-dupes channel strings per agent", () => {
+    const agents = [agent({ channels: ["Teams", "Teams", "Teams"] })];
+    const out = channelReachHistogram(agents);
     if (out.kind !== "chart") throw new Error("expected chart");
-    expect(out.buckets.every((b) => b.value > 0)).toBe(true);
+    expect(out.buckets.find((b) => b.name === "1")?.value).toBe(1);
   });
 });
 
@@ -419,6 +459,25 @@ describe("mostSharedIndividualsTable", () => {
     expect(out.items[1].totalUsers).toBe(25);
   });
 
+  it("excludes tenant-wide-shared agents from this list (covered by the Tenant-wide KPI)", () => {
+    const agents = [
+      // Tenant-wide flag set, userCount=0 — should be EXCLUDED.
+      agent({
+        displayName: "TenantWide",
+        sharedWithViewers: { userCount: 0, groupCount: 0, entireTenant: true },
+        sharedWithEditors: { userCount: 0, groupCount: 0, entireTenant: false },
+      }),
+      agent({
+        displayName: "SmallShare",
+        sharedWithViewers: { userCount: 5, groupCount: 0, entireTenant: false },
+        sharedWithEditors: { userCount: 0, groupCount: 0, entireTenant: false },
+      }),
+    ];
+    const out = mostSharedIndividualsTable(agents);
+    if (out.kind !== "table") throw new Error("expected table");
+    expect(out.items.map((r) => r.displayName)).toEqual(["SmallShare"]);
+  });
+
   it("respects topN", () => {
     const agents = Array.from({ length: 10 }, (_, i) =>
       agent({
@@ -443,6 +502,24 @@ describe("mostSharedGroupsTable", () => {
     const out = mostSharedGroupsTable(agents);
     if (out.kind !== "table") throw new Error("expected table");
     expect(out.items.map((r) => r.displayName)).toEqual(["Many", "Few"]);
+  });
+
+  it("excludes tenant-wide-shared agents from this list", () => {
+    const agents = [
+      agent({
+        displayName: "TenantWide",
+        sharedWithViewers: { userCount: 0, groupCount: 0, entireTenant: true },
+        sharedWithEditors: { userCount: 0, groupCount: 0, entireTenant: false },
+      }),
+      agent({
+        displayName: "SomeGroups",
+        sharedWithViewers: { userCount: 0, groupCount: 3, entireTenant: false },
+        sharedWithEditors: { userCount: 0, groupCount: 0, entireTenant: false },
+      }),
+    ];
+    const out = mostSharedGroupsTable(agents);
+    if (out.kind !== "table") throw new Error("expected table");
+    expect(out.items.map((r) => r.displayName)).toEqual(["SomeGroups"]);
   });
 });
 

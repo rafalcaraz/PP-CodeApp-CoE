@@ -55,12 +55,27 @@ const DEFAULT_MAX_PAGES = 20;
 
 /** Fetch every customer-authored Copilot Studio agent in the tenant
  *  (first-party `msdyn_*` agents excluded). Result is memoized per filter
- *  shape; pass `forceFresh: true` to bypass on a manual refresh. */
+ *  shape; pass `forceFresh: true` to bypass on a manual refresh.
+ *
+ *  **Important:** the `msdyn_` exclusion is pushed to the SERVER via
+ *  `schemaPrefix: { mode: "exclude", value: "msdyn_" }`. Excluding it
+ *  client-side after the fact would waste the pagination budget on
+ *  first-party Dynamics agents — on a real tenant first-party agents
+ *  often outnumber customer agents 10:1, so a 10k-row budget could be
+ *  fully consumed before reaching the customer agents we actually want. */
 export async function fetchAllCustomerAgents(
   filters: AgentFilters = {},
   opts: FetchOpts = {}
 ): Promise<DataResult<AgentRow[]>> {
-  const key = JSON.stringify(filters);
+  // Push the msdyn_ exclusion server-side. If the caller already specified
+  // a schemaPrefix filter (e.g. a different prefix scope), respect their
+  // choice and skip our default — they know what they're filtering for.
+  const effectiveFilters: AgentFilters = {
+    ...filters,
+    schemaPrefix:
+      filters.schemaPrefix ?? { mode: "exclude", value: "msdyn_" },
+  };
+  const key = JSON.stringify(effectiveFilters);
   const ttl = opts.cacheTtlMs ?? DASHBOARD_CACHE_TTL_MS;
   const now = Date.now();
   if (!opts.forceFresh) {
@@ -76,7 +91,7 @@ export async function fetchAllCustomerAgents(
   let skip = 0;
   const maxPages = opts.maxPages ?? DEFAULT_MAX_PAGES;
   for (let page = 0; page < maxPages; page++) {
-    const res = await listAgentsPage(filters, skipToken, DEFAULT_PAGE_SIZE, skip);
+    const res = await listAgentsPage(effectiveFilters, skipToken, DEFAULT_PAGE_SIZE, skip);
     if (!res.ok) return res;
     for (const row of res.data.rows) {
       // De-dupe defensively — agents have a non-tenant-unique `id`
@@ -93,9 +108,10 @@ export async function fetchAllCustomerAgents(
     skip += res.data.rows.length;
   }
 
-  // Apply the Phase 1 default exclusion of first-party Dynamics agents.
-  // Done client-side because `schemaName` filter shape via the connector
-  // can be inconsistent across pages, and the resulting set is small.
+  // Defensive belt-and-suspenders: if the server fell back to client-side
+  // filtering for the schemaPrefix (see listAgentsPage's degradation chain
+  // in inventory.ts), some msdyn_ agents could still slip through. Drop
+  // anything that survived.
   const customerAgents = all.filter(
     (a) => !(a.schemaName ?? "").toLowerCase().startsWith("msdyn_")
   );
