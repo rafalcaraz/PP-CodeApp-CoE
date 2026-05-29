@@ -1,75 +1,83 @@
-# React + TypeScript + Vite
+# PP CoE Code App
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+The Power Apps **Code App** that powers the Power Platform Center of Excellence
+inventory & governance console. React 19 + TypeScript + Vite + Fluent UI v9,
+running inside the Power Apps player and reading tenant inventory live through the
+**Power Platform for Admins V2** connector.
 
-It is preconfigured to work with Power Apps Code Apps.
+> 👉 For the product overview — what it does, why it exists, and how to install
+> it from a release — see the [repository root README](../README.md).
+> This file is the **developer** quick reference.
 
-Currently, two official plugins are available:
+## Prerequisites
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+- Node.js (LTS) and npm
+- [Power Platform CLI (`pac`)](https://learn.microsoft.com/power-platform/developer/cli/introduction)
+  authenticated to a Dataverse environment with admin access
+- A **Power Platform for Admins V2** connection in the target environment
 
-## React Compiler
+## Setup
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```powershell
+npm install        # deps + auto-heal generated connectors (postinstall)
+npm run dev        # dev server on :5173, opened through the Power Apps player
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+> `npm install` runs `scripts/fixup-generated-connectors.mjs` to repair the
+> auto-generated connector clients under `src/generated/`. Never hand-edit that
+> folder — see [`docs/connector-generator-fixup.md`](docs/connector-generator-fixup.md).
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+## Common commands
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+| Command | What it does |
+|---|---|
+| `npm run dev` | Local dev server (`:5173`), accessed via the Power Apps player |
+| `npm run build` | `tsc -b && vite build` (CI build mode — strictest type-check) |
+| `npm run lint` | ESLint, including the feature-boundary rules |
+| `npx tsc --noEmit` | Type-check only |
+| `npm run test:run` | Vitest, single CI run |
+| `npm test` | Vitest in watch mode |
+| `npm run test:coverage` | Vitest with coverage |
+| `npm run e2e` | Playwright smoke tests (needs a deployed URL — see `tests/e2e/README.md`) |
+| `npm run screenshots` | Refresh the docs screenshots in `docs/img/` |
+
+## Project structure
+
+The codebase is organized **vertically by feature**. Features may import from
+`shared/*`, `generated/*`, `app/*`, and `featureFlags/*` — but never from a
+sibling feature, and never past another feature's `index.ts`. ESLint and CI
+enforce this.
+
 ```
+src/
+├── app/            # shell: router, providers, TopBar, SideNav
+├── features/       # vertical slices (apps, flows, agents, environments,
+│                   #   dashboards, security, queries, deep-inventory, zones, …)
+├── shared/         # inventory-core (the query engine), deep-inventory catalog,
+│                   #   ui, portal-actions, user-lookup, connector-catalog
+├── generated/      # auto-generated connector clients — DO NOT hand-edit
+└── featureFlags/   # cross-cutting feature flags
+```
+
+## Testing
+
+Tests live next to the code they test (`*.test.ts` / `*.test.tsx`). Pure
+functions in `shared/inventory-core/` must have unit tests; each feature view
+should have at least one smoke test with a mocked data layer. Don't hit the real
+`QueryResources` connector in tests — mock it with `vi.mock`. See
+[`tests/TESTING.md`](tests/TESTING.md) for the full playbook and
+[`tests/e2e/README.md`](tests/e2e/README.md) for Playwright/E2E specifics.
+
+> Run `npm run build` before pushing test-heavy changes — `tsc -b` (project
+> references, used in CI) is stricter than `tsc --noEmit`.
+
+## Conventions
+
+- **UI:** Fluent UI v9 only (`@fluentui/react-components` + `@fluentui/react-icons`). No v8, no other UI libs.
+- **Styling:** `makeStyles` + `tokens`. No inline styles except one-off computed values.
+- **Router:** `react-router-dom` v7 `HashRouter` (required inside the player iframe).
+- **Async data:** every call returns `DataResult<T>`; surface errors via `<ErrorPane>`, loading via `<LoadingPane>`.
+- **Caching:** `runQuery` already caches, throttles, and retries 429s. Use `forceFresh: true` to bypass; call `invalidateInventoryCache()` after any write.
+
+See the [root agent guide](../.github/copilot-instructions.md) for the complete
+architecture rules and per-task required reading.
