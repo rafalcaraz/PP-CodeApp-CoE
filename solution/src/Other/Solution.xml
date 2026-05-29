@@ -1,5 +1,5 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
-<ImportExportXml version="9.2.26043.177" SolutionPackageVersion="9.2" languagecode="1033" generatedBy="CrmLive" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" OrganizationVersion="9.2.26043.177" OrganizationSchemaType="Standard" CRMServerServiceabilityVersion="9.2.26043.00177">
+<ImportExportXml version="9.2.26043.177" SolutionPackageVersion="9.2" languagecode="1033" generatedBy="CrmLive" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" OrganizationVersion="9.2.26043.177" OrganizationSchemaType="Standard" CRMServerServiceabilityVersion="9.2.26044.00163">
   <SolutionManifest>
     <UniqueName>PPCoECodeApp</UniqueName>
     <LocalizedNames>
@@ -87,6 +87,10 @@
         <Required type="1" schemaName="aaduser" displayName="Microsoft Entra ID" solution="MetadataExtension (1.0.2.117)">
           <package appName="Data Modeling Extensions Package" version="1.0.0.34">msft_AsyncAttributeMetadataApp (1.0.0.34)</package>
         </Required>
+        <Dependent type="300" schemaName="msftcsa_ppcoecodeapp_63a36" displayName="PP-COE-CodeApp" />
+      </MissingDependency>
+      <MissingDependency>
+        <Required type="connectionreference" displayName="new_sharedwebcontents_d2692be18e" solution="Active" id.connectionreferencelogicalname="new_sharedwebcontents_d2692be18e" />
         <Dependent type="300" schemaName="msftcsa_ppcoecodeapp_63a36" displayName="PP-COE-CodeApp" />
       </MissingDependency>
     </MissingDependencies>
