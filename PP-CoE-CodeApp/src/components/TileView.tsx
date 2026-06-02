@@ -827,7 +827,12 @@ function TileBody({ tile, state }: { tile: DashboardTile; state: QueryState }) {
   // `delta` (default) plots `value` (per-bucket creations); `cumulative`
   // plots `total` (running total) and switches the tooltip label.
   if (viz.type === "line") {
-    if (!viz.dateField) {
+    // The `viz.dateField` guard only matters for `source: "builder"` —
+    // the builder path uses it to build the time-series KQL. For
+    // `source: "computed"`, the aggregator already filled `state.series`
+    // before we got here, so the guard would lock out a perfectly
+    // healthy computed line tile.
+    if (!viz.dateField && tile.source !== "computed") {
       return (
         <div className={styles.empty}>
           Set a Date field on this tile to chart it.
@@ -881,7 +886,7 @@ function TileBody({ tile, state }: { tile: DashboardTile; state: QueryState }) {
   // total (right axis). Uses recharts ComposedChart. Always renders both
   // series; no mode toggle.
   if (viz.type === "combo") {
-    if (!viz.dateField) {
+    if (!viz.dateField && tile.source !== "computed") {
       return (
         <div className={styles.empty}>
           Set a Date field on this tile to chart it.
