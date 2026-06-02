@@ -18,7 +18,7 @@
  * `AgentRow` fixtures. Keep them dependency-free (no `runQuery`, no
  * `localStorage`) so the tests stay deterministic.
  */
-import type { AgentRow, ResourceConnector, ResourceConnectorOperation } from "./inventory";
+import type { AgentRow, ResourceConnector, ResourceConnectorOperation, ResourceTypeValue } from "./inventory";
 
 // ---------------------------------------------------------------------------
 // Output shapes
@@ -65,16 +65,59 @@ export interface StackedBarOutput {
   data: StackedChartDatum[];
 }
 
+/** One data point in a time-series line chart, mirroring the
+ *  `SeriesDatum` shape `TileView` already consumes from
+ *  `runCumulativeSeries` / `runTimeSeriesAggregate`. Lets computed
+ *  tiles drive line viz without rebuilding the renderer. */
+export interface AggregatorSeriesDatum {
+  /** ISO datetime string for the bucket start. */
+  date: string;
+  /** Human-friendly label for the X axis tick. */
+  label: string;
+  /** Per-bucket count (e.g. apps created this week). */
+  delta: number;
+  /** Running total through this bucket. For non-cumulative outputs, set
+   *  equal to `delta` so the existing delta-rendering path Just Works. */
+  total: number;
+  /** Back-compat alias used by the pure-delta line tile. Mirrors `delta`
+   *  for delta lines, mirrors `total` for cumulative lines. */
+  value: number;
+}
+
+export interface SeriesOutput {
+  kind: "series";
+  series: AggregatorSeriesDatum[];
+}
+
 export type AggregatorOutput =
   | KpiOutput
   | ChartOutput
   | TableOutput
-  | StackedBarOutput;
+  | StackedBarOutput
+  | SeriesOutput;
 
-export type Aggregator = (
-  agents: AgentRow[],
+export type Aggregator<TRow = AgentRow> = (
+  rows: TRow[],
   params?: Record<string, unknown>
 ) => AggregatorOutput;
+
+/** Where the rows fed into an aggregator come from. Used by the
+ *  TileView dispatch path to pick the right "fetch the universe"
+ *  function before invoking the aggregator. New data sources should
+ *  be added here AND mapped in `TileView`'s computed-tile branch. */
+export type AggregatorDataSource = "agents" | "apps";
+
+export interface AggregatorRegistration {
+  /** The aggregator function. Typed loosely at the registry boundary —
+   *  individual registrations narrow it to the row shape they expect. */
+  fn: Aggregator<unknown>;
+  /** Which population the aggregator needs as input. */
+  dataSource: AggregatorDataSource;
+  /** Optional filter passed to the data source. For `dataSource: "apps"`,
+   *  this restricts the fetched universe by app type (e.g. canvas + MDA
+   *  only). When omitted, the data source's default scope is used. */
+  appTypes?: ResourceTypeValue[];
+}
 
 // ---------------------------------------------------------------------------
 // Shared helpers
@@ -736,29 +779,49 @@ export const AGGREGATOR_IDS = {
   cleanupCandidatesTable: "agents.cleanupCandidatesTable",
 } as const;
 
-const REGISTRY: Record<string, Aggregator> = {
-  [AGGREGATOR_IDS.distinctConnectorsKpi]: distinctConnectorsKpi,
-  [AGGREGATOR_IDS.distinctConnectorsTable]: distinctConnectorsTable,
-  [AGGREGATOR_IDS.topConnectorsByAgentCount]: topConnectorsByAgentCount,
-  [AGGREGATOR_IDS.connectorOpUsageTypePerConnector]: connectorOpUsageTypePerConnector,
-  [AGGREGATOR_IDS.makerVsEndUserMix]: makerVsEndUserMix,
-  [AGGREGATOR_IDS.toolRichnessHistogram]: toolRichnessHistogram,
-  [AGGREGATOR_IDS.agentsUsingConnectorKnowledgeTable]: agentsUsingConnectorKnowledgeTable,
-  [AGGREGATOR_IDS.knowledgeDiversityHistogram]: knowledgeDiversityHistogram,
-  [AGGREGATOR_IDS.channelFrequencyBar]: channelFrequencyBar,
-  [AGGREGATOR_IDS.channelReachHistogram]: channelReachHistogram,
-  [AGGREGATOR_IDS.consentGatedAgentsTable]: consentGatedAgentsTable,
-  [AGGREGATOR_IDS.mostSharedIndividualsTable]: mostSharedIndividualsTable,
-  [AGGREGATOR_IDS.mostSharedGroupsTable]: mostSharedGroupsTable,
-  [AGGREGATOR_IDS.promptLengthHistogram]: promptLengthHistogram,
-  [AGGREGATOR_IDS.authoringSurfaceMix]: authoringSurfaceMix,
-  [AGGREGATOR_IDS.cleanupNeverPublishedCohorts]: cleanupNeverPublishedCohorts,
-  [AGGREGATOR_IDS.cleanupStalePublishedCohorts]: cleanupStalePublishedCohorts,
-  [AGGREGATOR_IDS.cleanupCandidatesTable]: cleanupCandidatesTable,
+const REGISTRY: Record<string, AggregatorRegistration> = {
+  [AGGREGATOR_IDS.distinctConnectorsKpi]: { fn: distinctConnectorsKpi as Aggregator<unknown>, dataSource: "agents" },
+  [AGGREGATOR_IDS.distinctConnectorsTable]: { fn: distinctConnectorsTable as Aggregator<unknown>, dataSource: "agents" },
+  [AGGREGATOR_IDS.topConnectorsByAgentCount]: { fn: topConnectorsByAgentCount as Aggregator<unknown>, dataSource: "agents" },
+  [AGGREGATOR_IDS.connectorOpUsageTypePerConnector]: { fn: connectorOpUsageTypePerConnector as Aggregator<unknown>, dataSource: "agents" },
+  [AGGREGATOR_IDS.makerVsEndUserMix]: { fn: makerVsEndUserMix as Aggregator<unknown>, dataSource: "agents" },
+  [AGGREGATOR_IDS.toolRichnessHistogram]: { fn: toolRichnessHistogram as Aggregator<unknown>, dataSource: "agents" },
+  [AGGREGATOR_IDS.agentsUsingConnectorKnowledgeTable]: { fn: agentsUsingConnectorKnowledgeTable as Aggregator<unknown>, dataSource: "agents" },
+  [AGGREGATOR_IDS.knowledgeDiversityHistogram]: { fn: knowledgeDiversityHistogram as Aggregator<unknown>, dataSource: "agents" },
+  [AGGREGATOR_IDS.channelFrequencyBar]: { fn: channelFrequencyBar as Aggregator<unknown>, dataSource: "agents" },
+  [AGGREGATOR_IDS.channelReachHistogram]: { fn: channelReachHistogram as Aggregator<unknown>, dataSource: "agents" },
+  [AGGREGATOR_IDS.consentGatedAgentsTable]: { fn: consentGatedAgentsTable as Aggregator<unknown>, dataSource: "agents" },
+  [AGGREGATOR_IDS.mostSharedIndividualsTable]: { fn: mostSharedIndividualsTable as Aggregator<unknown>, dataSource: "agents" },
+  [AGGREGATOR_IDS.mostSharedGroupsTable]: { fn: mostSharedGroupsTable as Aggregator<unknown>, dataSource: "agents" },
+  [AGGREGATOR_IDS.promptLengthHistogram]: { fn: promptLengthHistogram as Aggregator<unknown>, dataSource: "agents" },
+  [AGGREGATOR_IDS.authoringSurfaceMix]: { fn: authoringSurfaceMix as Aggregator<unknown>, dataSource: "agents" },
+  [AGGREGATOR_IDS.cleanupNeverPublishedCohorts]: { fn: cleanupNeverPublishedCohorts as Aggregator<unknown>, dataSource: "agents" },
+  [AGGREGATOR_IDS.cleanupStalePublishedCohorts]: { fn: cleanupStalePublishedCohorts as Aggregator<unknown>, dataSource: "agents" },
+  [AGGREGATOR_IDS.cleanupCandidatesTable]: { fn: cleanupCandidatesTable as Aggregator<unknown>, dataSource: "agents" },
 };
 
-export function getAggregator(id: string): Aggregator | null {
+export function getAggregator(id: string): Aggregator<unknown> | null {
+  return REGISTRY[id]?.fn ?? null;
+}
+
+/** Full registration record for an aggregator — exposes the data-source
+ *  discriminator (and any other registration-level metadata) so callers
+ *  like `TileView` can pick the right fetcher before invoking the
+ *  aggregator function. */
+export function getAggregatorRegistration(id: string): AggregatorRegistration | null {
   return REGISTRY[id] ?? null;
+}
+
+/** Used by app-specific aggregator modules to extend the registry without
+ *  re-exporting it. Each entry MUST use a unique id (we throw on collisions
+ *  rather than silently overwriting). */
+export function registerAggregators(entries: Record<string, AggregatorRegistration>): void {
+  for (const [id, reg] of Object.entries(entries)) {
+    if (REGISTRY[id] && REGISTRY[id] !== reg) {
+      throw new Error(`Aggregator id "${id}" is already registered.`);
+    }
+    REGISTRY[id] = reg;
+  }
 }
 
 /** For tests / validation: every registered aggregator id. */

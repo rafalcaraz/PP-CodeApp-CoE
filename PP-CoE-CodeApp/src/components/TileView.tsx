@@ -44,10 +44,19 @@ import {
 } from "../data/inventory";
 import type { DashboardTab, DashboardTile, TileTableColumn } from "../data/dashboards";
 import { fetchAllCustomerAgents } from "../data/dashboardAgentSource";
+import { fetchAllCustomerApps } from "../data/dashboardAppSource";
 import {
   getAggregator,
+  getAggregatorRegistration,
   type StackedChartDatum,
 } from "../data/dashboardAggregators";
+// Side-effect import — running this module registers the app-typed
+// aggregators with the central registry. Belt-and-suspenders alongside
+// the equivalent import in `dashboardTemplates.ts`, so a persisted
+// dashboard containing `apps.*` computed tiles still resolves even if
+// the templates module hasn't been pulled in yet (e.g. when rendering
+// a stored dashboard on cold load without visiting the templates flow).
+import "../data/dashboardAppAggregators";
 
 const useStyles = makeStyles({
   root: {
@@ -367,13 +376,31 @@ export function TileView({ tile, editable, onEdit, onDelete, onDuplicate, classN
           );
           return;
         }
-        const agentsRes = await fetchAllCustomerAgents({}, cacheOpts);
-        if (cancelled) return;
-        if (!agentsRes.ok) {
-          setError(agentsRes.error);
-          return;
+        // Dispatch the right "fetch the universe" call based on what the
+        // aggregator was registered against. Defaults to the agent
+        // population so legacy aggregators (registered before the
+        // dataSource field existed) keep working untouched.
+        const registration = getAggregatorRegistration(tile.computed!.aggregatorId);
+        const dataSource = registration?.dataSource ?? "agents";
+        let rows: unknown[];
+        if (dataSource === "apps") {
+          const res = await fetchAllCustomerApps(registration?.appTypes, {}, cacheOpts);
+          if (cancelled) return;
+          if (!res.ok) {
+            setError(res.error);
+            return;
+          }
+          rows = res.data;
+        } else {
+          const agentsRes = await fetchAllCustomerAgents({}, cacheOpts);
+          if (cancelled) return;
+          if (!agentsRes.ok) {
+            setError(agentsRes.error);
+            return;
+          }
+          rows = agentsRes.data;
         }
-        const out = aggregator(agentsRes.data, tile.computed!.params);
+        const out = aggregator(rows, tile.computed!.params);
         if (cancelled) return;
         if (out.kind === "kpi") {
           setState({
@@ -403,6 +430,18 @@ export function TileView({ tile, editable, onEdit, onDelete, onDuplicate, classN
             phase: "ready",
             ...EMPTY_DATA,
             stackedChart: { series: out.series, data: out.data },
+            error: "",
+          });
+        } else if (out.kind === "series") {
+          // Computed series → line viz. Populate both `series` (delta line
+          // renderer) and `trend` (KPI sparkline / cumulative line renderer)
+          // so the existing render branches all work without a viz-specific
+          // dispatch up here.
+          setState({
+            phase: "ready",
+            ...EMPTY_DATA,
+            series: out.series,
+            trend: out.series,
             error: "",
           });
         }

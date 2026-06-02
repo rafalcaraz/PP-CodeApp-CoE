@@ -1699,7 +1699,7 @@ export function shortResourceType(type: string): string {
 // Apps / Flows / Agents — server-paginated, server-filtered
 // ---------------------------------------------------------------------------
 
-function toAppRow(item: ResourceItem): AppRow {
+export function toAppRow(item: ResourceItem): AppRow {
   const raw = item as unknown as Record<string, unknown>;
   return {
     id: item.name ?? "",

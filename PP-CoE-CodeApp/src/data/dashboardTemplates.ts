@@ -32,6 +32,7 @@ import {
   extend,
   orderBy,
   where,
+  type ResourceTypeValue,
 } from "./inventory";
 import type {
   DashboardTab,
@@ -42,6 +43,11 @@ import type {
 } from "./dashboards";
 import { newId } from "./dashboards";
 import { AGGREGATOR_IDS } from "./dashboardAggregators";
+// Side-effect import: registers the app-typed aggregators with the central
+// registry so templates below that reference APP_AGGREGATOR_IDS resolve at
+// render time. Without this import the registrations would only run when
+// some other module happened to pull the file in.
+import { APP_AGGREGATOR_IDS } from "./dashboardAppAggregators";
 
 const AGENT_TYPE = `'${ResourceType.CopilotStudioAgent}'`;
 const ZERO_GUID = "00000000-0000-0000-0000-000000000000";
@@ -856,6 +862,637 @@ function copilotStudioEstateTiles(): DashboardTile[] {
 }
 
 // ---------------------------------------------------------------------------
+// Power Apps templates — shared helpers
+// ---------------------------------------------------------------------------
+
+/** Scope a Power Apps tile to a set of app types AND exclude rows whose
+ *  `createdBy` starts with the Dataverse system-user GUID prefix
+ *  (`00000000-…`). The Power Apps analogue of `agentScope()` —
+ *  without it, every Dataverse environment's first-party model-driven
+ *  apps (Customer Service Hub, Sales Hub, Field Service, …) drown out
+ *  customer-built signal. */
+function appScope(types: ResourceTypeValue[]): Clause[] {
+  const clauses: Clause[] = [];
+  if (types.length === 1) {
+    clauses.push(where("type", "==", [`'${types[0]}'`]));
+  } else {
+    clauses.push(where("type", "in~", types.map((t) => `'${t}'`)));
+  }
+  clauses.push(extend("__sys", "startswith(tostring(properties.createdBy), '00000000-')"));
+  clauses.push(where("__sys", "==", ["false"]));
+  return clauses;
+}
+
+/** Default `createdAt desc` ordering for app table tiles. */
+function appOrderByCreatedDesc(): Clause {
+  return orderBy({ "tostring(properties.createdAt)": "desc" });
+}
+
+/** Default column set for canvas + MDA app tables. */
+const APP_TABLE_COLUMNS: TileTableColumn[] = [
+  { field: "properties.displayName", header: "Name" },
+  { field: "type", header: "Type" },
+  { field: "properties.environmentId", header: "Environment" },
+  { field: "properties.ownerId", header: "Owner" },
+  { field: "properties.createdAt", header: "Created" },
+  { field: "properties.lastModifiedAt", header: "Last modified" },
+];
+
+/** Canvas-only table columns (surfaces lastLaunchedTime + shared counts
+ *  that only exist on canvas apps). */
+const CANVAS_TABLE_COLUMNS: TileTableColumn[] = [
+  { field: "properties.displayName", header: "Name" },
+  { field: "properties.environmentId", header: "Environment" },
+  { field: "properties.ownerId", header: "Owner" },
+  { field: "properties.lastLaunchedTime", header: "Last launched" },
+  { field: "properties.sharedUsersCount", header: "Users" },
+  { field: "properties.sharedGroupsCount", header: "Groups" },
+];
+
+/** App-typed tile factories — small wrappers analogous to the agent
+ *  factories above, parameterized by `resourceTypes` so the same factory
+ *  serves canvas-only, canvas+MDA, and modern-app tiles. */
+function appKpiTile(
+  title: string,
+  kpiLabel: string,
+  clauses: Clause[],
+  size: TileSize = "xs",
+  tabId?: string
+): DashboardTile {
+  return {
+    id: newId("t"),
+    title,
+    size,
+    viz: { type: "kpi", kpiLabel },
+    spec: {
+      resourceTypes: [ResourceType.CanvasApp],
+      filters: [],
+      orderField: "",
+      orderDirection: "desc",
+      limit: 1,
+    },
+    source: "raw",
+    clauses,
+    ...(tabId ? { tabId } : {}),
+  };
+}
+
+function appTableTile(
+  title: string,
+  clauses: Clause[],
+  opts: {
+    rows?: number;
+    size?: TileSize;
+    columns?: TileTableColumn[];
+    tabId?: string;
+  } = {}
+): DashboardTile {
+  return {
+    id: newId("t"),
+    title,
+    size: opts.size ?? "medium",
+    viz: {
+      type: "table",
+      tableRows: opts.rows ?? 10,
+      tableColumns: opts.columns ?? APP_TABLE_COLUMNS,
+    },
+    spec: {
+      resourceTypes: [ResourceType.CanvasApp],
+      filters: [],
+      orderField: "",
+      orderDirection: "desc",
+      limit: 1,
+    },
+    source: "raw",
+    clauses,
+    ...(opts.tabId ? { tabId: opts.tabId } : {}),
+  };
+}
+
+function appComputedTile(
+  title: string,
+  aggregatorId: string,
+  vizType: TileVizType,
+  opts: {
+    size?: TileSize;
+    tabId?: string;
+    kpiLabel?: string;
+    tableRows?: number;
+    tableColumns?: TileTableColumn[];
+    params?: Record<string, unknown>;
+  } = {}
+): DashboardTile {
+  return {
+    id: newId("t"),
+    title,
+    size: opts.size ?? "medium",
+    viz: {
+      type: vizType,
+      ...(opts.kpiLabel ? { kpiLabel: opts.kpiLabel } : {}),
+      ...(opts.tableRows ? { tableRows: opts.tableRows } : {}),
+      ...(opts.tableColumns ? { tableColumns: opts.tableColumns } : {}),
+    },
+    spec: {
+      resourceTypes: [ResourceType.CanvasApp],
+      filters: [],
+      orderField: "",
+      orderDirection: "desc",
+      limit: 1,
+    },
+    source: "computed",
+    computed: {
+      aggregatorId,
+      ...(opts.params ? { params: opts.params } : {}),
+    },
+    ...(opts.tabId ? { tabId: opts.tabId } : {}),
+  };
+}
+
+// Reusable clause fragments for Power Apps tiles.
+
+/** Filter to canvas apps that have NEVER been launched. */
+function neverLaunchedClauses(): Clause[] {
+  return [
+    extend("__lt_set", "isnotempty(tostring(properties.lastLaunchedTime))"),
+    where("__lt_set", "==", ["false"]),
+  ];
+}
+
+/** Filter to apps whose last launch is older than N days. Skips
+ *  never-launched (those are counted separately). */
+function staleLaunchedClauses(days: number): Clause[] {
+  return [
+    extend("__lt_set", "isnotempty(tostring(properties.lastLaunchedTime))"),
+    where("__lt_set", "==", ["true"]),
+    where("properties.lastLaunchedTime", "<", [`ago(${days}d)`]),
+  ];
+}
+
+/** Filter to apps created in the last N days. */
+function appCreatedInLastDaysClauses(days: number): Clause[] {
+  return [where("properties.createdAt", ">", [`ago(${days}d)`])];
+}
+
+/** Filter to apps whose `sharedUsersCount` exceeds `threshold`. Canvas-only
+ *  signal. Uses an alias `extend` so the `where` comparison stays on a
+ *  plain identifier — the proven pattern for the connector's filter
+ *  surface. */
+function highShareUsersClauses(threshold: number): Clause[] {
+  return [
+    extend("__sus", "toint(properties.sharedUsersCount)"),
+    where("__sus", ">", [`${threshold}`]),
+  ];
+}
+
+/** Filter to apps whose connector list (works for both `powerPlatformConnectors`
+ *  on canvas apps AND `connectors` on app-builder apps) contains the given
+ *  connector id. Uses the documented `tostring(...) has` pattern from
+ *  `docs/inventory-schema-samples.md` for nested-array string search.
+ *  Concatenates the two shapes with a `|` separator via `strcat` so a
+ *  match can never bleed across the boundary between the two arrays. */
+function appHasConnectorClauses(connectorId: string): Clause[] {
+  return [
+    extend(
+      "__conns_str",
+      "strcat(tostring(properties.powerPlatformConnectors), '|', tostring(properties.connectors))"
+    ),
+    where("__conns_str", "has", [`'${connectorId}'`]),
+  ];
+}
+
+// ---------------------------------------------------------------------------
+// Template: Canvas + Model-driven Estate
+// ---------------------------------------------------------------------------
+
+const CANVAS_MDA_TYPES: ResourceTypeValue[] = [
+  ResourceType.CanvasApp,
+  ResourceType.ModelDrivenApp,
+];
+
+const CANVAS_MDA_TABS = {
+  overview: "apps-overview",
+  sharing: "apps-sharing",
+  lifecycle: "apps-lifecycle",
+  trends: "apps-trends",
+  connectors: "apps-connectors",
+} as const;
+
+function canvasMdaEstateTabs(): DashboardTab[] {
+  return [
+    { id: CANVAS_MDA_TABS.overview, name: "Overview" },
+    { id: CANVAS_MDA_TABS.sharing, name: "Sharing & Governance" },
+    { id: CANVAS_MDA_TABS.lifecycle, name: "Lifecycle" },
+    { id: CANVAS_MDA_TABS.trends, name: "Trends" },
+    { id: CANVAS_MDA_TABS.connectors, name: "Connectors & Dependencies" },
+  ];
+}
+
+function canvasMdaEstateLayout(): { tabs: DashboardTab[]; tiles: DashboardTile[] } {
+  const tabs = canvasMdaEstateTabs();
+  const t = CANVAS_MDA_TABS;
+
+  const cleanupColumns: TileTableColumn[] = [
+    { field: "displayName", header: "Name" },
+    { field: "type", header: "Type" },
+    { field: "environmentId", header: "Environment" },
+    { field: "score", header: "Score" },
+    { field: "reasons", header: "Reasons" },
+    { field: "ageDays", header: "Age (days)" },
+    { field: "lastLaunchedAt", header: "Last launched" },
+    { field: "lastModifiedAt", header: "Last modified" },
+  ];
+
+  const tiles: DashboardTile[] = [
+    // ── Overview ─────────────────────────────────────────────────────────
+    appKpiTile(
+      "Total apps",
+      "Customer-built (excl. first-party MDA)",
+      [...appScope(CANVAS_MDA_TYPES)],
+      "xs",
+      t.overview
+    ),
+    appKpiTile(
+      "Canvas apps",
+      "Customer-built canvas",
+      [...appScope([ResourceType.CanvasApp])],
+      "xs",
+      t.overview
+    ),
+    appKpiTile(
+      "Model-driven apps",
+      "Customer-built MDA (excl. first-party)",
+      [...appScope([ResourceType.ModelDrivenApp])],
+      "xs",
+      t.overview
+    ),
+    appKpiTile(
+      "Code apps",
+      "Cross-link from Modern template",
+      [...appScope([ResourceType.CodeApp])],
+      "xs",
+      t.overview
+    ),
+    appKpiTile(
+      "App-builder apps",
+      "Cross-link from Modern template",
+      [...appScope([ResourceType.AppBuilderApp])],
+      "xs",
+      t.overview
+    ),
+    appComputedTile(
+      "Distribution by type",
+      APP_AGGREGATOR_IDS.byType,
+      "pie",
+      {
+        size: "medium",
+        tabId: t.overview,
+        params: { types: CANVAS_MDA_TYPES },
+      }
+    ),
+
+    // ── Sharing & Governance (canvas-only signals) ───────────────────────
+    appTableTile(
+      "👤 Top shared canvas apps — by users",
+      [
+        ...appScope([ResourceType.CanvasApp]),
+        extend("__sus", "toint(properties.sharedUsersCount)"),
+        where("__sus", ">", ["0"]),
+        orderBy({ "__sus": "desc" }),
+      ],
+      { rows: 20, columns: CANVAS_TABLE_COLUMNS, size: "large", tabId: t.sharing }
+    ),
+    appTableTile(
+      "👥 Top shared canvas apps — by groups",
+      [
+        ...appScope([ResourceType.CanvasApp]),
+        extend("__sgs", "toint(properties.sharedGroupsCount)"),
+        where("__sgs", ">", ["0"]),
+        orderBy({ "__sgs": "desc" }),
+      ],
+      { rows: 20, columns: CANVAS_TABLE_COLUMNS, size: "large", tabId: t.sharing }
+    ),
+    appKpiTile(
+      "🚨 Canvas apps shared with >100 users",
+      "Blast radius",
+      [...appScope([ResourceType.CanvasApp]), ...highShareUsersClauses(100)],
+      "small",
+      t.sharing
+    ),
+    appComputedTile(
+      "🏆 Top creators (top 10)",
+      APP_AGGREGATOR_IDS.topCreators,
+      "bar",
+      {
+        size: "medium",
+        tabId: t.sharing,
+        params: { topN: 10, types: CANVAS_MDA_TYPES },
+      }
+    ),
+    appComputedTile(
+      "🏭 Top environments by app count",
+      APP_AGGREGATOR_IDS.topEnvironments,
+      "bar",
+      {
+        size: "medium",
+        tabId: t.sharing,
+        params: { topN: 10, types: CANVAS_MDA_TYPES },
+      }
+    ),
+
+    // ── Lifecycle ────────────────────────────────────────────────────────
+    appTableTile(
+      "🥶 Stale canvas apps (last launched >180d ago)",
+      [
+        ...appScope([ResourceType.CanvasApp]),
+        ...staleLaunchedClauses(180),
+        orderBy({ "tostring(properties.lastLaunchedTime)": "asc" }),
+      ],
+      { rows: 15, columns: CANVAS_TABLE_COLUMNS, size: "large", tabId: t.lifecycle }
+    ),
+    appTableTile(
+      "👻 Never-launched canvas apps",
+      [
+        ...appScope([ResourceType.CanvasApp]),
+        ...neverLaunchedClauses(),
+        appOrderByCreatedDesc(),
+      ],
+      { rows: 15, columns: CANVAS_TABLE_COLUMNS, size: "large", tabId: t.lifecycle }
+    ),
+    appTableTile(
+      "🆕 New this week",
+      [
+        ...appScope(CANVAS_MDA_TYPES),
+        ...appCreatedInLastDaysClauses(7),
+        appOrderByCreatedDesc(),
+      ],
+      { rows: 10, tabId: t.lifecycle }
+    ),
+    appComputedTile(
+      "Never-launched canvas apps by age",
+      APP_AGGREGATOR_IDS.neverLaunchedCohorts,
+      "bar",
+      { size: "medium", tabId: t.lifecycle }
+    ),
+    appComputedTile(
+      "Stale canvas apps by age since last launch",
+      APP_AGGREGATOR_IDS.staleCohorts,
+      "bar",
+      { size: "medium", tabId: t.lifecycle }
+    ),
+    appComputedTile(
+      "Launched vs never-launched canvas apps per environment",
+      APP_AGGREGATOR_IDS.launchedVsNeverPerEnv,
+      "stackedBar",
+      { size: "large", tabId: t.lifecycle, params: { topN: 15 } }
+    ),
+    appComputedTile(
+      "🧹 Cleanup candidates (scored)",
+      APP_AGGREGATOR_IDS.cleanupCandidatesTable,
+      "table",
+      {
+        size: "large",
+        tabId: t.lifecycle,
+        tableRows: 30,
+        tableColumns: cleanupColumns,
+        params: { topN: 30, types: CANVAS_MDA_TYPES },
+      }
+    ),
+
+    // ── Trends ───────────────────────────────────────────────────────────
+    appComputedTile(
+      "Apps created over time (monthly, 12 mo)",
+      APP_AGGREGATOR_IDS.createdTrend,
+      "line",
+      {
+        size: "large",
+        tabId: t.trends,
+        params: {
+          bucket: "month",
+          lookbackDays: 365,
+          dateField: "createdAt",
+          types: CANVAS_MDA_TYPES,
+        },
+      }
+    ),
+    appComputedTile(
+      "Cumulative app inventory (monthly, 12 mo)",
+      APP_AGGREGATOR_IDS.createdTrend,
+      "line",
+      {
+        size: "large",
+        tabId: t.trends,
+        params: {
+          bucket: "month",
+          lookbackDays: 365,
+          dateField: "createdAt",
+          cumulative: true,
+          types: CANVAS_MDA_TYPES,
+        },
+      }
+    ),
+    appComputedTile(
+      "Apps last modified — activity heartbeat (weekly, 90d)",
+      APP_AGGREGATOR_IDS.createdTrend,
+      "line",
+      {
+        size: "large",
+        tabId: t.trends,
+        params: {
+          bucket: "week",
+          lookbackDays: 90,
+          dateField: "lastModifiedAt",
+          types: CANVAS_MDA_TYPES,
+        },
+      }
+    ),
+
+    // ── Connectors & Dependencies ────────────────────────────────────────
+    appComputedTile(
+      "Top connectors across canvas apps",
+      APP_AGGREGATOR_IDS.topConnectorsAllTypes,
+      "bar",
+      {
+        size: "large",
+        tabId: t.connectors,
+        params: { topN: 15, types: [ResourceType.CanvasApp] },
+      }
+    ),
+    appComputedTile(
+      "Top connectors across all app types",
+      APP_AGGREGATOR_IDS.topConnectorsAllTypes,
+      "bar",
+      { size: "large", tabId: t.connectors, params: { topN: 15 } }
+    ),
+    appComputedTile(
+      "Connectors-per-app distribution",
+      APP_AGGREGATOR_IDS.connectorsPerAppHistogram,
+      "bar",
+      { size: "medium", tabId: t.connectors }
+    ),
+    appKpiTile(
+      "Canvas apps using SharePoint",
+      "shared_sharepointonline",
+      [
+        ...appScope([ResourceType.CanvasApp]),
+        ...appHasConnectorClauses("shared_sharepointonline"),
+      ],
+      "small",
+      t.connectors
+    ),
+    appKpiTile(
+      "Canvas apps using Office 365 Users",
+      "shared_office365users",
+      [
+        ...appScope([ResourceType.CanvasApp]),
+        ...appHasConnectorClauses("shared_office365users"),
+      ],
+      "small",
+      t.connectors
+    ),
+    appKpiTile(
+      "Canvas apps using SQL Server",
+      "shared_sql",
+      [
+        ...appScope([ResourceType.CanvasApp]),
+        ...appHasConnectorClauses("shared_sql"),
+      ],
+      "small",
+      t.connectors
+    ),
+  ];
+
+  return { tabs, tiles };
+}
+
+function canvasMdaEstateTiles(): DashboardTile[] {
+  return canvasMdaEstateLayout().tiles.map((tile) => {
+    const rest = { ...tile };
+    delete rest.tabId;
+    return rest;
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Template: Modern Apps Estate (Code + App Builder)
+// ---------------------------------------------------------------------------
+
+const MODERN_APP_TYPES: ResourceTypeValue[] = [
+  ResourceType.CodeApp,
+  ResourceType.AppBuilderApp,
+];
+
+const MODERN_APPS_TABS = {
+  overview: "modern-overview",
+  inventory: "modern-inventory",
+  trends: "modern-trends",
+} as const;
+
+function modernAppsEstateTabs(): DashboardTab[] {
+  return [
+    { id: MODERN_APPS_TABS.overview, name: "Overview" },
+    { id: MODERN_APPS_TABS.inventory, name: "Inventory" },
+    { id: MODERN_APPS_TABS.trends, name: "Trends" },
+  ];
+}
+
+function modernAppsEstateLayout(): { tabs: DashboardTab[]; tiles: DashboardTile[] } {
+  const tabs = modernAppsEstateTabs();
+  const t = MODERN_APPS_TABS;
+
+  const modernColumns: TileTableColumn[] = [
+    { field: "properties.displayName", header: "Name" },
+    { field: "properties.environmentId", header: "Environment" },
+    { field: "properties.ownerId", header: "Owner" },
+    { field: "properties.subType", header: "Sub-type" },
+    { field: "properties.createdAt", header: "Created" },
+    { field: "properties.lastModifiedAt", header: "Last modified" },
+  ];
+
+  const tiles: DashboardTile[] = [
+    // ── Overview ─────────────────────────────────────────────────────────
+    appKpiTile(
+      "Code apps",
+      "Total customer-built",
+      [...appScope([ResourceType.CodeApp])],
+      "xs",
+      t.overview
+    ),
+    appKpiTile(
+      "App-builder apps",
+      "Total customer-built",
+      [...appScope([ResourceType.AppBuilderApp])],
+      "xs",
+      t.overview
+    ),
+    appKpiTile(
+      "Code apps — new this month",
+      "Created in last 30 days",
+      [
+        ...appScope([ResourceType.CodeApp]),
+        ...appCreatedInLastDaysClauses(30),
+      ],
+      "xs",
+      t.overview
+    ),
+    appKpiTile(
+      "App-builder apps — new this month",
+      "Created in last 30 days",
+      [
+        ...appScope([ResourceType.AppBuilderApp]),
+        ...appCreatedInLastDaysClauses(30),
+      ],
+      "xs",
+      t.overview
+    ),
+    appComputedTile(
+      "Code app sub-types",
+      APP_AGGREGATOR_IDS.byCodeSubType,
+      "pie",
+      { size: "medium", tabId: t.overview }
+    ),
+
+    // ── Inventory ────────────────────────────────────────────────────────
+    appTableTile(
+      "All Code apps",
+      [...appScope([ResourceType.CodeApp]), appOrderByCreatedDesc()],
+      { rows: 30, size: "large", columns: modernColumns, tabId: t.inventory }
+    ),
+    appTableTile(
+      "All App-builder apps",
+      [...appScope([ResourceType.AppBuilderApp]), appOrderByCreatedDesc()],
+      { rows: 30, size: "large", columns: modernColumns, tabId: t.inventory }
+    ),
+
+    // ── Trends ───────────────────────────────────────────────────────────
+    appComputedTile(
+      "Code + App-builder creation trend (monthly, 12 mo)",
+      APP_AGGREGATOR_IDS.createdTrend,
+      "line",
+      {
+        size: "large",
+        tabId: t.trends,
+        params: {
+          bucket: "month",
+          lookbackDays: 365,
+          dateField: "createdAt",
+          types: MODERN_APP_TYPES,
+        },
+      }
+    ),
+  ];
+
+  return { tabs, tiles };
+}
+
+function modernAppsEstateTiles(): DashboardTile[] {
+  return modernAppsEstateLayout().tiles.map((tile) => {
+    const rest = { ...tile };
+    delete rest.tabId;
+    return rest;
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
 
@@ -884,6 +1521,29 @@ export const DASHBOARD_TEMPLATES: DashboardTemplate[] = [
       "default so the signal isn't drowned out by Dynamics-installed bots.",
     build: copilotStudioEstateTiles,
     buildLayout: copilotStudioEstateLayout,
+  },
+  {
+    id: "canvas-mda-estate",
+    name: "Canvas + Model-driven Estate",
+    description:
+      "Overview, sharing & governance, lifecycle hot-spots, creation trends, " +
+      "and connector dependencies for every customer-built canvas and model-driven " +
+      "app in the tenant. First-party Microsoft model-driven apps (system-owned " +
+      "Customer Service Hub, Sales Hub, etc.) are excluded by default so the " +
+      "signal isn't drowned out by Dataverse-installed apps.",
+    build: canvasMdaEstateTiles,
+    buildLayout: canvasMdaEstateLayout,
+  },
+  {
+    id: "modern-apps-estate",
+    name: "Modern Apps Estate (Code + App Builder)",
+    description:
+      "Inventory and creation trends for the newer Power Apps modalities — " +
+      "Code apps (BYOC) and App Builder apps. Kept separate from the Canvas + " +
+      "MDA template so growth in these emerging surfaces is visible at a glance " +
+      "rather than buried under the larger canvas / model-driven population.",
+    build: modernAppsEstateTiles,
+    buildLayout: modernAppsEstateLayout,
   },
 ];
 
