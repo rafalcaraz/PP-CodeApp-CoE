@@ -870,7 +870,13 @@ function copilotStudioEstateTiles(): DashboardTile[] {
  *  (`00000000-…`). The Power Apps analogue of `agentScope()` —
  *  without it, every Dataverse environment's first-party model-driven
  *  apps (Customer Service Hub, Sales Hub, Field Service, …) drown out
- *  customer-built signal. */
+ *  customer-built signal.
+ *
+ *  Uses the alias-string + `!startswith` operator pattern (NOT a
+ *  `startswith()` function call in `extend`) because the Inventory
+ *  API's KQL whitelist surfaces `startswith` only as a `where` operator;
+ *  using it as a function in `extend` returns KS006 "Missing
+ *  expression" at query time. */
 function appScope(types: ResourceTypeValue[]): Clause[] {
   const clauses: Clause[] = [];
   if (types.length === 1) {
@@ -878,8 +884,8 @@ function appScope(types: ResourceTypeValue[]): Clause[] {
   } else {
     clauses.push(where("type", "in~", types.map((t) => `'${t}'`)));
   }
-  clauses.push(extend("__sys", "startswith(tostring(properties.createdBy), '00000000-')"));
-  clauses.push(where("__sys", "==", ["false"]));
+  clauses.push(extend("__cb", "tostring(properties.createdBy)"));
+  clauses.push(where("__cb", "!startswith", ["'00000000-'"]));
   return clauses;
 }
 
@@ -1044,18 +1050,16 @@ function highShareUsersClauses(threshold: number): Clause[] {
   ];
 }
 
-/** Filter to apps whose connector list (works for both `powerPlatformConnectors`
- *  on canvas apps AND `connectors` on app-builder apps) contains the given
- *  connector id. Uses the documented `tostring(...) has` pattern from
- *  `docs/inventory-schema-samples.md` for nested-array string search.
- *  Concatenates the two shapes with a `|` separator via `strcat` so a
- *  match can never bleed across the boundary between the two arrays. */
+/** Filter to canvas apps whose `properties.powerPlatformConnectors` list
+ *  contains the given connector id. Uses the documented `tostring(...)
+ *  has` pattern from `docs/inventory-schema-samples.md` — the only
+ *  proven-working shape for nested-array membership against the
+ *  Inventory API's KQL whitelist. Canvas-scoped because that's the
+ *  shape this property has; app-builder uses `properties.connectors`
+ *  with a different structure and isn't covered by these KPIs. */
 function appHasConnectorClauses(connectorId: string): Clause[] {
   return [
-    extend(
-      "__conns_str",
-      "strcat(tostring(properties.powerPlatformConnectors), '|', tostring(properties.connectors))"
-    ),
+    extend("__conns_str", "tostring(properties.powerPlatformConnectors)"),
     where("__conns_str", "has", [`'${connectorId}'`]),
   ];
 }

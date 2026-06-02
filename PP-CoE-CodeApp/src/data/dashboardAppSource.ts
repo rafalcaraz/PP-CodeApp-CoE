@@ -91,10 +91,12 @@ function customerAppScope(types: ResourceTypeValue[]): Clause[] {
       )
     );
   }
-  // Alias-then-filter so the predicate stays server-side. The Power Apps
-  // analogue of the agentScope msdyn_ exclusion.
-  clauses.push(extend("__sys", "startswith(tostring(properties.createdBy), '00000000-')"));
-  clauses.push(where("__sys", "==", ["false"]));
+  // Alias the string then use `!startswith` as a `where` OPERATOR. KQL
+  // does not accept `startswith()` as a function inside `extend` (the
+  // Inventory API's whitelist surfaces it only as an operator). Same
+  // shape the agent template uses for the `msdyn_` exclusion.
+  clauses.push(extend("__cb", "tostring(properties.createdBy)"));
+  clauses.push(where("__cb", "!startswith", ["'00000000-'"]));
   return clauses;
 }
 
