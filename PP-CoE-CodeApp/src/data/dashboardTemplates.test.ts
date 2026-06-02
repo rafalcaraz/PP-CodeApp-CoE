@@ -260,3 +260,84 @@ describe("Modern Apps Estate template", () => {
   });
 });
 
+describe("Power Automate Estate template", () => {
+  const tpl = getDashboardTemplate("power-automate-estate")!;
+
+  it("is registered and exposes both build() and buildLayout()", () => {
+    expect(tpl).toBeDefined();
+    expect(typeof tpl.build).toBe("function");
+    expect(typeof tpl.buildLayout).toBe("function");
+  });
+
+  it("buildLayout returns the seven server-side tabs in order", () => {
+    const layout = tpl.buildLayout!();
+    expect(layout.tabs.map((t) => t.name)).toEqual([
+      "Overview",
+      "Configuration & triggers",
+      "Lifecycle",
+      "Ownership & environments",
+      "Trigger patterns",
+      "Agent & AI flows",
+      "Risk / governance",
+    ]);
+  });
+
+  it("tab ids are unique", () => {
+    const layout = tpl.buildLayout!();
+    const ids = layout.tabs.map((t) => t.id);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  it("every tile in buildLayout references a real tab", () => {
+    const layout = tpl.buildLayout!();
+    const tabIds = new Set(layout.tabs.map((t) => t.id));
+    for (const tile of layout.tiles) {
+      expect(tile.tabId, `tile "${tile.title}" has no tabId`).toBeDefined();
+      expect(
+        tabIds.has(tile.tabId!),
+        `tile "${tile.title}" points at unknown tab "${tile.tabId}"`,
+      ).toBe(true);
+    }
+  });
+
+  it("every tab has at least one tile", () => {
+    const layout = tpl.buildLayout!();
+    const tileCountByTab = new Map<string, number>();
+    for (const tile of layout.tiles) {
+      tileCountByTab.set(tile.tabId!, (tileCountByTab.get(tile.tabId!) ?? 0) + 1);
+    }
+    for (const tab of layout.tabs) {
+      expect(
+        tileCountByTab.get(tab.id) ?? 0,
+        `tab "${tab.name}" has no tiles`,
+      ).toBeGreaterThan(0);
+    }
+  });
+
+  it("uses NO computed-source tiles — server-side only (raw + builder)", () => {
+    const layout = tpl.buildLayout!();
+    for (const tile of layout.tiles) {
+      expect(
+        tile.source,
+        `tile "${tile.title}" must be server-side (raw or builder), not computed`,
+      ).not.toBe("computed");
+    }
+  });
+
+  it("build() strips tabIds for back-compat", () => {
+    const flat = tpl.build();
+    expect(flat.length).toBeGreaterThan(0);
+    for (const tile of flat) {
+      expect(tile.tabId).toBeUndefined();
+    }
+  });
+
+  it("build() and buildLayout() return matching tile counts", () => {
+    expect(tpl.build().length).toBe(tpl.buildLayout!().tiles.length);
+  });
+
+  it("is registered in the DASHBOARD_TEMPLATES list", () => {
+    expect(DASHBOARD_TEMPLATES.find((t) => t.id === "power-automate-estate")).toBeDefined();
+  });
+});
+
