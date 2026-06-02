@@ -105,8 +105,37 @@ const useStyles = makeStyles({
     paddingInlineStart: tokens.spacingHorizontalS,
     paddingInlineEnd: tokens.spacingHorizontalS,
   },
+  // Items inside a card section don't need extra horizontal padding —
+  // the card's own margin provides the visual boundary, and the Tab
+  // component has its own internal padding. Adding more here squeezes
+  // long labels (e.g. "Ownerless resources") into a second line.
+  groupedTabList: {
+    paddingInlineStart: 0,
+    paddingInlineEnd: 0,
+  },
   tab: {
     justifyContent: "flex-start",
+  },
+  // Grouped sections render as a subtle card so the section's items
+  // visibly belong together and the section boundaries are obvious at
+  // a glance. The background is one step lighter than the sidebar
+  // (Background1 vs Background2), which reads as a soft elevated tile
+  // in light theme and a soft well in dark theme without needing extra
+  // borders. Standalone items (Home, Settings) skip this treatment so
+  // they remain clearly top-level destinations.
+  groupedSection: {
+    backgroundColor: tokens.colorNeutralBackground1,
+    border: `1px solid ${tokens.colorNeutralStroke2}`,
+    borderRadius: tokens.borderRadiusMedium,
+    marginInline: tokens.spacingHorizontalS,
+    marginBottom: tokens.spacingVerticalS,
+    paddingBottom: tokens.spacingVerticalXS,
+  },
+  groupedSectionHeader: {
+    // Header sits flush with the card edges so the click target spans
+    // the full card width, not just the inner padding.
+    paddingInline: tokens.spacingHorizontalM,
+    paddingBlock: tokens.spacingVerticalS,
   },
 });
 
@@ -344,11 +373,14 @@ export function SideNav() {
         const isCollapsed = hasHeader && collapsed.has(section.key);
         const sectionId = `sidenav-section-${section.key}`;
         return (
-          <div key={section.key} className={styles.section}>
+          <div
+            key={section.key}
+            className={mergeClasses(styles.section, hasHeader && styles.groupedSection)}
+          >
             {hasHeader && (
               <button
                 type="button"
-                className={styles.sectionHeader}
+                className={mergeClasses(styles.sectionHeader, styles.groupedSectionHeader)}
                 onClick={() => toggleSection(section.key)}
                 aria-expanded={!isCollapsed}
                 aria-controls={sectionId}
@@ -367,7 +399,7 @@ export function SideNav() {
             {!isCollapsed && (
               <TabList
                 id={sectionId}
-                className={mergeClasses(styles.tabList)}
+                className={mergeClasses(styles.tabList, hasHeader && styles.groupedTabList)}
                 vertical
                 // Each TabList is independent; only the list owning the active
                 // item will visually highlight it. Passing the global activeKey
