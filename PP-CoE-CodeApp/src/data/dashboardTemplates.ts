@@ -1495,6 +1495,623 @@ function modernAppsEstateTiles(): DashboardTile[] {
     return rest;
   });
 }
+// ---------------------------------------------------------------------------
+// Power Automate Estate template (server-side only)
+// ---------------------------------------------------------------------------
+//
+// Tiles use ONLY server-side `source: "raw"` clauses + `source: "builder"`
+// charts. There is no `fetchAllFlows`-backed client-side fold here ΓÇö the
+// flow population on real tenants (often 100k+) is too large to walk
+// client-side, and the connector's KQL whitelist (no `mv-expand`) means
+// some aggregations are off the table entirely until Deep Scan
+// integration lands.
+//
+// What we DROP vs. the original plan, and why:
+//   - "Connectors & actions" tab ΓÇö every tile needs to walk
+//     `powerPlatformConnectors[].operations[]`. Requires `mv-expand`.
+//     Defer to Deep Scan.
+//   - Age-cohort bar ΓÇö needed client-side bucketing.
+//   - Single-owner-env table ΓÇö needed multi-axis aggregation per env.
+//   - Trigger-pattern-mix bar ΓÇö the 5 individual KPIs already convey the
+//     same signal without client-side rollup.
+//   - Top connectors / AI flows table in Agent & AI tab ΓÇö same array-walk
+//     limitation.
+//
+// What we MIGRATE to server-side (vs. the original computed plan):
+//   - Risk score ΓåÆ `flowRiskScoreExtends()` mirrors the agent template's
+//     `riskScoreExtends()` pattern. Components evaluated server-side per
+//     flow, sortable, top-N takeable, count()-able.
+//   - "Old recurring flows" ΓåÆ plain `where` on flowTriggerType +
+//     lastModifiedAt < ago(1y).
+
+const FLOW_TYPES = [
+  ResourceType.CloudFlow,
+  ResourceType.AgentFlow,
+  ResourceType.WorkflowAgentFlow,
+] as const;
+
+const FLOW_TYPE_LITERALS = FLOW_TYPES.map((t) => `'${t}'`);
+
+/** Empty QuerySpec for raw flow tiles. Renderer ignores `spec` when
+ *  `source === "raw"` for the *query*, but it still reads
+ *  `spec.resourceTypes` to render the type-list subheader under the tile
+ *  title. Tiles that filter down to a single flow type via raw clauses
+ *  should pass that type here so the subheader matches the actual scope
+ *  (otherwise every per-type KPI shows all three types and looks like a
+ *  double-count even though the count is correct). */
+function rawFlowSpec(types: readonly ResourceTypeValue[] = FLOW_TYPES) {
+  return {
+    resourceTypes: [...types],
+    filters: [],
+    orderField: "",
+    orderDirection: "desc" as const,
+    limit: 1,
+  };
+}
+
+/** Scope every Power Automate tile to all three flow types. */
+function flowScope(): Clause[] {
+  return [where("type", "in~", FLOW_TYPE_LITERALS)];
+}
+
+function orderByLastModifiedDesc(): Clause {
+  return orderBy({ "tostring(properties.lastModifiedAt)": "desc" });
+}
+
+function orderByFlowCreatedDesc(): Clause {
+  return orderBy({ "tostring(properties.createdAt)": "desc" });
+}
+
+// ΓöÇΓöÇ Status / lifecycle clause fragments ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+
+function activatedClauses(): Clause[] {
+  return [where("properties.status", "==", ["'Activated'"])];
+}
+
+function brokenStatusClauses(): Clause[] {
+  return [where("properties.status", "in~", ["'Suspended'", "'Stopped'", "'Deactivated'"])];
+}
+
+function staleActivatedClauses(days: number): Clause[] {
+  return [
+    ...activatedClauses(),
+    where("properties.lastModifiedAt", "<", [`ago(${days}d)`]),
+  ];
+}
+
+function flowCreatedInLastDaysClauses(days: number): Clause[] {
+  return [where("properties.createdAt", ">", [`ago(${days}d)`])];
+}
+
+function flowCreatedMoreThanDaysAgoClauses(days: number): Clause[] {
+  return [where("properties.createdAt", "<", [`ago(${days}d)`])];
+}
+
+// ΓöÇΓöÇ Trigger-pattern clause fragments ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+
+function pollingTriggerClauses(): Clause[] {
+  return [where("properties.flowTriggerType", "in~", ["'Recurrence'", "'Scheduled'"])];
+}
+
+function powerAppsCoupledClauses(): Clause[] {
+  return [
+    extend("__top", "tostring(properties.trigger.operationId)"),
+    where("__top", "==", ["'RequestPowerAppV2'"]),
+  ];
+}
+
+function emailTriggeredClauses(): Clause[] {
+  return [
+    extend("__tcid", "tostring(properties.trigger.connectorId)"),
+    where("__tcid", "startswith", ["'office365'"]),
+  ];
+}
+
+function sharePointEventClauses(): Clause[] {
+  return [
+    extend("__tcid", "tostring(properties.trigger.connectorId)"),
+    where("__tcid", "==", ["'sharepointonline'"]),
+  ];
+}
+
+function dataverseEventClauses(): Clause[] {
+  return [
+    extend("__tcid", "tostring(properties.trigger.connectorId)"),
+    where("__tcid", "==", ["'commondataserviceforapps'"]),
+  ];
+}
+
+/** Old recurring flows: polling trigger AND lastModified > 1y ago.
+ *  INFORMATIONAL ΓÇö surfaces long-running schedules that may or may not
+ *  be intentional. Not part of the risk score (too many false positives
+ *  on legit cron-style flows: payroll, archival, monthly compliance). */
+function oldRecurringFlowClauses(days = 365): Clause[] {
+  return [
+    ...pollingTriggerClauses(),
+    where("properties.lastModifiedAt", "<", [`ago(${days}d)`]),
+  ];
+}
+
+// ΓöÇΓöÇ Ownership clause fragments ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+
+function orphanedFlowClauses(): Clause[] {
+  return [
+    extend("__ownset", "isnotempty(tostring(properties.ownerId))"),
+    extend(
+      "__own_orph",
+      `iif(__ownset == false or tostring(properties.ownerId) == '${ZERO_GUID}', 1, 0)`
+    ),
+    where("__own_orph", "==", ["1"]),
+  ];
+}
+
+// ΓöÇΓöÇ Composite risk score (server-side) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+//
+// Mirrors the CS template's `riskScoreExtends()` shape: a chain of
+// `extend` clauses that each contribute 0 or 1 to a final `__risk` sum.
+// Tiles wrap `flowRiskScoreExtends()` and add a `where __risk >= N` /
+// `orderBy __risk desc` to filter / sort.
+
+/** v1 risk components (each +1):
+ *   - Orphaned: ownerId empty or zero-GUID
+ *   - Stale-Activated: status Activated AND lastModifiedAt > 180d ago
+ *   - Broken: status in (Suspended, Stopped, Deactivated)
+ *   - Solution-less: workflowEntityId empty or zero-GUID
+ *
+ * "Abandoned polling" (Recurrence + old) deliberately excluded ΓÇö too many
+ * false positives on legitimate long-running schedules. It surfaces as
+ * the informational `oldRecurringFlowClauses` tile instead. */
+function flowRiskScoreExtends(staleDays = 180): Clause[] {
+  return [
+    extend(
+      "__r_orph",
+      `iif(isempty(tostring(properties.ownerId)) or tostring(properties.ownerId) == '${ZERO_GUID}', 1, 0)`
+    ),
+    extend(
+      "__r_act",
+      "iif(tostring(properties.status) == 'Activated', 1, 0)"
+    ),
+    extend(
+      "__r_lm_old",
+      `iif(properties.lastModifiedAt < ago(${staleDays}d), 1, 0)`
+    ),
+    extend("__r_stale", "__r_act * __r_lm_old"),
+    extend(
+      "__r_broken",
+      "iif(tostring(properties.status) in~ ('Suspended', 'Stopped', 'Deactivated'), 1, 0)"
+    ),
+    extend(
+      "__r_solnless",
+      `iif(isempty(tostring(properties.workflowEntityId)) or tostring(properties.workflowEntityId) == '${ZERO_GUID}', 1, 0)`
+    ),
+    extend("__risk", "__r_orph + __r_stale + __r_broken + __r_solnless"),
+  ];
+}
+
+// ΓöÇΓöÇ Tab structure ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+
+const FLOW_ESTATE_TABS = {
+  overview: "flow-estate-overview",
+  config: "flow-estate-configuration",
+  lifecycle: "flow-estate-lifecycle",
+  ownership: "flow-estate-ownership",
+  triggers: "flow-estate-triggers",
+  agentAi: "flow-estate-agent-ai",
+  risk: "flow-estate-risk",
+} as const;
+
+function flowEstateTabs(): DashboardTab[] {
+  return [
+    { id: FLOW_ESTATE_TABS.overview, name: "Overview" },
+    { id: FLOW_ESTATE_TABS.config, name: "Configuration & triggers" },
+    { id: FLOW_ESTATE_TABS.lifecycle, name: "Lifecycle" },
+    { id: FLOW_ESTATE_TABS.ownership, name: "Ownership & environments" },
+    { id: FLOW_ESTATE_TABS.triggers, name: "Trigger patterns" },
+    { id: FLOW_ESTATE_TABS.agentAi, name: "Agent & AI flows" },
+    { id: FLOW_ESTATE_TABS.risk, name: "Risk / governance" },
+  ];
+}
+
+// ΓöÇΓöÇ Tile factories scoped to flows ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+
+function flowKpiTile(
+  title: string,
+  kpiLabel: string,
+  clauses: Clause[],
+  size: TileSize = "xs",
+  tabId?: string,
+  scopedTypes?: readonly ResourceTypeValue[]
+): DashboardTile {
+  return {
+    id: newId("t"),
+    title,
+    size,
+    viz: { type: "kpi", kpiLabel },
+    spec: rawFlowSpec(scopedTypes),
+    source: "raw",
+    clauses,
+    ...(tabId ? { tabId } : {}),
+  };
+}
+
+const FLOW_TABLE_COLUMNS: TileTableColumn[] = [
+  { field: "properties.displayName", header: "Name" },
+  { field: "type", header: "Type" },
+  { field: "properties.status", header: "Status" },
+  { field: "properties.flowTriggerType", header: "Trigger" },
+  { field: "properties.environmentId", header: "Environment" },
+  { field: "properties.ownerId", header: "Owner" },
+  { field: "properties.lastModifiedAt", header: "Last modified" },
+];
+
+function flowTableTile(
+  title: string,
+  clauses: Clause[],
+  opts: { rows?: number; size?: TileSize; columns?: TileTableColumn[]; tabId?: string } = {}
+): DashboardTile {
+  return {
+    id: newId("t"),
+    title,
+    size: opts.size ?? "medium",
+    viz: {
+      type: "table",
+      tableRows: opts.rows ?? 10,
+      tableColumns: opts.columns ?? FLOW_TABLE_COLUMNS,
+    },
+    spec: rawFlowSpec(),
+    source: "raw",
+    clauses,
+    ...(opts.tabId ? { tabId: opts.tabId } : {}),
+  };
+}
+
+function flowPieTile(
+  title: string,
+  groupBy: string,
+  size: TileSize = "small",
+  maxCategories = 8,
+  tabId?: string
+): DashboardTile {
+  return {
+    id: newId("t"),
+    title,
+    size,
+    viz: { type: "pie", groupBy, maxCategories },
+    spec: {
+      resourceTypes: [...FLOW_TYPES],
+      filters: [],
+      orderField: "",
+      orderDirection: "desc",
+      limit: 500,
+    },
+    ...(tabId ? { tabId } : {}),
+  };
+}
+
+function flowBarTile(
+  title: string,
+  groupBy: string,
+  size: TileSize = "medium",
+  maxCategories = 10,
+  tabId?: string
+): DashboardTile {
+  return {
+    id: newId("t"),
+    title,
+    size,
+    viz: { type: "bar", groupBy, maxCategories },
+    spec: {
+      resourceTypes: [...FLOW_TYPES],
+      filters: [],
+      orderField: "",
+      orderDirection: "desc",
+      limit: 500,
+    },
+    ...(tabId ? { tabId } : {}),
+  };
+}
+
+function flowLineTile(
+  title: string,
+  dateField: string,
+  bucket: "day" | "week" | "month",
+  lookbackDays: number,
+  size: TileSize = "large",
+  tabId?: string
+): DashboardTile {
+  return {
+    id: newId("t"),
+    title,
+    size,
+    viz: { type: "line", dateField, bucket, lookbackDays },
+    spec: {
+      resourceTypes: [...FLOW_TYPES],
+      filters: [],
+      orderField: "",
+      orderDirection: "desc",
+      limit: 500,
+    },
+    ...(tabId ? { tabId } : {}),
+  };
+}
+
+// ΓöÇΓöÇ The layout ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+
+function powerAutomateEstateLayout(): { tabs: DashboardTab[]; tiles: DashboardTile[] } {
+  const tabs = flowEstateTabs();
+  const t = FLOW_ESTATE_TABS;
+
+  const riskColumns: TileTableColumn[] = [
+    { field: "properties.displayName", header: "Name" },
+    { field: "__risk", header: "Risk" },
+    { field: "__r_orph", header: "Orphaned" },
+    { field: "__r_stale", header: "Stale-Activated" },
+    { field: "__r_broken", header: "Broken" },
+    { field: "__r_solnless", header: "Solution-less" },
+    { field: "type", header: "Type" },
+    { field: "properties.environmentId", header: "Environment" },
+    { field: "properties.ownerId", header: "Owner" },
+    { field: "properties.lastModifiedAt", header: "Last modified" },
+  ];
+  const oldRecurringColumns: TileTableColumn[] = [
+    { field: "properties.displayName", header: "Name" },
+    { field: "properties.environmentId", header: "Environment" },
+    { field: "properties.ownerId", header: "Owner" },
+    { field: "properties.status", header: "Status" },
+    { field: "properties.flowTriggerType", header: "Trigger" },
+    { field: "properties.lastModifiedAt", header: "Last modified" },
+  ];
+
+  const tiles: DashboardTile[] = [
+    // ΓöÇΓöÇ Overview ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+    flowKpiTile("Total flows", "All flow types", [...flowScope()], "xs", t.overview),
+    flowKpiTile(
+      "Cloud flows",
+      "microsoft.powerautomate/cloudflows",
+      [where("type", "==", [`'${ResourceType.CloudFlow}'`])],
+      "xs",
+      t.overview,
+      [ResourceType.CloudFlow]
+    ),
+    flowKpiTile(
+      "Agent flows",
+      "microsoft.powerautomate/agentflows",
+      [where("type", "==", [`'${ResourceType.AgentFlow}'`])],
+      "xs",
+      t.overview,
+      [ResourceType.AgentFlow]
+    ),
+    flowKpiTile(
+      "Workflow agent flows",
+      "microsoft.powerautomate/m365agentflows",
+      [where("type", "==", [`'${ResourceType.WorkflowAgentFlow}'`])],
+      "xs",
+      t.overview,
+      [ResourceType.WorkflowAgentFlow]
+    ),
+    flowKpiTile(
+      "Activated",
+      "Currently running",
+      [...flowScope(), ...activatedClauses()],
+      "xs",
+      t.overview
+    ),
+    flowKpiTile(
+      "Broken / disabled",
+      "Suspended + Stopped + Deactivated",
+      [...flowScope(), ...brokenStatusClauses()],
+      "xs",
+      t.overview
+    ),
+    flowKpiTile(
+      "≡ƒÑ╢ Stale-Activated (180d+)",
+      "Activated but unmodified >180d",
+      [...flowScope(), ...staleActivatedClauses(180)],
+      "xs",
+      t.overview
+    ),
+    flowKpiTile(
+      "≡ƒåò New this week",
+      "Created in last 7 days",
+      [...flowScope(), ...flowCreatedInLastDaysClauses(7)],
+      "xs",
+      t.overview
+    ),
+
+    // ΓöÇΓöÇ Configuration & triggers ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+    flowPieTile("Status distribution", "properties.status", "small", 8, t.config),
+    flowPieTile("Trigger type", "properties.flowTriggerType", "small", 8, t.config),
+    flowBarTile("Flows by type", "type", "medium", 6, t.config),
+    flowPieTile(
+      "Trigger source (connector)",
+      "properties.trigger.connectorDisplayName",
+      "medium",
+      10,
+      t.config
+    ),
+    flowBarTile(
+      "Top trigger operations",
+      "properties.trigger.operationId",
+      "large",
+      12,
+      t.config
+    ),
+
+    // ΓöÇΓöÇ Lifecycle ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+    flowTableTile(
+      "≡ƒÑ╢ Stale-Activated flows (>180d unmodified, still Activated)",
+      [...flowScope(), ...staleActivatedClauses(180), orderByLastModifiedDesc()],
+      { rows: 15, size: "large", tabId: t.lifecycle }
+    ),
+    flowTableTile(
+      "≡ƒÆÇ Broken / disabled flows (>90d old)",
+      [
+        ...flowScope(),
+        ...brokenStatusClauses(),
+        ...flowCreatedMoreThanDaysAgoClauses(90),
+        orderByLastModifiedDesc(),
+      ],
+      { rows: 15, size: "large", tabId: t.lifecycle }
+    ),
+    flowTableTile(
+      "≡ƒåò New this week",
+      [...flowScope(), ...flowCreatedInLastDaysClauses(7), orderByFlowCreatedDesc()],
+      { rows: 10, tabId: t.lifecycle }
+    ),
+    flowLineTile(
+      "Flows created over time (weekly, 180d)",
+      "properties.createdAt",
+      "week",
+      180,
+      "large",
+      t.lifecycle
+    ),
+
+    // ΓöÇΓöÇ Ownership & environments ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+    flowBarTile("≡ƒÅå Top creators", "properties.createdBy", "medium", 10, t.ownership),
+    flowBarTile("Top owners", "properties.ownerId", "medium", 10, t.ownership),
+    flowBarTile(
+      "≡ƒÅ¡ Top environments by flow count",
+      "properties.environmentId",
+      "medium",
+      10,
+      t.ownership
+    ),
+    flowKpiTile(
+      "≡ƒ¬ª Orphaned flows",
+      "Owner is empty or zero-GUID",
+      [...flowScope(), ...orphanedFlowClauses()],
+      "small",
+      t.ownership
+    ),
+
+    // ΓöÇΓöÇ Trigger patterns ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+    flowKpiTile(
+      "≡ƒòÆ Polling flows",
+      "Recurrence / Scheduled trigger",
+      [...flowScope(), ...pollingTriggerClauses()],
+      "xs",
+      t.triggers
+    ),
+    flowKpiTile(
+      "≡ƒº⌐ Power Apps-coupled",
+      "Triggered by a canvas/model app",
+      [...flowScope(), ...powerAppsCoupledClauses()],
+      "xs",
+      t.triggers
+    ),
+    flowKpiTile(
+      "≡ƒôº Email-triggered",
+      "Triggered by Outlook / Office 365 mail",
+      [...flowScope(), ...emailTriggeredClauses()],
+      "xs",
+      t.triggers
+    ),
+    flowKpiTile(
+      "≡ƒôü SharePoint-event",
+      "Triggered by a SharePoint event",
+      [...flowScope(), ...sharePointEventClauses()],
+      "xs",
+      t.triggers
+    ),
+    flowKpiTile(
+      "≡ƒôª Dataverse-event",
+      "Triggered by a Dataverse event",
+      [...flowScope(), ...dataverseEventClauses()],
+      "xs",
+      t.triggers
+    ),
+    flowTableTile(
+      "Γä╣∩╕Å Old recurring flows (>1y unmodified) ΓÇö informational, not a risk signal",
+      [
+        ...flowScope(),
+        ...oldRecurringFlowClauses(365),
+        orderByLastModifiedDesc(),
+      ],
+      {
+        rows: 20,
+        size: "large",
+        tabId: t.triggers,
+        columns: oldRecurringColumns,
+      }
+    ),
+
+    // ΓöÇΓöÇ Agent & AI flows ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+    flowKpiTile(
+      "Agent flows",
+      "microsoft.powerautomate/agentflows",
+      [where("type", "==", [`'${ResourceType.AgentFlow}'`])],
+      "xs",
+      t.agentAi,
+      [ResourceType.AgentFlow]
+    ),
+    flowKpiTile(
+      "Workflow agent flows",
+      "microsoft.powerautomate/m365agentflows",
+      [where("type", "==", [`'${ResourceType.WorkflowAgentFlow}'`])],
+      "xs",
+      t.agentAi,
+      [ResourceType.WorkflowAgentFlow]
+    ),
+    flowBarTile(
+      "Agent + workflow flows by trigger type",
+      "properties.flowTriggerType",
+      "medium",
+      8,
+      t.agentAi
+    ),
+    flowBarTile(
+      "Agent + workflow flows by environment",
+      "properties.environmentId",
+      "medium",
+      10,
+      t.agentAi
+    ),
+
+    // ΓöÇΓöÇ Risk / governance ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+    flowKpiTile(
+      "≡ƒÜ¿ High-risk flows (score ΓëÑ 3)",
+      "Risk components: orphaned + stale-Activated + broken + solution-less",
+      [...flowScope(), ...flowRiskScoreExtends(180), where("__risk", ">=", ["3"])],
+      "small",
+      t.risk
+    ),
+    flowKpiTile(
+      "ΓÜá∩╕Å Flows with any risk (score ΓëÑ 1)",
+      "Any single risk component triggered",
+      [...flowScope(), ...flowRiskScoreExtends(180), where("__risk", ">=", ["1"])],
+      "small",
+      t.risk
+    ),
+    flowTableTile(
+      "Risk score per flow (top 30)",
+      [
+        ...flowScope(),
+        ...flowRiskScoreExtends(180),
+        where("__risk", ">=", ["1"]),
+        orderBy({ "__risk": "desc" }),
+      ],
+      {
+        rows: 30,
+        size: "large",
+        tabId: t.risk,
+        columns: riskColumns,
+      }
+    ),
+  ];
+
+  return { tabs, tiles };
+}
+
+/** Flat tile list for back-compat with `DashboardTemplate.build()`. */
+function powerAutomateEstateTiles(): DashboardTile[] {
+  return powerAutomateEstateLayout().tiles.map((tile) => {
+    const rest = { ...tile };
+    delete rest.tabId;
+    return rest;
+  });
+}
+
 
 // ---------------------------------------------------------------------------
 // Public API
@@ -1548,6 +2165,24 @@ export const DASHBOARD_TEMPLATES: DashboardTemplate[] = [
       "rather than buried under the larger canvas / model-driven population.",
     build: modernAppsEstateTiles,
     buildLayout: modernAppsEstateLayout,
+  },
+  {
+    id: "power-automate-estate",
+    name: "Power Automate Estate",
+    description:
+      "Estate health snapshot for every Power Automate flow in the tenant " +
+      "— cloud flows, agent flows, and workflow (M365) agent flows " +
+      "together. Server-side tiles only (no client-side population walk), " +
+      "so it loads fast even on tenants with 100k+ flows. Covers status " +
+      "and trigger mix, lifecycle cleanup signals (stale-Activated, " +
+      "broken, new), ownership concentration, trigger patterns " +
+      "(polling, app-coupled, email/SharePoint/Dataverse-event), and a " +
+      "composite risk score (orphaned + stale-Activated + broken + " +
+      "solution-less). Deep array-walking queries (top connectors, " +
+      "AI-connector usage) require a manual deep scan and aren't in this " +
+      "template.",
+    build: powerAutomateEstateTiles,
+    buildLayout: powerAutomateEstateLayout,
   },
 ];
 
