@@ -27,6 +27,7 @@ import {
   PortalActionsBar,
   resourceTypeToEntityKind,
 } from "../../components/PortalActions";
+import { UsageCard } from "../../components/UsageCard";
 import {
   DateWithRelative,
   IdentifiersAccordion,
@@ -277,6 +278,16 @@ function ReadyView({
       {/* 3. Connectors & actions */}
       <div className={styles.colFull}>
         <ConnectorsCard connectors={row.connectors} />
+      </div>
+
+      {/* 3b. Usage telemetry (licensing API) */}
+      <div className={styles.colFull}>
+        <UsageCard
+          productCategory="PowerAutomate"
+          productLabel="Power Automate"
+          tenantId={row.tenantId}
+          resourceId={row.id}
+        />
       </div>
 
       {/* 4. People & ownership */}

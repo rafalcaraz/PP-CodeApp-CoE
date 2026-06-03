@@ -57,6 +57,7 @@ import {
 import { EmptyPane, ErrorPane, LoadingPane } from "../../components/Status";
 import { PortalActionsBar } from "../../components/PortalActions";
 import { RawJsonAccordion } from "../../components/RawJsonAccordion";
+import { EnvironmentEntitlementCard } from "../../components/EnvironmentEntitlementCard";
 import {
   DateWithRelative,
   IdentifiersAccordion,
@@ -457,6 +458,16 @@ function ReadyView({
         }
         renderReady={(status) => <DlpCoverageBody status={status} env={row} />}
       />
+
+      {/* 3d. MCS Messages entitlement — per-environment, on-demand.
+          Sourced from the licensing API's v0.1-alpha route; flagged
+          Experimental in the card header. */}
+      <div className={styles.colFull}>
+        <EnvironmentEntitlementCard
+          tenantId={row.tenantId}
+          environmentId={row.id}
+        />
+      </div>
 
       {/* 4. Resource roll-up */}
       <Card className={styles.colFull}>

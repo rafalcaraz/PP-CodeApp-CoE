@@ -1,7 +1,7 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <CanvasApp xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
   <Name>msftcsa_ppcoecodeapp_63a36</Name>
-  <AppVersion>2026-05-29T20:30:41Z</AppVersion>
+  <AppVersion>2026-06-02T22:05:30Z</AppVersion>
   <Status>Ready</Status>
   <CreatedByClientVersion>0.0.0.0</CreatedByClientVersion>
   <MinClientVersion>0.0.0.0</MinClientVersion>
@@ -14,7 +14,7 @@
   <CommitMessage xsi:nil="true"></CommitMessage>
   <Publisher xsi:nil="true"></Publisher>
   <AuthorizationReferences>[]</AuthorizationReferences>
-  <ConnectionReferences>{"aaedf328-30da-4325-8925-c2d33cce2d38":{"id":"/providers/Microsoft.PowerApps/apis/shared_powerplatformadminv2","displayName":"Power Platform for Admins V2","iconUri":"https://static.powerapps.com/resource/ppcr/releases/v1.0.1812/1.0.1812.4731/powerplatformadminv2/icon.png","dataSources":["powerplatformadminv2"],"dependencies":[],"dependents":[],"parameterHints":{},"parameterHintsV2":{},"isOnPremiseConnection":false,"bypassConsent":false,"dataSets":{},"apiTier":"Standard","actions":[],"authenticationType":"oauth2-auth"},"5aefb442-1a7d-4024-a102-c085636b92b4":{"id":"/providers/Microsoft.PowerApps/apis/shared_microsoftcopilotstudio","displayName":"Microsoft Copilot Studio","iconUri":"https://static.powerapps.com/resource/ppcr/releases/v1.0.1813/1.0.1813.4754/microsoftcopilotstudio/icon.png","dataSources":["microsoftcopilotstudio"],"dependencies":[],"dependents":[],"parameterHints":{},"parameterHintsV2":{},"isOnPremiseConnection":false,"bypassConsent":false,"dataSets":{},"apiTier":"Standard","actions":[],"authenticationType":"oauthDefault"},"2fa18c09-c5b7-4b18-aa2c-892769ffb0d8":{"id":"/providers/Microsoft.PowerApps/apis/shared_powerplatformforadmins","displayName":"Power Platform for Admins","iconUri":"https://conn-afd-prod-endpoint-bmc9bqahasf3grgk.b01.azurefd.net/releases/v1.0.1802/1.0.1802.4640/powerplatformforadmins/icon.png","dataSources":["powerplatformforadmins"],"dependencies":[],"dependents":[],"parameterHints":{},"parameterHintsV2":{},"isOnPremiseConnection":false,"bypassConsent":false,"dataSets":{},"apiTier":"Standard","actions":[]},"5f74384a-e9de-4f7a-a14b-0a7d803c24fa":{"id":"/providers/Microsoft.PowerApps/apis/shared_webcontents","xrmConnectionReferenceLogicalName":"new_sharedwebcontents_d2692be18e","displayName":"HTTP with Microsoft Entra ID (preauthorized)","iconUri":"https://conn-afd-prod-endpoint-bmc9bqahasf3grgk.b01.azurefd.net/releases/v1.0.1800/1.0.1800.4648/webcontents/icon.png","dataSources":["webcontents"],"dependencies":[],"dependents":[],"parameterHints":{},"parameterHintsV2":{},"isOnPremiseConnection":false,"sharedConnectionId":"d9489b82-9f18-40dc-a9d4-449d4388b74b","bypassConsent":false,"dataSets":{},"apiTier":"Premium","actions":[],"authenticationType":"EntraAuth"}}</ConnectionReferences>
+  <ConnectionReferences>{"aaedf328-30da-4325-8925-c2d33cce2d38":{"id":"/providers/Microsoft.PowerApps/apis/shared_powerplatformadminv2","displayName":"Power Platform for Admins V2","iconUri":"https://static.powerapps.com/resource/ppcr/releases/v1.0.1812/1.0.1812.4731/powerplatformadminv2/icon.png","dataSources":["powerplatformadminv2"],"dependencies":[],"dependents":[],"parameterHints":{},"parameterHintsV2":{},"isOnPremiseConnection":false,"bypassConsent":false,"dataSets":{},"apiTier":"Standard","actions":[],"authenticationType":"oauth2-auth"},"5aefb442-1a7d-4024-a102-c085636b92b4":{"id":"/providers/Microsoft.PowerApps/apis/shared_microsoftcopilotstudio","displayName":"Microsoft Copilot Studio","iconUri":"https://static.powerapps.com/resource/ppcr/releases/v1.0.1813/1.0.1813.4754/microsoftcopilotstudio/icon.png","dataSources":["microsoftcopilotstudio"],"dependencies":[],"dependents":[],"parameterHints":{},"parameterHintsV2":{},"isOnPremiseConnection":false,"bypassConsent":false,"dataSets":{},"apiTier":"Standard","actions":[],"authenticationType":"oauthDefault"},"2fa18c09-c5b7-4b18-aa2c-892769ffb0d8":{"id":"/providers/Microsoft.PowerApps/apis/shared_powerplatformforadmins","displayName":"Power Platform for Admins","iconUri":"https://conn-afd-prod-endpoint-bmc9bqahasf3grgk.b01.azurefd.net/releases/v1.0.1802/1.0.1802.4640/powerplatformforadmins/icon.png","dataSources":["powerplatformforadmins"],"dependencies":[],"dependents":[],"parameterHints":{},"parameterHintsV2":{},"isOnPremiseConnection":false,"bypassConsent":false,"dataSets":{},"apiTier":"Standard","actions":[]},"5f74384a-e9de-4f7a-a14b-0a7d803c24fa":{"id":"/providers/Microsoft.PowerApps/apis/shared_webcontents","xrmConnectionReferenceLogicalName":"new_sharedwebcontents_d2692be18e","displayName":"HTTP with Microsoft Entra ID (preauthorized)","iconUri":"https://conn-afd-prod-endpoint-bmc9bqahasf3grgk.b01.azurefd.net/releases/v1.0.1800/1.0.1800.4648/webcontents/icon.png","dataSources":["webcontents"],"dependencies":[],"dependents":[],"parameterHints":{},"parameterHintsV2":{},"isOnPremiseConnection":false,"sharedConnectionId":"a9cb3a41-ca87-4e75-98c3-977ab41d772d","bypassConsent":false,"dataSets":{},"apiTier":"Premium","actions":[],"authenticationType":"EntraAuth"}}</ConnectionReferences>
   <DatabaseReferences>{"default.cds":{"databaseDetails":{"referenceType":"Environmental","environmentName":"default.cds","overrideValues":{"status":"NotSpecified","environmentVariableName":""}},"dataSources":{"microsoftentraids":{"entitySetName":"aadusers","logicalName":"aaduser"}}}}</DatabaseReferences>
   <AppComponents>[]</AppComponents>
   <AppComponentDependencies>[]</AppComponentDependencies>
@@ -28,60 +28,60 @@
   <IsCustomizable>1</IsCustomizable>
   <CodeAppPackageUris>
     <CodeAppPackageUri>/CanvasApps/msftcsa_ppcoecodeapp_63a36_CodeAppPackages/index.html_ContentType_text/html</CodeAppPackageUri>
-    <CodeAppPackageUri>/CanvasApps/msftcsa_ppcoecodeapp_63a36_CodeAppPackages/assets/AgentDetail-BIbg1FQz.js_ContentType_application/javascript</CodeAppPackageUri>
-    <CodeAppPackageUri>/CanvasApps/msftcsa_ppcoecodeapp_63a36_CodeAppPackages/assets/AgentsList-CkA-GB9t.js_ContentType_application/javascript</CodeAppPackageUri>
-    <CodeAppPackageUri>/CanvasApps/msftcsa_ppcoecodeapp_63a36_CodeAppPackages/assets/AppDetail-JtyMZYKu.js_ContentType_application/javascript</CodeAppPackageUri>
-    <CodeAppPackageUri>/CanvasApps/msftcsa_ppcoecodeapp_63a36_CodeAppPackages/assets/AppsList-D4JTCQoF.js_ContentType_application/javascript</CodeAppPackageUri>
-    <CodeAppPackageUri>/CanvasApps/msftcsa_ppcoecodeapp_63a36_CodeAppPackages/assets/Comparator-CTBOkVw9.js_ContentType_application/javascript</CodeAppPackageUri>
+    <CodeAppPackageUri>/CanvasApps/msftcsa_ppcoecodeapp_63a36_CodeAppPackages/assets/AgentDetail-Dut2ULOu.js_ContentType_application/javascript</CodeAppPackageUri>
+    <CodeAppPackageUri>/CanvasApps/msftcsa_ppcoecodeapp_63a36_CodeAppPackages/assets/AgentsList-C3EsGSV9.js_ContentType_application/javascript</CodeAppPackageUri>
+    <CodeAppPackageUri>/CanvasApps/msftcsa_ppcoecodeapp_63a36_CodeAppPackages/assets/AppDetail-EK15upyr.js_ContentType_application/javascript</CodeAppPackageUri>
+    <CodeAppPackageUri>/CanvasApps/msftcsa_ppcoecodeapp_63a36_CodeAppPackages/assets/AppsList-CnfGmVZF.js_ContentType_application/javascript</CodeAppPackageUri>
+    <CodeAppPackageUri>/CanvasApps/msftcsa_ppcoecodeapp_63a36_CodeAppPackages/assets/Comparator-Blme5_S0.js_ContentType_application/javascript</CodeAppPackageUri>
     <CodeAppPackageUri>/CanvasApps/msftcsa_ppcoecodeapp_63a36_CodeAppPackages/assets/ConnectorsCard-UBz-YbVN.js_ContentType_application/javascript</CodeAppPackageUri>
-    <CodeAppPackageUri>/CanvasApps/msftcsa_ppcoecodeapp_63a36_CodeAppPackages/assets/ConnectorsList-CrUN_We3.js_ContentType_application/javascript</CodeAppPackageUri>
+    <CodeAppPackageUri>/CanvasApps/msftcsa_ppcoecodeapp_63a36_CodeAppPackages/assets/ConnectorsList-B5fHLwjg.js_ContentType_application/javascript</CodeAppPackageUri>
     <CodeAppPackageUri>/CanvasApps/msftcsa_ppcoecodeapp_63a36_CodeAppPackages/assets/CopilotChatPanel-C7_MpJqw.js_ContentType_application/javascript</CodeAppPackageUri>
-    <CodeAppPackageUri>/CanvasApps/msftcsa_ppcoecodeapp_63a36_CodeAppPackages/assets/CustomGroupReportingView-DTS8uP-Z.js_ContentType_application/javascript</CodeAppPackageUri>
-    <CodeAppPackageUri>/CanvasApps/msftcsa_ppcoecodeapp_63a36_CodeAppPackages/assets/DashboardDetail-CQkl6l2T.js_ContentType_application/javascript</CodeAppPackageUri>
-    <CodeAppPackageUri>/CanvasApps/msftcsa_ppcoecodeapp_63a36_CodeAppPackages/assets/DashboardsList-Ct7oyoIW.js_ContentType_application/javascript</CodeAppPackageUri>
-    <CodeAppPackageUri>/CanvasApps/msftcsa_ppcoecodeapp_63a36_CodeAppPackages/assets/DeepScanView-Da2K52oS.js_ContentType_application/javascript</CodeAppPackageUri>
-    <CodeAppPackageUri>/CanvasApps/msftcsa_ppcoecodeapp_63a36_CodeAppPackages/assets/DlpComparator-DON8pHXu.js_ContentType_application/javascript</CodeAppPackageUri>
-    <CodeAppPackageUri>/CanvasApps/msftcsa_ppcoecodeapp_63a36_CodeAppPackages/assets/DlpDuplicator-CEBgBU9l.js_ContentType_application/javascript</CodeAppPackageUri>
-    <CodeAppPackageUri>/CanvasApps/msftcsa_ppcoecodeapp_63a36_CodeAppPackages/assets/DlpImpact-s1XajmtK.js_ContentType_application/javascript</CodeAppPackageUri>
-    <CodeAppPackageUri>/CanvasApps/msftcsa_ppcoecodeapp_63a36_CodeAppPackages/assets/Duplicator-BnCWrojl.js_ContentType_application/javascript</CodeAppPackageUri>
-    <CodeAppPackageUri>/CanvasApps/msftcsa_ppcoecodeapp_63a36_CodeAppPackages/assets/EnvironmentDetail-D6AB4oCg.js_ContentType_application/javascript</CodeAppPackageUri>
-    <CodeAppPackageUri>/CanvasApps/msftcsa_ppcoecodeapp_63a36_CodeAppPackages/assets/EnvironmentGroupDetail-BKsMDbAQ.js_ContentType_application/javascript</CodeAppPackageUri>
-    <CodeAppPackageUri>/CanvasApps/msftcsa_ppcoecodeapp_63a36_CodeAppPackages/assets/EnvironmentGroupsList-D-PEe4NW.js_ContentType_application/javascript</CodeAppPackageUri>
-    <CodeAppPackageUri>/CanvasApps/msftcsa_ppcoecodeapp_63a36_CodeAppPackages/assets/EnvironmentPicker-CHCyZfsR.js_ContentType_application/javascript</CodeAppPackageUri>
-    <CodeAppPackageUri>/CanvasApps/msftcsa_ppcoecodeapp_63a36_CodeAppPackages/assets/EnvironmentsList-rCQtAGnI.js_ContentType_application/javascript</CodeAppPackageUri>
-    <CodeAppPackageUri>/CanvasApps/msftcsa_ppcoecodeapp_63a36_CodeAppPackages/assets/FlowDetail-Bh-KIVRA.js_ContentType_application/javascript</CodeAppPackageUri>
-    <CodeAppPackageUri>/CanvasApps/msftcsa_ppcoecodeapp_63a36_CodeAppPackages/assets/FlowsList-C1H9PYpT.js_ContentType_application/javascript</CodeAppPackageUri>
-    <CodeAppPackageUri>/CanvasApps/msftcsa_ppcoecodeapp_63a36_CodeAppPackages/assets/Impact-EYk49Bco.js_ContentType_application/javascript</CodeAppPackageUri>
-    <CodeAppPackageUri>/CanvasApps/msftcsa_ppcoecodeapp_63a36_CodeAppPackages/assets/Ownerless-IszxxomG.js_ContentType_application/javascript</CodeAppPackageUri>
-    <CodeAppPackageUri>/CanvasApps/msftcsa_ppcoecodeapp_63a36_CodeAppPackages/assets/PdeLandscape-Dkli6W8X.js_ContentType_application/javascript</CodeAppPackageUri>
-    <CodeAppPackageUri>/CanvasApps/msftcsa_ppcoecodeapp_63a36_CodeAppPackages/assets/QueriesView-BDXdDw_U.js_ContentType_application/javascript</CodeAppPackageUri>
-    <CodeAppPackageUri>/CanvasApps/msftcsa_ppcoecodeapp_63a36_CodeAppPackages/assets/ResourceRollupCard-CoJBmnCE.js_ContentType_application/javascript</CodeAppPackageUri>
-    <CodeAppPackageUri>/CanvasApps/msftcsa_ppcoecodeapp_63a36_CodeAppPackages/assets/SettingsView-By6UbxCI.js_ContentType_application/javascript</CodeAppPackageUri>
-    <CodeAppPackageUri>/CanvasApps/msftcsa_ppcoecodeapp_63a36_CodeAppPackages/assets/StandardCustomGroupDetailView-BBn11UIN.js_ContentType_application/javascript</CodeAppPackageUri>
+    <CodeAppPackageUri>/CanvasApps/msftcsa_ppcoecodeapp_63a36_CodeAppPackages/assets/CustomGroupReportingView-C2KqREXF.js_ContentType_application/javascript</CodeAppPackageUri>
+    <CodeAppPackageUri>/CanvasApps/msftcsa_ppcoecodeapp_63a36_CodeAppPackages/assets/DashboardDetail-BlQ9Ojz1.js_ContentType_application/javascript</CodeAppPackageUri>
+    <CodeAppPackageUri>/CanvasApps/msftcsa_ppcoecodeapp_63a36_CodeAppPackages/assets/DashboardsList-NsHFumQ6.js_ContentType_application/javascript</CodeAppPackageUri>
+    <CodeAppPackageUri>/CanvasApps/msftcsa_ppcoecodeapp_63a36_CodeAppPackages/assets/DeepScanView-Bqoo_eRY.js_ContentType_application/javascript</CodeAppPackageUri>
+    <CodeAppPackageUri>/CanvasApps/msftcsa_ppcoecodeapp_63a36_CodeAppPackages/assets/DlpComparator-D9oZspfV.js_ContentType_application/javascript</CodeAppPackageUri>
+    <CodeAppPackageUri>/CanvasApps/msftcsa_ppcoecodeapp_63a36_CodeAppPackages/assets/DlpDuplicator-CvKaNiJ9.js_ContentType_application/javascript</CodeAppPackageUri>
+    <CodeAppPackageUri>/CanvasApps/msftcsa_ppcoecodeapp_63a36_CodeAppPackages/assets/DlpImpact-Cf56e-2q.js_ContentType_application/javascript</CodeAppPackageUri>
+    <CodeAppPackageUri>/CanvasApps/msftcsa_ppcoecodeapp_63a36_CodeAppPackages/assets/Duplicator-DaBL9Vmz.js_ContentType_application/javascript</CodeAppPackageUri>
+    <CodeAppPackageUri>/CanvasApps/msftcsa_ppcoecodeapp_63a36_CodeAppPackages/assets/EnvironmentDetail-DMVdkheT.js_ContentType_application/javascript</CodeAppPackageUri>
+    <CodeAppPackageUri>/CanvasApps/msftcsa_ppcoecodeapp_63a36_CodeAppPackages/assets/EnvironmentGroupDetail-B9kdH6FG.js_ContentType_application/javascript</CodeAppPackageUri>
+    <CodeAppPackageUri>/CanvasApps/msftcsa_ppcoecodeapp_63a36_CodeAppPackages/assets/EnvironmentGroupsList-C2qrVHg8.js_ContentType_application/javascript</CodeAppPackageUri>
+    <CodeAppPackageUri>/CanvasApps/msftcsa_ppcoecodeapp_63a36_CodeAppPackages/assets/EnvironmentPicker-CboMfOpD.js_ContentType_application/javascript</CodeAppPackageUri>
+    <CodeAppPackageUri>/CanvasApps/msftcsa_ppcoecodeapp_63a36_CodeAppPackages/assets/EnvironmentsList-DOhpiUNj.js_ContentType_application/javascript</CodeAppPackageUri>
+    <CodeAppPackageUri>/CanvasApps/msftcsa_ppcoecodeapp_63a36_CodeAppPackages/assets/FlowDetail-B0eGdXxc.js_ContentType_application/javascript</CodeAppPackageUri>
+    <CodeAppPackageUri>/CanvasApps/msftcsa_ppcoecodeapp_63a36_CodeAppPackages/assets/FlowsList-Dy_Z5SDF.js_ContentType_application/javascript</CodeAppPackageUri>
+    <CodeAppPackageUri>/CanvasApps/msftcsa_ppcoecodeapp_63a36_CodeAppPackages/assets/Impact-BORqusDd.js_ContentType_application/javascript</CodeAppPackageUri>
+    <CodeAppPackageUri>/CanvasApps/msftcsa_ppcoecodeapp_63a36_CodeAppPackages/assets/Ownerless-CIbe29ca.js_ContentType_application/javascript</CodeAppPackageUri>
+    <CodeAppPackageUri>/CanvasApps/msftcsa_ppcoecodeapp_63a36_CodeAppPackages/assets/PdeLandscape-B9M76p9h.js_ContentType_application/javascript</CodeAppPackageUri>
+    <CodeAppPackageUri>/CanvasApps/msftcsa_ppcoecodeapp_63a36_CodeAppPackages/assets/QueriesView-RgwVAyAs.js_ContentType_application/javascript</CodeAppPackageUri>
+    <CodeAppPackageUri>/CanvasApps/msftcsa_ppcoecodeapp_63a36_CodeAppPackages/assets/ResourceRollupCard-Xh-poQ1S.js_ContentType_application/javascript</CodeAppPackageUri>
+    <CodeAppPackageUri>/CanvasApps/msftcsa_ppcoecodeapp_63a36_CodeAppPackages/assets/SettingsView-1cJuF4US.js_ContentType_application/javascript</CodeAppPackageUri>
+    <CodeAppPackageUri>/CanvasApps/msftcsa_ppcoecodeapp_63a36_CodeAppPackages/assets/StandardCustomGroupDetailView-wDR0Q3uE.js_ContentType_application/javascript</CodeAppPackageUri>
     <CodeAppPackageUri>/CanvasApps/msftcsa_ppcoecodeapp_63a36_CodeAppPackages/assets/StandardGroupEditorDialog-CgKA7l6h.js_ContentType_application/javascript</CodeAppPackageUri>
-    <CodeAppPackageUri>/CanvasApps/msftcsa_ppcoecodeapp_63a36_CodeAppPackages/assets/SupplementalAdminCard-CeGxQr8_.js_ContentType_application/javascript</CodeAppPackageUri>
-    <CodeAppPackageUri>/CanvasApps/msftcsa_ppcoecodeapp_63a36_CodeAppPackages/assets/UserChip-D8mV4V8g.js_ContentType_application/javascript</CodeAppPackageUri>
-    <CodeAppPackageUri>/CanvasApps/msftcsa_ppcoecodeapp_63a36_CodeAppPackages/assets/ZoneDetailView-BZH0GXqV.js_ContentType_application/javascript</CodeAppPackageUri>
+    <CodeAppPackageUri>/CanvasApps/msftcsa_ppcoecodeapp_63a36_CodeAppPackages/assets/SupplementalAdminCard-BKvaDouB.js_ContentType_application/javascript</CodeAppPackageUri>
+    <CodeAppPackageUri>/CanvasApps/msftcsa_ppcoecodeapp_63a36_CodeAppPackages/assets/UserChip-DXQiK6wH.js_ContentType_application/javascript</CodeAppPackageUri>
+    <CodeAppPackageUri>/CanvasApps/msftcsa_ppcoecodeapp_63a36_CodeAppPackages/assets/ZoneDetailView-CQqE3uNw.js_ContentType_application/javascript</CodeAppPackageUri>
     <CodeAppPackageUri>/CanvasApps/msftcsa_ppcoecodeapp_63a36_CodeAppPackages/assets/ZoneEditorDialog-DYmv1I4Y.js_ContentType_application/javascript</CodeAppPackageUri>
-    <CodeAppPackageUri>/CanvasApps/msftcsa_ppcoecodeapp_63a36_CodeAppPackages/assets/ZoneReportingView-mQgOQ1mL.js_ContentType_application/javascript</CodeAppPackageUri>
-    <CodeAppPackageUri>/CanvasApps/msftcsa_ppcoecodeapp_63a36_CodeAppPackages/assets/ZonesReportingOverviewView-X475Dk8f.js_ContentType_application/javascript</CodeAppPackageUri>
-    <CodeAppPackageUri>/CanvasApps/msftcsa_ppcoecodeapp_63a36_CodeAppPackages/assets/ZonesView-B_2Ixg2i.js_ContentType_application/javascript</CodeAppPackageUri>
-    <CodeAppPackageUri>/CanvasApps/msftcsa_ppcoecodeapp_63a36_CodeAppPackages/assets/acpDiff-Drws1lDS.js_ContentType_application/javascript</CodeAppPackageUri>
-    <CodeAppPackageUri>/CanvasApps/msftcsa_ppcoecodeapp_63a36_CodeAppPackages/assets/adminEnrichment-B3DXsfX4.js_ContentType_application/javascript</CodeAppPackageUri>
+    <CodeAppPackageUri>/CanvasApps/msftcsa_ppcoecodeapp_63a36_CodeAppPackages/assets/ZoneReportingView-Ca6stkvv.js_ContentType_application/javascript</CodeAppPackageUri>
+    <CodeAppPackageUri>/CanvasApps/msftcsa_ppcoecodeapp_63a36_CodeAppPackages/assets/ZonesReportingOverviewView-whwm-v8h.js_ContentType_application/javascript</CodeAppPackageUri>
+    <CodeAppPackageUri>/CanvasApps/msftcsa_ppcoecodeapp_63a36_CodeAppPackages/assets/ZonesView-B1DqcELd.js_ContentType_application/javascript</CodeAppPackageUri>
+    <CodeAppPackageUri>/CanvasApps/msftcsa_ppcoecodeapp_63a36_CodeAppPackages/assets/acpDiff-iVd5GPkb.js_ContentType_application/javascript</CodeAppPackageUri>
+    <CodeAppPackageUri>/CanvasApps/msftcsa_ppcoecodeapp_63a36_CodeAppPackages/assets/adminEnrichment-B2nAFsPn.js_ContentType_application/javascript</CodeAppPackageUri>
     <CodeAppPackageUri>/CanvasApps/msftcsa_ppcoecodeapp_63a36_CodeAppPackages/assets/charts-B0X7d5Uk.js_ContentType_application/javascript</CodeAppPackageUri>
     <CodeAppPackageUri>/CanvasApps/msftcsa_ppcoecodeapp_63a36_CodeAppPackages/assets/csv-wbMTzG1k.js_ContentType_application/javascript</CodeAppPackageUri>
     <CodeAppPackageUri>/CanvasApps/msftcsa_ppcoecodeapp_63a36_CodeAppPackages/assets/dashboardAggregators-wxizZxLV.js_ContentType_application/javascript</CodeAppPackageUri>
-    <CodeAppPackageUri>/CanvasApps/msftcsa_ppcoecodeapp_63a36_CodeAppPackages/assets/dlpImpact-DNqogSF2.js_ContentType_application/javascript</CodeAppPackageUri>
-    <CodeAppPackageUri>/CanvasApps/msftcsa_ppcoecodeapp_63a36_CodeAppPackages/assets/dlpPolicies-DlS31Ckd.js_ContentType_application/javascript</CodeAppPackageUri>
+    <CodeAppPackageUri>/CanvasApps/msftcsa_ppcoecodeapp_63a36_CodeAppPackages/assets/dlpImpact-qMPNRmd5.js_ContentType_application/javascript</CodeAppPackageUri>
+    <CodeAppPackageUri>/CanvasApps/msftcsa_ppcoecodeapp_63a36_CodeAppPackages/assets/dlpPolicies-t-JV6QqQ.js_ContentType_application/javascript</CodeAppPackageUri>
     <CodeAppPackageUri>/CanvasApps/msftcsa_ppcoecodeapp_63a36_CodeAppPackages/assets/fluent-LB3x8Bud.js_ContentType_application/javascript</CodeAppPackageUri>
-    <CodeAppPackageUri>/CanvasApps/msftcsa_ppcoecodeapp_63a36_CodeAppPackages/assets/index-Dv6fn7CO.js_ContentType_application/javascript</CodeAppPackageUri>
+    <CodeAppPackageUri>/CanvasApps/msftcsa_ppcoecodeapp_63a36_CodeAppPackages/assets/index-B7FF08QV.js_ContentType_application/javascript</CodeAppPackageUri>
+    <CodeAppPackageUri>/CanvasApps/msftcsa_ppcoecodeapp_63a36_CodeAppPackages/assets/index-DTFaYTm2.js_ContentType_application/javascript</CodeAppPackageUri>
     <CodeAppPackageUri>/CanvasApps/msftcsa_ppcoecodeapp_63a36_CodeAppPackages/assets/index-Nf8HYkQ6.css_ContentType_text/css</CodeAppPackageUri>
-    <CodeAppPackageUri>/CanvasApps/msftcsa_ppcoecodeapp_63a36_CodeAppPackages/assets/index-z8mI-tE6.js_ContentType_application/javascript</CodeAppPackageUri>
     <CodeAppPackageUri>/CanvasApps/msftcsa_ppcoecodeapp_63a36_CodeAppPackages/assets/router-B9nNZWlh.js_ContentType_application/javascript</CodeAppPackageUri>
-    <CodeAppPackageUri>/CanvasApps/msftcsa_ppcoecodeapp_63a36_CodeAppPackages/assets/savedQueries-DJyoTKDl.js_ContentType_application/javascript</CodeAppPackageUri>
+    <CodeAppPackageUri>/CanvasApps/msftcsa_ppcoecodeapp_63a36_CodeAppPackages/assets/savedQueries-phf5Xqvt.js_ContentType_application/javascript</CodeAppPackageUri>
     <CodeAppPackageUri>/CanvasApps/msftcsa_ppcoecodeapp_63a36_CodeAppPackages/assets/standardGroups-CW_2z1pa.js_ContentType_application/javascript</CodeAppPackageUri>
-    <CodeAppPackageUri>/CanvasApps/msftcsa_ppcoecodeapp_63a36_CodeAppPackages/assets/types-BRg2IjSo.js_ContentType_application/javascript</CodeAppPackageUri>
-    <CodeAppPackageUri>/CanvasApps/msftcsa_ppcoecodeapp_63a36_CodeAppPackages/assets/useDebouncedValue-DTpyF-WT.js_ContentType_application/javascript</CodeAppPackageUri>
+    <CodeAppPackageUri>/CanvasApps/msftcsa_ppcoecodeapp_63a36_CodeAppPackages/assets/types-BkRePpkE.js_ContentType_application/javascript</CodeAppPackageUri>
+    <CodeAppPackageUri>/CanvasApps/msftcsa_ppcoecodeapp_63a36_CodeAppPackages/assets/useDebouncedValue-BIxXkWyo.js_ContentType_application/javascript</CodeAppPackageUri>
     <CodeAppPackageUri>/CanvasApps/msftcsa_ppcoecodeapp_63a36_CodeAppPackages/assets/useZones-CZvLi5qj.js_ContentType_application/javascript</CodeAppPackageUri>
     <CodeAppPackageUri>/CanvasApps/msftcsa_ppcoecodeapp_63a36_CodeAppPackages/vite.svg_ContentType_image/svg+xml</CodeAppPackageUri>
   </CodeAppPackageUris>
