@@ -60,6 +60,7 @@ function env(id: string, displayName: string): EnvironmentRow {
     lastModifiedAt: "",
     environmentGroupId: "",
     environmentGroup: "",
+    tenantId: "",
   };
 }
 

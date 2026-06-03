@@ -24,6 +24,8 @@ import { ErrorPane, LoadingPane } from "../../components/Status";
 import { ConnectorsCard } from "../../components/ConnectorsCard";
 import { RawJsonAccordion } from "../../components/RawJsonAccordion";
 import { PortalActionsBar } from "../../components/PortalActions";
+import { UsageCard } from "../../components/UsageCard";
+import { AgentMessagesCard } from "../../components/AgentMessagesCard";
 import {
   DateWithRelative,
   IdentifiersAccordion,
@@ -307,6 +309,21 @@ function ReadyView({
       </Card>
       <div className={styles.colFull}>
         <ConnectorsCard connectors={row.connectors} />
+      </div>
+
+      {/* 4b. Usage telemetry (licensing API) */}
+      <div className={styles.colFull}>
+        <UsageCard
+          productCategory="CopilotStudio"
+          productLabel="Copilot Studio"
+          tenantId={row.tenantId}
+          resourceId={row.id}
+        />
+      </div>
+
+      {/* 4c. MCS Messages entitlement (per-agent, current consumption). */}
+      <div className={styles.colFull}>
+        <AgentMessagesCard tenantId={row.tenantId} resourceId={row.id} />
       </div>
 
       {/* 5. People & sharing */}

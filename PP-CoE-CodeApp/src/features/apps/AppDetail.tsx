@@ -22,6 +22,7 @@ import { ErrorPane, LoadingPane } from "../../components/Status";
 import { ConnectorsCard } from "../../components/ConnectorsCard";
 import { RawJsonAccordion } from "../../components/RawJsonAccordion";
 import { UserChip } from "../../components/UserChip";
+import { UsageCard } from "../../components/UsageCard";
 import {
   PortalActionsBar,
   resourceTypeToEntityKind,
@@ -238,6 +239,17 @@ function ReadyView({
       {/* 3. Connectors & actions */}
       <div className={styles.colFull}>
         <ConnectorsCard connectors={row.connectors} />
+      </div>
+
+      {/* 3b. Usage telemetry (licensing API) — experimental for PowerApps */}
+      <div className={styles.colFull}>
+        <UsageCard
+          productCategory="PowerApps"
+          productLabel="Power Apps"
+          tenantId={row.tenantId}
+          resourceId={row.id}
+          experimentalNote="Experimental — the Power Apps usage endpoint may not be available for all tenants/app types and could return an error."
+        />
       </div>
 
       {/* 4. People & sharing */}

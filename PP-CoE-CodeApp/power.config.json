@@ -45,6 +45,32 @@
       "authenticationType": "EntraAuth",
       "sharedConnectionId": "/providers/Microsoft.PowerApps/apis/shared_webcontents/connections/b0b935afcb3a445caf00c0aed03be18e",
       "dataSets": {}
+    },
+    "9268b990-0e73-4b2d-82a6-99026c06c536": {
+      "id": "/providers/microsoft.powerapps/apis/shared_webcontents",
+      "displayName": "HTTP with Microsoft Entra ID (preauthorized)",
+      "authenticationType": "EntraAuth",
+      "sharedConnectionId": "/providers/Microsoft.PowerApps/apis/shared_webcontents/connections/056e6c17d50d4e38bc4a5804bce4cf44",
+      "xrmConnectionReferenceLogicalName": "msftcsa_HttpWithAzureusil102"
+    },
+    "dc9d6a36-b7a7-424d-8e23-08c5442f9ef2": {
+      "id": "/providers/Microsoft.PowerApps/apis/shared_logicflows",
+      "displayName": "Logic flows",
+      "dataSources": [
+        "pplicensingapi_wrapper_flow"
+      ],
+      "workflowDetails": {
+        "workflowEntityId": "78b5e751-d55e-f111-a826-000d3a34206e",
+        "workflowDisplayName": "PPLicensingAPI-Wrapper-Flow",
+        "workflowName": "496a336f-3040-b3cc-a8c7-466bd1d3f5b4"
+      }
+    },
+    "6427e5dd-15d9-4a11-b90f-1e41b8fb75b8": {
+      "id": "/providers/microsoft.powerapps/apis/shared_webcontents",
+      "displayName": "HTTP with Microsoft Entra ID (preauthorized)",
+      "authenticationType": "EntraAuth",
+      "sharedConnectionId": "/providers/Microsoft.PowerApps/apis/shared_webcontents/connections/df9a6e0303e24abea2a5342aefa2cbe4",
+      "xrmConnectionReferenceLogicalName": "msftcsa_PPLicensingAPI"
     }
   },
   "databaseReferences": {

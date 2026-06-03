@@ -555,6 +555,8 @@ export interface EnvironmentRow {
   lastModifiedAt: string;
   environmentGroupId: string;
   environmentGroup: string;
+  /** Tenant GUID this environment belongs to. Needed for licensing-API calls. */
+  tenantId: string;
 }
 
 export interface ResourceRow {
@@ -1149,6 +1151,7 @@ export async function getEnvironment(
 }
 
 function toEnvironmentRow(item: ResourceItem): EnvironmentRow {
+  const raw = item as unknown as Record<string, unknown>;
   return {
     id: item.name ?? "",
     displayName: propStr(item, "displayName"),
@@ -1160,6 +1163,7 @@ function toEnvironmentRow(item: ResourceItem): EnvironmentRow {
     lastModifiedAt: propStr(item, "lastModifiedAt"),
     environmentGroupId: propStr(item, "environmentGroupId"),
     environmentGroup: propStr(item, "environmentGroup"),
+    tenantId: (raw.tenantId as string) ?? "",
   };
 }
 

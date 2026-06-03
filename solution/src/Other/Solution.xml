@@ -1,5 +1,5 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
-<ImportExportXml version="9.2.26043.177" SolutionPackageVersion="9.2" languagecode="1033" generatedBy="CrmLive" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" OrganizationVersion="9.2.26043.177" OrganizationSchemaType="Standard" CRMServerServiceabilityVersion="9.2.26044.00163">
+<ImportExportXml version="9.2.26044.164" SolutionPackageVersion="9.2" languagecode="1033" generatedBy="CrmLive" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" OrganizationVersion="9.2.26044.164" OrganizationSchemaType="Standard" CRMServerServiceabilityVersion="9.2.26044.00164">
   <SolutionManifest>
     <UniqueName>PPCoECodeApp</UniqueName>
     <LocalizedNames>
@@ -80,6 +80,7 @@
       </Addresses>
     </Publisher>
     <RootComponents>
+      <RootComponent type="29" id="{78b5e751-d55e-f111-a826-000d3a34206e}" behavior="0" />
       <RootComponent type="300" schemaName="msftcsa_ppcoecodeapp_63a36" behavior="0" />
     </RootComponents>
     <MissingDependencies>
