@@ -91,6 +91,10 @@
         <Dependent type="300" schemaName="msftcsa_ppcoecodeapp_63a36" displayName="PP-COE-CodeApp" />
       </MissingDependency>
       <MissingDependency>
+        <Required type="connectionreference" displayName="msftcsa_HttpWithAzureusil102" solution="Active" id.connectionreferencelogicalname="msftcsa_HttpWithAzureusil102" />
+        <Dependent type="300" schemaName="msftcsa_ppcoecodeapp_63a36" displayName="PP-COE-CodeApp" />
+      </MissingDependency>
+      <MissingDependency>
         <Required type="connectionreference" displayName="new_sharedwebcontents_d2692be18e" solution="Active" id.connectionreferencelogicalname="new_sharedwebcontents_d2692be18e" />
         <Dependent type="300" schemaName="msftcsa_ppcoecodeapp_63a36" displayName="PP-COE-CodeApp" />
       </MissingDependency>

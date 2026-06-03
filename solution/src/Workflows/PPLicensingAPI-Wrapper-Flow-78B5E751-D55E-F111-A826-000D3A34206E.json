@@ -2,13 +2,13 @@
   "properties": {
     "connectionReferences": {
       "shared_webcontents-1": {
-        "api": {
-          "name": "shared_webcontents"
-        },
+        "runtimeSource": "invoker",
         "connection": {
           "connectionReferenceLogicalName": "msftcsa_PPLicensingAPI"
         },
-        "runtimeSource": "invoker"
+        "api": {
+          "name": "shared_webcontents"
+        }
       }
     },
     "definition": {
@@ -26,6 +26,9 @@
       },
       "triggers": {
         "manual": {
+          "metadata": {
+            "operationMetadataId": "32b8819d-3218-4c8d-bd30-12d5875b7e23"
+          },
           "type": "Request",
           "kind": "PowerAppV2",
           "inputs": {
@@ -52,32 +55,37 @@
                 "text_1"
               ]
             }
-          },
-          "metadata": {
-            "operationMetadataId": "32b8819d-3218-4c8d-bd30-12d5875b7e23"
           }
         }
       },
       "actions": {
         "Invoke_an_HTTP_request": {
+          "runAfter": {},
+          "metadata": {
+            "operationMetadataId": "1ce50f6a-d453-4459-a5ac-98e7b2dfd1ce"
+          },
           "type": "OpenApiConnection",
           "inputs": {
             "parameters": {
-              "request/method": "@triggerBody()['text']",
-              "request/url": "@triggerBody()['text_1']"
+              "request/method": "@triggerBody()?['text']",
+              "request/url": "@triggerBody()?['text_1']"
             },
             "host": {
               "apiId": "/providers/Microsoft.PowerApps/apis/shared_webcontents",
               "operationId": "InvokeHttp",
               "connectionName": "shared_webcontents-1"
             }
-          },
-          "runAfter": {},
-          "metadata": {
-            "operationMetadataId": "1ce50f6a-d453-4459-a5ac-98e7b2dfd1ce"
           }
         },
         "Respond_to_a_Power_App_or_flow": {
+          "runAfter": {
+            "Invoke_an_HTTP_request": [
+              "Succeeded"
+            ]
+          },
+          "metadata": {
+            "operationMetadataId": "ab216c17-8a3a-4be8-b04e-3c0f028a81a7"
+          },
           "type": "Response",
           "kind": "PowerApp",
           "inputs": {
@@ -96,14 +104,6 @@
             "body": {
               "response": "@{body('Invoke_an_HTTP_request')}"
             }
-          },
-          "runAfter": {
-            "Invoke_an_HTTP_request": [
-              "Succeeded"
-            ]
-          },
-          "metadata": {
-            "operationMetadataId": "ab216c17-8a3a-4be8-b04e-3c0f028a81a7"
           }
         }
       },
