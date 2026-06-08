@@ -277,6 +277,12 @@ const ZONES_SECTION: NavSection = {
       icon: <ChartMultipleRegular />,
       path: "/zones/reporting",
     },
+    {
+      key: "zones-usage",
+      label: "Zone usage",
+      icon: <DataPieRegular />,
+      path: "/zones/usage",
+    },
   ],
 };
 
@@ -350,7 +356,13 @@ export function SideNav() {
 
   const allItems = sections.flatMap((s) => s.items);
   const activeKey =
-    allItems.find((item) => item.path && location.pathname.startsWith(item.path))?.key ?? "home";
+    allItems
+      .filter(
+        (item): item is NavItem & { path: string } =>
+          !!item.path &&
+          (location.pathname === item.path || location.pathname.startsWith(`${item.path}/`)),
+      )
+      .sort((a, b) => b.path.length - a.path.length)[0]?.key ?? "home";
 
   const onSelect = (_e: SelectTabEvent, data: SelectTabData) => {
     const target = allItems.find((item) => item.key === data.value);
@@ -427,3 +439,4 @@ export function SideNav() {
     </nav>
   );
 }
+

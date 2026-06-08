@@ -444,8 +444,7 @@ export const dataSourcesInfo = {
             "name": "triggerId",
             "in": "path",
             "required": true,
-            "type": "string",
-            "format": "guid"
+            "type": "string"
           },
           {
             "name": "body",
@@ -472,8 +471,8 @@ export const dataSourcesInfo = {
           }
         }
       },
-      "InvokeTrigger": {
-        "path": "/{connectionId}/powervirtualagents/bots/{Copilot}/triggers/{triggerId}/invoke",
+      "InvokeTriggerOnAgenticRuntime": {
+        "path": "/{connectionId}/copilotstudio/agenticruntime/bots/{Copilot}/triggers/{triggerId}/invoke",
         "method": "POST",
         "parameters": [
           {
@@ -492,15 +491,13 @@ export const dataSourcesInfo = {
             "name": "triggerId",
             "in": "path",
             "required": true,
-            "type": "string",
-            "format": "uuid"
+            "type": "string"
           },
           {
             "name": "x-ms-cds-bot-id",
             "in": "header",
             "required": true,
-            "type": "string",
-            "format": "uuid"
+            "type": "string"
           },
           {
             "name": "x-ms-workflow-resourcegroup-name",
@@ -566,8 +563,108 @@ export const dataSourcesInfo = {
             "name": "x-ms-pva-bot-id",
             "in": "header",
             "required": false,
-            "type": "string",
-            "format": "uuid"
+            "type": "string"
+          }
+        ],
+        "responseInfo": {
+          "200": {
+            "type": "void"
+          }
+        }
+      },
+      "InvokeTrigger": {
+        "path": "/{connectionId}/powervirtualagents/bots/{Copilot}/triggers/{triggerId}/invoke",
+        "method": "POST",
+        "parameters": [
+          {
+            "name": "connectionId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "Copilot",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "triggerId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "x-ms-cds-bot-id",
+            "in": "header",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "x-ms-workflow-resourcegroup-name",
+            "in": "header",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "x-ms-workflow-name",
+            "in": "header",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "x-ms-trigger-connection-mode",
+            "in": "header",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "x-ms-trigger-purpose",
+            "in": "header",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "x-ms-trigger-component-schema-name",
+            "in": "header",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "x-ms-trigger-component-version",
+            "in": "header",
+            "required": true,
+            "type": "integer"
+          },
+          {
+            "name": "x-ms-trigger-bot-version",
+            "in": "header",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "inputs",
+            "in": "body",
+            "required": false,
+            "type": "object"
+          },
+          {
+            "name": "conversationId",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "environmentId",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "x-ms-pva-bot-id",
+            "in": "header",
+            "required": false,
+            "type": "string"
           }
         ],
         "responseInfo": {
@@ -654,6 +751,123 @@ export const dataSourcesInfo = {
       },
       "EvaluationTestContinueTurn": {
         "path": "/{connectionId}/powervirtualagents/evaluation-test/authenticated/bots/{CdsBotId}/conversations/{ConversationId}/continue",
+        "method": "POST",
+        "parameters": [
+          {
+            "name": "connectionId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "CdsBotId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "ConversationId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "type": "object"
+          },
+          {
+            "name": "environmentId",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "responseInfo": {
+          "200": {
+            "type": "void"
+          }
+        }
+      },
+      "EvaluationTestStartNewConversationOnAgenticRuntime": {
+        "path": "/{connectionId}/copilotstudio/agenticruntime/evaluation-test/authenticated/bots/{CdsBotId}/conversations",
+        "method": "POST",
+        "parameters": [
+          {
+            "name": "connectionId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "CdsBotId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "type": "object"
+          },
+          {
+            "name": "environmentId",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "responseInfo": {
+          "200": {
+            "type": "void"
+          }
+        }
+      },
+      "EvaluationTestExecuteTurnOnAgenticRuntime": {
+        "path": "/{connectionId}/copilotstudio/agenticruntime/evaluation-test/authenticated/bots/{CdsBotId}/conversations/{ConversationId}",
+        "method": "POST",
+        "parameters": [
+          {
+            "name": "connectionId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "CdsBotId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "ConversationId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "type": "object"
+          },
+          {
+            "name": "environmentId",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "responseInfo": {
+          "200": {
+            "type": "void"
+          }
+        }
+      },
+      "EvaluationTestContinueTurnOnAgenticRuntime": {
+        "path": "/{connectionId}/copilotstudio/agenticruntime/evaluation-test/authenticated/bots/{CdsBotId}/conversations/{ConversationId}/continue",
         "method": "POST",
         "parameters": [
           {
@@ -1409,8 +1623,7 @@ export const dataSourcesInfo = {
             "name": "operationId",
             "in": "path",
             "required": true,
-            "type": "string",
-            "format": "uuid"
+            "type": "string"
           },
           {
             "name": "api-version",
@@ -2148,6 +2361,256 @@ export const dataSourcesInfo = {
           }
         }
       },
+      "ListMakerEvaluationTestRuns": {
+        "path": "/{connectionId}/copilotstudio/environments/{EnvironmentId}/bots/{BotId}/api/makerevaluation/testruns",
+        "method": "GET",
+        "parameters": [
+          {
+            "name": "connectionId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "EnvironmentId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "BotId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "api-version",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responseInfo": {
+          "200": {
+            "type": "object"
+          }
+        }
+      },
+      "GetMakerEvaluationTestRun": {
+        "path": "/{connectionId}/copilotstudio/environments/{EnvironmentId}/bots/{BotId}/api/makerevaluation/testruns/{TestRunId}",
+        "method": "GET",
+        "parameters": [
+          {
+            "name": "connectionId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "EnvironmentId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "BotId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "TestRunId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "api-version",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responseInfo": {
+          "200": {
+            "type": "object"
+          }
+        }
+      },
+      "DownloadMakerEvaluationSnapshot": {
+        "path": "/{connectionId}/copilotstudio/environments/{EnvironmentId}/bots/{BotId}/api/makerevaluation/testruns/{TestRunId}/snapshot",
+        "method": "GET",
+        "parameters": [
+          {
+            "name": "connectionId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "EnvironmentId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "BotId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "TestRunId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "api-version",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responseInfo": {
+          "200": {
+            "type": "string",
+            "format": "binary"
+          },
+          "404": {
+            "type": "void"
+          }
+        }
+      },
+      "ListMakerEvaluationTestSets": {
+        "path": "/{connectionId}/copilotstudio/environments/{EnvironmentId}/bots/{BotId}/api/makerevaluation/testsets",
+        "method": "GET",
+        "parameters": [
+          {
+            "name": "connectionId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "EnvironmentId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "BotId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "api-version",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responseInfo": {
+          "200": {
+            "type": "object"
+          }
+        }
+      },
+      "GetMakerEvaluationTestSet": {
+        "path": "/{connectionId}/copilotstudio/environments/{EnvironmentId}/bots/{BotId}/api/makerevaluation/testsets/{TestSetId}",
+        "method": "GET",
+        "parameters": [
+          {
+            "name": "connectionId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "EnvironmentId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "BotId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "TestSetId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "api-version",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responseInfo": {
+          "200": {
+            "type": "object"
+          }
+        }
+      },
+      "RunMakerEvaluationTestSet": {
+        "path": "/{connectionId}/copilotstudio/environments/{EnvironmentId}/bots/{BotId}/api/makerevaluation/testsets/{TestSetId}/run",
+        "method": "POST",
+        "parameters": [
+          {
+            "name": "connectionId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "EnvironmentId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "BotId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "TestSetId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "api-version",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "type": "object"
+          }
+        ],
+        "responseInfo": {
+          "200": {
+            "type": "object"
+          },
+          "400": {
+            "type": "void"
+          },
+          "500": {
+            "type": "void"
+          }
+        }
+      },
       "GetFinOpsMaintenanceSettings": {
         "path": "/{connectionId}/dynamics/environments/{environmentId}/finopsadminsettings",
         "method": "GET",
@@ -2162,8 +2625,7 @@ export const dataSourcesInfo = {
             "name": "environmentId",
             "in": "path",
             "required": true,
-            "type": "string",
-            "format": "uuid"
+            "type": "string"
           },
           {
             "name": "api-version",
@@ -2207,8 +2669,7 @@ export const dataSourcesInfo = {
             "name": "environmentId",
             "in": "path",
             "required": true,
-            "type": "string",
-            "format": "uuid"
+            "type": "string"
           },
           {
             "name": "api-version",
@@ -3280,6 +3741,204 @@ export const dataSourcesInfo = {
           }
         }
       },
+      "ProvisionNewEnvironment": {
+        "path": "/{connectionId}/environmentmanagement/provisioning/create",
+        "method": "POST",
+        "parameters": [
+          {
+            "name": "connectionId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "api-version",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": false,
+            "type": "object"
+          }
+        ],
+        "responseInfo": {
+          "201": {
+            "type": "object"
+          },
+          "202": {
+            "type": "void"
+          },
+          "400": {
+            "type": "object"
+          }
+        }
+      },
+      "LinkDataverse": {
+        "path": "/{connectionId}/environmentmanagement/provisioning/environments/{environmentId}/link",
+        "method": "PATCH",
+        "parameters": [
+          {
+            "name": "connectionId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "environmentId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "api-version",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": false,
+            "type": "object"
+          }
+        ],
+        "responseInfo": {
+          "202": {
+            "type": "object"
+          },
+          "400": {
+            "type": "object"
+          }
+        }
+      },
+      "GetSupportedLocations": {
+        "path": "/{connectionId}/environmentmanagement/provisioning/locations",
+        "method": "GET",
+        "parameters": [
+          {
+            "name": "connectionId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "api-version",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responseInfo": {
+          "200": {
+            "type": "object"
+          },
+          "400": {
+            "type": "object"
+          },
+          "404": {
+            "type": "object"
+          }
+        }
+      },
+      "GetProvisioningCurrencies": {
+        "path": "/{connectionId}/environmentmanagement/provisioning/locations/{location}/currencies",
+        "method": "GET",
+        "parameters": [
+          {
+            "name": "connectionId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "location",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "api-version",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responseInfo": {
+          "200": {
+            "type": "object"
+          },
+          "400": {
+            "type": "object"
+          }
+        }
+      },
+      "GetProvisioningLanguages": {
+        "path": "/{connectionId}/environmentmanagement/provisioning/locations/{location}/languages",
+        "method": "GET",
+        "parameters": [
+          {
+            "name": "connectionId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "location",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "api-version",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responseInfo": {
+          "200": {
+            "type": "object"
+          },
+          "400": {
+            "type": "object"
+          }
+        }
+      },
+      "GetProvisioningTemplates": {
+        "path": "/{connectionId}/environmentmanagement/provisioning/locations/{location}/templates",
+        "method": "GET",
+        "parameters": [
+          {
+            "name": "connectionId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "location",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "api-version",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responseInfo": {
+          "200": {
+            "type": "object"
+          },
+          "400": {
+            "type": "object"
+          }
+        }
+      },
       "GetEnvironmentGroupOperation": {
         "path": "/{connectionId}/environmentmanagement/environmentGroupOperations/{operationId}",
         "method": "GET",
@@ -3294,8 +3953,7 @@ export const dataSourcesInfo = {
             "name": "operationId",
             "in": "path",
             "required": true,
-            "type": "string",
-            "format": "uuid"
+            "type": "string"
           },
           {
             "name": "api-version",
@@ -3429,8 +4087,7 @@ export const dataSourcesInfo = {
             "name": "groupId",
             "in": "path",
             "required": true,
-            "type": "string",
-            "format": "uuid"
+            "type": "string"
           },
           {
             "name": "api-version",
@@ -3506,8 +4163,7 @@ export const dataSourcesInfo = {
             "name": "groupId",
             "in": "path",
             "required": true,
-            "type": "string",
-            "format": "uuid"
+            "type": "string"
           },
           {
             "name": "environmentId",
@@ -3548,8 +4204,7 @@ export const dataSourcesInfo = {
             "name": "groupId",
             "in": "path",
             "required": true,
-            "type": "string",
-            "format": "uuid"
+            "type": "string"
           },
           {
             "name": "environmentId",
@@ -3591,6 +4246,42 @@ export const dataSourcesInfo = {
             "in": "query",
             "required": true,
             "type": "string"
+          },
+          {
+            "name": "ids",
+            "in": "query",
+            "required": false,
+            "type": "array"
+          },
+          {
+            "name": "$filter",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "$select",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "$top",
+            "in": "query",
+            "required": false,
+            "type": "integer"
+          },
+          {
+            "name": "$skip",
+            "in": "query",
+            "required": false,
+            "type": "integer"
+          },
+          {
+            "name": "$orderby",
+            "in": "query",
+            "required": false,
+            "type": "string"
           }
         ],
         "responseInfo": {
@@ -3619,6 +4310,12 @@ export const dataSourcesInfo = {
             "name": "api-version",
             "in": "query",
             "required": true,
+            "type": "string"
+          },
+          {
+            "name": "$select",
+            "in": "query",
+            "required": false,
             "type": "string"
           }
         ],
@@ -3839,6 +4536,53 @@ export const dataSourcesInfo = {
           }
         }
       },
+      "PatchRuleBasedPolicy": {
+        "path": "/{connectionId}/governance/ruleBasedPolicies/{policyId}",
+        "method": "PATCH",
+        "parameters": [
+          {
+            "name": "connectionId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "policyId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "api-version",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "type": "object"
+          }
+        ],
+        "responseInfo": {
+          "200": {
+            "type": "object"
+          },
+          "400": {
+            "type": "void"
+          },
+          "401": {
+            "type": "void"
+          },
+          "404": {
+            "type": "void"
+          },
+          "500": {
+            "type": "void"
+          }
+        }
+      },
       "ListRuleAssignmentsByPolicyId": {
         "path": "/{connectionId}/governance/ruleBasedPolicies/{policyId}/assignments",
         "method": "GET",
@@ -3998,6 +4742,53 @@ export const dataSourcesInfo = {
           }
         }
       },
+      "RemoveRuleFromRuleBasedPolicy": {
+        "path": "/{connectionId}/governance/ruleBasedPolicies/{policyId}/removeRule",
+        "method": "PATCH",
+        "parameters": [
+          {
+            "name": "connectionId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "policyId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "api-version",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "type": "object"
+          }
+        ],
+        "responseInfo": {
+          "200": {
+            "type": "object"
+          },
+          "400": {
+            "type": "void"
+          },
+          "401": {
+            "type": "void"
+          },
+          "404": {
+            "type": "void"
+          },
+          "500": {
+            "type": "void"
+          }
+        }
+      },
       "ListRuleAssignments": {
         "path": "/{connectionId}/governance/ruleBasedPolicies/assignments",
         "method": "GET",
@@ -4134,7 +4925,7 @@ export const dataSourcesInfo = {
         }
       },
       "GetRuleSet": {
-        "path": "/{connectionId}/governance/environments/{environmentId}/environmentGroups/{groupId}/ruleSets",
+        "path": "/{connectionId}/governance/environmentGroups/{groupId}/ruleSets",
         "method": "GET",
         "parameters": [
           {
@@ -4144,18 +4935,10 @@ export const dataSourcesInfo = {
             "type": "string"
           },
           {
-            "name": "environmentId",
-            "in": "path",
-            "required": true,
-            "type": "string",
-            "format": "uuid"
-          },
-          {
             "name": "groupId",
             "in": "path",
             "required": true,
-            "type": "string",
-            "format": "uuid"
+            "type": "string"
           },
           {
             "name": "api-version",
@@ -4186,7 +4969,7 @@ export const dataSourcesInfo = {
         }
       },
       "CreateRuleSet": {
-        "path": "/{connectionId}/governance/environments/{environmentId}/environmentGroups/{groupId}/ruleSets",
+        "path": "/{connectionId}/governance/environmentGroups/{groupId}/ruleSets",
         "method": "POST",
         "parameters": [
           {
@@ -4196,18 +4979,10 @@ export const dataSourcesInfo = {
             "type": "string"
           },
           {
-            "name": "environmentId",
-            "in": "path",
-            "required": true,
-            "type": "string",
-            "format": "uuid"
-          },
-          {
             "name": "groupId",
             "in": "path",
             "required": true,
-            "type": "string",
-            "format": "uuid"
+            "type": "string"
           },
           {
             "name": "api-version",
@@ -4322,8 +5097,7 @@ export const dataSourcesInfo = {
             "name": "ruleSetId",
             "in": "path",
             "required": true,
-            "type": "string",
-            "format": "uuid"
+            "type": "string"
           },
           {
             "name": "api-version",
@@ -4370,8 +5144,7 @@ export const dataSourcesInfo = {
             "name": "ruleSetId",
             "in": "path",
             "required": true,
-            "type": "string",
-            "format": "uuid"
+            "type": "string"
           },
           {
             "name": "api-version",
@@ -5474,8 +6247,7 @@ export const dataSourcesInfo = {
             "name": "startDate",
             "in": "query",
             "required": true,
-            "type": "string",
-            "format": "date-time"
+            "type": "string"
           },
           {
             "name": "api-version",
@@ -5487,22 +6259,19 @@ export const dataSourcesInfo = {
             "name": "endDate",
             "in": "query",
             "required": false,
-            "type": "string",
-            "format": "date-time"
+            "type": "string"
           },
           {
             "name": "pageNumber",
             "in": "query",
             "required": false,
-            "type": "integer",
-            "format": "int32"
+            "type": "integer"
           },
           {
             "name": "pageSize",
             "in": "query",
             "required": false,
-            "type": "integer",
-            "format": "int32"
+            "type": "integer"
           },
           {
             "name": "userId",
@@ -5532,8 +6301,7 @@ export const dataSourcesInfo = {
             "name": "environmentId",
             "in": "query",
             "required": false,
-            "type": "string",
-            "format": "uuid"
+            "type": "string"
           }
         ],
         "responseInfo": {
@@ -5574,8 +6342,7 @@ export const dataSourcesInfo = {
             "name": "startDate",
             "in": "query",
             "required": true,
-            "type": "string",
-            "format": "date-time"
+            "type": "string"
           },
           {
             "name": "api-version",
@@ -5587,29 +6354,25 @@ export const dataSourcesInfo = {
             "name": "endDate",
             "in": "query",
             "required": false,
-            "type": "string",
-            "format": "date-time"
+            "type": "string"
           },
           {
             "name": "pageNumber",
             "in": "query",
             "required": false,
-            "type": "integer",
-            "format": "int32"
+            "type": "integer"
           },
           {
             "name": "pageSize",
             "in": "query",
             "required": false,
-            "type": "integer",
-            "format": "int32"
+            "type": "integer"
           },
           {
             "name": "environmentId",
             "in": "query",
             "required": false,
-            "type": "string",
-            "format": "uuid"
+            "type": "string"
           }
         ],
         "responseInfo": {
@@ -5650,15 +6413,13 @@ export const dataSourcesInfo = {
             "name": "userId",
             "in": "path",
             "required": true,
-            "type": "string",
-            "format": "uuid"
+            "type": "string"
           },
           {
             "name": "startDate",
             "in": "query",
             "required": true,
-            "type": "string",
-            "format": "date-time"
+            "type": "string"
           },
           {
             "name": "api-version",
@@ -5670,29 +6431,25 @@ export const dataSourcesInfo = {
             "name": "endDate",
             "in": "query",
             "required": false,
-            "type": "string",
-            "format": "date-time"
+            "type": "string"
           },
           {
             "name": "pageNumber",
             "in": "query",
             "required": false,
-            "type": "integer",
-            "format": "int32"
+            "type": "integer"
           },
           {
             "name": "pageSize",
             "in": "query",
             "required": false,
-            "type": "integer",
-            "format": "int32"
+            "type": "integer"
           },
           {
             "name": "environmentId",
             "in": "query",
             "required": false,
-            "type": "string",
-            "format": "uuid"
+            "type": "string"
           }
         ],
         "responseInfo": {
@@ -5733,8 +6490,7 @@ export const dataSourcesInfo = {
             "name": "startDate",
             "in": "query",
             "required": true,
-            "type": "string",
-            "format": "date-time"
+            "type": "string"
           },
           {
             "name": "api-version",
@@ -5746,15 +6502,13 @@ export const dataSourcesInfo = {
             "name": "endDate",
             "in": "query",
             "required": false,
-            "type": "string",
-            "format": "date-time"
+            "type": "string"
           },
           {
             "name": "environmentId",
             "in": "query",
             "required": false,
-            "type": "string",
-            "format": "uuid"
+            "type": "string"
           }
         ],
         "responseInfo": {
@@ -5795,8 +6549,7 @@ export const dataSourcesInfo = {
             "name": "startDate",
             "in": "query",
             "required": true,
-            "type": "string",
-            "format": "date-time"
+            "type": "string"
           },
           {
             "name": "api-version",
@@ -5808,29 +6561,25 @@ export const dataSourcesInfo = {
             "name": "endDate",
             "in": "query",
             "required": false,
-            "type": "string",
-            "format": "date-time"
+            "type": "string"
           },
           {
             "name": "pageNumber",
             "in": "query",
             "required": false,
-            "type": "integer",
-            "format": "int32"
+            "type": "integer"
           },
           {
             "name": "pageSize",
             "in": "query",
             "required": false,
-            "type": "integer",
-            "format": "int32"
+            "type": "integer"
           },
           {
             "name": "environmentId",
             "in": "query",
             "required": false,
-            "type": "string",
-            "format": "uuid"
+            "type": "string"
           }
         ],
         "responseInfo": {
@@ -5871,15 +6620,13 @@ export const dataSourcesInfo = {
             "name": "userId",
             "in": "path",
             "required": true,
-            "type": "string",
-            "format": "uuid"
+            "type": "string"
           },
           {
             "name": "startDate",
             "in": "query",
             "required": true,
-            "type": "string",
-            "format": "date-time"
+            "type": "string"
           },
           {
             "name": "api-version",
@@ -5891,29 +6638,25 @@ export const dataSourcesInfo = {
             "name": "endDate",
             "in": "query",
             "required": false,
-            "type": "string",
-            "format": "date-time"
+            "type": "string"
           },
           {
             "name": "pageNumber",
             "in": "query",
             "required": false,
-            "type": "integer",
-            "format": "int32"
+            "type": "integer"
           },
           {
             "name": "pageSize",
             "in": "query",
             "required": false,
-            "type": "integer",
-            "format": "int32"
+            "type": "integer"
           },
           {
             "name": "environmentId",
             "in": "query",
             "required": false,
-            "type": "string",
-            "format": "uuid"
+            "type": "string"
           }
         ],
         "responseInfo": {
@@ -6045,57 +6788,49 @@ export const dataSourcesInfo = {
             "name": "workflowId",
             "in": "query",
             "required": false,
-            "type": "string",
-            "format": "uuid"
+            "type": "string"
           },
           {
             "name": "resourceId",
             "in": "query",
             "required": false,
-            "type": "string",
-            "format": "uuid"
+            "type": "string"
           },
           {
             "name": "createdBy",
             "in": "query",
             "required": false,
-            "type": "string",
-            "format": "uuid"
+            "type": "string"
           },
           {
             "name": "ownerId",
             "in": "query",
             "required": false,
-            "type": "string",
-            "format": "uuid"
+            "type": "string"
           },
           {
             "name": "createdOnStartDate",
             "in": "query",
             "required": false,
-            "type": "string",
-            "format": "date"
+            "type": "string"
           },
           {
             "name": "createdOnEndDate",
             "in": "query",
             "required": false,
-            "type": "string",
-            "format": "date"
+            "type": "string"
           },
           {
             "name": "modifiedOnStartDate",
             "in": "query",
             "required": false,
-            "type": "string",
-            "format": "date"
+            "type": "string"
           },
           {
             "name": "modifiedOnEndDate",
             "in": "query",
             "required": false,
-            "type": "string",
-            "format": "date"
+            "type": "string"
           }
         ],
         "responseInfo": {
@@ -6148,15 +6883,13 @@ export const dataSourcesInfo = {
             "name": "workflowId",
             "in": "query",
             "required": false,
-            "type": "string",
-            "format": "uuid"
+            "type": "string"
           },
           {
             "name": "parentProcessStageId",
             "in": "query",
             "required": false,
-            "type": "string",
-            "format": "uuid"
+            "type": "string"
           },
           {
             "name": "connector",
@@ -6233,8 +6966,7 @@ export const dataSourcesInfo = {
             "name": "workflowId",
             "in": "query",
             "required": true,
-            "type": "string",
-            "format": "uuid"
+            "type": "string"
           },
           {
             "name": "api-version",
@@ -6818,7 +7550,57 @@ export const dataSourcesInfo = {
         ],
         "responseInfo": {
           "200": {
+            "type": "array"
+          },
+          "400": {
             "type": "object"
+          },
+          "401": {
+            "type": "object"
+          },
+          "404": {
+            "type": "object"
+          }
+        }
+      },
+      "RemoveAllowedIpAddresses": {
+        "path": "/{connectionId}/powerpages/environments/{environmentId}/websites/{id}/removeAllowedIpAddresses",
+        "method": "POST",
+        "parameters": [
+          {
+            "name": "connectionId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "environmentId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "api-version",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "type": "object"
+          }
+        ],
+        "responseInfo": {
+          "200": {
+            "type": "array"
           },
           "400": {
             "type": "object"
@@ -7239,6 +8021,56 @@ export const dataSourcesInfo = {
           }
         }
       },
+      "ToggleAFDTrafficRouting": {
+        "path": "/{connectionId}/powerpages/environments/{environmentId}/websites/{id}/toggleAFDTrafficRouting",
+        "method": "POST",
+        "parameters": [
+          {
+            "name": "connectionId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "environmentId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "enableAFD",
+            "in": "query",
+            "required": true,
+            "type": "boolean"
+          },
+          {
+            "name": "api-version",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responseInfo": {
+          "200": {
+            "type": "object"
+          },
+          "400": {
+            "type": "object"
+          },
+          "401": {
+            "type": "object"
+          },
+          "404": {
+            "type": "object"
+          }
+        }
+      },
       "UpdatePortalSecurityGroup": {
         "path": "/{connectionId}/powerpages/environments/{environmentId}/websites/{id}/updatePortalSecurityGroup",
         "method": "POST",
@@ -7441,8 +8273,7 @@ export const dataSourcesInfo = {
             "name": "continuationToken",
             "in": "query",
             "required": false,
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           }
         ],
         "responseInfo": {
@@ -7518,8 +8349,7 @@ export const dataSourcesInfo = {
             "name": "approvalId",
             "in": "path",
             "required": true,
-            "type": "string",
-            "format": "uuid"
+            "type": "string"
           },
           {
             "name": "api-version",
@@ -7707,8 +8537,7 @@ export const dataSourcesInfo = {
             "name": "continuationToken",
             "in": "query",
             "required": false,
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           }
         ],
         "responseInfo": {
@@ -7796,8 +8625,7 @@ export const dataSourcesInfo = {
             "name": "flowId",
             "in": "path",
             "required": true,
-            "type": "string",
-            "format": "uuid"
+            "type": "string"
           },
           {
             "name": "api-version",
@@ -7850,8 +8678,7 @@ export const dataSourcesInfo = {
             "name": "flowId",
             "in": "path",
             "required": true,
-            "type": "string",
-            "format": "uuid"
+            "type": "string"
           },
           {
             "name": "runId",
@@ -7945,8 +8772,7 @@ export const dataSourcesInfo = {
             "name": "flowId",
             "in": "path",
             "required": true,
-            "type": "string",
-            "format": "uuid"
+            "type": "string"
           },
           {
             "name": "api-version",
@@ -7987,8 +8813,7 @@ export const dataSourcesInfo = {
             "name": "flowId",
             "in": "path",
             "required": true,
-            "type": "string",
-            "format": "uuid"
+            "type": "string"
           },
           {
             "name": "api-version",
@@ -8035,8 +8860,7 @@ export const dataSourcesInfo = {
             "name": "flowId",
             "in": "path",
             "required": true,
-            "type": "string",
-            "format": "uuid"
+            "type": "string"
           },
           {
             "name": "runId",
@@ -8130,8 +8954,7 @@ export const dataSourcesInfo = {
             "name": "promptId",
             "in": "path",
             "required": true,
-            "type": "string",
-            "format": "uuid"
+            "type": "string"
           },
           {
             "name": "api-version",
@@ -8160,6 +8983,38 @@ export const dataSourcesInfo = {
       },
       "mcp_EnvironmentManagement": {
         "path": "/{connectionId}/mcp/EnvironmentManagement",
+        "method": "POST",
+        "parameters": [
+          {
+            "name": "connectionId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "queryRequest",
+            "in": "body",
+            "required": false,
+            "type": "object"
+          },
+          {
+            "name": "sessionId",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "responseInfo": {
+          "200": {
+            "type": "object"
+          },
+          "default": {
+            "type": "void"
+          }
+        }
+      },
+      "mcp_Governance": {
+        "path": "/{connectionId}/mcp/Governance",
         "method": "POST",
         "parameters": [
           {

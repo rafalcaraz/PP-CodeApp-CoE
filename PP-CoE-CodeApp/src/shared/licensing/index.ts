@@ -9,6 +9,7 @@
 export { callLicensing, clearLicensingInflight } from "./client";
 export type { LicensingRequest } from "./client";
 export { getUsageTimeseries, normalizeUsageSeries } from "./usage";
+export { aggregateUsageSeries } from "./aggregate";
 export {
   getAgentMessagesConsumed,
   normalizeAgentMessages,

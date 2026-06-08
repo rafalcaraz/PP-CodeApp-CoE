@@ -4,7 +4,7 @@
   "type": "Microsoft.PowerApps/apis",
   "properties": {
     "displayName": "Microsoft Copilot Studio",
-    "iconUri": "https://static.powerapps.com/resource/ppcr/releases/v1.0.1811/1.0.1811.4738/microsoftcopilotstudio/icon.png",
+    "iconUri": "https://static.powerapps.com/resource/ppcr/releases/v1.0.1813/1.0.1813.4754/microsoftcopilotstudio/icon.png",
     "iconBrandColor": "",
     "apiEnvironment": "Shared",
     "isCustomApi": false,
@@ -1065,6 +1065,163 @@
             }
           }
         },
+        "/{connectionId}/copilotstudio/agenticruntime/bots/{Copilot}/triggers/{triggerId}/invoke": {
+          "post": {
+            "responses": {
+              "200": {
+                "description": ""
+              }
+            },
+            "operationId": "InvokeTriggerOnAgenticRuntime",
+            "x-ms-visibility": "internal",
+            "summary": "Invokes a trigger on Agentic Runtime",
+            "description": "Invokes a trigger on the Agentic Runtime service (mcs-dracarys)",
+            "parameters": [
+              {
+                "name": "connectionId",
+                "in": "path",
+                "required": true,
+                "x-ms-visibility": "internal",
+                "type": "string"
+              },
+              {
+                "name": "Copilot",
+                "in": "path",
+                "required": true,
+                "type": "string",
+                "x-ms-dynamic-list": {
+                  "operationId": "ListCopilots",
+                  "parameters": {},
+                  "itemsPath": "copilotsList",
+                  "itemValuePath": "schemaname",
+                  "itemTitlePath": "name"
+                },
+                "x-ms-dynamic-values": {
+                  "operationId": "ListCopilots",
+                  "parameters": {},
+                  "value-collection": "copilotsList",
+                  "value-path": "schemaname",
+                  "value-title": "name"
+                },
+                "x-ms-summary": "Copilot Name",
+                "description": "Copilot Name"
+              },
+              {
+                "name": "triggerId",
+                "in": "path",
+                "required": true,
+                "type": "string",
+                "format": "uuid",
+                "description": "Trigger ID"
+              },
+              {
+                "name": "inputs",
+                "in": "body",
+                "description": "Trigger Inputs",
+                "x-ms-summary": "Trigger Inputs",
+                "required": false,
+                "x-ms-visibility": "important",
+                "schema": {
+                  "type": "object",
+                  "description": "A flexible object that accepts any properties.",
+                  "x-ms-summary": "A flexible object that accepts any properties."
+                }
+              },
+              {
+                "in": "query",
+                "name": "conversationId",
+                "required": false,
+                "description": "Optional Conversation ID",
+                "type": "string",
+                "x-ms-summary": "Conversation ID"
+              },
+              {
+                "in": "query",
+                "name": "environmentId",
+                "required": false,
+                "description": "Optional environment ID",
+                "type": "string",
+                "x-ms-summary": "Environment ID"
+              },
+              {
+                "in": "header",
+                "name": "x-ms-cds-bot-id",
+                "required": true,
+                "description": "CDS Bot ID",
+                "type": "string",
+                "format": "uuid",
+                "x-ms-summary": "CDS Bot ID"
+              },
+              {
+                "in": "header",
+                "name": "x-ms-workflow-resourcegroup-name",
+                "required": true,
+                "description": "Trigger Group",
+                "type": "string",
+                "x-ms-summary": "Trigger Group"
+              },
+              {
+                "in": "header",
+                "name": "x-ms-workflow-name",
+                "required": true,
+                "description": "Trigger Instance Id",
+                "type": "string",
+                "x-ms-summary": "Trigger Instance Id"
+              },
+              {
+                "in": "header",
+                "name": "x-ms-trigger-connection-mode",
+                "required": true,
+                "description": "Trigger Connection Mode",
+                "type": "string",
+                "x-ms-summary": "Trigger Connection Mode"
+              },
+              {
+                "in": "header",
+                "name": "x-ms-trigger-purpose",
+                "required": true,
+                "description": "Trigger Purpose",
+                "type": "string",
+                "x-ms-summary": "Trigger Purpose"
+              },
+              {
+                "in": "header",
+                "name": "x-ms-trigger-component-schema-name",
+                "required": true,
+                "description": "Trigger Component Schema Name",
+                "type": "string",
+                "x-ms-summary": "Trigger Component Schema Name"
+              },
+              {
+                "in": "header",
+                "name": "x-ms-trigger-component-version",
+                "required": true,
+                "description": "Trigger Component Version",
+                "type": "integer",
+                "x-ms-summary": "Trigger Component Version"
+              },
+              {
+                "in": "header",
+                "name": "x-ms-trigger-bot-version",
+                "required": true,
+                "description": "Bot Version",
+                "type": "string",
+                "x-ms-summary": "Bot Version"
+              },
+              {
+                "in": "header",
+                "name": "x-ms-pva-bot-id",
+                "description": "PVA Bot ID",
+                "type": "string",
+                "format": "uuid",
+                "x-ms-summary": "PVA Bot ID"
+              }
+            ],
+            "externalDocs": {
+              "url": "https://docs.microsoft.com/connectors/microsoftcopilotstudio/#invokes-a-trigger-on-agentic-runtime"
+            }
+          }
+        },
         "/{connectionId}/powervirtualagents/bots/{Copilot}/triggers/{triggerId}/invoke": {
           "post": {
             "responses": {
@@ -1377,6 +1534,202 @@
               }
             },
             "operationId": "EvaluationTestContinueTurn",
+            "x-ms-visibility": "internal",
+            "summary": "Maker Evaluation test Continue Turn",
+            "description": "Maker Evaluation test continue turn",
+            "x-ms-api-annotation": {
+              "status": "Preview"
+            },
+            "parameters": [
+              {
+                "name": "connectionId",
+                "in": "path",
+                "required": true,
+                "x-ms-visibility": "internal",
+                "type": "string"
+              },
+              {
+                "name": "CdsBotId",
+                "description": "The Copilot to start a conversation with",
+                "x-ms-summary": "Copilot ID",
+                "in": "path",
+                "required": true,
+                "type": "string"
+              },
+              {
+                "name": "ConversationId",
+                "description": "The conversation ID to continue",
+                "x-ms-summary": "Conversation ID",
+                "in": "path",
+                "required": true,
+                "type": "string"
+              },
+              {
+                "name": "body",
+                "description": "Body",
+                "x-ms-summary": "Body",
+                "in": "body",
+                "required": true,
+                "x-ms-visibility": "important",
+                "schema": {
+                  "type": "object",
+                  "description": "A flexible object that accepts any properties.",
+                  "additionalProperties": {
+                    "type": "object"
+                  }
+                }
+              },
+              {
+                "in": "query",
+                "name": "environmentId",
+                "required": false,
+                "description": "Optional environment ID",
+                "type": "string",
+                "x-ms-summary": "Environment ID",
+                "x-ms-visibility": "internal"
+              }
+            ],
+            "externalDocs": {
+              "url": "https://docs.microsoft.com/connectors/microsoftcopilotstudio/#maker-evaluation-test-continue-turn"
+            }
+          }
+        },
+        "/{connectionId}/copilotstudio/agenticruntime/evaluation-test/authenticated/bots/{CdsBotId}/conversations": {
+          "post": {
+            "responses": {
+              "200": {
+                "description": ""
+              }
+            },
+            "operationId": "EvaluationTestStartNewConversationOnAgenticRuntime",
+            "x-ms-visibility": "internal",
+            "summary": "Maker Evaluation Start New Conversation",
+            "description": "Emits a start conversation test event to the specified Copilot",
+            "x-ms-api-annotation": {
+              "status": "Preview"
+            },
+            "parameters": [
+              {
+                "name": "connectionId",
+                "in": "path",
+                "required": true,
+                "x-ms-visibility": "internal",
+                "type": "string"
+              },
+              {
+                "name": "CdsBotId",
+                "description": "The Copilot to start a conversation with",
+                "x-ms-summary": "Copilot ID",
+                "in": "path",
+                "required": true,
+                "type": "string"
+              },
+              {
+                "name": "body",
+                "description": "Body",
+                "x-ms-summary": "Body",
+                "in": "body",
+                "required": true,
+                "x-ms-visibility": "important",
+                "schema": {
+                  "type": "object",
+                  "description": "A flexible object that accepts any properties.",
+                  "additionalProperties": {
+                    "type": "object"
+                  }
+                }
+              },
+              {
+                "in": "query",
+                "name": "environmentId",
+                "required": false,
+                "description": "Optional environment ID",
+                "type": "string",
+                "x-ms-summary": "Environment ID",
+                "x-ms-visibility": "internal"
+              }
+            ],
+            "externalDocs": {
+              "url": "https://docs.microsoft.com/connectors/microsoftcopilotstudio/#maker-evaluation-start-new-conversation"
+            }
+          }
+        },
+        "/{connectionId}/copilotstudio/agenticruntime/evaluation-test/authenticated/bots/{CdsBotId}/conversations/{ConversationId}": {
+          "post": {
+            "responses": {
+              "200": {
+                "description": ""
+              }
+            },
+            "operationId": "EvaluationTestExecuteTurnOnAgenticRuntime",
+            "x-ms-visibility": "internal",
+            "summary": "Maker Evaluation Test Execute Turn",
+            "description": "Sends a prompt to the specified Copilot to start processing in a test conversation",
+            "x-ms-api-annotation": {
+              "status": "Preview"
+            },
+            "parameters": [
+              {
+                "name": "connectionId",
+                "in": "path",
+                "required": true,
+                "x-ms-visibility": "internal",
+                "type": "string"
+              },
+              {
+                "name": "CdsBotId",
+                "description": "The Copilot to start a conversation with",
+                "x-ms-summary": "Copilot ID",
+                "in": "path",
+                "required": true,
+                "type": "string"
+              },
+              {
+                "name": "ConversationId",
+                "description": "The conversation ID to execute the turn in",
+                "x-ms-summary": "Conversation ID",
+                "in": "path",
+                "required": true,
+                "type": "string"
+              },
+              {
+                "name": "body",
+                "description": "Body",
+                "x-ms-summary": "Body",
+                "in": "body",
+                "required": true,
+                "x-ms-visibility": "important",
+                "schema": {
+                  "type": "object",
+                  "description": "A flexible object that accepts any properties.",
+                  "additionalProperties": {
+                    "type": "object"
+                  }
+                }
+              },
+              {
+                "in": "query",
+                "name": "environmentId",
+                "required": false,
+                "description": "Optional environment ID",
+                "type": "string",
+                "x-ms-summary": "Environment ID",
+                "x-ms-visibility": "internal"
+              }
+            ],
+            "externalDocs": {
+              "url": "https://docs.microsoft.com/connectors/microsoftcopilotstudio/#maker-evaluation-test-execute-turn"
+            }
+          }
+        },
+        "/{connectionId}/copilotstudio/agenticruntime/evaluation-test/authenticated/bots/{CdsBotId}/conversations/{ConversationId}/continue": {
+          "post": {
+            "responses": {
+              "200": {
+                "description": ""
+              }
+            },
+            "operationId": "EvaluationTestContinueTurnOnAgenticRuntime",
             "x-ms-visibility": "internal",
             "summary": "Maker Evaluation test Continue Turn",
             "description": "Maker Evaluation test continue turn",
@@ -2329,8 +2682,8 @@
       },
       "useNewApimVersion": "true",
       "version": {
-        "previous": "releases/v1.0.1808\\1.0.1808.4692",
-        "current": "releases/v1.0.1811\\1.0.1811.4738"
+        "previous": "releases/v1.0.1811\\1.0.1811.4738",
+        "current": "releases/v1.0.1813\\1.0.1813.4754"
       }
     },
     "capabilities": [
@@ -2340,7 +2693,7 @@
     "interfaces": {},
     "description": "Microsoft Copilot Studio used to discover and trigger agents",
     "createdTime": "2024-06-12T22:26:12.3187631Z",
-    "changedTime": "2026-05-08T09:06:57.415629Z",
+    "changedTime": "2026-05-22T19:07:47.1325409Z",
     "releaseTag": "Production",
     "tier": "Standard",
     "publisher": "Microsoft",

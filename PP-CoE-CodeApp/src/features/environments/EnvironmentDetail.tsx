@@ -371,6 +371,19 @@ function ReadyView({
               <Text size={300}>{row.region}</Text>
             </>
           )}
+          <span className={styles.summaryDot} aria-hidden>·</span>
+          <Link
+            onClick={() => {
+              const params = new URLSearchParams({ envId: row.id });
+              if (row.environmentGroupId) {
+                params.set("groupKind", "ms");
+                params.set("groupId", row.environmentGroupId);
+              }
+              navigate(`/zones/usage?${params.toString()}`);
+            }}
+          >
+            Usage
+          </Link>
         </div>
       </div>
 

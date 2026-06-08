@@ -1,5 +1,6 @@
 import { lazy } from "react";
 import { Route } from "react-router-dom";
+import { ZoneUsageRoute } from "./ZoneUsageRoute";
 
 // Feature routes are lazy-loaded at the feature boundary so a new feature
 // adds at most one lazy() call instead of touching the App.tsx central
@@ -49,7 +50,17 @@ export function zonesRoutes() {
       path="/zones/reporting"
       element={<ZonesReportingOverviewView />}
     />,
+    <Route
+      key="zones-ZoneUsageView--zones--usage"
+      path="/zones/usage"
+      element={<ZoneUsageRoute />}
+    />,
     <Route key="zones-ZoneDetailView--zones--zoneId" path="/zones/:zoneId" element={<ZoneDetailView />} />,
+    <Route
+      key="zones-ZoneUsageView--zones--zoneId--usage"
+      path="/zones/:zoneId/usage"
+      element={<ZoneUsageRoute />}
+    />,
     <Route
       key="zones-ZoneReportingView--zones--zoneId--reporting"
       path="/zones/:zoneId/reporting"

@@ -10,49 +10,6 @@
   "localAppUrl": "http://localhost:3000",
   "logoPath": "Default",
   "connectionReferences": {
-    "aaedf328-30da-4325-8925-c2d33cce2d38": {
-      "id": "/providers/Microsoft.PowerApps/apis/shared_powerplatformadminv2",
-      "displayName": "Power Platform for Admins V2",
-      "dataSources": [
-        "powerplatformadminv2"
-      ],
-      "authenticationType": "oauth2-auth",
-      "dataSets": {}
-    },
-    "5aefb442-1a7d-4024-a102-c085636b92b4": {
-      "id": "/providers/Microsoft.PowerApps/apis/shared_microsoftcopilotstudio",
-      "displayName": "Microsoft Copilot Studio",
-      "dataSources": [
-        "microsoftcopilotstudio"
-      ],
-      "authenticationType": "oauthDefault",
-      "dataSets": {}
-    },
-    "2fa18c09-c5b7-4b18-aa2c-892769ffb0d8": {
-      "id": "/providers/Microsoft.PowerApps/apis/shared_powerplatformforadmins",
-      "displayName": "Power Platform for Admins",
-      "dataSources": [
-        "powerplatformforadmins"
-      ],
-      "dataSets": {}
-    },
-    "5f74384a-e9de-4f7a-a14b-0a7d803c24fa": {
-      "id": "/providers/Microsoft.PowerApps/apis/shared_webcontents",
-      "displayName": "HTTP with Microsoft Entra ID (preauthorized)",
-      "dataSources": [
-        "webcontents"
-      ],
-      "authenticationType": "EntraAuth",
-      "sharedConnectionId": "/providers/Microsoft.PowerApps/apis/shared_webcontents/connections/b0b935afcb3a445caf00c0aed03be18e",
-      "dataSets": {}
-    },
-    "9268b990-0e73-4b2d-82a6-99026c06c536": {
-      "id": "/providers/microsoft.powerapps/apis/shared_webcontents",
-      "displayName": "HTTP with Microsoft Entra ID (preauthorized)",
-      "authenticationType": "EntraAuth",
-      "sharedConnectionId": "/providers/Microsoft.PowerApps/apis/shared_webcontents/connections/056e6c17d50d4e38bc4a5804bce4cf44",
-      "xrmConnectionReferenceLogicalName": "msftcsa_HttpWithAzureusil102"
-    },
     "dc9d6a36-b7a7-424d-8e23-08c5442f9ef2": {
       "id": "/providers/Microsoft.PowerApps/apis/shared_logicflows",
       "displayName": "Logic flows",
@@ -69,8 +26,47 @@
       "id": "/providers/microsoft.powerapps/apis/shared_webcontents",
       "displayName": "HTTP with Microsoft Entra ID (preauthorized)",
       "authenticationType": "EntraAuth",
-      "sharedConnectionId": "/providers/Microsoft.PowerApps/apis/shared_webcontents/connections/df9a6e0303e24abea2a5342aefa2cbe4",
       "xrmConnectionReferenceLogicalName": "msftcsa_PPLicensingAPI"
+    },
+    "d81f91ed-7d13-48cf-8b7f-1abbf1ca6172": {
+      "id": "/providers/Microsoft.PowerApps/apis/shared_webcontents",
+      "displayName": "HTTP with Microsoft Entra ID (preauthorized)",
+      "dataSources": [
+        "webcontents"
+      ],
+      "authenticationType": "EntraAuth",
+      "sharedConnectionId": "/providers/Microsoft.PowerApps/apis/shared_webcontents/connections/b0b935afcb3a445caf00c0aed03be18e",
+      "dataSets": {},
+      "xrmConnectionReferenceLogicalName": "msftcsa_HTTPEntraPreAuthGraph"
+    },
+    "5a9a2e16-40b8-4386-9aed-b22d2faa4d96": {
+      "id": "/providers/Microsoft.PowerApps/apis/shared_powerplatformforadmins",
+      "displayName": "Power Platform for Admins",
+      "dataSources": [
+        "powerplatformforadmins"
+      ],
+      "dataSets": {},
+      "xrmConnectionReferenceLogicalName": "msftcsa_PPForAdmins"
+    },
+    "44644aeb-674d-44eb-b1e1-a6ac69a9e4c9": {
+      "id": "/providers/Microsoft.PowerApps/apis/shared_microsoftcopilotstudio",
+      "displayName": "Microsoft Copilot Studio",
+      "dataSources": [
+        "microsoftcopilotstudio"
+      ],
+      "authenticationType": "oauthDefault",
+      "dataSets": {},
+      "xrmConnectionReferenceLogicalName": "msftcsa_PPCopilotStudio"
+    },
+    "20675a14-287e-49e2-a575-1a7dd31c611e": {
+      "id": "/providers/Microsoft.PowerApps/apis/shared_powerplatformadminv2",
+      "displayName": "Power Platform for Admins V2",
+      "dataSources": [
+        "powerplatformadminv2"
+      ],
+      "authenticationType": "oauth2-auth",
+      "dataSets": {},
+      "xrmConnectionReferenceLogicalName": "msftcsa_PPForAdminsV2"
     }
   },
   "databaseReferences": {
