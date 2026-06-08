@@ -186,6 +186,23 @@ export class MicrosoftCopilotStudioService {
   }
 
   /**
+   * Invokes a trigger on Agentic Runtime
+   * Invokes a trigger on the Agentic Runtime service (mcs-dracarys)
+   */
+  public static async InvokeTriggerOnAgenticRuntime(Copilot: string, triggerId: string, x_ms_cds_bot_id: string, x_ms_workflow_resourcegroup_name: string, x_ms_workflow_name: string, x_ms_trigger_connection_mode: string, x_ms_trigger_purpose: string, x_ms_trigger_component_schema_name: string, x_ms_trigger_component_version: number, x_ms_trigger_bot_version: string, inputs?: Record<string, unknown>, conversationId?: string, environmentId?: string, x_ms_pva_bot_id?: string): Promise<IOperationResult<void>> {
+    const params: { Copilot: string, triggerId: string, "x-ms-cds-bot-id": string, "x-ms-workflow-resourcegroup-name": string, "x-ms-workflow-name": string, "x-ms-trigger-connection-mode": string, "x-ms-trigger-purpose": string, "x-ms-trigger-component-schema-name": string, "x-ms-trigger-component-version": number, "x-ms-trigger-bot-version": string, inputs?: Record<string, unknown>, conversationId?: string, environmentId?: string, "x-ms-pva-bot-id"?: string } = { Copilot, triggerId, "x-ms-cds-bot-id": x_ms_cds_bot_id, "x-ms-workflow-resourcegroup-name": x_ms_workflow_resourcegroup_name, "x-ms-workflow-name": x_ms_workflow_name, "x-ms-trigger-connection-mode": x_ms_trigger_connection_mode, "x-ms-trigger-purpose": x_ms_trigger_purpose, "x-ms-trigger-component-schema-name": x_ms_trigger_component_schema_name, "x-ms-trigger-component-version": x_ms_trigger_component_version, "x-ms-trigger-bot-version": x_ms_trigger_bot_version, inputs, conversationId, environmentId, "x-ms-pva-bot-id": x_ms_pva_bot_id };
+    const result = await MicrosoftCopilotStudioService.client.executeAsync<{ Copilot: string, triggerId: string, "x-ms-cds-bot-id": string, "x-ms-workflow-resourcegroup-name": string, "x-ms-workflow-name": string, "x-ms-trigger-connection-mode": string, "x-ms-trigger-purpose": string, "x-ms-trigger-component-schema-name": string, "x-ms-trigger-component-version": number, "x-ms-trigger-bot-version": string, inputs?: Record<string, unknown>, conversationId?: string, environmentId?: string, "x-ms-pva-bot-id"?: string }, void>(
+      {
+        connectorOperation: {
+          tableName: MicrosoftCopilotStudioService.dataSourceName,
+          operationName: 'InvokeTriggerOnAgenticRuntime',
+          parameters: params
+        },
+      });
+    return result;
+  }
+
+  /**
    * Invokes a trigger
    * Invokes a trigger
    */
@@ -247,6 +264,57 @@ export class MicrosoftCopilotStudioService {
         connectorOperation: {
           tableName: MicrosoftCopilotStudioService.dataSourceName,
           operationName: 'EvaluationTestContinueTurn',
+          parameters: params
+        },
+      });
+    return result;
+  }
+
+  /**
+   * Maker Evaluation Start New Conversation
+   * Emits a start conversation test event to the specified Copilot
+   */
+  public static async EvaluationTestStartNewConversationOnAgenticRuntime(CdsBotId: string, body: Record<string, unknown>, environmentId?: string): Promise<IOperationResult<void>> {
+    const params: { CdsBotId: string, body: Record<string, unknown>, environmentId?: string } = { CdsBotId, body, environmentId };
+    const result = await MicrosoftCopilotStudioService.client.executeAsync<{ CdsBotId: string, body: Record<string, unknown>, environmentId?: string }, void>(
+      {
+        connectorOperation: {
+          tableName: MicrosoftCopilotStudioService.dataSourceName,
+          operationName: 'EvaluationTestStartNewConversationOnAgenticRuntime',
+          parameters: params
+        },
+      });
+    return result;
+  }
+
+  /**
+   * Maker Evaluation Test Execute Turn
+   * Sends a prompt to the specified Copilot to start processing in a test conversation
+   */
+  public static async EvaluationTestExecuteTurnOnAgenticRuntime(CdsBotId: string, ConversationId: string, body: Record<string, unknown>, environmentId?: string): Promise<IOperationResult<void>> {
+    const params: { CdsBotId: string, ConversationId: string, body: Record<string, unknown>, environmentId?: string } = { CdsBotId, ConversationId, body, environmentId };
+    const result = await MicrosoftCopilotStudioService.client.executeAsync<{ CdsBotId: string, ConversationId: string, body: Record<string, unknown>, environmentId?: string }, void>(
+      {
+        connectorOperation: {
+          tableName: MicrosoftCopilotStudioService.dataSourceName,
+          operationName: 'EvaluationTestExecuteTurnOnAgenticRuntime',
+          parameters: params
+        },
+      });
+    return result;
+  }
+
+  /**
+   * Maker Evaluation test Continue Turn
+   * Maker Evaluation test continue turn
+   */
+  public static async EvaluationTestContinueTurnOnAgenticRuntime(CdsBotId: string, ConversationId: string, body: Record<string, unknown>, environmentId?: string): Promise<IOperationResult<void>> {
+    const params: { CdsBotId: string, ConversationId: string, body: Record<string, unknown>, environmentId?: string } = { CdsBotId, ConversationId, body, environmentId };
+    const result = await MicrosoftCopilotStudioService.client.executeAsync<{ CdsBotId: string, ConversationId: string, body: Record<string, unknown>, environmentId?: string }, void>(
+      {
+        connectorOperation: {
+          tableName: MicrosoftCopilotStudioService.dataSourceName,
+          operationName: 'EvaluationTestContinueTurnOnAgenticRuntime',
           parameters: params
         },
       });

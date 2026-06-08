@@ -211,6 +211,7 @@ export function EnvironmentGroupDetail() {
           envs={envs}
           counts={counts}
           envColumns={envColumns}
+          navigate={navigate}
         />
       )}
     </div>
@@ -223,9 +224,10 @@ interface ReadyViewProps {
   envs: AsyncSlot<EnvironmentRow[]>;
   counts: AsyncSlot<ResourceCountRow[]>;
   envColumns: TableColumnDefinition<EnvironmentRow>[];
+  navigate: ReturnType<typeof useNavigate>;
 }
 
-function ReadyView({ row, raw, envs, counts, envColumns }: ReadyViewProps) {
+function ReadyView({ row, raw, envs, counts, envColumns, navigate }: ReadyViewProps) {
   const styles = useDetailStyles();
   const page = usePageStyles();
   return (
@@ -255,6 +257,18 @@ function ReadyView({ row, raw, envs, counts, envColumns }: ReadyViewProps) {
             {row.description}
           </Text>
         )}
+        <div className={styles.summaryLine}>
+          <Text size={300}>Explore usage for this group's environments</Text>
+          <Link
+            onClick={() =>
+              navigate(
+                `/zones/usage?groupKind=ms&groupId=${encodeURIComponent(row.id)}`,
+              )
+            }
+          >
+            Usage
+          </Link>
+        </div>
       </div>
 
       {/* 2. Details */}

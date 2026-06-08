@@ -81,7 +81,9 @@ const FEATURES: Array<{
     expectedPaths: [
       "/zones",
       "/zones/reporting",
+      "/zones/usage",
       "/zones/:zoneId",
+      "/zones/:zoneId/usage",
       "/zones/:zoneId/reporting",
       "/zones/custom-groups/:groupId",
       "/zones/custom-groups/:groupId/reporting",
@@ -147,3 +149,6 @@ describe("feature routes", () => {
     });
   }
 });
+
+
+

@@ -84,6 +84,7 @@ function renderEnvDetail(envId = "env-1") {
       <MemoryRouter initialEntries={[`/environments/${envId}`]}>
         <Routes>
           <Route path="/environments/:envId" element={<EnvironmentDetail />} />
+          <Route path="/zones/usage" element={<div>Zone usage page</div>} />
         </Routes>
       </MemoryRouter>
     </FluentProvider>,
@@ -125,6 +126,19 @@ describe("EnvironmentDetail smoke", () => {
       expect(
         screen.getByText("Couldn't load environment"),
       ).toBeInTheDocument();
+    });
+  });
+
+  it("shows a Usage link that routes to scoped zone usage", async () => {
+    primeOnMountCalls();
+    renderEnvDetail();
+    await waitFor(() => {
+      expect(screen.getByText("Usage")).toBeInTheDocument();
+    });
+
+    await userEvent.click(screen.getByText("Usage"));
+    await waitFor(() => {
+      expect(screen.getByText("Zone usage page")).toBeInTheDocument();
     });
   });
 });

@@ -66,6 +66,7 @@ function renderGroupDetail(groupId = "grp-1") {
             path="/environment-groups/:groupId"
             element={<EnvironmentGroupDetail />}
           />
+          <Route path="/zones/usage" element={<div>Zone usage page</div>} />
         </Routes>
       </MemoryRouter>
     </FluentProvider>,
@@ -169,6 +170,19 @@ describe("EnvironmentGroupDetail smoke", () => {
     );
     await waitFor(() => {
       expect(getEnvironmentGroupGovernance).toHaveBeenCalledWith("grp-1");
+    });
+  });
+
+  it("shows a Usage link that routes to scoped zone usage", async () => {
+    primeOnMountCalls();
+    renderGroupDetail();
+    await waitFor(() => {
+      expect(screen.getByText("Usage")).toBeInTheDocument();
+    });
+
+    await userEvent.click(screen.getByText("Usage"));
+    await waitFor(() => {
+      expect(screen.getByText("Zone usage page")).toBeInTheDocument();
     });
   });
 });

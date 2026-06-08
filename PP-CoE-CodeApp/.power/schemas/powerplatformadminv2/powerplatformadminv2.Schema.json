@@ -4,7 +4,7 @@
   "type": "Microsoft.PowerApps/apis",
   "properties": {
     "displayName": "Power Platform for Admins V2",
-    "iconUri": "https://static.powerapps.com/resource/ppcr/releases/v1.0.1808/1.0.1808.4692/powerplatformadminv2/icon.png",
+    "iconUri": "https://static.powerapps.com/resource/ppcr/releases/v1.0.1812/1.0.1812.4731/powerplatformadminv2/icon.png",
     "iconBrandColor": "#000000",
     "apiEnvironment": "Shared",
     "isCustomApi": false,
@@ -237,7 +237,7 @@
           "url": "https://admin.powerplatform.microsoft.com/support",
           "email": "support@microsoft.com"
         },
-        "version": "2022-03-01-preview",
+        "version": "2024-10-01",
         "x-ms-api-annotation": {
           "status": "Production"
         }
@@ -319,7 +319,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               }
@@ -383,7 +383,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               }
@@ -458,7 +458,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               }
@@ -526,7 +526,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               }
@@ -622,7 +622,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               }
@@ -684,7 +684,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               }
@@ -741,7 +741,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               }
@@ -820,7 +820,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               }
@@ -891,7 +891,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               },
@@ -971,7 +971,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               }
@@ -1031,7 +1031,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               }
@@ -1095,7 +1095,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               },
@@ -1171,7 +1171,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               }
@@ -1231,7 +1231,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               }
@@ -1295,7 +1295,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               },
@@ -1371,7 +1371,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               }
@@ -1423,7 +1423,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               }
@@ -1479,7 +1479,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               },
@@ -1547,7 +1547,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               }
@@ -1599,7 +1599,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               }
@@ -1662,7 +1662,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               }
@@ -1721,7 +1721,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               }
@@ -1788,7 +1788,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               }
@@ -1844,7 +1844,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               }
@@ -1900,7 +1900,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               },
@@ -1970,7 +1970,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               }
@@ -2029,7 +2029,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               }
@@ -2088,7 +2088,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               }
@@ -2103,6 +2103,421 @@
             },
             "externalDocs": {
               "url": "https://docs.microsoft.com/connectors/powerplatformadminv2/#set-bot-as-unquarantined"
+            }
+          }
+        },
+        "/{connectionId}/copilotstudio/environments/{EnvironmentId}/bots/{BotId}/api/makerevaluation/testruns": {
+          "get": {
+            "tags": [
+              "Bots"
+            ],
+            "summary": "List Maker Evaluation Test Runs",
+            "description": "List all maker evaluation test runs for a bot.",
+            "operationId": "ListMakerEvaluationTestRuns",
+            "produces": [
+              "application/json"
+            ],
+            "parameters": [
+              {
+                "name": "connectionId",
+                "in": "path",
+                "required": true,
+                "x-ms-visibility": "internal",
+                "type": "string"
+              },
+              {
+                "in": "path",
+                "name": "EnvironmentId",
+                "description": "The environment ID.",
+                "required": true,
+                "type": "string",
+                "x-ms-summary": "Environment Id"
+              },
+              {
+                "in": "path",
+                "name": "BotId",
+                "description": "The bot ID.",
+                "required": true,
+                "type": "string",
+                "x-ms-summary": "Bot Id"
+              },
+              {
+                "in": "query",
+                "name": "api-version",
+                "description": "The API version.",
+                "required": true,
+                "type": "string",
+                "default": "2024-10-01",
+                "x-ms-summary": "Api-version",
+                "x-ms-visibility": "advanced"
+              }
+            ],
+            "responses": {
+              "200": {
+                "description": "Successful response.",
+                "schema": {
+                  "$ref": "#/definitions/TestRunCollection"
+                }
+              }
+            },
+            "externalDocs": {
+              "url": "https://docs.microsoft.com/connectors/powerplatformadminv2/#list-maker-evaluation-test-runs"
+            }
+          }
+        },
+        "/{connectionId}/copilotstudio/environments/{EnvironmentId}/bots/{BotId}/api/makerevaluation/testruns/{TestRunId}": {
+          "get": {
+            "tags": [
+              "Bots"
+            ],
+            "summary": "Get Maker Evaluation Test Run by ID",
+            "description": "Get the status and results of a specific maker evaluation test run.",
+            "operationId": "GetMakerEvaluationTestRun",
+            "produces": [
+              "application/json"
+            ],
+            "parameters": [
+              {
+                "name": "connectionId",
+                "in": "path",
+                "required": true,
+                "x-ms-visibility": "internal",
+                "type": "string"
+              },
+              {
+                "in": "path",
+                "name": "EnvironmentId",
+                "description": "The environment ID.",
+                "required": true,
+                "type": "string",
+                "x-ms-summary": "Environment Id"
+              },
+              {
+                "in": "path",
+                "name": "BotId",
+                "description": "The bot ID.",
+                "required": true,
+                "type": "string",
+                "x-ms-summary": "Bot Id"
+              },
+              {
+                "in": "path",
+                "name": "TestRunId",
+                "description": "The test run ID.",
+                "required": true,
+                "type": "string",
+                "format": "uuid",
+                "x-ms-summary": "Test Run Id"
+              },
+              {
+                "in": "query",
+                "name": "api-version",
+                "description": "The API version.",
+                "required": true,
+                "type": "string",
+                "default": "2024-10-01",
+                "x-ms-summary": "Api-version",
+                "x-ms-visibility": "advanced"
+              }
+            ],
+            "responses": {
+              "200": {
+                "description": "Successful response.",
+                "schema": {
+                  "$ref": "#/definitions/TestRun"
+                }
+              }
+            },
+            "externalDocs": {
+              "url": "https://docs.microsoft.com/connectors/powerplatformadminv2/#get-maker-evaluation-test-run-by-id"
+            }
+          }
+        },
+        "/{connectionId}/copilotstudio/environments/{EnvironmentId}/bots/{BotId}/api/makerevaluation/testruns/{TestRunId}/snapshot": {
+          "get": {
+            "tags": [
+              "Bots"
+            ],
+            "summary": "Download Maker Evaluation Snapshot",
+            "description": "Download the bot content snapshot associated with a specific maker evaluation test run as a ZIP file.",
+            "operationId": "DownloadMakerEvaluationSnapshot",
+            "produces": [
+              "application/zip"
+            ],
+            "parameters": [
+              {
+                "name": "connectionId",
+                "in": "path",
+                "required": true,
+                "x-ms-visibility": "internal",
+                "type": "string"
+              },
+              {
+                "in": "path",
+                "name": "EnvironmentId",
+                "description": "The environment ID.",
+                "required": true,
+                "type": "string",
+                "x-ms-summary": "Environment Id"
+              },
+              {
+                "in": "path",
+                "name": "BotId",
+                "description": "The bot ID.",
+                "required": true,
+                "type": "string",
+                "x-ms-summary": "Bot Id"
+              },
+              {
+                "in": "path",
+                "name": "TestRunId",
+                "description": "The test run ID.",
+                "required": true,
+                "type": "string",
+                "format": "uuid",
+                "x-ms-summary": "Test Run Id"
+              },
+              {
+                "in": "query",
+                "name": "api-version",
+                "description": "The API version.",
+                "required": true,
+                "type": "string",
+                "default": "2024-10-01",
+                "x-ms-summary": "Api-version",
+                "x-ms-visibility": "advanced"
+              }
+            ],
+            "responses": {
+              "200": {
+                "description": "The bot content snapshot ZIP file.",
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                },
+                "headers": {
+                  "Content-Disposition": {
+                    "description": "Attachment filename in the format botcontent_{testRunId}.zip.",
+                    "type": "string"
+                  }
+                }
+              },
+              "404": {
+                "description": "Test run not found."
+              }
+            },
+            "externalDocs": {
+              "url": "https://docs.microsoft.com/connectors/powerplatformadminv2/#download-maker-evaluation-snapshot"
+            }
+          }
+        },
+        "/{connectionId}/copilotstudio/environments/{EnvironmentId}/bots/{BotId}/api/makerevaluation/testsets": {
+          "get": {
+            "tags": [
+              "Bots"
+            ],
+            "summary": "List Maker Evaluation Test Sets",
+            "description": "Retrieves the list of test sets for a bot in a specified environment.",
+            "operationId": "ListMakerEvaluationTestSets",
+            "produces": [
+              "application/json"
+            ],
+            "parameters": [
+              {
+                "name": "connectionId",
+                "in": "path",
+                "required": true,
+                "x-ms-visibility": "internal",
+                "type": "string"
+              },
+              {
+                "in": "path",
+                "name": "EnvironmentId",
+                "description": "The environment ID.",
+                "required": true,
+                "type": "string",
+                "x-ms-summary": "Environment Id"
+              },
+              {
+                "in": "path",
+                "name": "BotId",
+                "description": "The bot ID.",
+                "required": true,
+                "type": "string",
+                "x-ms-summary": "Bot Id"
+              },
+              {
+                "in": "query",
+                "name": "api-version",
+                "description": "The API version.",
+                "required": true,
+                "type": "string",
+                "default": "2024-10-01",
+                "x-ms-summary": "Api-version",
+                "x-ms-visibility": "advanced"
+              }
+            ],
+            "responses": {
+              "200": {
+                "description": "Successful response.",
+                "schema": {
+                  "$ref": "#/definitions/TestSetCollection"
+                }
+              }
+            },
+            "externalDocs": {
+              "url": "https://docs.microsoft.com/connectors/powerplatformadminv2/#list-maker-evaluation-test-sets"
+            }
+          }
+        },
+        "/{connectionId}/copilotstudio/environments/{EnvironmentId}/bots/{BotId}/api/makerevaluation/testsets/{TestSetId}": {
+          "get": {
+            "tags": [
+              "Bots"
+            ],
+            "summary": "Get Maker Evaluation Test Set by ID",
+            "description": "Get a specific test set for maker evaluation of a bot.",
+            "operationId": "GetMakerEvaluationTestSet",
+            "produces": [
+              "application/json"
+            ],
+            "parameters": [
+              {
+                "name": "connectionId",
+                "in": "path",
+                "required": true,
+                "x-ms-visibility": "internal",
+                "type": "string"
+              },
+              {
+                "in": "path",
+                "name": "EnvironmentId",
+                "description": "The environment ID.",
+                "required": true,
+                "type": "string",
+                "x-ms-summary": "Environment Id"
+              },
+              {
+                "in": "path",
+                "name": "BotId",
+                "description": "The bot ID.",
+                "required": true,
+                "type": "string",
+                "x-ms-summary": "Bot Id"
+              },
+              {
+                "in": "path",
+                "name": "TestSetId",
+                "description": "The test set ID.",
+                "required": true,
+                "type": "string",
+                "x-ms-summary": "Test Set Id"
+              },
+              {
+                "in": "query",
+                "name": "api-version",
+                "description": "The API version.",
+                "required": true,
+                "type": "string",
+                "default": "2024-10-01",
+                "x-ms-summary": "Api-version",
+                "x-ms-visibility": "advanced"
+              }
+            ],
+            "responses": {
+              "200": {
+                "description": "Successful response.",
+                "schema": {
+                  "$ref": "#/definitions/TestSet"
+                }
+              }
+            },
+            "externalDocs": {
+              "url": "https://docs.microsoft.com/connectors/powerplatformadminv2/#get-maker-evaluation-test-set-by-id"
+            }
+          }
+        },
+        "/{connectionId}/copilotstudio/environments/{EnvironmentId}/bots/{BotId}/api/makerevaluation/testsets/{TestSetId}/run": {
+          "post": {
+            "tags": [
+              "Bots"
+            ],
+            "summary": "Run Maker Evaluation Test Set",
+            "description": "Trigger a maker evaluation test run for a specific test set.",
+            "operationId": "RunMakerEvaluationTestSet",
+            "consumes": [
+              "application/json"
+            ],
+            "produces": [
+              "application/json"
+            ],
+            "parameters": [
+              {
+                "name": "connectionId",
+                "in": "path",
+                "required": true,
+                "x-ms-visibility": "internal",
+                "type": "string"
+              },
+              {
+                "in": "path",
+                "name": "EnvironmentId",
+                "description": "The environment ID.",
+                "required": true,
+                "type": "string",
+                "x-ms-summary": "Environment Id"
+              },
+              {
+                "in": "path",
+                "name": "BotId",
+                "description": "The bot ID.",
+                "required": true,
+                "type": "string",
+                "x-ms-summary": "Bot Id"
+              },
+              {
+                "in": "path",
+                "name": "TestSetId",
+                "description": "The test set ID.",
+                "required": true,
+                "type": "string",
+                "x-ms-summary": "Test Set Id"
+              },
+              {
+                "in": "query",
+                "name": "api-version",
+                "description": "The API version.",
+                "required": true,
+                "type": "string",
+                "default": "2024-10-01",
+                "x-ms-summary": "Api-version",
+                "x-ms-visibility": "advanced"
+              },
+              {
+                "in": "body",
+                "name": "body",
+                "required": true,
+                "schema": {
+                  "$ref": "#/definitions/RunTestSetRequestBody"
+                }
+              }
+            ],
+            "responses": {
+              "200": {
+                "description": "Successful response.",
+                "schema": {
+                  "$ref": "#/definitions/RunStatusResponse"
+                }
+              },
+              "400": {
+                "description": "Bad Request."
+              },
+              "500": {
+                "description": "Internal Server Error."
+              }
+            },
+            "externalDocs": {
+              "url": "https://docs.microsoft.com/connectors/powerplatformadminv2/#run-maker-evaluation-test-set"
             }
           }
         },
@@ -2140,7 +2555,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               }
@@ -2223,7 +2638,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               },
@@ -2346,7 +2761,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               },
@@ -2447,7 +2862,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               }
@@ -2548,7 +2963,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               },
@@ -2635,7 +3050,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               },
@@ -2702,7 +3117,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               }
@@ -2777,7 +3192,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               }
@@ -2838,7 +3253,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               }
@@ -2924,7 +3339,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               },
@@ -3004,7 +3419,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               }
@@ -3079,7 +3494,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               }
@@ -3159,7 +3574,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               },
@@ -3239,7 +3654,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               }
@@ -3319,7 +3734,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               },
@@ -3402,7 +3817,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               }
@@ -3477,7 +3892,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               }
@@ -3557,7 +3972,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               },
@@ -3640,7 +4055,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               }
@@ -3721,7 +4136,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               }
@@ -3793,7 +4208,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               }
@@ -3874,7 +4289,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               }
@@ -3960,7 +4375,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               },
@@ -4045,7 +4460,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               },
@@ -4111,7 +4526,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               }
@@ -4140,6 +4555,391 @@
             "x-AccessControl.Permission": "EnvironmentManagement.Operation.Read",
             "externalDocs": {
               "url": "https://docs.microsoft.com/connectors/powerplatformadminv2/#gets-the-status-of-an-environment-lifecycle-operation-(preview)"
+            }
+          }
+        },
+        "/{connectionId}/environmentmanagement/provisioning/create": {
+          "post": {
+            "tags": [
+              "EnvironmentProvisioning"
+            ],
+            "summary": "Provisions a new environment",
+            "description": "Provisions a new environment.",
+            "operationId": "ProvisionNewEnvironment",
+            "consumes": [
+              "application/json",
+              "text/json",
+              "application/*+json"
+            ],
+            "produces": [
+              "text/plain",
+              "application/json",
+              "text/json"
+            ],
+            "parameters": [
+              {
+                "name": "connectionId",
+                "in": "path",
+                "required": true,
+                "x-ms-visibility": "internal",
+                "type": "string"
+              },
+              {
+                "in": "query",
+                "name": "api-version",
+                "description": "The API version.",
+                "required": true,
+                "type": "string",
+                "default": "2024-10-01",
+                "x-ms-summary": "Api-version",
+                "x-ms-visibility": "advanced"
+              },
+              {
+                "in": "body",
+                "name": "body",
+                "description": "The environment creation request.",
+                "schema": {
+                  "$ref": "#/definitions/CreateEnvironmentRequest"
+                }
+              }
+            ],
+            "responses": {
+              "201": {
+                "description": "Created",
+                "schema": {
+                  "$ref": "#/definitions/OperationExecutionResult"
+                }
+              },
+              "202": {
+                "description": "Accepted"
+              },
+              "400": {
+                "description": "Bad Request",
+                "schema": {
+                  "$ref": "#/definitions/ValidationResponse"
+                }
+              }
+            },
+            "x-AccessControl.Scope": "/tenants/{tenantId}",
+            "x-AccessControl.Permission": "EnvironmentManagement.Provisioning.Write",
+            "externalDocs": {
+              "url": "https://docs.microsoft.com/connectors/powerplatformadminv2/#provisions-a-new-environment"
+            }
+          }
+        },
+        "/{connectionId}/environmentmanagement/provisioning/environments/{environmentId}/link": {
+          "patch": {
+            "tags": [
+              "EnvironmentProvisioning"
+            ],
+            "summary": "Links a Dataverse instance to an existing environment",
+            "description": "Links a Dataverse instance to an existing environment.",
+            "operationId": "LinkDataverse",
+            "consumes": [
+              "application/json",
+              "text/json",
+              "application/*+json"
+            ],
+            "produces": [
+              "text/plain",
+              "application/json",
+              "text/json"
+            ],
+            "parameters": [
+              {
+                "name": "connectionId",
+                "in": "path",
+                "required": true,
+                "x-ms-visibility": "internal",
+                "type": "string"
+              },
+              {
+                "in": "path",
+                "name": "environmentId",
+                "description": "The environment ID to link Dataverse to.",
+                "required": true,
+                "type": "string",
+                "x-ms-summary": "Environment Id"
+              },
+              {
+                "in": "query",
+                "name": "api-version",
+                "description": "The API version.",
+                "required": true,
+                "type": "string",
+                "default": "2024-10-01",
+                "x-ms-summary": "Api-version",
+                "x-ms-visibility": "advanced"
+              },
+              {
+                "in": "body",
+                "name": "body",
+                "description": "The linked environment metadata.",
+                "schema": {
+                  "$ref": "#/definitions/CreateEnvironmentRequestLinkedMetadata"
+                }
+              }
+            ],
+            "responses": {
+              "202": {
+                "description": "Accepted",
+                "schema": {
+                  "$ref": "#/definitions/OperationExecutionResult"
+                }
+              },
+              "400": {
+                "description": "Bad Request",
+                "schema": {
+                  "$ref": "#/definitions/ValidationResponse"
+                }
+              }
+            },
+            "x-AccessControl.Scope": "/tenants/{tenantId}",
+            "x-AccessControl.Permission": "EnvironmentManagement.Provisioning.Write",
+            "externalDocs": {
+              "url": "https://docs.microsoft.com/connectors/powerplatformadminv2/#links-a-dataverse-instance-to-an-existing-environment"
+            }
+          }
+        },
+        "/{connectionId}/environmentmanagement/provisioning/locations": {
+          "get": {
+            "tags": [
+              "EnvironmentProvisioning"
+            ],
+            "summary": "Gets the list of supported locations for environment provisioning",
+            "description": "Gets the list of supported locations for environment provisioning.",
+            "operationId": "GetSupportedLocations",
+            "produces": [
+              "text/plain",
+              "application/json",
+              "text/json"
+            ],
+            "parameters": [
+              {
+                "name": "connectionId",
+                "in": "path",
+                "required": true,
+                "x-ms-visibility": "internal",
+                "type": "string"
+              },
+              {
+                "in": "query",
+                "name": "api-version",
+                "description": "The API version.",
+                "required": true,
+                "type": "string",
+                "default": "2024-10-01",
+                "x-ms-summary": "Api-version",
+                "x-ms-visibility": "advanced"
+              }
+            ],
+            "responses": {
+              "200": {
+                "description": "OK",
+                "schema": {
+                  "$ref": "#/definitions/LocationPagedCollection"
+                }
+              },
+              "400": {
+                "description": "Bad Request",
+                "schema": {
+                  "$ref": "#/definitions/ValidationResponse"
+                }
+              },
+              "404": {
+                "description": "Not Found",
+                "schema": {
+                  "$ref": "#/definitions/ValidationResponse"
+                }
+              }
+            },
+            "x-AccessControl.Scope": "/tenants/{tenantId}",
+            "x-AccessControl.Permission": "EnvironmentManagement.Provisioning.Read",
+            "externalDocs": {
+              "url": "https://docs.microsoft.com/connectors/powerplatformadminv2/#gets-the-list-of-supported-locations-for-environment-provisioning"
+            }
+          }
+        },
+        "/{connectionId}/environmentmanagement/provisioning/locations/{location}/currencies": {
+          "get": {
+            "tags": [
+              "EnvironmentProvisioning"
+            ],
+            "summary": "Retrieves available currencies for environment provisioning in a location",
+            "description": "Retrieves available currencies for environment provisioning in a location.",
+            "operationId": "GetProvisioningCurrencies",
+            "produces": [
+              "text/plain",
+              "application/json",
+              "text/json"
+            ],
+            "parameters": [
+              {
+                "name": "connectionId",
+                "in": "path",
+                "required": true,
+                "x-ms-visibility": "internal",
+                "type": "string"
+              },
+              {
+                "in": "path",
+                "name": "location",
+                "description": "The location name.",
+                "required": true,
+                "type": "string",
+                "x-ms-summary": "Location"
+              },
+              {
+                "in": "query",
+                "name": "api-version",
+                "description": "The API version.",
+                "required": true,
+                "type": "string",
+                "default": "2024-10-01",
+                "x-ms-summary": "Api-version",
+                "x-ms-visibility": "advanced"
+              }
+            ],
+            "responses": {
+              "200": {
+                "description": "OK",
+                "schema": {
+                  "$ref": "#/definitions/EnvironmentCurrencyPagedCollection"
+                }
+              },
+              "400": {
+                "description": "Bad Request",
+                "schema": {
+                  "$ref": "#/definitions/ValidationResponse"
+                }
+              }
+            },
+            "x-AccessControl.Scope": "/tenants/{tenantId}",
+            "x-AccessControl.Permission": "EnvironmentManagement.Provisioning.Read",
+            "externalDocs": {
+              "url": "https://docs.microsoft.com/connectors/powerplatformadminv2/#retrieves-available-currencies-for-environment-provisioning-in-a-location"
+            }
+          }
+        },
+        "/{connectionId}/environmentmanagement/provisioning/locations/{location}/languages": {
+          "get": {
+            "tags": [
+              "EnvironmentProvisioning"
+            ],
+            "summary": "Retrieves available languages for environment provisioning in a location",
+            "description": "Retrieves available languages for environment provisioning in a location.",
+            "operationId": "GetProvisioningLanguages",
+            "produces": [
+              "text/plain",
+              "application/json",
+              "text/json"
+            ],
+            "parameters": [
+              {
+                "name": "connectionId",
+                "in": "path",
+                "required": true,
+                "x-ms-visibility": "internal",
+                "type": "string"
+              },
+              {
+                "in": "path",
+                "name": "location",
+                "description": "The location name.",
+                "required": true,
+                "type": "string",
+                "x-ms-summary": "Location"
+              },
+              {
+                "in": "query",
+                "name": "api-version",
+                "description": "The API version.",
+                "required": true,
+                "type": "string",
+                "default": "2024-10-01",
+                "x-ms-summary": "Api-version",
+                "x-ms-visibility": "advanced"
+              }
+            ],
+            "responses": {
+              "200": {
+                "description": "OK",
+                "schema": {
+                  "$ref": "#/definitions/EnvironmentLanguagePagedCollection"
+                }
+              },
+              "400": {
+                "description": "Bad Request",
+                "schema": {
+                  "$ref": "#/definitions/ValidationResponse"
+                }
+              }
+            },
+            "x-AccessControl.Scope": "/tenants/{tenantId}",
+            "x-AccessControl.Permission": "EnvironmentManagement.Provisioning.Read",
+            "externalDocs": {
+              "url": "https://docs.microsoft.com/connectors/powerplatformadminv2/#retrieves-available-languages-for-environment-provisioning-in-a-location"
+            }
+          }
+        },
+        "/{connectionId}/environmentmanagement/provisioning/locations/{location}/templates": {
+          "get": {
+            "tags": [
+              "EnvironmentProvisioning"
+            ],
+            "summary": "Retrieves available templates for environment provisioning in a location",
+            "description": "Retrieves available templates for environment provisioning in a location.",
+            "operationId": "GetProvisioningTemplates",
+            "produces": [
+              "text/plain",
+              "application/json",
+              "text/json"
+            ],
+            "parameters": [
+              {
+                "name": "connectionId",
+                "in": "path",
+                "required": true,
+                "x-ms-visibility": "internal",
+                "type": "string"
+              },
+              {
+                "in": "path",
+                "name": "location",
+                "description": "The location name.",
+                "required": true,
+                "type": "string",
+                "x-ms-summary": "Location"
+              },
+              {
+                "in": "query",
+                "name": "api-version",
+                "description": "The API version.",
+                "required": true,
+                "type": "string",
+                "default": "2024-10-01",
+                "x-ms-summary": "Api-version",
+                "x-ms-visibility": "advanced"
+              }
+            ],
+            "responses": {
+              "200": {
+                "description": "OK",
+                "schema": {
+                  "$ref": "#/definitions/EnvironmentTemplatePagedCollection"
+                }
+              },
+              "400": {
+                "description": "Bad Request",
+                "schema": {
+                  "$ref": "#/definitions/ValidationResponse"
+                }
+              }
+            },
+            "x-AccessControl.Scope": "/tenants/{tenantId}",
+            "x-AccessControl.Permission": "EnvironmentManagement.Provisioning.Read",
+            "externalDocs": {
+              "url": "https://docs.microsoft.com/connectors/powerplatformadminv2/#retrieves-available-templates-for-environment-provisioning-in-a-location"
             }
           }
         },
@@ -4177,7 +4977,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               }
@@ -4229,7 +5029,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               },
@@ -4288,7 +5088,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               }
@@ -4348,7 +5148,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               }
@@ -4410,7 +5210,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               },
@@ -4477,7 +5277,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               }
@@ -4543,7 +5343,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               }
@@ -4609,7 +5409,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               }
@@ -4654,11 +5454,58 @@
               },
               {
                 "in": "query",
+                "name": "ids",
+                "description": "Comma-separated list of environment IDs to retrieve. When specified, only environments matching these IDs are returned.",
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "x-ms-summary": "Ids"
+              },
+              {
+                "in": "query",
+                "name": "$filter",
+                "description": "OData filter expression to restrict the set of environments returned. Supported filter properties include `dataverseId`, `type`, `geo`, `state`, `environmentGroupId`, and `domainName`.",
+                "type": "string",
+                "x-ms-summary": "$filter"
+              },
+              {
+                "in": "query",
+                "name": "$select",
+                "description": "Comma-separated list of properties to include in the response.",
+                "type": "string",
+                "x-ms-summary": "$select"
+              },
+              {
+                "in": "query",
+                "name": "$top",
+                "description": "Maximum number of environments to return.",
+                "type": "integer",
+                "minimum": 0,
+                "x-ms-summary": "$top"
+              },
+              {
+                "in": "query",
+                "name": "$skip",
+                "description": "Number of environments to skip before returning results.",
+                "type": "integer",
+                "minimum": 0,
+                "x-ms-summary": "$skip"
+              },
+              {
+                "in": "query",
+                "name": "$orderby",
+                "description": "OData order-by expression for sorting the results.",
+                "type": "string",
+                "x-ms-summary": "$orderby"
+              },
+              {
+                "in": "query",
                 "name": "api-version",
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               }
@@ -4705,11 +5552,18 @@
               },
               {
                 "in": "query",
+                "name": "$select",
+                "description": "Comma-separated list of properties to include in the response.",
+                "type": "string",
+                "x-ms-summary": "$select"
+              },
+              {
+                "in": "query",
                 "name": "api-version",
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               }
@@ -4774,7 +5628,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               }
@@ -4828,7 +5682,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               },
@@ -4889,7 +5743,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               }
@@ -4952,7 +5806,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               }
@@ -5016,7 +5870,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               },
@@ -5051,6 +5905,78 @@
             },
             "externalDocs": {
               "url": "https://docs.microsoft.com/connectors/powerplatformadminv2/#update-rule-based-policy-by-id"
+            }
+          },
+          "patch": {
+            "tags": [
+              "RuleBasedPolicies"
+            ],
+            "summary": "Patch rule based policy",
+            "description": "Allows adding or updating one or more rule sets to an existing policy.",
+            "operationId": "PatchRuleBasedPolicy",
+            "consumes": [
+              "application/json"
+            ],
+            "produces": [
+              "application/json"
+            ],
+            "parameters": [
+              {
+                "name": "connectionId",
+                "in": "path",
+                "required": true,
+                "x-ms-visibility": "internal",
+                "type": "string"
+              },
+              {
+                "in": "path",
+                "name": "policyId",
+                "description": "The unique identifier of the policy.",
+                "required": true,
+                "type": "string",
+                "x-ms-summary": "Policy Id"
+              },
+              {
+                "in": "query",
+                "name": "api-version",
+                "description": "The API version.",
+                "required": true,
+                "type": "string",
+                "default": "2024-10-01",
+                "x-ms-summary": "Api-version",
+                "x-ms-visibility": "advanced"
+              },
+              {
+                "in": "body",
+                "name": "body",
+                "required": true,
+                "schema": {
+                  "$ref": "#/definitions/PolicyRequest"
+                }
+              }
+            ],
+            "responses": {
+              "200": {
+                "description": "The updated policy.",
+                "schema": {
+                  "$ref": "#/definitions/Policy"
+                }
+              },
+              "400": {
+                "description": "Bad Request - The query parameters are invalid."
+              },
+              "401": {
+                "description": "Unauthorized - Invalid credentials or missing authentication."
+              },
+              "404": {
+                "description": "Not Found - The specified policy does not exist."
+              },
+              "500": {
+                "description": "Internal Server Error - Unexpected server error."
+              }
+            },
+            "externalDocs": {
+              "url": "https://docs.microsoft.com/connectors/powerplatformadminv2/#patch-rule-based-policy"
             }
           }
         },
@@ -5095,7 +6021,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               }
@@ -5169,7 +6095,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               },
@@ -5257,7 +6183,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               },
@@ -5301,6 +6227,80 @@
             }
           }
         },
+        "/{connectionId}/governance/ruleBasedPolicies/{policyId}/removeRule": {
+          "patch": {
+            "tags": [
+              "RuleBasedPolicies"
+            ],
+            "summary": "Removes a rule set from an existing policy",
+            "description": "Removes a rule set from an existing policy.",
+            "operationId": "RemoveRuleFromRuleBasedPolicy",
+            "consumes": [
+              "application/json"
+            ],
+            "produces": [
+              "application/json"
+            ],
+            "parameters": [
+              {
+                "name": "connectionId",
+                "in": "path",
+                "required": true,
+                "x-ms-visibility": "internal",
+                "type": "string"
+              },
+              {
+                "in": "path",
+                "name": "policyId",
+                "description": "The unique identifier of the policy.",
+                "required": true,
+                "type": "string",
+                "x-ms-summary": "Policy Id"
+              },
+              {
+                "in": "query",
+                "name": "api-version",
+                "description": "The API version.",
+                "required": true,
+                "type": "string",
+                "default": "2024-10-01",
+                "x-ms-summary": "Api-version",
+                "x-ms-visibility": "advanced"
+              },
+              {
+                "in": "body",
+                "name": "body",
+                "required": true,
+                "schema": {
+                  "$ref": "#/definitions/PolicyRequest"
+                }
+              }
+            ],
+            "responses": {
+              "200": {
+                "description": "The updated policy.",
+                "schema": {
+                  "$ref": "#/definitions/Policy"
+                }
+              },
+              "400": {
+                "description": "Bad Request - The query parameters are invalid."
+              },
+              "401": {
+                "description": "Unauthorized - Invalid credentials or missing authentication."
+              },
+              "404": {
+                "description": "Not Found - The specified policy does not exist."
+              },
+              "500": {
+                "description": "Internal Server Error - Unexpected server error."
+              }
+            },
+            "externalDocs": {
+              "url": "https://docs.microsoft.com/connectors/powerplatformadminv2/#removes-a-rule-set-from-an-existing-policy"
+            }
+          }
+        },
         "/{connectionId}/governance/ruleBasedPolicies/assignments": {
           "get": {
             "tags": [
@@ -5334,7 +6334,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               }
@@ -5405,7 +6405,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               }
@@ -5476,7 +6476,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               }
@@ -5506,7 +6506,7 @@
             }
           }
         },
-        "/{connectionId}/governance/environments/{environmentId}/environmentGroups/{groupId}/ruleSets": {
+        "/{connectionId}/governance/environmentGroups/{groupId}/ruleSets": {
           "get": {
             "tags": [
               "RuleSets"
@@ -5527,15 +6527,6 @@
               },
               {
                 "in": "path",
-                "name": "environmentId",
-                "description": "The unique identifier of the environment.",
-                "required": true,
-                "type": "string",
-                "format": "uuid",
-                "x-ms-summary": "Environment Id"
-              },
-              {
-                "in": "path",
                 "name": "groupId",
                 "description": "The unique identifier of the environment group.",
                 "required": true,
@@ -5549,7 +6540,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               }
@@ -5616,15 +6607,6 @@
               },
               {
                 "in": "path",
-                "name": "environmentId",
-                "description": "The unique identifier of the environment.",
-                "required": true,
-                "type": "string",
-                "format": "uuid",
-                "x-ms-summary": "Environment Id"
-              },
-              {
-                "in": "path",
                 "name": "groupId",
                 "description": "The unique identifier of the environment group.",
                 "required": true,
@@ -5638,7 +6620,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               },
@@ -5751,7 +6733,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               }
@@ -5830,7 +6812,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               },
@@ -5912,7 +6894,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               }
@@ -5976,7 +6958,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               }
@@ -6026,7 +7008,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               }
@@ -6095,7 +7077,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               }
@@ -6157,7 +7139,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               }
@@ -6210,7 +7192,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               },
@@ -6278,7 +7260,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               }
@@ -6342,7 +7324,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               },
@@ -6408,7 +7390,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               }
@@ -6468,7 +7450,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               }
@@ -6539,7 +7521,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               }
@@ -6602,7 +7584,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               },
@@ -6670,7 +7652,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               },
@@ -6738,7 +7720,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               }
@@ -6801,7 +7783,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               }
@@ -6865,7 +7847,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               },
@@ -6936,7 +7918,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               }
@@ -6995,7 +7977,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               }
@@ -7048,7 +8030,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               },
@@ -7116,7 +8098,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               }
@@ -7180,7 +8162,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               },
@@ -7246,7 +8228,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               }
@@ -7306,7 +8288,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               }
@@ -7374,7 +8356,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               }
@@ -7426,7 +8408,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               }
@@ -7506,7 +8488,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               }
@@ -7561,7 +8543,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               }
@@ -7623,7 +8605,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               }
@@ -7740,7 +8722,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               }
@@ -7844,7 +8826,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               }
@@ -7957,7 +8939,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               }
@@ -8043,7 +9025,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               }
@@ -8150,7 +9132,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               }
@@ -8263,7 +9245,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               }
@@ -8348,7 +9330,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               }
@@ -8413,7 +9395,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               }
@@ -8528,7 +9510,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               }
@@ -8667,7 +9649,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               }
@@ -8763,7 +9745,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               }
@@ -8857,7 +9839,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               }
@@ -8921,7 +9903,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               },
@@ -9009,7 +9991,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               }
@@ -9092,7 +10074,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               }
@@ -9175,7 +10157,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               },
@@ -9266,7 +10248,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               },
@@ -9351,7 +10333,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               },
@@ -9433,7 +10415,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               }
@@ -9510,7 +10492,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               }
@@ -9607,7 +10589,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               }
@@ -9684,7 +10666,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               }
@@ -9764,7 +10746,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               },
@@ -9781,7 +10763,11 @@
               "200": {
                 "description": "Success",
                 "schema": {
-                  "$ref": "#/definitions/AllowedIpAddressesConfiguration"
+                  "description": "List of allowed IP addresses after the operation",
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/definitions/IpAddressEntity"
+                  }
                 }
               },
               "400": {
@@ -9805,6 +10791,98 @@
             },
             "externalDocs": {
               "url": "https://docs.microsoft.com/connectors/powerplatformadminv2/#add-allowed-ip-addresses-on-a-power-pages-website"
+            }
+          }
+        },
+        "/{connectionId}/powerpages/environments/{environmentId}/websites/{id}/removeAllowedIpAddresses": {
+          "post": {
+            "tags": [
+              "Websites"
+            ],
+            "summary": "Remove allowed IP addresses from a Power Pages website",
+            "description": "Removes the specified IP addresses from the website's IP restriction allow list.",
+            "operationId": "RemoveAllowedIpAddresses",
+            "consumes": [
+              "application/json"
+            ],
+            "produces": [
+              "application/json"
+            ],
+            "parameters": [
+              {
+                "name": "connectionId",
+                "in": "path",
+                "required": true,
+                "x-ms-visibility": "internal",
+                "type": "string"
+              },
+              {
+                "in": "path",
+                "name": "environmentId",
+                "description": "The environment ID.",
+                "required": true,
+                "type": "string",
+                "x-ms-summary": "Environment Id"
+              },
+              {
+                "in": "path",
+                "name": "id",
+                "description": "Website unique identifier (ID).",
+                "required": true,
+                "type": "string",
+                "x-ms-summary": "Id"
+              },
+              {
+                "in": "query",
+                "name": "api-version",
+                "description": "The API version.",
+                "required": true,
+                "type": "string",
+                "default": "2024-10-01",
+                "x-ms-summary": "Api-version",
+                "x-ms-visibility": "advanced"
+              },
+              {
+                "in": "body",
+                "name": "body",
+                "required": true,
+                "schema": {
+                  "$ref": "#/definitions/IpAddressConfiguration"
+                }
+              }
+            ],
+            "responses": {
+              "200": {
+                "description": "Success",
+                "schema": {
+                  "description": "List of allowed IP addresses after the operation",
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/definitions/IpAddressEntity"
+                  }
+                }
+              },
+              "400": {
+                "description": "Bad Request",
+                "schema": {
+                  "$ref": "#/definitions/ErrorMessage"
+                }
+              },
+              "401": {
+                "description": "Unauthorized",
+                "schema": {
+                  "$ref": "#/definitions/ErrorMessage"
+                }
+              },
+              "404": {
+                "description": "Not Found",
+                "schema": {
+                  "$ref": "#/definitions/ErrorMessage"
+                }
+              }
+            },
+            "externalDocs": {
+              "url": "https://docs.microsoft.com/connectors/powerplatformadminv2/#remove-allowed-ip-addresses-from-a-power-pages-website"
             }
           }
         },
@@ -9849,7 +10927,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               }
@@ -9923,7 +11001,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               }
@@ -10000,7 +11078,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               }
@@ -10077,7 +11155,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               }
@@ -10158,7 +11236,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               }
@@ -10235,7 +11313,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               }
@@ -10312,7 +11390,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               },
@@ -10394,7 +11472,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               }
@@ -10468,7 +11546,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               }
@@ -10498,6 +11576,91 @@
             },
             "externalDocs": {
               "url": "https://docs.microsoft.com/connectors/powerplatformadminv2/#stop-a-power-pages-website"
+            }
+          }
+        },
+        "/{connectionId}/powerpages/environments/{environmentId}/websites/{id}/toggleAFDTrafficRouting": {
+          "post": {
+            "tags": [
+              "Websites"
+            ],
+            "summary": "Toggle AFD traffic routing for a Power Pages website",
+            "description": "Toggles traffic routing between Azure Front Door and web apps for a portal. When enableAFD is true, enables the AFD endpoint and adds service tag restrictions to web apps. When false, removes service tags and disables the AFD endpoint.",
+            "operationId": "ToggleAFDTrafficRouting",
+            "produces": [
+              "application/json"
+            ],
+            "parameters": [
+              {
+                "name": "connectionId",
+                "in": "path",
+                "required": true,
+                "x-ms-visibility": "internal",
+                "type": "string"
+              },
+              {
+                "in": "path",
+                "name": "environmentId",
+                "description": "The environment ID.",
+                "required": true,
+                "type": "string",
+                "x-ms-summary": "Environment Id"
+              },
+              {
+                "in": "path",
+                "name": "id",
+                "description": "Website unique identifier (ID).",
+                "required": true,
+                "type": "string",
+                "x-ms-summary": "Id"
+              },
+              {
+                "in": "query",
+                "name": "enableAFD",
+                "description": "True to enable AFD routing, false to disable.",
+                "required": true,
+                "type": "boolean",
+                "x-ms-summary": "Enable A F D"
+              },
+              {
+                "in": "query",
+                "name": "api-version",
+                "description": "The API version.",
+                "required": true,
+                "type": "string",
+                "default": "2024-10-01",
+                "x-ms-summary": "Api-version",
+                "x-ms-visibility": "advanced"
+              }
+            ],
+            "responses": {
+              "200": {
+                "description": "Success",
+                "schema": {
+                  "$ref": "#/definitions/ToggleAFDTrafficRoutingResponse"
+                }
+              },
+              "400": {
+                "description": "Bad Request",
+                "schema": {
+                  "$ref": "#/definitions/ErrorMessage"
+                }
+              },
+              "401": {
+                "description": "Unauthorized",
+                "schema": {
+                  "$ref": "#/definitions/ErrorMessage"
+                }
+              },
+              "404": {
+                "description": "Not Found",
+                "schema": {
+                  "$ref": "#/definitions/ErrorMessage"
+                }
+              }
+            },
+            "externalDocs": {
+              "url": "https://docs.microsoft.com/connectors/powerplatformadminv2/#toggle-afd-traffic-routing-for-a-power-pages-website"
             }
           }
         },
@@ -10549,7 +11712,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               }
@@ -10630,7 +11793,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               }
@@ -10691,7 +11854,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               },
@@ -10787,7 +11950,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               }
@@ -10851,7 +12014,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               }
@@ -10919,7 +12082,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               }
@@ -10980,7 +12143,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               }
@@ -11039,7 +12202,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               }
@@ -11088,10 +12251,10 @@
               {
                 "in": "path",
                 "name": "connectionIdentifier",
-                "description": "The connection ID in apiName/connectionName format.",
+                "description": "The connection identifier in apiName/connectionName format.",
                 "required": true,
                 "type": "string",
-                "x-ms-summary": "Connection Id"
+                "x-ms-summary": "Connection Identifier"
               },
               {
                 "in": "query",
@@ -11099,7 +12262,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               }
@@ -11158,7 +12321,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               }
@@ -11251,7 +12414,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               }
@@ -11327,7 +12490,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               }
@@ -11412,7 +12575,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               }
@@ -11499,7 +12662,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               }
@@ -11561,7 +12724,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               }
@@ -11622,7 +12785,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               }
@@ -11690,7 +12853,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               }
@@ -11769,7 +12932,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               }
@@ -11831,7 +12994,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               }
@@ -11892,7 +13055,7 @@
                 "description": "The API version.",
                 "required": true,
                 "type": "string",
-                "default": "2022-03-01-preview",
+                "default": "2024-10-01",
                 "x-ms-summary": "Api-version",
                 "x-ms-visibility": "advanced"
               }
@@ -11972,6 +13135,62 @@
             "x-ms-mcs-visibility": "featured",
             "externalDocs": {
               "url": "https://docs.microsoft.com/connectors/powerplatformadminv2/#environment-management-mcp-server"
+            }
+          }
+        },
+        "/{connectionId}/mcp/Governance": {
+          "post": {
+            "tags": [
+              "agentic",
+              "Action",
+              "Connector-MCP"
+            ],
+            "summary": "Governance MCP Server",
+            "description": "MCP server for governance policies, rule sets, rule assignments, and cross-tenant connection reports in Power Platform.",
+            "operationId": "mcp_Governance",
+            "consumes": [],
+            "produces": [
+              "application/json",
+              "text/json"
+            ],
+            "parameters": [
+              {
+                "name": "connectionId",
+                "in": "path",
+                "required": true,
+                "x-ms-visibility": "internal",
+                "type": "string"
+              },
+              {
+                "in": "body",
+                "name": "queryRequest",
+                "schema": {
+                  "$ref": "#/definitions/MCPQueryRequest"
+                }
+              },
+              {
+                "in": "query",
+                "name": "sessionId",
+                "type": "string",
+                "required": false
+              }
+            ],
+            "responses": {
+              "200": {
+                "description": "MCP Server response",
+                "schema": {
+                  "$ref": "#/definitions/MCPQueryResponse"
+                }
+              },
+              "default": {
+                "description": "Operation failed."
+              }
+            },
+            "deprecated": false,
+            "x-ms-visibility": "important",
+            "x-ms-mcs-visibility": "featured",
+            "externalDocs": {
+              "url": "https://docs.microsoft.com/connectors/powerplatformadminv2/#governance-mcp-server"
             }
           }
         }
@@ -12517,39 +13736,6 @@
             }
           }
         },
-        "AllowedIpAddressesConfiguration": {
-          "type": "object",
-          "properties": {
-            "AllowedIpAddresses": {
-              "type": "array",
-              "items": {
-                "type": "object",
-                "properties": {
-                  "IpAddress": {
-                    "description": "The IP address or CIDR range",
-                    "type": "string"
-                  },
-                  "IpType": {
-                    "$ref": "#/definitions/IpAddressType"
-                  },
-                  "TenantId": {
-                    "format": "uuid",
-                    "description": "The unique identifier of the tenant",
-                    "type": "string"
-                  },
-                  "CreatedOn": {
-                    "format": "date-time",
-                    "description": "The creation timestamp of the IP address entry",
-                    "type": "string"
-                  },
-                  "LastModifiedOn": {
-                    "type": "string"
-                  }
-                }
-              }
-            }
-          }
-        },
         "ApiProperties": {
           "description": "Identifies the API for a connector action.",
           "type": "object",
@@ -12704,6 +13890,32 @@
             "All"
           ],
           "type": "string"
+        },
+        "AuditInfo": {
+          "description": "Audit information for a resource.",
+          "type": "object",
+          "properties": {
+            "createdBy": {
+              "format": "uuid",
+              "description": "The ID of the user who created the record.",
+              "type": "string"
+            },
+            "createdTimeUtc": {
+              "format": "date-time",
+              "description": "The UTC time when the record was created.",
+              "type": "string"
+            },
+            "modifiedBy": {
+              "format": "uuid",
+              "description": "The ID of the user who last modified the record.",
+              "type": "string"
+            },
+            "modifiedTimeUtc": {
+              "format": "date-time",
+              "description": "The UTC time when the record was last modified.",
+              "type": "string"
+            }
+          }
         },
         "Base64ThoughtImage": {
           "description": "A base64-encoded image associated with a thought.",
@@ -13994,6 +15206,175 @@
             }
           }
         },
+        "CreateEnvironmentRequest": {
+          "description": "Request model for provisioning a new environment.",
+          "required": [
+            "displayName",
+            "environmentSku"
+          ],
+          "type": "object",
+          "properties": {
+            "location": {
+              "description": "The location where the environment will be provisioned.",
+              "type": "string"
+            },
+            "displayName": {
+              "description": "The display name of the environment.",
+              "minLength": 1,
+              "type": "string"
+            },
+            "environmentSku": {
+              "$ref": "#/definitions/EnvironmentSku"
+            },
+            "description": {
+              "description": "An optional description for the environment.",
+              "type": "string"
+            },
+            "databaseType": {
+              "description": "The type of database to create (e.g., CommonDataService).",
+              "type": "string"
+            },
+            "usedBy": {
+              "$ref": "#/definitions/UserIdentity"
+            },
+            "billingPolicy": {
+              "$ref": "#/definitions/CreateEnvironmentRequestBillingPolicy"
+            },
+            "linkedEnvironmentMetadata": {
+              "$ref": "#/definitions/CreateEnvironmentRequestLinkedMetadata"
+            },
+            "parentEnvironmentGroup": {
+              "$ref": "#/definitions/CreateEnvironmentRequestParentGroup"
+            },
+            "cluster": {
+              "$ref": "#/definitions/CreateEnvironmentRequestCluster"
+            },
+            "governanceConfiguration": {
+              "$ref": "#/definitions/CreateEnvironmentRequestGovernance"
+            },
+            "connectedGroupIdForTeamsEnvironment": {
+              "description": "Microsoft 365 Group Id to be linked to the Teams environment during provisioning. This property is not applicable for non-Teams environments.",
+              "type": "string"
+            },
+            "finOpsMetadata": {
+              "$ref": "#/definitions/CreateEnvironmentRequestFinOpsMetadata"
+            }
+          }
+        },
+        "CreateEnvironmentRequestBillingPolicy": {
+          "description": "Billing policy for the environment.",
+          "type": "object",
+          "properties": {
+            "id": {
+              "description": "The billing policy ID.",
+              "type": "string"
+            }
+          }
+        },
+        "CreateEnvironmentRequestCluster": {
+          "description": "Cluster configuration.",
+          "type": "object",
+          "properties": {
+            "category": {
+              "description": "The cluster category. Eg: FirstRelease.",
+              "type": "string"
+            }
+          }
+        },
+        "CreateEnvironmentRequestCurrency": {
+          "description": "Currency settings for environment provisioning.",
+          "type": "object",
+          "properties": {
+            "code": {
+              "description": "The currency code (e.g., USD).",
+              "type": "string"
+            },
+            "name": {
+              "description": "The currency name.",
+              "type": "string"
+            },
+            "symbol": {
+              "description": "The currency symbol.",
+              "type": "string"
+            },
+            "precision": {
+              "format": "int32",
+              "description": "The currency precision.",
+              "type": "integer"
+            }
+          }
+        },
+        "CreateEnvironmentRequestFinOpsMetadata": {
+          "description": "FinOps metadata for environment provisioning.",
+          "type": "object",
+          "properties": {
+            "id": {
+              "description": "The FinOps environment ID.",
+              "type": "string"
+            },
+            "url": {
+              "description": "The FinOps environment URL.",
+              "type": "string"
+            },
+            "type": {
+              "description": "The FinOps environment link type.",
+              "type": "string"
+            }
+          }
+        },
+        "CreateEnvironmentRequestGovernance": {
+          "description": "Governance configuration.",
+          "type": "object",
+          "properties": {
+            "protectionLevel": {
+              "$ref": "#/definitions/ProtectionLevel"
+            }
+          }
+        },
+        "CreateEnvironmentRequestLinkedMetadata": {
+          "description": "Metadata for the linked Dataverse environment.",
+          "type": "object",
+          "properties": {
+            "baseLanguage": {
+              "format": "int32",
+              "description": "The base language code (e.g., 1033 for English).",
+              "type": "integer"
+            },
+            "currency": {
+              "$ref": "#/definitions/CreateEnvironmentRequestCurrency"
+            },
+            "templates": {
+              "description": "The templates to apply.",
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "securityGroupId": {
+              "description": "The security group ID.",
+              "type": "string"
+            },
+            "domainName": {
+              "description": "The domain name.",
+              "type": "string"
+            },
+            "templateMetadata": {
+              "description": "A JSON object payload customized for the selected templates.",
+              "type": "object",
+              "additionalProperties": true
+            }
+          }
+        },
+        "CreateEnvironmentRequestParentGroup": {
+          "description": "Parent environment group.",
+          "type": "object",
+          "properties": {
+            "id": {
+              "description": "The environment group ID.",
+              "type": "string"
+            }
+          }
+        },
         "CrossTenantConnection": {
           "required": [
             "tenantId",
@@ -14246,6 +15627,17 @@
             "type": "string"
           }
         },
+        "DisabledReason": {
+          "type": "object",
+          "properties": {
+            "code": {
+              "type": "string"
+            },
+            "message": {
+              "type": "string"
+            }
+          }
+        },
         "DistinctClause": {
           "required": [
             "FieldList"
@@ -14337,6 +15729,57 @@
             }
           }
         },
+        "EnterprisePolicies": {
+          "description": "The set of enterprise policies linked to the environment.",
+          "type": "object",
+          "properties": {
+            "encryption": {
+              "$ref": "#/definitions/EnterprisePolicyLink"
+            },
+            "identity": {
+              "$ref": "#/definitions/EnterprisePolicyLink"
+            },
+            "networkInjection": {
+              "$ref": "#/definitions/EnterprisePolicyLink"
+            },
+            "privateEndpoint": {
+              "$ref": "#/definitions/EnterprisePolicyLink"
+            }
+          }
+        },
+        "EnterprisePolicyLink": {
+          "description": "A link between the environment and an Azure enterprise policy resource.",
+          "type": "object",
+          "properties": {
+            "id": {
+              "description": "The ID of the enterprise policy.",
+              "type": "string"
+            },
+            "resourceId": {
+              "description": "The fully-qualified Azure resource ID of the enterprise policy.",
+              "type": "string"
+            },
+            "status": {
+              "$ref": "#/definitions/EnterprisePolicyLinkStatus"
+            },
+            "error": {
+              "description": "Error details when the link status is Failed.",
+              "type": "string"
+            }
+          }
+        },
+        "EnterprisePolicyLinkStatus": {
+          "description": "The status of the link between an environment and an enterprise policy.",
+          "enum": [
+            "Linking",
+            "Unlinking",
+            "Linked",
+            "Failed",
+            "LinkingOnline",
+            "UnlinkingOnline"
+          ],
+          "type": "string"
+        },
         "Environment": {
           "description": "Power platform Environment",
           "type": "object",
@@ -14388,6 +15831,34 @@
               "type": "array",
               "items": {
                 "$ref": "#/definitions/EnvironmentBackup"
+              }
+            },
+            "continuationToken": {
+              "type": "string"
+            }
+          }
+        },
+        "EnvironmentCurrency": {
+          "type": "object",
+          "properties": {
+            "code": {
+              "type": "string"
+            },
+            "symbol": {
+              "type": "string"
+            },
+            "isTenantDefault": {
+              "type": "boolean"
+            }
+          }
+        },
+        "EnvironmentCurrencyPagedCollection": {
+          "type": "object",
+          "properties": {
+            "collection": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/EnvironmentCurrency"
               }
             },
             "continuationToken": {
@@ -14449,6 +15920,35 @@
             }
           }
         },
+        "EnvironmentLanguage": {
+          "type": "object",
+          "properties": {
+            "localeId": {
+              "format": "int32",
+              "type": "integer"
+            },
+            "localizedName": {
+              "type": "string"
+            },
+            "isTenantDefault": {
+              "type": "boolean"
+            }
+          }
+        },
+        "EnvironmentLanguagePagedCollection": {
+          "type": "object",
+          "properties": {
+            "collection": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/EnvironmentLanguage"
+              }
+            },
+            "continuationToken": {
+              "type": "string"
+            }
+          }
+        },
         "EnvironmentList": {
           "type": "object",
           "properties": {
@@ -14457,6 +15957,11 @@
               "items": {
                 "$ref": "#/definitions/EnvironmentResponse"
               }
+            },
+            "@odata.nextlink": {
+              "format": "uri",
+              "description": "Opaque URL to retrieve the next page of results. Present only when additional pages are available.",
+              "type": "string"
             }
           }
         },
@@ -14584,7 +16089,7 @@
           "type": "object",
           "properties": {
             "id": {
-              "description": "The value of id property on the environment object.",
+              "description": "The ID of the environment.",
               "type": "string"
             },
             "displayName": {
@@ -14592,11 +16097,11 @@
               "type": "string"
             },
             "tenantId": {
-              "description": "The value of tenantId property on the environment object.",
+              "description": "The ID of the tenant that the environment belongs to.",
               "type": "string"
             },
             "type": {
-              "description": "The type of environment.",
+              "description": "The type (SKU) of the environment.",
               "type": "string"
             },
             "geo": {
@@ -14611,6 +16116,16 @@
               "description": "The Azure region of the environment.",
               "type": "string"
             },
+            "clusterCategory": {
+              "description": "The cluster category the environment is in.",
+              "type": "string"
+            },
+            "createdBy": {
+              "$ref": "#/definitions/Principal"
+            },
+            "createdFor": {
+              "$ref": "#/definitions/Principal"
+            },
             "createdDateTime": {
               "format": "date-time",
               "description": "The creation date and time of the environment.",
@@ -14622,35 +16137,43 @@
               "type": "string"
             },
             "dataverseId": {
-              "description": "The value of dataverseId property on the environment object.",
+              "description": "The ID of the Dataverse database (organization) associated with the environment.",
               "type": "string"
             },
             "url": {
-              "description": "The URL of the environment.",
+              "description": "The URL of the Dataverse database associated with the environment.",
               "type": "string"
             },
             "version": {
-              "description": "The version of the environment.",
+              "description": "The version of the Dataverse database associated with the environment.",
               "type": "string"
             },
             "domainName": {
-              "description": "The domain name of the environment.",
+              "description": "The domain name of the Dataverse database associated with the environment.",
+              "type": "string"
+            },
+            "securityGroupId": {
+              "description": "The security group that controls access to the environment.",
+              "type": "string"
+            },
+            "connectedGroupId": {
+              "description": "The ID of the AAD group connected to the environment.",
               "type": "string"
             },
             "state": {
-              "description": "The state of the environment.",
+              "description": "The current state of the environment.",
               "type": "string"
             },
             "adminMode": {
-              "description": "The administrative mode of the environment.",
+              "description": "Indicates whether admin-only mode is enabled or disabled for the environment.",
               "type": "string"
             },
             "backgroundOperationsState": {
-              "description": "The background operations state of the environment.",
+              "description": "Indicates whether background operations are enabled or disabled for the environment.",
               "type": "string"
             },
             "protectionLevel": {
-              "description": "The protection level of the environment.",
+              "description": "The protection level applied to the environment.",
               "type": "string"
             },
             "retentionDetails": {
@@ -14663,10 +16186,16 @@
                 },
                 "availableFromDateTime": {
                   "format": "date-time",
-                  "description": "The available from date and time of the environment.",
+                  "description": "The date and time from which the environment is available for recovery.",
                   "type": "string"
                 }
               }
+            },
+            "finOpsMetadata": {
+              "$ref": "#/definitions/FinOpsMetadata"
+            },
+            "enterprisePolicies": {
+              "$ref": "#/definitions/EnterprisePolicies"
             }
           }
         },
@@ -14711,6 +16240,43 @@
             "Platform"
           ],
           "type": "string"
+        },
+        "EnvironmentTemplate": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string"
+            },
+            "displayName": {
+              "type": "string"
+            },
+            "isCustomerEngagement": {
+              "type": "boolean"
+            },
+            "isSupportedForResetOperation": {
+              "type": "boolean"
+            },
+            "availability": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/TemplateAvailability"
+              }
+            }
+          }
+        },
+        "EnvironmentTemplatePagedCollection": {
+          "type": "object",
+          "properties": {
+            "collection": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/EnvironmentTemplate"
+              }
+            },
+            "continuationToken": {
+              "type": "string"
+            }
+          }
         },
         "ErrorDetail": {
           "type": "object",
@@ -14839,6 +16405,37 @@
             }
           }
         },
+        "EvaluationRunState": {
+          "description": "The state of an evaluation run describing the currently active stage.",
+          "enum": [
+            "Abandoned",
+            "Cancelled",
+            "Completed",
+            "Deleted",
+            "Failed",
+            "InProgress",
+            "Queued",
+            "Unknown"
+          ],
+          "type": "string"
+        },
+        "ExecutionState": {
+          "description": "The current execution state indicating the progress status of a maker evaluation run.",
+          "enum": [
+            "Abandoned",
+            "Cancelled",
+            "Completed",
+            "CreatingRunContent",
+            "Deleted",
+            "EvaluatingRun",
+            "Failed",
+            "Initializing",
+            "ProcessingRunContent",
+            "Queued",
+            "Unknown"
+          ],
+          "type": "string"
+        },
         "ExtendClause": {
           "required": [
             "FieldName",
@@ -14937,6 +16534,24 @@
                   "example": "The request was invalid"
                 }
               }
+            }
+          }
+        },
+        "FinOpsMetadata": {
+          "description": "Metadata describing a linked FinOps environment.",
+          "type": "object",
+          "properties": {
+            "type": {
+              "description": "The linked FinOps environment type.",
+              "type": "string"
+            },
+            "id": {
+              "description": "The linked FinOps environment ID.",
+              "type": "string"
+            },
+            "url": {
+              "description": "The linked FinOps environment URL.",
+              "type": "string"
             }
           }
         },
@@ -15671,6 +17286,33 @@
             }
           }
         },
+        "IpAddressEntity": {
+          "description": "Represents an IP address entry in the allow list",
+          "type": "object",
+          "properties": {
+            "IpAddress": {
+              "description": "The IP address or CIDR range",
+              "type": "string"
+            },
+            "IpType": {
+              "$ref": "#/definitions/IpAddressType"
+            },
+            "TenantId": {
+              "format": "uuid",
+              "description": "The unique identifier of the tenant",
+              "type": "string"
+            },
+            "CreatedOn": {
+              "format": "date-time",
+              "description": "The creation timestamp of the IP address entry",
+              "type": "string"
+            },
+            "LastModifiedOn": {
+              "description": "The last modification timestamp of the IP address entry",
+              "type": "string"
+            }
+          }
+        },
         "IpAddressType": {
           "description": "The type of the IP address",
           "enum": [
@@ -16004,6 +17646,138 @@
               }
             }
           }
+        },
+        "Location": {
+          "description": "Represents a location/geo for environment provisioning.",
+          "type": "object",
+          "properties": {
+            "name": {
+              "description": "The location name.",
+              "type": "string"
+            },
+            "displayName": {
+              "description": "The display name.",
+              "type": "string"
+            },
+            "code": {
+              "description": "The location code.",
+              "type": "string"
+            },
+            "isDefault": {
+              "description": "Whether this is the default location.",
+              "type": "boolean"
+            },
+            "isDisabled": {
+              "description": "Whether this location is disabled.",
+              "type": "boolean"
+            },
+            "canProvisionDatabase": {
+              "description": "Whether database provisioning is allowed.",
+              "type": "boolean"
+            }
+          }
+        },
+        "LocationPagedCollection": {
+          "type": "object",
+          "properties": {
+            "collection": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/Location"
+              }
+            },
+            "continuationToken": {
+              "type": "string"
+            }
+          }
+        },
+        "Metric": {
+          "description": "A grader metric associated with a test case in a maker evaluation run.",
+          "required": [
+            "result",
+            "type"
+          ],
+          "type": "object",
+          "properties": {
+            "result": {
+              "$ref": "#/definitions/MetricResult"
+            },
+            "type": {
+              "$ref": "#/definitions/MetricType"
+            }
+          }
+        },
+        "MetricErrorReason": {
+          "description": "The error reason providing additional information about a metric evaluation result.",
+          "enum": [
+            "AgentResponseIsNullOrEmpty",
+            "EmptyOrInvalidModelResponse",
+            "ExpectedInvocationStepsAreNullOrEmpty",
+            "ExpectedKeywordsAreNullOrEmpty",
+            "ExpectedOutputIsNullOrEmpty",
+            "GraderCreationFailed",
+            "InputOutputCountMismatch",
+            "IntentMatchInvalidMatchType",
+            "ModelLabelGraderInvalidLabel",
+            "QueryIsNullOrEmpty",
+            "RequestTokenLimitExceeded",
+            "RetrievedKnowledgeSourcesTextsAreEmpty",
+            "RetrievedKnowledgeTokenLimitExceeded",
+            "UnexpectedInternalError"
+          ],
+          "type": "string"
+        },
+        "MetricResult": {
+          "description": "The result of a grader metric in a maker evaluation run.",
+          "required": [
+            "data",
+            "status"
+          ],
+          "type": "object",
+          "properties": {
+            "aiResultReason": {
+              "description": "The reason generated by LLM, providing additional context to the evaluation result.",
+              "type": "string"
+            },
+            "data": {
+              "description": "The set of key-value pairs that defines this metric. Keys are normalized to lowercase.",
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              }
+            },
+            "errorReason": {
+              "$ref": "#/definitions/MetricErrorReason"
+            },
+            "status": {
+              "$ref": "#/definitions/MetricStatus"
+            }
+          }
+        },
+        "MetricStatus": {
+          "description": "The status of a grader metric result in a maker evaluation run.",
+          "enum": [
+            "Error",
+            "Fail",
+            "Pass",
+            "Unknown"
+          ],
+          "type": "string"
+        },
+        "MetricType": {
+          "description": "The type of a grader metric in a maker evaluation run.",
+          "enum": [
+            "AllKeywordMatch",
+            "AnyKeywordMatch",
+            "CapabilityUse",
+            "CompareMeaning",
+            "CustomLabels",
+            "ExactMatch",
+            "GeneralQuality",
+            "TextSimilarity",
+            "Unknown"
+          ],
+          "type": "string"
         },
         "MgGovEnvironmentValues": {
           "description": "Environment information.",
@@ -17059,6 +18833,15 @@
             }
           }
         },
+        "ProtectionLevel": {
+          "description": "The environment governance protection level.",
+          "enum": [
+            "NotSpecified",
+            "Basic",
+            "Standard"
+          ],
+          "type": "string"
+        },
         "ReassignBotRequestBody": {
           "description": "Request body for reassigning bot's owner.",
           "required": [
@@ -17067,7 +18850,7 @@
           "type": "object",
           "properties": {
             "NewOwnerAadUserId": {
-              "description": "The new owner aad id.",
+              "description": "The new owner Entra ID.",
               "type": "string"
             }
           }
@@ -17181,7 +18964,7 @@
               "type": "integer"
             },
             "Skip": {
-              "description": "Offset; typically 0 when using SkipToken",
+              "description": "Offset; don't include when using SkipToken",
               "minimum": 0,
               "type": "integer"
             },
@@ -17517,6 +19300,72 @@
           ],
           "type": "string"
         },
+        "RunStatusResponse": {
+          "description": "The response payload from triggering an evaluation run request.",
+          "required": [
+            "executionState",
+            "lastUpdatedAt",
+            "state"
+          ],
+          "type": "object",
+          "properties": {
+            "callbackUri": {
+              "format": "uri",
+              "description": "The URI to poll for the evaluation run results.",
+              "type": "string"
+            },
+            "executionState": {
+              "$ref": "#/definitions/ExecutionState"
+            },
+            "lastUpdatedAt": {
+              "format": "date-time",
+              "description": "The timestamp when the last status update occurred.",
+              "type": "string"
+            },
+            "runId": {
+              "format": "uuid",
+              "description": "The unique identifier for this evaluation run.",
+              "type": "string"
+            },
+            "state": {
+              "$ref": "#/definitions/EvaluationRunState"
+            },
+            "testCasesProcessed": {
+              "description": "The number of test cases processed so far in the evaluation run.",
+              "type": "integer"
+            },
+            "totalTestCases": {
+              "description": "Total number of test cases to be processed in the evaluation run.",
+              "type": "integer"
+            }
+          }
+        },
+        "RunTestSetRequestBody": {
+          "description": "Request body for triggering a maker evaluation test run.",
+          "type": "object",
+          "properties": {
+            "evaluationRunName": {
+              "description": "The name of the evaluation run.",
+              "type": "string"
+            },
+            "mcsConnectionId": {
+              "description": "The connection ID for the MCS connector that is used to execute the evaluation run, or leave empty for an anonymous run.",
+              "type": "string"
+            },
+            "runOnPublishedBot": {
+              "description": "Indicates whether the operation should run on a published bot instance. If set to false, the operation will run on a draft bot instance.",
+              "default": false,
+              "type": "boolean"
+            },
+            "toolsConnections": {
+              "description": "The tools connections that will be used to execute the evaluation run. This is a list of tools along with the corresponding user connections that should be used for each tool.",
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/ToolsConnections"
+              }
+            }
+          }
+        },
         "SensitivityLabelProperties": {
           "description": "Sensitivity label information from a connector response.",
           "type": "object",
@@ -17635,6 +19484,15 @@
             }
           }
         },
+        "StateCode": {
+          "description": "The state of an evaluation run describing the currently active stage.",
+          "enum": [
+            "Active",
+            "Inactive",
+            "Unknown"
+          ],
+          "type": "string"
+        },
         "StorageWarningThresholds": {
           "type": "object",
           "properties": {
@@ -17743,6 +19601,20 @@
             "TakeCount": {
               "minimum": 1,
               "type": "integer"
+            }
+          }
+        },
+        "TemplateAvailability": {
+          "type": "object",
+          "properties": {
+            "environmentSku": {
+              "$ref": "#/definitions/EnvironmentSku"
+            },
+            "isDisabled": {
+              "type": "boolean"
+            },
+            "disabledReason": {
+              "$ref": "#/definitions/DisabledReason"
             }
           }
         },
@@ -17913,6 +19785,171 @@
             }
           }
         },
+        "TestCaseResult": {
+          "description": "The result of a test case in a maker evaluation run.",
+          "required": [
+            "metricsResults",
+            "state",
+            "testCaseId"
+          ],
+          "type": "object",
+          "properties": {
+            "metricsResults": {
+              "description": "The list of grader metrics associated with the test case.",
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/Metric"
+              }
+            },
+            "state": {
+              "$ref": "#/definitions/TestCaseState"
+            },
+            "testCaseId": {
+              "format": "uuid",
+              "description": "The ID of the object model entity that the test case is sourced from.",
+              "type": "string"
+            }
+          }
+        },
+        "TestCaseState": {
+          "description": "The state of a test case in a maker evaluation run.",
+          "enum": [
+            "Cancelled",
+            "Completed",
+            "Error",
+            "Running",
+            "Unknown"
+          ],
+          "type": "string"
+        },
+        "TestRun": {
+          "description": "The response payload for a get evaluation run details request.",
+          "required": [
+            "cdsBotId",
+            "environmentId",
+            "id",
+            "ownerId",
+            "startTime",
+            "state",
+            "testCasesResults",
+            "testSetId"
+          ],
+          "type": "object",
+          "properties": {
+            "cdsBotId": {
+              "format": "uuid",
+              "description": "The CDS bot ID where the evaluation run is executed.",
+              "type": "string"
+            },
+            "endTime": {
+              "format": "date-time",
+              "description": "The timestamp when the evaluation run ended.",
+              "type": "string"
+            },
+            "environmentId": {
+              "description": "The environment ID where the evaluation run is executed.",
+              "type": "string"
+            },
+            "id": {
+              "format": "uuid",
+              "description": "The unique identifier for this evaluation run.",
+              "type": "string"
+            },
+            "mcsConnectionId": {
+              "description": "The MCS connection ID used in the evaluation run.",
+              "type": "string"
+            },
+            "name": {
+              "description": "The name of the evaluation run.",
+              "type": "string"
+            },
+            "ownerId": {
+              "description": "The ID of the owner who initiated the evaluation run.",
+              "type": "string"
+            },
+            "startTime": {
+              "format": "date-time",
+              "description": "The timestamp when the evaluation run started.",
+              "type": "string"
+            },
+            "state": {
+              "$ref": "#/definitions/EvaluationRunState"
+            },
+            "testCasesResults": {
+              "description": "The test cases and their results in the evaluation run.",
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/TestCaseResult"
+              }
+            },
+            "testSetId": {
+              "format": "uuid",
+              "description": "The ID of the object model test set entity record that the run is associated with.",
+              "type": "string"
+            },
+            "totalTestCases": {
+              "description": "Number of test cases included in the evaluation run.",
+              "type": "integer"
+            }
+          }
+        },
+        "TestRunCollection": {
+          "description": "A collection of maker evaluation test runs.",
+          "type": "object",
+          "properties": {
+            "value": {
+              "description": "The list of test runs.",
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/TestRun"
+              }
+            }
+          }
+        },
+        "TestSet": {
+          "description": "The response payload for a get test set request.",
+          "required": [
+            "id"
+          ],
+          "type": "object",
+          "properties": {
+            "auditInfo": {
+              "$ref": "#/definitions/AuditInfo"
+            },
+            "description": {
+              "description": "Description of the test set.",
+              "type": "string"
+            },
+            "displayName": {
+              "description": "Display name of the test set.",
+              "type": "string"
+            },
+            "id": {
+              "description": "The unique identifier for the test set component.",
+              "type": "string"
+            },
+            "state": {
+              "$ref": "#/definitions/StateCode"
+            },
+            "totalTestCases": {
+              "description": "The number of test cases in the test set.",
+              "type": "integer"
+            }
+          }
+        },
+        "TestSetCollection": {
+          "description": "A collection of maker evaluation test sets.",
+          "type": "object",
+          "properties": {
+            "value": {
+              "description": "The list of test sets.",
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/TestSet"
+              }
+            }
+          }
+        },
         "ThoughtEvent": {
           "description": "A thought event representing agent reasoning.",
           "allOf": [
@@ -17942,6 +19979,44 @@
               "type": "array",
               "items": {
                 "$ref": "#/definitions/Base64ThoughtImage"
+              }
+            }
+          }
+        },
+        "ToggleAFDTrafficRoutingResponse": {
+          "required": [
+            "message"
+          ],
+          "type": "object",
+          "properties": {
+            "message": {
+              "description": "Result message describing the outcome of the toggle operation.",
+              "type": "string"
+            }
+          }
+        },
+        "ToolsConnections": {
+          "description": "A tool along with the corresponding user connections to use for a maker evaluation run.",
+          "required": [
+            "botId",
+            "botSchemaName",
+            "connections"
+          ],
+          "type": "object",
+          "properties": {
+            "botId": {
+              "description": "The Dataverse bot ID.",
+              "type": "string"
+            },
+            "botSchemaName": {
+              "description": "Bot schema name.",
+              "type": "string"
+            },
+            "connections": {
+              "description": "A list of connections.",
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/Connection"
               }
             }
           }
@@ -18711,8 +20786,8 @@
       "stackOwner": "Microsoft",
       "useNewApimVersion": "true",
       "version": {
-        "previous": "releases/v1.0.1806\\1.0.1806.4672",
-        "current": "releases/v1.0.1808\\1.0.1808.4692"
+        "previous": "releases/v1.0.1808\\1.0.1808.4692",
+        "current": "releases/v1.0.1812\\1.0.1812.4731"
       }
     },
     "capabilities": [
@@ -18721,7 +20796,7 @@
     "interfaces": {},
     "description": "Unified connector for all administrative capabilities in Microsoft Power Platform",
     "createdTime": "2024-03-26T21:06:48.533185Z",
-    "changedTime": "2026-04-28T18:02:09.9954719Z",
+    "changedTime": "2026-05-25T16:42:20.8572924Z",
     "releaseTag": "Production",
     "tier": "Standard",
     "publisher": "Microsoft",

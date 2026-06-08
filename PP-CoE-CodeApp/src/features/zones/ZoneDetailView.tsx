@@ -70,6 +70,7 @@ import {
   ArrowLeftRegular,
   ChartMultipleRegular,
   DeleteRegular,
+  DataHistogramRegular,
   DismissRegular,
   EditRegular,
 } from "@fluentui/react-icons";
@@ -728,6 +729,13 @@ export function ZoneDetailView() {
             onClick={() => navigate(`/zones/${zone.id}/reporting`)}
           >
             Reporting
+          </Button>
+          <Button
+            appearance="subtle"
+            icon={<DataHistogramRegular />}
+            onClick={() => navigate(`/zones/${zone.id}/usage`)}
+          >
+            Usage
           </Button>
           <Button
             appearance="subtle"
