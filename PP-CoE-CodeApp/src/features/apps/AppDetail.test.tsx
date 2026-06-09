@@ -75,10 +75,10 @@ function appRow(overrides: Partial<Record<string, unknown>> = {}) {
   };
 }
 
-function renderAppDetail(appId = "app-1") {
+function renderAppDetail(route = "/apps/app-1") {
   return render(
     <FluentProvider theme={webLightTheme}>
-      <MemoryRouter initialEntries={[`/apps/${appId}`]}>
+      <MemoryRouter initialEntries={[route]}>
         <Routes>
           <Route path="/apps/:appId" element={<AppDetail />} />
         </Routes>
@@ -100,7 +100,7 @@ describe("AppDetail smoke", () => {
       // Display name appears twice (breadcrumb + header) — use getAllByText.
       expect(screen.getAllByText("Onboarding App").length).toBeGreaterThan(0);
     });
-    expect(getApp).toHaveBeenCalledWith("app-1");
+    expect(getApp).toHaveBeenCalledWith("app-1", undefined);
   });
 
   it("renders the missing-state ErrorPane when getApp returns ok:true but no data", async () => {
@@ -118,6 +118,18 @@ describe("AppDetail smoke", () => {
       expect(screen.getByText("Couldn't load app")).toBeInTheDocument();
     });
     expect(screen.getByText("boom")).toBeInTheDocument();
+  });
+
+  it("passes envId from the URL query to getApp", async () => {
+    vi.mocked(getApp).mockResolvedValue({
+      ok: true,
+      data: { row: appRow() as never, raw: {} },
+    });
+    renderAppDetail("/apps/app-1?envId=env-9");
+    await waitFor(() => {
+      expect(screen.getAllByText("Onboarding App").length).toBeGreaterThan(0);
+    });
+    expect(getApp).toHaveBeenCalledWith("app-1", "env-9");
   });
 });
 

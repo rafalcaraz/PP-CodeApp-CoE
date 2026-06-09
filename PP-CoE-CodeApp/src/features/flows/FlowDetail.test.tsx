@@ -43,10 +43,10 @@ function flowRow(overrides: Partial<Record<string, unknown>> = {}) {
   };
 }
 
-function renderFlowDetail(flowId = "flow-1") {
+function renderFlowDetail(route = "/flows/flow-1") {
   return render(
     <FluentProvider theme={webLightTheme}>
-      <MemoryRouter initialEntries={[`/flows/${flowId}`]}>
+      <MemoryRouter initialEntries={[route]}>
         <Routes>
           <Route path="/flows/:flowId" element={<FlowDetail />} />
         </Routes>
@@ -67,7 +67,7 @@ describe("FlowDetail smoke", () => {
     await waitFor(() => {
       expect(screen.getAllByText("Weekly Reminder").length).toBeGreaterThan(0);
     });
-    expect(getFlow).toHaveBeenCalledWith("flow-1");
+    expect(getFlow).toHaveBeenCalledWith("flow-1", undefined);
   });
 
   it("renders a human-readable trigger summary for Recurrence flows", async () => {
@@ -98,5 +98,17 @@ describe("FlowDetail smoke", () => {
       expect(screen.getByText("Couldn't load flow")).toBeInTheDocument();
     });
     expect(screen.getByText("boom")).toBeInTheDocument();
+  });
+
+  it("passes envId from the URL query to getFlow", async () => {
+    vi.mocked(getFlow).mockResolvedValue({
+      ok: true,
+      data: { row: flowRow() as never, raw: {} },
+    });
+    renderFlowDetail("/flows/flow-1?envId=env-9");
+    await waitFor(() => {
+      expect(screen.getAllByText("Weekly Reminder").length).toBeGreaterThan(0);
+    });
+    expect(getFlow).toHaveBeenCalledWith("flow-1", "env-9");
   });
 });

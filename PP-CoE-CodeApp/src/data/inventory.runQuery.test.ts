@@ -34,6 +34,9 @@ vi.mock("../generated", () => ({
 
 // Import AFTER vi.mock so the mock is in place when inventory.ts evaluates.
 import {
+  getAgent,
+  getApp,
+  getFlow,
   invalidateInventoryCache,
   listAppsPage,
   listEnvironmentsPage,
@@ -200,7 +203,7 @@ describe("runQuery cache (via listEnvironmentsPage)", () => {
 // ---------------------------------------------------------------------------
 
 describe("row dedup", () => {
-  it("drops rows with duplicate `name` values from the connector", async () => {
+  it("drops rows with duplicate identity key values from the connector", async () => {
     queryResourcesMock.mockResolvedValue({
       success: true,
       data: {
@@ -211,19 +214,31 @@ describe("row dedup", () => {
             name: "dup-id",
             type: "microsoft.powerplatform/environments",
             location: "us",
-            properties: { displayName: "First", environmentType: "Sandbox", isManaged: false },
+            properties: {
+              displayName: "First",
+              environmentType: "Sandbox",
+              isManaged: false,
+            },
           },
           {
             name: "dup-id", // duplicate — should be dropped
             type: "microsoft.powerplatform/environments",
             location: "us",
-            properties: { displayName: "Second (dup)", environmentType: "Sandbox", isManaged: false },
+            properties: {
+              displayName: "Second (dup)",
+              environmentType: "Sandbox",
+              isManaged: false,
+            },
           },
           {
             name: "unique-id",
             type: "microsoft.powerplatform/environments",
             location: "us",
-            properties: { displayName: "Third", environmentType: "Sandbox", isManaged: false },
+            properties: {
+              displayName: "Third",
+              environmentType: "Sandbox",
+              isManaged: false,
+            },
           },
         ],
       },
@@ -236,6 +251,96 @@ describe("row dedup", () => {
     expect(result.data.rows).toHaveLength(2);
     expect(result.data.rows[0].displayName).toBe("First");
     expect(result.data.rows[1].displayName).toBe("Third");
+  });
+
+  it("keeps same name when environmentId differs", async () => {
+    queryResourcesMock.mockResolvedValue({
+      success: true,
+      data: {
+        totalRecords: 2,
+        skipToken: null,
+        data: [
+          {
+            name: "same-id",
+            type: "microsoft.powerapps/canvasapps",
+            location: "us",
+            properties: {
+              displayName: "Env A",
+              environmentId: "env-a",
+            },
+          },
+          {
+            name: "same-id",
+            type: "microsoft.powerapps/canvasapps",
+            location: "us",
+            properties: {
+              displayName: "Env B",
+              environmentId: "env-b",
+            },
+          },
+        ],
+      },
+    });
+
+    const result = await listAppsPage({});
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.data.rows).toHaveLength(2);
+    expect(result.data.rows.map((r) => r.environmentId)).toEqual(["env-a", "env-b"]);
+  });
+});
+
+describe("get* environment filters", () => {
+  it("adds properties.environmentId clause when provided", async () => {
+    queryResourcesMock.mockResolvedValue({
+      success: true,
+      data: { totalRecords: 0, data: [], skipToken: null },
+    });
+
+    await getApp("app-1", "env-1");
+    await getFlow("flow-1", "env-2");
+    await getAgent("agent-1", "env-3");
+
+    const [appCall, flowCall, agentCall] = queryResourcesMock.mock.calls;
+    const appClauses = appCall[1].Clauses as Array<{ $type: string; FieldName?: string }>;
+    const flowClauses = flowCall[1].Clauses as Array<{ $type: string; FieldName?: string }>;
+    const agentClauses = agentCall[1].Clauses as Array<{ $type: string; FieldName?: string }>;
+
+    expect(
+      appClauses.some((c) => c.$type === "where" && c.FieldName === "properties.environmentId")
+    ).toBe(true);
+    expect(
+      flowClauses.some((c) => c.$type === "where" && c.FieldName === "properties.environmentId")
+    ).toBe(true);
+    expect(
+      agentClauses.some((c) => c.$type === "where" && c.FieldName === "properties.environmentId")
+    ).toBe(true);
+  });
+
+  it("keeps get* behavior when environmentId is omitted", async () => {
+    queryResourcesMock.mockResolvedValue({
+      success: true,
+      data: { totalRecords: 0, data: [], skipToken: null },
+    });
+
+    await getApp("app-1");
+    await getFlow("flow-1");
+    await getAgent("agent-1");
+
+    const [appCall, flowCall, agentCall] = queryResourcesMock.mock.calls;
+    const appClauses = appCall[1].Clauses as Array<{ $type: string; FieldName?: string }>;
+    const flowClauses = flowCall[1].Clauses as Array<{ $type: string; FieldName?: string }>;
+    const agentClauses = agentCall[1].Clauses as Array<{ $type: string; FieldName?: string }>;
+
+    expect(
+      appClauses.some((c) => c.$type === "where" && c.FieldName === "properties.environmentId")
+    ).toBe(false);
+    expect(
+      flowClauses.some((c) => c.$type === "where" && c.FieldName === "properties.environmentId")
+    ).toBe(false);
+    expect(
+      agentClauses.some((c) => c.$type === "where" && c.FieldName === "properties.environmentId")
+    ).toBe(false);
   });
 });
 
@@ -372,4 +477,3 @@ describe("runQueryAllPages — multi-page Environment drain", () => {
     expect(yellowMembers).toHaveLength(1);
   });
 });
-

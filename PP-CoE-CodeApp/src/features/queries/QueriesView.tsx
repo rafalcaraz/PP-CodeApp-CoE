@@ -28,6 +28,7 @@ import {
   Textarea,
   TabList,
   Tab,
+  Link,
   type InputOnChangeData,
   type TextareaOnChangeData,
 } from "@fluentui/react-components";
@@ -76,6 +77,8 @@ import { LoadingPane } from "../../components/Status";
 import { downloadCsv, rowsToCsv } from "../../utils/csv";
 import { useConnectorCatalog } from "../../shared/connector-catalog";
 import { buildDynamicQueryTemplates } from "./dynamicTemplates";
+import { useNavigate } from "react-router-dom";
+import { getQueryResultHref } from "./routeResolver";
 
 const useStyles = makeStyles({
   root: {
@@ -428,6 +431,7 @@ type BuilderMode = "basic" | "advanced";
 
 export function QueriesView() {
   const styles = useStyles();
+  const navigate = useNavigate();
   const { catalog: connectorCatalog } = useConnectorCatalog();
   const [spec, setSpec] = useState<QuerySpec>(DEFAULT_SPEC);
   const [mode, setMode] = useState<BuilderMode>("basic");
@@ -1243,39 +1247,56 @@ export function QueriesView() {
                 <span>Environment ID</span>
                 <span></span>
               </div>
-              {rows.map((row) => (
-                <div key={`${row.type}|${row.name}`} className={styles.resultRow}>
-                  <span className={styles.ellipsis}>{row.displayName || row.name || "—"}</span>
-                  <span className={styles.ellipsis}>
-                    <Badge appearance="outline" color="informative" size="small">
-                      {row.type}
-                    </Badge>
-                  </span>
-                  <span className={styles.ellipsis}>{row.environmentId || "—"}</span>
-                  <Dialog>
-                    <DialogTrigger disableButtonEnhancement>
-                      <Button size="small" appearance="subtle">
-                        View raw
-                      </Button>
-                    </DialogTrigger>
-                    <DialogSurface>
-                      <DialogBody>
-                        <DialogTitle>{row.displayName || row.name || "Raw item"}</DialogTitle>
-                        <DialogContent>
-                          <pre className={styles.json}>
-                            {JSON.stringify(row.raw, null, 2)}
-                          </pre>
-                        </DialogContent>
-                        <DialogActions>
-                          <DialogTrigger disableButtonEnhancement>
-                            <Button appearance="secondary">Close</Button>
-                          </DialogTrigger>
-                        </DialogActions>
-                      </DialogBody>
-                    </DialogSurface>
-                  </Dialog>
-                </div>
-              ))}
+              {rows.map((row) => {
+                const href = getQueryResultHref({
+                  id: row.name,
+                  type: row.type,
+                  environmentId: row.environmentId || undefined,
+                });
+                const displayName = row.displayName || row.name || "—";
+                return (
+                  <div
+                    key={`${row.type}|${row.name}|${row.environmentId || ""}`}
+                    className={styles.resultRow}
+                  >
+                    <span className={styles.ellipsis}>
+                      {href ? (
+                        <Link onClick={() => navigate(href)}>{displayName}</Link>
+                      ) : (
+                        displayName
+                      )}
+                    </span>
+                    <span className={styles.ellipsis}>
+                      <Badge appearance="outline" color="informative" size="small">
+                        {row.type}
+                      </Badge>
+                    </span>
+                    <span className={styles.ellipsis}>{row.environmentId || "—"}</span>
+                    <Dialog>
+                      <DialogTrigger disableButtonEnhancement>
+                        <Button size="small" appearance="subtle">
+                          View raw
+                        </Button>
+                      </DialogTrigger>
+                      <DialogSurface>
+                        <DialogBody>
+                          <DialogTitle>{displayName}</DialogTitle>
+                          <DialogContent>
+                            <pre className={styles.json}>
+                              {JSON.stringify(row.raw, null, 2)}
+                            </pre>
+                          </DialogContent>
+                          <DialogActions>
+                            <DialogTrigger disableButtonEnhancement>
+                              <Button appearance="secondary">Close</Button>
+                            </DialogTrigger>
+                          </DialogActions>
+                        </DialogBody>
+                      </DialogSurface>
+                    </Dialog>
+                  </div>
+                );
+              })}
             </div>
           )}
           {skipToken && (

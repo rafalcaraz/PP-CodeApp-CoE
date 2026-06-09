@@ -325,7 +325,7 @@ async function __invokeQueryOnce(
       return { ok: false, error: formatError(result.error) };
     }
     const rawItems = result.data?.data ?? [];
-    // Dedup by `name` (the resource GUID), but pass nameless rows
+    // Dedup by resource identity key (type + environmentId + name), but pass nameless rows
     // (summarize aggregates) through untouched. First-seen wins;
     // preserves server-side ordering since arrays + Set keep insertion
     // order.
@@ -333,7 +333,7 @@ async function __invokeQueryOnce(
     const out: ResourceItem[] = [];
     let droppedAny = false;
     for (const item of rawItems) {
-      const key = item.name;
+      const key = dedupeKeyForResource(item);
       if (key) {
         if (seen.has(key)) {
           droppedAny = true;
@@ -443,8 +443,8 @@ async function runQueryAllPages(
     previousToken = skipToken;
     skipToken = res.data.skipToken;
   }
-  // Second-line defense: dedupe by `name` (the resource id in the
-  // Admin V2 schema). Cheap O(n) pass; only re-allocates when there
+  // Second-line defense: dedupe by resource identity key
+  // (type + environmentId + name). Cheap O(n) pass; only re-allocates when there
   // *is* a duplicate to remove. Protects all `list*` callers uniformly
   // from any future pagination weirdness — if the backend behaves
   // correctly, this is a no-op.
@@ -457,7 +457,7 @@ async function runQueryAllPages(
   const dedup: ResourceItem[] = [];
   let droppedAny = false;
   for (const item of all) {
-    const key = item.name;
+    const key = dedupeKeyForResource(item);
     if (key) {
       if (seen.has(key)) {
         droppedAny = true;
@@ -471,6 +471,16 @@ async function runQueryAllPages(
     ok: true,
     data: droppedAny ? dedup : all,
   };
+}
+
+function dedupeKeyForResource(item: ResourceItem): string | null {
+  if (!item.name) return null;
+  const props = (item.properties ?? {}) as Record<string, unknown>;
+  const envId =
+    typeof props.environmentId === "string" && props.environmentId.trim()
+      ? props.environmentId.trim()
+      : "";
+  return `${item.type ?? ""}|${envId}|${item.name}`;
 }
 
 /** Run a query and call `onPage` as each page arrives. Caller can render
@@ -1951,12 +1961,18 @@ export async function listAppsPage(
   };
 }
 
-export async function getApp(appId: string): Promise<DataResult<{ row: AppRow; raw: ResourceItem } | null>> {
+export async function getApp(
+  appId: string,
+  environmentId?: string
+): Promise<DataResult<{ row: AppRow; raw: ResourceItem } | null>> {
   const clauses: Clause[] = [
     where("type", "in~", ALL_APP_TYPES.map((t) => `'${t}'`)),
     where("name", "==", [`'${appId}'`]),
-    take(1),
   ];
+  if (environmentId?.trim()) {
+    clauses.push(where("properties.environmentId", "==", [`'${environmentId.trim()}'`]));
+  }
+  clauses.push(take(1));
   const res = await runQuery(clauses, { Top: 1, Skip: 0, SkipToken: "" });
   if (!res.ok) return res;
   const item = res.data.items[0];
@@ -2001,12 +2017,18 @@ export async function listFlowsPage(
   };
 }
 
-export async function getFlow(flowId: string): Promise<DataResult<{ row: FlowRow; raw: ResourceItem } | null>> {
+export async function getFlow(
+  flowId: string,
+  environmentId?: string
+): Promise<DataResult<{ row: FlowRow; raw: ResourceItem } | null>> {
   const clauses: Clause[] = [
     where("type", "in~", ALL_FLOW_TYPES.map((t) => `'${t}'`)),
     where("name", "==", [`'${flowId}'`]),
-    take(1),
   ];
+  if (environmentId?.trim()) {
+    clauses.push(where("properties.environmentId", "==", [`'${environmentId.trim()}'`]));
+  }
+  clauses.push(take(1));
   const res = await runQuery(clauses, { Top: 1, Skip: 0, SkipToken: "" });
   if (!res.ok) return res;
   const item = res.data.items[0];
@@ -2106,12 +2128,18 @@ export async function listAgentsPage(
   };
 }
 
-export async function getAgent(agentId: string): Promise<DataResult<{ row: AgentRow; raw: ResourceItem } | null>> {
+export async function getAgent(
+  agentId: string,
+  environmentId?: string
+): Promise<DataResult<{ row: AgentRow; raw: ResourceItem } | null>> {
   const clauses: Clause[] = [
     where("type", "==", [`'${ResourceType.CopilotStudioAgent}'`]),
     where("name", "==", [`'${agentId}'`]),
-    take(1),
   ];
+  if (environmentId?.trim()) {
+    clauses.push(where("properties.environmentId", "==", [`'${environmentId.trim()}'`]));
+  }
+  clauses.push(take(1));
   const res = await runQuery(clauses, { Top: 1, Skip: 0, SkipToken: "" });
   if (!res.ok) return res;
   const item = res.data.items[0];
