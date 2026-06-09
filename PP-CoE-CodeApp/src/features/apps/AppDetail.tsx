@@ -11,7 +11,7 @@ import {
   Link,
   Divider,
 } from "@fluentui/react-components";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { getApp, shortResourceType, type AppRow } from "./data";
 import {
   getAppAdminDetails,
@@ -45,6 +45,8 @@ export function AppDetail() {
   const styles = useDetailStyles();
   const navigate = useNavigate();
   const { appId } = useParams<{ appId: string }>();
+  const [searchParams] = useSearchParams();
+  const envId = searchParams.get("envId")?.trim() || undefined;
   const [state, setState] = useState<State>({ kind: "loading" });
 
   useEffect(() => {
@@ -52,7 +54,7 @@ export function AppDetail() {
     let cancelled = false;
     (async () => {
       setState({ kind: "loading" });
-      const res = await getApp(appId);
+      const res = await getApp(appId, envId);
       if (cancelled) return;
       if (!res.ok) {
         setState({ kind: "error", message: res.error });
@@ -67,7 +69,7 @@ export function AppDetail() {
     return () => {
       cancelled = true;
     };
-  }, [appId]);
+  }, [appId, envId]);
 
   return (
     <div className={styles.root}>

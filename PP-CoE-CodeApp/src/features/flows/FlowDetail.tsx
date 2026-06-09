@@ -13,7 +13,7 @@ import {
   Link,
   Divider,
 } from "@fluentui/react-components";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
   getFlow,
   shortResourceType,
@@ -89,6 +89,8 @@ export function FlowDetail() {
   const styles = useDetailStyles();
   const navigate = useNavigate();
   const { flowId } = useParams<{ flowId: string }>();
+  const [searchParams] = useSearchParams();
+  const envId = searchParams.get("envId")?.trim() || undefined;
   const [state, setState] = useState<State>({ kind: "loading" });
 
   useEffect(() => {
@@ -96,7 +98,7 @@ export function FlowDetail() {
     let cancelled = false;
     (async () => {
       setState({ kind: "loading" });
-      const res = await getFlow(flowId);
+      const res = await getFlow(flowId, envId);
       if (cancelled) return;
       if (!res.ok) {
         setState({ kind: "error", message: res.error });
@@ -111,7 +113,7 @@ export function FlowDetail() {
     return () => {
       cancelled = true;
     };
-  }, [flowId]);
+  }, [flowId, envId]);
 
   return (
     <div className={styles.root}>
