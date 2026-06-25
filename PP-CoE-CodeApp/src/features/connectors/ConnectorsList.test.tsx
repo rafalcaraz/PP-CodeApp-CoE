@@ -15,14 +15,22 @@ vi.mock("../../shared/connector-catalog", () => ({
   useConnectorCatalog: vi.fn(),
 }));
 
+vi.mock("../../utils/csv", () => ({
+  rowsToCsv: vi.fn(() => "CSV_CONTENT"),
+  downloadCsv: vi.fn(),
+}));
+
 import { ConnectorsList } from "../../features/connectors/ConnectorsList";
 import {
   loadCatalog,
   useConnectorCatalog,
 } from "../../shared/connector-catalog";
+import { downloadCsv, rowsToCsv } from "../../utils/csv";
 
 const mockedUseCatalog = vi.mocked(useConnectorCatalog);
 const mockedLoadCatalog = vi.mocked(loadCatalog);
+const mockedDownloadCsv = vi.mocked(downloadCsv);
+const mockedRowsToCsv = vi.mocked(rowsToCsv);
 
 function renderView() {
   return render(
@@ -102,6 +110,91 @@ describe("ConnectorsList", () => {
     await userEvent.click(screen.getByRole("button", { name: /Refresh/i }));
     await waitFor(() =>
       expect(mockedLoadCatalog).toHaveBeenCalledWith({ force: true }),
+    );
+  });
+
+  it("exports all connectors to CSV when Export all is clicked", async () => {
+    const entries = new Map([
+      [
+        "shared_sql",
+        {
+          connectorId: "shared_sql",
+          displayName: "SQL Server",
+          tier: "Premium",
+          publisher: "Microsoft",
+        },
+      ],
+    ]);
+    mockedUseCatalog.mockReturnValue({
+      catalog: { entries, fetchedAt: Date.now(), envId: "env-1" },
+      status: "ready",
+      error: "",
+      classify: vi.fn(),
+    });
+    renderView();
+    await userEvent.click(screen.getByRole("button", { name: /Export all/i }));
+
+    // The serializer receives friendly-headered rows in grid order.
+    expect(mockedRowsToCsv).toHaveBeenCalledWith([
+      {
+        "Display name": "SQL Server",
+        Tier: "Premium",
+        Publisher: "Microsoft",
+        "Connector id": "shared_sql",
+      },
+    ]);
+    expect(mockedDownloadCsv).toHaveBeenCalledWith("connectors", "CSV_CONTENT");
+  });
+
+  it("disables Export filtered until a filter is active, then exports the filtered set", async () => {
+    const entries = new Map([
+      [
+        "shared_sql",
+        {
+          connectorId: "shared_sql",
+          displayName: "SQL Server",
+          tier: "Premium",
+          publisher: "Microsoft",
+        },
+      ],
+      [
+        "shared_sharepointonline",
+        {
+          connectorId: "shared_sharepointonline",
+          displayName: "SharePoint",
+          tier: "Standard",
+          publisher: "Microsoft",
+        },
+      ],
+    ]);
+    mockedUseCatalog.mockReturnValue({
+      catalog: { entries, fetchedAt: Date.now(), envId: "env-1" },
+      status: "ready",
+      error: "",
+      classify: vi.fn(),
+    });
+    renderView();
+
+    const exportFiltered = screen.getByRole("button", {
+      name: /Export filtered/i,
+    });
+    expect(exportFiltered).toBeDisabled();
+
+    await userEvent.type(screen.getByPlaceholderText(/Type to filter/i), "sql");
+    expect(exportFiltered).toBeEnabled();
+    await userEvent.click(exportFiltered);
+
+    expect(mockedRowsToCsv).toHaveBeenLastCalledWith([
+      {
+        "Display name": "SQL Server",
+        Tier: "Premium",
+        Publisher: "Microsoft",
+        "Connector id": "shared_sql",
+      },
+    ]);
+    expect(mockedDownloadCsv).toHaveBeenCalledWith(
+      "connectors-filtered",
+      "CSV_CONTENT",
     );
   });
 });

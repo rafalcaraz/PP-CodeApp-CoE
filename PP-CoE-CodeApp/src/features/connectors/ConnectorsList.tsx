@@ -13,6 +13,10 @@
  */
 import { useCallback, useMemo, useState } from "react";
 import {
+  Accordion,
+  AccordionHeader,
+  AccordionItem,
+  AccordionPanel,
   Badge,
   Button,
   Caption1,
@@ -31,13 +35,28 @@ import {
   type InputOnChangeData,
   type TableColumnDefinition,
 } from "@fluentui/react-components";
-import { ArrowClockwiseRegular } from "@fluentui/react-icons";
+import {
+  ArrowClockwiseRegular,
+  ArrowDownloadRegular,
+} from "@fluentui/react-icons";
 import { LoadingPane, ErrorPane, EmptyPane } from "../../components/Status";
+import { downloadCsv, rowsToCsv } from "../../utils/csv";
 import {
   loadCatalog,
   useConnectorCatalog,
   type ConnectorEntry,
 } from "./data";
+
+/** Maps a connector entry to a CSV row with friendly, stable column
+ *  headers matching the on-screen grid order. */
+function connectorToCsvRow(entry: ConnectorEntry): Record<string, string> {
+  return {
+    "Display name": entry.displayName,
+    Tier: entry.tier,
+    Publisher: entry.publisher,
+    "Connector id": entry.connectorId,
+  };
+}
 
 const useStyles = makeStyles({
   root: {
@@ -82,6 +101,31 @@ const useStyles = makeStyles({
     display: "flex",
     alignItems: "center",
     gap: tokens.spacingHorizontalS,
+  },
+  diagnostics: {
+    border: `1px dashed ${tokens.colorNeutralStroke2}`,
+    borderRadius: tokens.borderRadiusMedium,
+    backgroundColor: tokens.colorNeutralBackground2,
+  },
+  diagnosticsBody: {
+    display: "flex",
+    flexDirection: "column",
+    gap: tokens.spacingVerticalXS,
+    padding: `0 ${tokens.spacingHorizontalM} ${tokens.spacingVerticalM}`,
+  },
+  diagnosticsRow: {
+    display: "flex",
+    gap: tokens.spacingHorizontalS,
+  },
+  diagnosticsLabel: {
+    minWidth: "200px",
+    color: tokens.colorNeutralForeground3,
+  },
+  diagnosticsValue: {
+    fontFamily: tokens.fontFamilyMonospace,
+  },
+  diagnosticsFlag: {
+    color: tokens.colorPaletteRedForeground1,
   },
 });
 
@@ -186,6 +230,21 @@ export function ConnectorsList() {
     [allEntries],
   );
 
+  const hasFilter = filterText.trim().length > 0;
+
+  const exportAll = useCallback(() => {
+    if (allEntries.length === 0) return;
+    downloadCsv("connectors", rowsToCsv(allEntries.map(connectorToCsvRow)));
+  }, [allEntries]);
+
+  const exportFiltered = useCallback(() => {
+    if (filteredEntries.length === 0) return;
+    downloadCsv(
+      "connectors-filtered",
+      rowsToCsv(filteredEntries.map(connectorToCsvRow)),
+    );
+  }, [filteredEntries]);
+
   const showLoading = status === "loading" && !catalog;
   const showError = status === "error" && !catalog;
 
@@ -223,6 +282,22 @@ export function ConnectorsList() {
           )}
           <Button
             appearance="secondary"
+            icon={<ArrowDownloadRegular />}
+            onClick={exportAll}
+            disabled={!catalog || allEntries.length === 0}
+          >
+            Export all
+          </Button>
+          <Button
+            appearance="secondary"
+            icon={<ArrowDownloadRegular />}
+            onClick={exportFiltered}
+            disabled={!catalog || !hasFilter || filteredEntries.length === 0}
+          >
+            Export filtered
+          </Button>
+          <Button
+            appearance="secondary"
             icon={<ArrowClockwiseRegular />}
             onClick={onRefresh}
             disabled={refreshing || status === "loading"}
@@ -257,6 +332,76 @@ export function ConnectorsList() {
               </>
             )}
           </div>
+
+          {catalog.diagnostics && (
+            <Accordion collapsible className={styles.diagnostics}>
+              <AccordionItem value="diag">
+                <AccordionHeader>
+                  Diagnostics (temporary — connector count investigation)
+                </AccordionHeader>
+                <AccordionPanel>
+                  <div className={styles.diagnosticsBody}>
+                    <Caption1>
+                      Compares the raw <code>ListConnectors</code> response
+                      against what the catalog kept. If the API paged the
+                      result, a continuation token will appear below and the
+                      raw count will be a single page — that means connectors
+                      past page one are being dropped. Compare the raw count to
+                      the DLP “prebuilt connectors” total (~1705).
+                    </Caption1>
+                    <div className={styles.diagnosticsRow}>
+                      <Caption1 className={styles.diagnosticsLabel}>
+                        Raw connectors (page returned)
+                      </Caption1>
+                      <Text className={styles.diagnosticsValue}>
+                        {catalog.diagnostics.rawCount}
+                      </Text>
+                    </div>
+                    <div className={styles.diagnosticsRow}>
+                      <Caption1 className={styles.diagnosticsLabel}>
+                        After dedup (kept in catalog)
+                      </Caption1>
+                      <Text className={styles.diagnosticsValue}>
+                        {catalog.diagnostics.dedupedCount}
+                      </Text>
+                    </div>
+                    <div className={styles.diagnosticsRow}>
+                      <Caption1 className={styles.diagnosticsLabel}>
+                        Dropped to duplicate slugs
+                      </Caption1>
+                      <Text className={styles.diagnosticsValue}>
+                        {catalog.diagnostics.droppedToDedup}
+                      </Text>
+                    </div>
+                    <div className={styles.diagnosticsRow}>
+                      <Caption1 className={styles.diagnosticsLabel}>
+                        Continuation token present?
+                      </Caption1>
+                      <Text
+                        className={
+                          catalog.diagnostics.continuationToken
+                            ? styles.diagnosticsFlag
+                            : styles.diagnosticsValue
+                        }
+                      >
+                        {catalog.diagnostics.continuationToken
+                          ? `YES — page truncated (field: ${catalog.diagnostics.continuationField})`
+                          : "no"}
+                      </Text>
+                    </div>
+                    <div className={styles.diagnosticsRow}>
+                      <Caption1 className={styles.diagnosticsLabel}>
+                        Source environment
+                      </Caption1>
+                      <Text className={styles.diagnosticsValue}>
+                        {catalog.diagnostics.envId || "—"}
+                      </Text>
+                    </div>
+                  </div>
+                </AccordionPanel>
+              </AccordionItem>
+            </Accordion>
+          )}
 
           {filteredEntries.length === 0 ? (
             <EmptyPane message="No connectors match the current filter." />
