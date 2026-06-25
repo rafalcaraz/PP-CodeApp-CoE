@@ -12,6 +12,46 @@ export const dataSourcesInfo = {
     "dataSourceType": "Dataverse",
     "apis": {}
   },
+  "listrows_dataverse": {
+    "tableId": "",
+    "version": "",
+    "primaryKey": "",
+    "dataSourceType": "Connector",
+    "apis": {
+      "Run": {
+        "path": "/{connectionId}/triggers/manual/run",
+        "method": "POST",
+        "parameters": [
+          {
+            "name": "connectionId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "input",
+            "in": "body",
+            "required": true,
+            "type": "object"
+          },
+          {
+            "name": "api-version",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responseInfo": {
+          "200": {
+            "type": "object"
+          },
+          "default": {
+            "type": "object"
+          }
+        }
+      }
+    }
+  },
   "pplicensingapi_wrapper_flow": {
     "tableId": "",
     "version": "",
@@ -444,7 +484,8 @@ export const dataSourcesInfo = {
             "name": "triggerId",
             "in": "path",
             "required": true,
-            "type": "string"
+            "type": "string",
+            "format": "guid"
           },
           {
             "name": "body",
@@ -491,13 +532,15 @@ export const dataSourcesInfo = {
             "name": "triggerId",
             "in": "path",
             "required": true,
-            "type": "string"
+            "type": "string",
+            "format": "uuid"
           },
           {
             "name": "x-ms-cds-bot-id",
             "in": "header",
             "required": true,
-            "type": "string"
+            "type": "string",
+            "format": "uuid"
           },
           {
             "name": "x-ms-workflow-resourcegroup-name",
@@ -563,7 +606,8 @@ export const dataSourcesInfo = {
             "name": "x-ms-pva-bot-id",
             "in": "header",
             "required": false,
-            "type": "string"
+            "type": "string",
+            "format": "uuid"
           }
         ],
         "responseInfo": {
@@ -592,13 +636,15 @@ export const dataSourcesInfo = {
             "name": "triggerId",
             "in": "path",
             "required": true,
-            "type": "string"
+            "type": "string",
+            "format": "uuid"
           },
           {
             "name": "x-ms-cds-bot-id",
             "in": "header",
             "required": true,
-            "type": "string"
+            "type": "string",
+            "format": "uuid"
           },
           {
             "name": "x-ms-workflow-resourcegroup-name",
@@ -664,7 +710,8 @@ export const dataSourcesInfo = {
             "name": "x-ms-pva-bot-id",
             "in": "header",
             "required": false,
-            "type": "string"
+            "type": "string",
+            "format": "uuid"
           }
         ],
         "responseInfo": {
@@ -1623,7 +1670,8 @@ export const dataSourcesInfo = {
             "name": "operationId",
             "in": "path",
             "required": true,
-            "type": "string"
+            "type": "string",
+            "format": "uuid"
           },
           {
             "name": "api-version",
@@ -2422,7 +2470,8 @@ export const dataSourcesInfo = {
             "name": "TestRunId",
             "in": "path",
             "required": true,
-            "type": "string"
+            "type": "string",
+            "format": "uuid"
           },
           {
             "name": "api-version",
@@ -2463,7 +2512,8 @@ export const dataSourcesInfo = {
             "name": "TestRunId",
             "in": "path",
             "required": true,
-            "type": "string"
+            "type": "string",
+            "format": "uuid"
           },
           {
             "name": "api-version",
@@ -2625,7 +2675,8 @@ export const dataSourcesInfo = {
             "name": "environmentId",
             "in": "path",
             "required": true,
-            "type": "string"
+            "type": "string",
+            "format": "uuid"
           },
           {
             "name": "api-version",
@@ -2669,7 +2720,8 @@ export const dataSourcesInfo = {
             "name": "environmentId",
             "in": "path",
             "required": true,
-            "type": "string"
+            "type": "string",
+            "format": "uuid"
           },
           {
             "name": "api-version",
@@ -3953,7 +4005,8 @@ export const dataSourcesInfo = {
             "name": "operationId",
             "in": "path",
             "required": true,
-            "type": "string"
+            "type": "string",
+            "format": "uuid"
           },
           {
             "name": "api-version",
@@ -4087,7 +4140,8 @@ export const dataSourcesInfo = {
             "name": "groupId",
             "in": "path",
             "required": true,
-            "type": "string"
+            "type": "string",
+            "format": "uuid"
           },
           {
             "name": "api-version",
@@ -4163,7 +4217,8 @@ export const dataSourcesInfo = {
             "name": "groupId",
             "in": "path",
             "required": true,
-            "type": "string"
+            "type": "string",
+            "format": "uuid"
           },
           {
             "name": "environmentId",
@@ -4204,7 +4259,8 @@ export const dataSourcesInfo = {
             "name": "groupId",
             "in": "path",
             "required": true,
-            "type": "string"
+            "type": "string",
+            "format": "uuid"
           },
           {
             "name": "environmentId",
@@ -4938,7 +4994,8 @@ export const dataSourcesInfo = {
             "name": "groupId",
             "in": "path",
             "required": true,
-            "type": "string"
+            "type": "string",
+            "format": "uuid"
           },
           {
             "name": "api-version",
@@ -4982,7 +5039,8 @@ export const dataSourcesInfo = {
             "name": "groupId",
             "in": "path",
             "required": true,
-            "type": "string"
+            "type": "string",
+            "format": "uuid"
           },
           {
             "name": "api-version",
@@ -5097,7 +5155,8 @@ export const dataSourcesInfo = {
             "name": "ruleSetId",
             "in": "path",
             "required": true,
-            "type": "string"
+            "type": "string",
+            "format": "uuid"
           },
           {
             "name": "api-version",
@@ -5144,7 +5203,8 @@ export const dataSourcesInfo = {
             "name": "ruleSetId",
             "in": "path",
             "required": true,
-            "type": "string"
+            "type": "string",
+            "format": "uuid"
           },
           {
             "name": "api-version",
@@ -6247,7 +6307,8 @@ export const dataSourcesInfo = {
             "name": "startDate",
             "in": "query",
             "required": true,
-            "type": "string"
+            "type": "string",
+            "format": "date-time"
           },
           {
             "name": "api-version",
@@ -6259,19 +6320,22 @@ export const dataSourcesInfo = {
             "name": "endDate",
             "in": "query",
             "required": false,
-            "type": "string"
+            "type": "string",
+            "format": "date-time"
           },
           {
             "name": "pageNumber",
             "in": "query",
             "required": false,
-            "type": "integer"
+            "type": "integer",
+            "format": "int32"
           },
           {
             "name": "pageSize",
             "in": "query",
             "required": false,
-            "type": "integer"
+            "type": "integer",
+            "format": "int32"
           },
           {
             "name": "userId",
@@ -6301,7 +6365,8 @@ export const dataSourcesInfo = {
             "name": "environmentId",
             "in": "query",
             "required": false,
-            "type": "string"
+            "type": "string",
+            "format": "uuid"
           }
         ],
         "responseInfo": {
@@ -6342,7 +6407,8 @@ export const dataSourcesInfo = {
             "name": "startDate",
             "in": "query",
             "required": true,
-            "type": "string"
+            "type": "string",
+            "format": "date-time"
           },
           {
             "name": "api-version",
@@ -6354,25 +6420,29 @@ export const dataSourcesInfo = {
             "name": "endDate",
             "in": "query",
             "required": false,
-            "type": "string"
+            "type": "string",
+            "format": "date-time"
           },
           {
             "name": "pageNumber",
             "in": "query",
             "required": false,
-            "type": "integer"
+            "type": "integer",
+            "format": "int32"
           },
           {
             "name": "pageSize",
             "in": "query",
             "required": false,
-            "type": "integer"
+            "type": "integer",
+            "format": "int32"
           },
           {
             "name": "environmentId",
             "in": "query",
             "required": false,
-            "type": "string"
+            "type": "string",
+            "format": "uuid"
           }
         ],
         "responseInfo": {
@@ -6413,13 +6483,15 @@ export const dataSourcesInfo = {
             "name": "userId",
             "in": "path",
             "required": true,
-            "type": "string"
+            "type": "string",
+            "format": "uuid"
           },
           {
             "name": "startDate",
             "in": "query",
             "required": true,
-            "type": "string"
+            "type": "string",
+            "format": "date-time"
           },
           {
             "name": "api-version",
@@ -6431,25 +6503,29 @@ export const dataSourcesInfo = {
             "name": "endDate",
             "in": "query",
             "required": false,
-            "type": "string"
+            "type": "string",
+            "format": "date-time"
           },
           {
             "name": "pageNumber",
             "in": "query",
             "required": false,
-            "type": "integer"
+            "type": "integer",
+            "format": "int32"
           },
           {
             "name": "pageSize",
             "in": "query",
             "required": false,
-            "type": "integer"
+            "type": "integer",
+            "format": "int32"
           },
           {
             "name": "environmentId",
             "in": "query",
             "required": false,
-            "type": "string"
+            "type": "string",
+            "format": "uuid"
           }
         ],
         "responseInfo": {
@@ -6490,7 +6566,8 @@ export const dataSourcesInfo = {
             "name": "startDate",
             "in": "query",
             "required": true,
-            "type": "string"
+            "type": "string",
+            "format": "date-time"
           },
           {
             "name": "api-version",
@@ -6502,13 +6579,15 @@ export const dataSourcesInfo = {
             "name": "endDate",
             "in": "query",
             "required": false,
-            "type": "string"
+            "type": "string",
+            "format": "date-time"
           },
           {
             "name": "environmentId",
             "in": "query",
             "required": false,
-            "type": "string"
+            "type": "string",
+            "format": "uuid"
           }
         ],
         "responseInfo": {
@@ -6549,7 +6628,8 @@ export const dataSourcesInfo = {
             "name": "startDate",
             "in": "query",
             "required": true,
-            "type": "string"
+            "type": "string",
+            "format": "date-time"
           },
           {
             "name": "api-version",
@@ -6561,25 +6641,29 @@ export const dataSourcesInfo = {
             "name": "endDate",
             "in": "query",
             "required": false,
-            "type": "string"
+            "type": "string",
+            "format": "date-time"
           },
           {
             "name": "pageNumber",
             "in": "query",
             "required": false,
-            "type": "integer"
+            "type": "integer",
+            "format": "int32"
           },
           {
             "name": "pageSize",
             "in": "query",
             "required": false,
-            "type": "integer"
+            "type": "integer",
+            "format": "int32"
           },
           {
             "name": "environmentId",
             "in": "query",
             "required": false,
-            "type": "string"
+            "type": "string",
+            "format": "uuid"
           }
         ],
         "responseInfo": {
@@ -6620,13 +6704,15 @@ export const dataSourcesInfo = {
             "name": "userId",
             "in": "path",
             "required": true,
-            "type": "string"
+            "type": "string",
+            "format": "uuid"
           },
           {
             "name": "startDate",
             "in": "query",
             "required": true,
-            "type": "string"
+            "type": "string",
+            "format": "date-time"
           },
           {
             "name": "api-version",
@@ -6638,25 +6724,29 @@ export const dataSourcesInfo = {
             "name": "endDate",
             "in": "query",
             "required": false,
-            "type": "string"
+            "type": "string",
+            "format": "date-time"
           },
           {
             "name": "pageNumber",
             "in": "query",
             "required": false,
-            "type": "integer"
+            "type": "integer",
+            "format": "int32"
           },
           {
             "name": "pageSize",
             "in": "query",
             "required": false,
-            "type": "integer"
+            "type": "integer",
+            "format": "int32"
           },
           {
             "name": "environmentId",
             "in": "query",
             "required": false,
-            "type": "string"
+            "type": "string",
+            "format": "uuid"
           }
         ],
         "responseInfo": {
@@ -6788,49 +6878,57 @@ export const dataSourcesInfo = {
             "name": "workflowId",
             "in": "query",
             "required": false,
-            "type": "string"
+            "type": "string",
+            "format": "uuid"
           },
           {
             "name": "resourceId",
             "in": "query",
             "required": false,
-            "type": "string"
+            "type": "string",
+            "format": "uuid"
           },
           {
             "name": "createdBy",
             "in": "query",
             "required": false,
-            "type": "string"
+            "type": "string",
+            "format": "uuid"
           },
           {
             "name": "ownerId",
             "in": "query",
             "required": false,
-            "type": "string"
+            "type": "string",
+            "format": "uuid"
           },
           {
             "name": "createdOnStartDate",
             "in": "query",
             "required": false,
-            "type": "string"
+            "type": "string",
+            "format": "date"
           },
           {
             "name": "createdOnEndDate",
             "in": "query",
             "required": false,
-            "type": "string"
+            "type": "string",
+            "format": "date"
           },
           {
             "name": "modifiedOnStartDate",
             "in": "query",
             "required": false,
-            "type": "string"
+            "type": "string",
+            "format": "date"
           },
           {
             "name": "modifiedOnEndDate",
             "in": "query",
             "required": false,
-            "type": "string"
+            "type": "string",
+            "format": "date"
           }
         ],
         "responseInfo": {
@@ -6883,13 +6981,15 @@ export const dataSourcesInfo = {
             "name": "workflowId",
             "in": "query",
             "required": false,
-            "type": "string"
+            "type": "string",
+            "format": "uuid"
           },
           {
             "name": "parentProcessStageId",
             "in": "query",
             "required": false,
-            "type": "string"
+            "type": "string",
+            "format": "uuid"
           },
           {
             "name": "connector",
@@ -6966,7 +7066,8 @@ export const dataSourcesInfo = {
             "name": "workflowId",
             "in": "query",
             "required": true,
-            "type": "string"
+            "type": "string",
+            "format": "uuid"
           },
           {
             "name": "api-version",
@@ -8273,7 +8374,8 @@ export const dataSourcesInfo = {
             "name": "continuationToken",
             "in": "query",
             "required": false,
-            "type": "integer"
+            "type": "integer",
+            "format": "int64"
           }
         ],
         "responseInfo": {
@@ -8349,7 +8451,8 @@ export const dataSourcesInfo = {
             "name": "approvalId",
             "in": "path",
             "required": true,
-            "type": "string"
+            "type": "string",
+            "format": "uuid"
           },
           {
             "name": "api-version",
@@ -8537,7 +8640,8 @@ export const dataSourcesInfo = {
             "name": "continuationToken",
             "in": "query",
             "required": false,
-            "type": "integer"
+            "type": "integer",
+            "format": "int64"
           }
         ],
         "responseInfo": {
@@ -8625,7 +8729,8 @@ export const dataSourcesInfo = {
             "name": "flowId",
             "in": "path",
             "required": true,
-            "type": "string"
+            "type": "string",
+            "format": "uuid"
           },
           {
             "name": "api-version",
@@ -8678,7 +8783,8 @@ export const dataSourcesInfo = {
             "name": "flowId",
             "in": "path",
             "required": true,
-            "type": "string"
+            "type": "string",
+            "format": "uuid"
           },
           {
             "name": "runId",
@@ -8772,7 +8878,8 @@ export const dataSourcesInfo = {
             "name": "flowId",
             "in": "path",
             "required": true,
-            "type": "string"
+            "type": "string",
+            "format": "uuid"
           },
           {
             "name": "api-version",
@@ -8813,7 +8920,8 @@ export const dataSourcesInfo = {
             "name": "flowId",
             "in": "path",
             "required": true,
-            "type": "string"
+            "type": "string",
+            "format": "uuid"
           },
           {
             "name": "api-version",
@@ -8860,7 +8968,8 @@ export const dataSourcesInfo = {
             "name": "flowId",
             "in": "path",
             "required": true,
-            "type": "string"
+            "type": "string",
+            "format": "uuid"
           },
           {
             "name": "runId",
@@ -8954,7 +9063,8 @@ export const dataSourcesInfo = {
             "name": "promptId",
             "in": "path",
             "required": true,
-            "type": "string"
+            "type": "string",
+            "format": "uuid"
           },
           {
             "name": "api-version",

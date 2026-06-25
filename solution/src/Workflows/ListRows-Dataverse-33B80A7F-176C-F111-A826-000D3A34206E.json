@@ -1,0 +1,224 @@
+{
+  "properties": {
+    "connectionReferences": {
+      "shared_powerplatformadminv2_1": {
+        "runtimeSource": "invoker",
+        "connection": {
+          "connectionReferenceLogicalName": "msftcsa_PPForAdminsV2"
+        },
+        "api": {
+          "name": "shared_powerplatformadminv2"
+        }
+      },
+      "shared_commondataserviceforapps_1": {
+        "runtimeSource": "embedded",
+        "connection": {
+          "connectionReferenceLogicalName": "msftcsa_PPDataverse"
+        },
+        "api": {
+          "name": "shared_commondataserviceforapps"
+        }
+      }
+    },
+    "definition": {
+      "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+      "contentVersion": "1.0.0.0",
+      "parameters": {
+        "$connections": {
+          "defaultValue": {},
+          "type": "Object"
+        },
+        "$authentication": {
+          "defaultValue": {},
+          "type": "SecureObject"
+        }
+      },
+      "triggers": {
+        "manual": {
+          "metadata": {
+            "operationMetadataId": "eaa58ae7-8d15-4880-b498-9633d88b65d0"
+          },
+          "type": "Request",
+          "kind": "PowerAppV2",
+          "inputs": {
+            "schema": {
+              "type": "object",
+              "properties": {
+                "text": {
+                  "title": "environmentId",
+                  "type": "string",
+                  "x-ms-dynamically-added": true,
+                  "description": "Please enter your input",
+                  "x-ms-content-hint": "TEXT"
+                },
+                "text_1": {
+                  "title": "schemaNamePlural",
+                  "type": "string",
+                  "x-ms-dynamically-added": true,
+                  "description": "Please enter your input",
+                  "x-ms-content-hint": "TEXT"
+                },
+                "text_2": {
+                  "title": "filterXMLQuery",
+                  "type": "string",
+                  "x-ms-dynamically-added": true,
+                  "description": "Please enter your input",
+                  "x-ms-content-hint": "TEXT"
+                }
+              },
+              "required": [
+                "text",
+                "text_1",
+                "text_2"
+              ]
+            }
+          }
+        }
+      },
+      "actions": {
+        "Init_var_-_output_variable": {
+          "runAfter": {},
+          "metadata": {
+            "operationMetadataId": "0b5e3724-e8c1-49f5-aa3a-a4f3eef77572"
+          },
+          "type": "InitializeVariable",
+          "inputs": {
+            "variables": [
+              {
+                "name": "resultOutput",
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "Respond_to_a_Power_App_or_flow": {
+          "runAfter": {
+            "Catch": [
+              "Succeeded",
+              "Skipped"
+            ]
+          },
+          "metadata": {
+            "operationMetadataId": "01f3bd64-60bc-4c8d-88ea-418383eb6994"
+          },
+          "type": "Response",
+          "kind": "PowerApp",
+          "inputs": {
+            "statusCode": 200,
+            "body": {
+              "result": "@variables('resultOutput')"
+            },
+            "schema": {
+              "type": "object",
+              "properties": {
+                "result": {
+                  "title": "result",
+                  "x-ms-dynamically-added": true,
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "Try": {
+          "actions": {
+            "Retrieves_a_single_environment_by_ID_(preview)": {
+              "runAfter": {},
+              "metadata": {
+                "operationMetadataId": "e68c4088-7549-4950-b42c-918b7908b26f"
+              },
+              "type": "OpenApiConnection",
+              "inputs": {
+                "host": {
+                  "connectionName": "shared_powerplatformadminv2_1",
+                  "operationId": "GetEnvironmentByIdForUser",
+                  "apiId": "/providers/Microsoft.PowerApps/apis/shared_powerplatformadminv2"
+                },
+                "parameters": {
+                  "environmentId": "@triggerBody()['text']",
+                  "api-version": "2024-10-01"
+                },
+                "authentication": "@parameters('$authentication')"
+              }
+            },
+            "List_rows_from_selected_environment": {
+              "runAfter": {
+                "Retrieves_a_single_environment_by_ID_(preview)": [
+                  "Succeeded"
+                ]
+              },
+              "metadata": {
+                "operationMetadataId": "3163f9ef-3fb1-4c8b-bd43-f5f666fa6a56"
+              },
+              "type": "OpenApiConnection",
+              "inputs": {
+                "host": {
+                  "connectionName": "shared_commondataserviceforapps_1",
+                  "operationId": "ListRecordsWithOrganization",
+                  "apiId": "/providers/Microsoft.PowerApps/apis/shared_commondataserviceforapps"
+                },
+                "parameters": {
+                  "organization": "@outputs('Retrieves_a_single_environment_by_ID_(preview)')?['body/url']",
+                  "entityName": "@triggerBody()['text_1']",
+                  "fetchXml": "@triggerBody()['text_2']"
+                },
+                "authentication": "@parameters('$authentication')"
+              }
+            },
+            "Set_variable_2": {
+              "runAfter": {
+                "List_rows_from_selected_environment": [
+                  "Succeeded"
+                ]
+              },
+              "metadata": {
+                "operationMetadataId": "ad473242-daae-41b0-8732-286f6e34bc6d"
+              },
+              "type": "SetVariable",
+              "inputs": {
+                "name": "resultOutput",
+                "value": "@{string(outputs('List_rows_from_selected_environment')?['body/value'])}"
+              }
+            }
+          },
+          "runAfter": {
+            "Init_var_-_output_variable": [
+              "Succeeded"
+            ]
+          },
+          "metadata": {
+            "operationMetadataId": "77b820cd-ba5c-4add-81aa-3b39a769d085"
+          },
+          "type": "Scope"
+        },
+        "Catch": {
+          "actions": {
+            "Set_variable": {
+              "runAfter": {},
+              "metadata": {
+                "operationMetadataId": "b290a8aa-5b9b-4250-b10c-d486b2d4b63c"
+              },
+              "type": "SetVariable",
+              "inputs": {
+                "name": "resultOutput",
+                "value": "ERROR"
+              }
+            }
+          },
+          "runAfter": {
+            "Try": [
+              "Failed",
+              "TimedOut"
+            ]
+          },
+          "metadata": {
+            "operationMetadataId": "18eee391-bd6e-418e-8930-6484c0605a72"
+          },
+          "type": "Scope"
+        }
+      }
+    },
+    "templateName": ""
+  },
+  "schemaVersion": "1.0.0.0"
+}

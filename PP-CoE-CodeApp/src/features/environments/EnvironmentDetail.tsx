@@ -23,6 +23,7 @@ import {
   Option,
   Link,
   Input,
+  SearchBox,
   Button,
   MessageBar,
   MessageBarBody,
@@ -30,7 +31,7 @@ import {
   type OptionOnSelectData,
   type SelectionEvents,
 } from "@fluentui/react-components";
-import { ChevronDownRegular, ChevronRightRegular } from "@fluentui/react-icons";
+import { ChevronDownRegular, ChevronRightRegular, OpenRegular } from "@fluentui/react-icons";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   countResourcesByTypeForEnvironment,
@@ -41,6 +42,7 @@ import {
   type ResourceCountRow,
   type ResourceRow,
 } from "./data";
+import { listSolutions, solutionOverviewUrl, type SolutionRow } from "./solutions";
 import {
   getEnvironmentAdminDetails,
   type EnvironmentAdminDetails,
@@ -137,6 +139,9 @@ export function EnvironmentDetail() {
   // full list before clicking.
   const [resources, setResources] = useState<AsyncSlot<ResourceRow[]>>({ kind: "idle" });
   const [typeFilter, setTypeFilter] = useState<string>(ALL_TYPES_KEY);
+  // Solutions are Dataverse-backed (via the passthrough flow) and unrelated to
+  // the inventory resource list, so they get their own button-gated slot.
+  const [solutions, setSolutions] = useState<AsyncSlot<SolutionRow[]>>({ kind: "idle" });
 
   useEffect(() => {
     let cancelled = false;
@@ -148,6 +153,7 @@ export function EnvironmentDetail() {
       // session so the previous env's data doesn't bleed through.
       setResources({ kind: "idle" });
       setTypeFilter(ALL_TYPES_KEY);
+      setSolutions({ kind: "idle" });
 
       const [envRes, countsRes] = await Promise.all([
         getEnvironment(envId),
@@ -172,6 +178,18 @@ export function EnvironmentDetail() {
     setResources({ kind: "loading" });
     const res = await listResourcesInEnvironment(envId);
     setResources(
+      res.ok
+        ? { kind: "ready", data: res.data }
+        : { kind: "error", message: res.error }
+    );
+  }, [envId]);
+
+  // Explicit, button-driven load for solutions — keeps the Dataverse
+  // passthrough flow from firing on every environment open.
+  const loadSolutions = useCallback(async () => {
+    setSolutions({ kind: "loading" });
+    const res = await listSolutions(envId);
+    setSolutions(
       res.ok
         ? { kind: "ready", data: res.data }
         : { kind: "error", message: res.error }
@@ -231,6 +249,43 @@ export function EnvironmentDetail() {
   const selectedTypeText =
     typeFilter === ALL_TYPES_KEY ? "All types" : friendlyResourceType(typeFilter);
 
+  const solutionColumns: TableColumnDefinition<SolutionRow>[] = [
+    createTableColumn<SolutionRow>({
+      columnId: "friendlyName",
+      renderHeaderCell: () => "Name",
+      renderCell: (row) => row.friendlyName || row.uniqueName,
+    }),
+    createTableColumn<SolutionRow>({
+      columnId: "uniqueName",
+      renderHeaderCell: () => "Unique name",
+      renderCell: (row) => row.uniqueName || "—",
+    }),
+    createTableColumn<SolutionRow>({
+      columnId: "version",
+      renderHeaderCell: () => "Version",
+      renderCell: (row) => row.version || "—",
+    }),
+    createTableColumn<SolutionRow>({
+      columnId: "isManaged",
+      renderHeaderCell: () => "Type",
+      renderCell: (row) =>
+        row.isManaged ? (
+          <Badge appearance="filled" color="success">
+            Managed
+          </Badge>
+        ) : (
+          <Badge appearance="outline" color="informative">
+            Unmanaged
+          </Badge>
+        ),
+    }),
+    createTableColumn<SolutionRow>({
+      columnId: "modifiedOn",
+      renderHeaderCell: () => "Modified",
+      renderCell: (row) => formatDate(row.modifiedOn ?? ""),
+    }),
+  ];
+
   return (
     <div className={styles.root}>
       <div className={styles.colFull}>
@@ -281,6 +336,9 @@ export function EnvironmentDetail() {
           selectedTypeText={selectedTypeText}
           onTypeFilterSelect={onTypeFilterSelect}
           resourceColumns={resourceColumns}
+          solutions={solutions}
+          onLoadSolutions={loadSolutions}
+          solutionColumns={solutionColumns}
         />
       )}
     </div>
@@ -300,6 +358,9 @@ interface ReadyViewProps {
   selectedTypeText: string;
   onTypeFilterSelect: (e: SelectionEvents, data: OptionOnSelectData) => void;
   resourceColumns: TableColumnDefinition<ResourceRow>[];
+  solutions: AsyncSlot<SolutionRow[]>;
+  onLoadSolutions: () => void;
+  solutionColumns: TableColumnDefinition<SolutionRow>[];
 }
 
 function ReadyView({
@@ -315,9 +376,48 @@ function ReadyView({
   selectedTypeText,
   onTypeFilterSelect,
   resourceColumns,
+  solutions,
+  onLoadSolutions,
+  solutionColumns,
 }: ReadyViewProps) {
   const styles = useDetailStyles();
   const page = usePageStyles();
+
+  // Client-side solutions search.
+  const [solutionQuery, setSolutionQuery] = useState("");
+
+  const filteredSolutions = useMemo(() => {
+    const rows = solutions.kind === "ready" ? (solutions.data ?? []) : [];
+    const term = solutionQuery.trim().toLowerCase();
+    if (!term) return rows;
+    return rows.filter(
+      (r) =>
+        r.friendlyName.toLowerCase().includes(term) ||
+        r.uniqueName.toLowerCase().includes(term),
+    );
+  }, [solutions, solutionQuery]);
+
+  // Append an "Open in maker portal" action to the data columns supplied by
+  // the parent — deep-links each solution into make.powerapps.com.
+  const solutionColumnsWithActions = useMemo<TableColumnDefinition<SolutionRow>[]>(
+    () => [
+      ...solutionColumns,
+      createTableColumn<SolutionRow>({
+        columnId: "open",
+        renderHeaderCell: () => "Open",
+        renderCell: (rowItem) => (
+          <Link
+            href={solutionOverviewUrl(row.id, rowItem.id)}
+            target="_blank"
+            rel="noreferrer"
+          >
+            Maker portal <OpenRegular />
+          </Link>
+        ),
+      }),
+    ],
+    [solutionColumns, row.id],
+  );
 
   return (
     <>
@@ -623,7 +723,94 @@ function ReadyView({
         </div>
       </Card>
 
-      {/* 6. Identifiers — collapsed */}
+      {/* 6. Solutions — Dataverse-backed, button-gated */}
+      <Card className={styles.colFull}>
+        <CardHeader
+          header={
+            <Text weight="semibold">
+              Solutions
+              {solutions.kind === "ready" ? ` (${solutions.data?.length ?? 0})` : ""}
+            </Text>
+          }
+          description={
+            <Text size={200}>
+              Solutions installed in this environment (from Dataverse).
+              {solutions.kind === "ready" && " "}
+              {solutions.kind === "ready" && (
+                <Link onClick={onLoadSolutions}>Refresh</Link>
+              )}
+            </Text>
+          }
+        />
+        <Divider />
+        <div className={page.resourcesBody}>
+          {solutions.kind === "idle" && (
+            <div className={page.resourcesIdle}>
+              <Text size={200} className={page.resourcesIdleHelp}>
+                Retrieve the list of solutions in this environment from Dataverse.
+              </Text>
+              <Button appearance="primary" onClick={onLoadSolutions}>
+                Retrieve solutions
+              </Button>
+            </div>
+          )}
+          {solutions.kind === "loading" && <LoadingPane label="Retrieving solutions…" />}
+          {solutions.kind === "error" && (
+            <>
+              <ErrorPane
+                title="Couldn't retrieve solutions"
+                message={solutions.message ?? "Unknown error"}
+              />
+              <div className={page.resourcesRetry}>
+                <Button onClick={onLoadSolutions}>Retry</Button>
+              </div>
+            </>
+          )}
+          {solutions.kind === "ready" && (solutions.data?.length ?? 0) === 0 && (
+            <EmptyPane message="No solutions found in this environment." />
+          )}
+          {solutions.kind === "ready" && solutions.data && solutions.data.length > 0 && (
+            <>
+              <div className={page.toolbar}>
+                <SearchBox
+                  placeholder="Search solutions…"
+                  value={solutionQuery}
+                  onChange={(_, data) => setSolutionQuery(data.value)}
+                  aria-label="Search solutions"
+                />
+              </div>
+              {filteredSolutions.length === 0 ? (
+                <EmptyPane message="No solutions match your search." />
+              ) : (
+                <DataGrid
+                  items={filteredSolutions}
+                  columns={solutionColumnsWithActions}
+                  getRowId={(r) => r.id}
+                  sortable={false}
+                  focusMode="composite"
+                >
+                  <DataGridHeader>
+                    <DataGridRow>
+                      {({ renderHeaderCell }) => (
+                        <DataGridHeaderCell>{renderHeaderCell()}</DataGridHeaderCell>
+                      )}
+                    </DataGridRow>
+                  </DataGridHeader>
+                  <DataGridBody<SolutionRow>>
+                    {({ item, rowId }) => (
+                      <DataGridRow<SolutionRow> key={rowId}>
+                        {({ renderCell }) => <DataGridCell>{renderCell(item)}</DataGridCell>}
+                      </DataGridRow>
+                    )}
+                  </DataGridBody>
+                </DataGrid>
+              )}
+            </>
+          )}
+        </div>
+      </Card>
+
+      {/* 7. Identifiers — collapsed */}
       <IdentifiersAccordion
         className={styles.colFull}
         items={[

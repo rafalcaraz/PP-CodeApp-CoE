@@ -67,6 +67,21 @@
       "authenticationType": "oauth2-auth",
       "dataSets": {},
       "xrmConnectionReferenceLogicalName": "msftcsa_PPForAdminsV2"
+    },
+    "ba780b1f-c85c-4b23-adcf-9a9e16376566": {
+      "id": "/providers/Microsoft.PowerApps/apis/shared_logicflows",
+      "displayName": "Logic flows",
+      "dataSources": [
+        "listrows_dataverse"
+      ],
+      "workflowDetails": {
+        "workflowEntityId": "33b80a7f-176c-f111-a826-000d3a34206e",
+        "workflowDisplayName": "ListRows-Dataverse",
+        "workflowName": "33b80a7f-176c-f111-a826-000d3a34206e",
+        "dependencies": {
+          "shared_powerplatformadminv2_1": "20675a14-287e-49e2-a575-1a7dd31c611e"
+        }
+      }
     }
   },
   "databaseReferences": {
