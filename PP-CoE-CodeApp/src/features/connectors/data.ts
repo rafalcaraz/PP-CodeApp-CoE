@@ -18,7 +18,6 @@ export {
 export type {
   ConnectorEntry,
   ConnectorCatalog,
-  CatalogDiagnostics,
   Classification,
   CatalogStatus,
 } from "../../shared/connector-catalog";

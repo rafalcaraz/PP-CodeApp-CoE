@@ -77,27 +77,6 @@ export interface ConnectorEntry {
   publisher: string;
 }
 
-/** Diagnostics captured during a catalog fetch. Temporary — surfaced in
- *  the Connectors page's Diagnostics panel to investigate the count gap
- *  (app shows fewer connectors than the DLP "prebuilt connectors" list).
- *  Remove (or gate behind an off-by-default flag) once root cause is
- *  confirmed. */
-export interface CatalogDiagnostics {
-  /** Raw `value.length` returned by ListConnectors before any dedup. */
-  rawCount: number;
-  /** Entry count after slug-keyed dedup (i.e. the Map size). */
-  dedupedCount: number;
-  /** rawCount - dedupedCount: how many rows collapsed on duplicate slugs. */
-  droppedToDedup: number;
-  /** Continuation token found on the raw response, if any. Its presence
-   *  means the API paged the result and we're only seeing page one. */
-  continuationToken: string;
-  /** Which raw field the continuation token came from (for diagnostics). */
-  continuationField: string;
-  /** Env id the snapshot was sourced from. */
-  envId: string;
-}
-
 /** The in-memory representation of the catalog. */
 export interface ConnectorCatalog {
   entries: Map<string, ConnectorEntry>;
@@ -107,9 +86,6 @@ export interface ConnectorCatalog {
    *  diagnostics — the catalog itself is the same across envs but it's
    *  occasionally useful to know "this came from env X". */
   envId: string;
-  /** Optional fetch diagnostics. Absent on catalogs hydrated from an
-   *  older localStorage snapshot. */
-  diagnostics?: CatalogDiagnostics;
 }
 
 /** Normalized classification result returned by `classify`. */
@@ -195,7 +171,6 @@ interface PersistShape {
   fetchedAt: number;
   envId: string;
   entries: ConnectorEntry[];
-  diagnostics?: CatalogDiagnostics;
 }
 
 function loadFromStorage(): ConnectorCatalog | undefined {
@@ -223,7 +198,6 @@ function loadFromStorage(): ConnectorCatalog | undefined {
       entries,
       fetchedAt: parsed.fetchedAt,
       envId: typeof parsed.envId === "string" ? parsed.envId : "",
-      diagnostics: parsed.diagnostics,
     };
   } catch {
     return undefined;
@@ -236,7 +210,6 @@ function persist(catalog: ConnectorCatalog): void {
       fetchedAt: catalog.fetchedAt,
       envId: catalog.envId,
       entries: Array.from(catalog.entries.values()),
-      diagnostics: catalog.diagnostics,
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
   } catch {
@@ -294,38 +267,9 @@ async function fetchCatalogFromEnv(
       publisher: typeof props.publisher === "string" ? props.publisher : "",
     });
   }
-
-  // Defensively probe the raw response for a continuation token. The
-  // generated `ListConnectorsResponse` only models `value`, so if the
-  // admin connector pages its result we'd silently drop every page after
-  // the first. Reading these off an untyped view (without editing
-  // `generated/`) tells us whether truncation is happening.
-  const rawResponse = result.data as unknown as Record<string, unknown>;
-  let continuationToken = "";
-  let continuationField = "";
-  for (const field of ["@odata.nextLink", "nextLink", "skipToken"]) {
-    const v = rawResponse?.[field];
-    if (typeof v === "string" && v) {
-      continuationToken = v;
-      continuationField = field;
-      break;
-    }
-  }
-
-  const rawCount = items.length;
-  const dedupedCount = entries.size;
-  const diagnostics: CatalogDiagnostics = {
-    rawCount,
-    dedupedCount,
-    droppedToDedup: rawCount - dedupedCount,
-    continuationToken,
-    continuationField,
-    envId,
-  };
-
   return {
     ok: true,
-    data: { entries, fetchedAt: Date.now(), envId, diagnostics },
+    data: { entries, fetchedAt: Date.now(), envId },
   };
 }
 
