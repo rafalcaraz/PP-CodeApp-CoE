@@ -74,6 +74,7 @@ function agent(overrides: Partial<AgentRow> = {}): AgentRow {
     model: "GPT-4o",
     instructionsCharactersCount: 0,
     isWebSearchEnabledForKnowledge: false,
+    isCLIAgent: false,
     channels: [],
     sharedWithEditors: { userCount: 0, groupCount: 0, entireTenant: false },
     sharedWithViewers: { userCount: 0, groupCount: 0, entireTenant: false },

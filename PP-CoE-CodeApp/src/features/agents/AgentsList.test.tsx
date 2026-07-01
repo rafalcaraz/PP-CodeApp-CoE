@@ -54,6 +54,7 @@ vi.mock("../../features/agents/data", async () => {
             model: "",
             instructionsCharactersCount: 0,
             isWebSearchEnabledForKnowledge: false,
+            isCLIAgent: false,
             channels: [],
             sharedWithEditors: { userCount: 0, groupCount: 0, entireTenant: false },
             sharedWithViewers: { userCount: 0, groupCount: 0, entireTenant: false },

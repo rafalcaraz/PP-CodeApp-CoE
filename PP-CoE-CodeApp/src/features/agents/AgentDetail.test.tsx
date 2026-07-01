@@ -37,6 +37,7 @@ function agentRow(overrides: Partial<Record<string, unknown>> = {}) {
     model: "Claude Sonnet 4.6",
     instructionsCharactersCount: 100,
     isWebSearchEnabledForKnowledge: true,
+    isCLIAgent: true,
     connectors: [],
     channels: [],
     sharedWithEditors: { userCount: 0, groupCount: 0, entireTenant: false },
@@ -88,5 +89,29 @@ describe("AgentDetail smoke", () => {
       expect(screen.getAllByText("Copilot Agent").length).toBeGreaterThan(0);
     });
     expect(getAgent).toHaveBeenCalledWith("agent-1", "env-9");
+  });
+
+  it("shows the Skills card for a skills-capable (isCLIAgent) agent", async () => {
+    vi.mocked(getAgent).mockResolvedValue({
+      ok: true,
+      data: { row: agentRow({ isCLIAgent: true }) as never, raw: {} },
+    });
+    renderAgentDetail();
+    await waitFor(() => {
+      expect(screen.getAllByText("Copilot Agent").length).toBeGreaterThan(0);
+    });
+    expect(screen.getByText("Skills")).toBeInTheDocument();
+  });
+
+  it("hides the Skills card for a non-skills-capable agent", async () => {
+    vi.mocked(getAgent).mockResolvedValue({
+      ok: true,
+      data: { row: agentRow({ isCLIAgent: false }) as never, raw: {} },
+    });
+    renderAgentDetail();
+    await waitFor(() => {
+      expect(screen.getAllByText("Copilot Agent").length).toBeGreaterThan(0);
+    });
+    expect(screen.queryByText("Skills")).not.toBeInTheDocument();
   });
 });

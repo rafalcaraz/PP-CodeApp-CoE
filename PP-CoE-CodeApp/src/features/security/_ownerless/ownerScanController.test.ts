@@ -187,6 +187,7 @@ function makeAgentRow(id: string, ownerId: string): AgentRow {
     model: "",
     instructionsCharactersCount: 0,
     isWebSearchEnabledForKnowledge: false,
+    isCLIAgent: false,
     channels: [],
     sharedWithEditors: { userCount: 0, groupCount: 0, entireTenant: false },
     sharedWithViewers: { userCount: 0, groupCount: 0, entireTenant: false },
