@@ -267,8 +267,8 @@ function ReadyView({
         </div>
       </Card>
 
-      {/* 2b. Skills — dedicated explorer for skills-capable agents */}
-      {skillsEnabled && (
+      {/* 2b. Skills — dedicated explorer for skills-capable ("CLI") agents */}
+      {skillsEnabled && row.isCLIAgent && (
         <Card className={styles.colFull}>
           <CardHeader
             header={<Text weight="semibold">Skills</Text>}

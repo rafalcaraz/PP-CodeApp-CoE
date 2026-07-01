@@ -26,8 +26,10 @@
  * result is simply an empty skill list.
  *
  * ── Missing / deferred (see plan.md) ──────────────────────────────────────
- *  1. The inventory/schema property that marks an agent as skills-capable is
- *     not yet known; callers currently assume every agent is capable.
+ *  1. The agent property that marks an agent as skills-capable is
+ *     `properties.isCLIAgent` (mapped to `AgentRow.isCLIAgent`). The Skills
+ *     card/route is gated on it in the UI; this data layer still runs for any
+ *     agentId it's given and simply returns an empty list for non-capable ones.
  *
  * NOTE: Mock fixtures (`./_mock/mockSkills`) are intentionally left on disk but
  * are no longer wired into this live path. Re-import them here if you need to

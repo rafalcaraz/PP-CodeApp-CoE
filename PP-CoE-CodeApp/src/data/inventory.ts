@@ -722,6 +722,12 @@ export interface AgentRow {
   model: string;
   instructionsCharactersCount: number;
   isWebSearchEnabledForKnowledge: boolean;
+  /** True when this is a newer "CLI agent" (skills-capable) Copilot
+   *  Studio agent. Surfaced by the inventory API as
+   *  `properties.isCLIAgent`. Only these agents expose skills
+   *  (single/bundled) via Dataverse `botcomponent`, so the Skills
+   *  explorer is gated on this flag. */
+  isCLIAgent: boolean;
   // Distribution
   channels: string[];
   sharedWithEditors: AgentSharingCounts;
@@ -1814,6 +1820,7 @@ export function toAgentRow(item: ResourceItem): AgentRow {
     model: propStr(item, "model"),
     instructionsCharactersCount: propNum(item, "instructionsCharactersCount"),
     isWebSearchEnabledForKnowledge: propBool(item, "isWebSearchEnabledForKnowledge"),
+    isCLIAgent: propBool(item, "isCLIAgent"),
     // Distribution
     channels: propStrArray(item, "channels"),
     sharedWithEditors: {
