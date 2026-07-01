@@ -31,13 +31,28 @@ import {
   type InputOnChangeData,
   type TableColumnDefinition,
 } from "@fluentui/react-components";
-import { ArrowClockwiseRegular } from "@fluentui/react-icons";
+import {
+  ArrowClockwiseRegular,
+  ArrowDownloadRegular,
+} from "@fluentui/react-icons";
 import { LoadingPane, ErrorPane, EmptyPane } from "../../components/Status";
+import { downloadCsv, rowsToCsv } from "../../utils/csv";
 import {
   loadCatalog,
   useConnectorCatalog,
   type ConnectorEntry,
 } from "./data";
+
+/** Maps a connector entry to a CSV row with friendly, stable column
+ *  headers matching the on-screen grid order. */
+function connectorToCsvRow(entry: ConnectorEntry): Record<string, string> {
+  return {
+    "Display name": entry.displayName,
+    Tier: entry.tier,
+    Publisher: entry.publisher,
+    "Connector id": entry.connectorId,
+  };
+}
 
 const useStyles = makeStyles({
   root: {
@@ -186,6 +201,21 @@ export function ConnectorsList() {
     [allEntries],
   );
 
+  const hasFilter = filterText.trim().length > 0;
+
+  const exportAll = useCallback(() => {
+    if (allEntries.length === 0) return;
+    downloadCsv("connectors", rowsToCsv(allEntries.map(connectorToCsvRow)));
+  }, [allEntries]);
+
+  const exportFiltered = useCallback(() => {
+    if (filteredEntries.length === 0) return;
+    downloadCsv(
+      "connectors-filtered",
+      rowsToCsv(filteredEntries.map(connectorToCsvRow)),
+    );
+  }, [filteredEntries]);
+
   const showLoading = status === "loading" && !catalog;
   const showError = status === "error" && !catalog;
 
@@ -221,6 +251,22 @@ export function ConnectorsList() {
               Refreshed {formatAge(catalog.fetchedAt)}
             </Caption1>
           )}
+          <Button
+            appearance="secondary"
+            icon={<ArrowDownloadRegular />}
+            onClick={exportAll}
+            disabled={!catalog || allEntries.length === 0}
+          >
+            Export all
+          </Button>
+          <Button
+            appearance="secondary"
+            icon={<ArrowDownloadRegular />}
+            onClick={exportFiltered}
+            disabled={!catalog || !hasFilter || filteredEntries.length === 0}
+          >
+            Export filtered
+          </Button>
           <Button
             appearance="secondary"
             icon={<ArrowClockwiseRegular />}
