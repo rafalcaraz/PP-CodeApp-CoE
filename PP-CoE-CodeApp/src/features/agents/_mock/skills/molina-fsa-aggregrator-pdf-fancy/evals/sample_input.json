@@ -1,0 +1,21 @@
+{
+  "$comment": "Sample aggregated input (the exact shape the upstream aggregation emits). Feed to scripts/render_pdf.py to produce the branded PDF.",
+  "final_summary": [
+    { "account": "Medical Flexible Spending Account", "total": 22609.72 },
+    { "account": "Limited Purpose Flexible Spending Account", "total": 708.19 },
+    { "account": "Dependent Care Flexible Spending Account", "total": 6325.23 },
+    { "account": "Health Reimbursement Arrangement", "total": 400.58 }
+  ],
+  "per_file": [
+    { "file": "3-31-2026 FSA Funding Report.xlsx",
+      "accounts": { "Medical FSA": 9650.40, "Limited Purpose FSA": 497.19, "Dependent Care FSA": 2435.00, "HRA": 400.58 } },
+    { "file": "4-1-2026 FSA Funding Report.xlsx",
+      "accounts": { "Medical FSA": 12959.32, "Limited Purpose FSA": 211.00, "Dependent Care FSA": 3890.23, "HRA": 0.00 } }
+  ],
+  "processed_files": [
+    "3-31-2026 FSA Funding Report.xlsx",
+    "4-1-2026 FSA Funding Report.xlsx"
+  ],
+  "file_count": 2,
+  "run_date": "2026-07-01"
+}

@@ -6,6 +6,7 @@
 // Models
 export * as AadusersModel from './models/AadusersModel';
 export * as CommonModels from './models/CommonModels';
+export * as DownloadFile_DataverseModel from './models/DownloadFile_DataverseModel';
 export * as HTTPwithMicrosoftEntraID_preauthorized_Model from './models/HTTPwithMicrosoftEntraID_preauthorized_Model';
 export * as ListRows_DataverseModel from './models/ListRows_DataverseModel';
 export * as MicrosoftCopilotStudioModel from './models/MicrosoftCopilotStudioModel';
@@ -15,6 +16,7 @@ export * as PowerPlatformforAdminsV2Model from './models/PowerPlatformforAdminsV
 
 // Services
 export * from './services/AadusersService';
+export * from './services/DownloadFile_DataverseService';
 export * from './services/HTTPwithMicrosoftEntraID_preauthorized_Service';
 export * from './services/ListRows_DataverseService';
 export * from './services/MicrosoftCopilotStudioService';

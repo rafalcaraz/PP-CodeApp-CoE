@@ -48,7 +48,7 @@ const FEATURES: Array<{
   {
     name: "agents",
     routes: agentsRoutes,
-    expectedPaths: ["/agents", "/agents/:agentId"],
+    expectedPaths: ["/agents", "/agents/:agentId", "/agents/:agentId/skills"],
   },
   {
     name: "apps",

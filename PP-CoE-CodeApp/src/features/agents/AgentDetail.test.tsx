@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Routes, Route } from "react-router-dom";
 import { FluentProvider, webLightTheme } from "@fluentui/react-components";
+import { FeatureFlagsProvider } from "../../featureFlags";
 
 vi.mock("../../features/agents/data", async () => {
   const actual = await vi.importActual<
@@ -51,11 +52,13 @@ function agentRow(overrides: Partial<Record<string, unknown>> = {}) {
 function renderAgentDetail(route = "/agents/agent-1") {
   return render(
     <FluentProvider theme={webLightTheme}>
-      <MemoryRouter initialEntries={[route]}>
-        <Routes>
-          <Route path="/agents/:agentId" element={<AgentDetail />} />
-        </Routes>
-      </MemoryRouter>
+      <FeatureFlagsProvider>
+        <MemoryRouter initialEntries={[route]}>
+          <Routes>
+            <Route path="/agents/:agentId" element={<AgentDetail />} />
+          </Routes>
+        </MemoryRouter>
+      </FeatureFlagsProvider>
     </FluentProvider>
   );
 }

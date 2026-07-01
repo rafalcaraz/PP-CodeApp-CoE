@@ -82,6 +82,21 @@
           "shared_powerplatformadminv2_1": "20675a14-287e-49e2-a575-1a7dd31c611e"
         }
       }
+    },
+    "2025d613-cfea-494c-bbb3-49f87b18768d": {
+      "id": "/providers/Microsoft.PowerApps/apis/shared_logicflows",
+      "displayName": "Logic flows",
+      "dataSources": [
+        "downloadfile_dataverse"
+      ],
+      "workflowDetails": {
+        "workflowEntityId": "8eee7be1-6d75-f111-ab0f-000d3a34206e",
+        "workflowDisplayName": "DownloadFile-Dataverse",
+        "workflowName": "8eee7be1-6d75-f111-ab0f-000d3a34206e",
+        "dependencies": {
+          "shared_powerplatformadminv2_1": "20675a14-287e-49e2-a575-1a7dd31c611e"
+        }
+      }
     }
   },
   "databaseReferences": {
