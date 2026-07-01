@@ -1,0 +1,82 @@
+{
+  "skill": "molina-fsa-aggregrator-pdf-fancy",
+  "description": "Trigger + output evals for the branded (Contoso letterhead) Molina FSA aggregation PDF renderer. should_trigger cases ask for the branded/letterhead/fancy FSA PDF; should_not_trigger near-misses must route to the plain PDF skill (molina-fsa-aggregator-pdf), the math-only aggregators, or are out of scope (Sheet2/PII).",
+  "trigger_evals": {
+    "should_trigger": [
+      "generate the branded FSA funding PDF",
+      "produce the fancy Molina FSA run summary as a document",
+      "export the monthly FSA roll-up on the Contoso letterhead",
+      "make the FSA summary PDF with the letterhead",
+      "give me the FSA aggregation as a polished PDF"
+    ],
+    "should_not_trigger": [
+      "run the FSA aggregation and give me a plain PDF",
+      "just show me the FSA totals as a table",
+      "what is the aggregation math for the FSA accounts",
+      "give me per-employee FSA detail from Sheet2",
+      "book a patient appointment"
+    ],
+    "near_misses": [
+      {
+        "query": "run the FSA aggregation and give me a PDF",
+        "note": "Ambiguous branded-vs-plain. If the user does not ask for branded/letterhead/fancy, prefer molina-fsa-aggregator-pdf (plain). This skill wins only when branding/letterhead/'fancy'/polished is requested."
+      },
+      {
+        "query": "total the FSA reports and show me the numbers",
+        "note": "Math/inline-table only -> molina-fsa-aggregator-pdf / -singlefile, not this document renderer."
+      }
+    ]
+  },
+  "output_evals": [
+    {
+      "name": "branded_render_of_sample",
+      "given": "python scripts/render_pdf.py evals/sample_input.json -o out.pdf (run from the skill folder; letterhead present in assets/).",
+      "assert": [
+        "Exit code 0 and stdout ends with '..., branded).' (not 'UNBRANDED').",
+        "The rendered page shows the Contoso letterhead: blue header 'CONTOSO HEALTHCARE', green divider rule, bottom-right footer box (Contoso Healthcare / www.contosohealthcare.com / 1-800-555-CARE), faint diagonal watermark.",
+        "Body contains headings 'FSA Aggregation - Run Summary', 'Final Summary Table', 'Per-File Contributions', 'Processed Files List (2)'.",
+        "Final Summary shows $22,609.72, $708.19, $6,325.23, $400.58; the Per-File TOTAL row equals the Final Summary column-wise.",
+        "Subtitle contains 'Run date: 2026-07-01.'",
+        "Page number 'Page 1 of 1' appears bottom-LEFT (bottom-right is the letterhead footer box)."
+      ]
+    },
+    {
+      "name": "deterministic_bytes",
+      "given": "Render evals/sample_input.json twice to two files.",
+      "assert": [
+        "SHA-256(render_a) == SHA-256(render_b) — identical input + same letterhead yields byte-identical PDF."
+      ]
+    },
+    {
+      "name": "scales_and_clears_letterhead",
+      "given": "A 30+-file aggregated payload.",
+      "assert": [
+        "Output auto-paginates to multiple pages.",
+        "Every page carries the letterhead and a bottom-left page number.",
+        "No table content overlaps the header band or the bottom-right footer box."
+      ]
+    },
+    {
+      "name": "refuses_unbranded_by_default",
+      "given": "python scripts/render_pdf.py evals/sample_input.json -o out.pdf --letterhead does-not-exist.pdf",
+      "assert": [
+        "Non-zero exit (3) and an ERROR on stderr; no unbranded PDF is written.",
+        "Adding --allow-unbranded instead exits 0 and prints '..., UNBRANDED).'"
+      ]
+    },
+    {
+      "name": "cli_help_works",
+      "given": "python scripts/render_pdf.py --help",
+      "assert": [
+        "Exit code 0 and usage/help text is printed (no traceback)."
+      ]
+    },
+    {
+      "name": "phi_safe",
+      "given": "Any render.",
+      "assert": [
+        "No employee names or identifiers appear — aggregate totals only (Sheet1-derived)."
+      ]
+    }
+  ]
+}

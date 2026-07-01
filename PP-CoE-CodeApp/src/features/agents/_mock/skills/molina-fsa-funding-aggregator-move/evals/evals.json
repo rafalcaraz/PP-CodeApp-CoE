@@ -1,0 +1,66 @@
+{
+  "trigger_evals": {
+    "should_trigger": [
+      "Run the Molina FSA aggregation and move the processed files to the Output folder",
+      "Total the FSA reports in Input, then clear them out into the archive folder",
+      "Process my FSA funding reports at <Input URL> and file them into <Output URL>",
+      "Aggregate the FSA workbooks and move each one out of Input once it's processed",
+      "Run the monthly FSA funding summary and tidy up the Input folder afterward"
+    ],
+    "should_not_trigger": [
+      "Run the Molina FSA aggregation but leave the files where they are",
+      "Just total the FSA reports — do NOT move or touch any files",
+      "Give me a dry-run FSA summary without changing the Input folder",
+      "Show me the per-employee FSA contributions (Sheet2 detail)",
+      "Move these PowerPoint decks to another SharePoint library"
+    ],
+    "near_misses": [
+      {
+        "query": "Run the FSA aggregation",
+        "note": "Ambiguous on whether to move. Because this skill ALWAYS moves the processed files out of Input, a bare 'run the aggregation' should trigger only after confirming the move is intended — the agent should ask rather than silently relocating files."
+      },
+      {
+        "query": "Archive last month's FSA reports to the Output folder",
+        "note": "Move-without-aggregation. This skill always aggregates first (it moves only files it processed); a pure archive with no summary is a near-miss."
+      }
+    ]
+  },
+  "output_evals": [
+    {
+      "name": "tables_then_manifest",
+      "given": "A successful run over 3 readable Input workbooks with a valid Output URL.",
+      "assert": [
+        "Renders the three tables in order: Final Summary Table, Per-File Contributions, Processed Files List.",
+        "Appends a 'Moved Files' manifest naming a single per-run timestamped Output subfolder (not the Output root).",
+        "All 3 processed files appear in both the Processed Files List and the Moved Files manifest.",
+        "Does not echo any employee name or identifier (Sheet1 aggregate only)."
+      ]
+    },
+    {
+      "name": "skipped_file_stays_in_input",
+      "given": "A run of 3 files where 1 workbook has no Sheet1 (unreadable).",
+      "assert": [
+        "The run completes (never aborts) and totals only the 2 readable files.",
+        "The unreadable file is listed under 'Not moved -> Skipped during read (left in Input)'.",
+        "Only the 2 successfully-processed files are moved."
+      ]
+    },
+    {
+      "name": "move_failure_is_surfaced_loudly",
+      "given": "A run where a file is read and counted but its PATCH move fails.",
+      "assert": [
+        "The run still completes and renders the tables.",
+        "The file is flagged under '⚠ Counted this run but move FAILED (still in Input — will be re-counted next run)'.",
+        "The move failure does not abort the remaining moves."
+      ]
+    },
+    {
+      "name": "ordering_move_last",
+      "given": "Any successful run.",
+      "assert": [
+        "No file is moved before the three tables are rendered (move is the final step).",
+        "The per-run subfolder is created with conflictBehavior=rename before any file is PATCHed into it."
+      ]
+    }
+  ]
+}

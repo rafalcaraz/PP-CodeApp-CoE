@@ -8,6 +8,11 @@
  */
 
 export { retrieveRecords, clearDataverseInflight } from "./client";
+export {
+  downloadDataverseFile,
+  clearDataverseFileInflight,
+} from "./fileClient";
+export type { DataverseFileDownloadRequest } from "./fileClient";
 export { buildFetchXml } from "./fetchxml";
 export type { FetchCondition, FetchXmlSpec } from "./fetchxml";
 export {
@@ -15,11 +20,18 @@ export {
   setDataverseRunner,
   resetDataverseRunner,
   realDataverseRunner,
+  runDataverseFileDownload,
+  setDataverseFileRunner,
+  resetDataverseFileRunner,
+  realDataverseFileRunner,
 } from "./flowContract";
 export type {
   DataverseFlowInput,
   DataverseFlowRawResult,
   DataverseRunner,
+  DataverseFileInput,
+  DataverseFileRawResult,
+  DataverseFileRunner,
 } from "./flowContract";
 export { mockDataverseRunner, MOCK_SOLUTIONS } from "./mock";
 export type {

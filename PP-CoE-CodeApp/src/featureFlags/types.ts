@@ -7,7 +7,7 @@
 // reference a flag that doesn't exist.
 // ---------------------------------------------------------------------------
 
-export type FeatureFlagKey = "copilotStudioAssistant" | "zones";
+export type FeatureFlagKey = "copilotStudioAssistant" | "zones" | "agentSkills";
 
 export interface FeatureFlagDefinition {
   key: FeatureFlagKey;
@@ -38,6 +38,18 @@ export const FEATURE_FLAGS: readonly FeatureFlagDefinition[] = [
       "with localStorage-backed assignments — no changes are made to " +
       "any Microsoft data.",
     defaultValue: false,
+  },
+  {
+    key: "agentSkills",
+    label: "Agent skills viewer",
+    description:
+      "Adds a Skills area to the Copilot Studio agent detail page for " +
+      "newer agents that support skills. Retrieves the agent's skill " +
+      "components from Dataverse and lets you browse the skill file tree " +
+      "and render individual files (markdown / code). Bundled-skill file " +
+      "contents are sampled from mock fixtures until the file-download " +
+      "flow is available.",
+    defaultValue: true,
   },
 ];
 

@@ -10,9 +10,11 @@ import {
   Card,
   CardHeader,
   Badge,
+  Button,
   Link,
   Divider,
 } from "@fluentui/react-components";
+import { AppsListDetailRegular, ChevronRightRegular } from "@fluentui/react-icons";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
   getAgent,
@@ -32,6 +34,7 @@ import {
   Meta,
   useDetailStyles,
 } from "../../components/detail";
+import { useFeatureFlag } from "../../featureFlags";
 
 // Agent-specific styles that aren't shared with the other detail pages
 // (channels chip strip, "tools & knowledge" stat blocks, sharing chip grid).
@@ -174,6 +177,7 @@ function ReadyView({
 }) {
   const styles = useDetailStyles();
   const page = usePageStyles();
+  const skillsEnabled = useFeatureFlag("agentSkills");
   const ownerLabel = row.ownerDisplayName || row.ownerId;
   return (
     <>
@@ -262,6 +266,54 @@ function ReadyView({
           </div>
         </div>
       </Card>
+
+      {/* 2b. Skills — dedicated explorer for skills-capable agents */}
+      {skillsEnabled && (
+        <Card className={styles.colFull}>
+          <CardHeader
+            header={<Text weight="semibold">Skills</Text>}
+            description={
+              <Text size={200}>
+                Browse this agent's skills and their files.
+              </Text>
+            }
+            action={
+              <Button
+                appearance="primary"
+                icon={<AppsListDetailRegular />}
+                iconPosition="before"
+                onClick={() =>
+                  navigate(
+                    `/agents/${encodeURIComponent(row.id)}/skills${
+                      row.environmentId
+                        ? `?envId=${encodeURIComponent(row.environmentId)}`
+                        : ""
+                    }`,
+                  )
+                }
+              >
+                Open skills
+              </Button>
+            }
+          />
+          <Divider />
+          <div className={styles.cardBody}>
+            <Link
+              onClick={() =>
+                navigate(
+                  `/agents/${encodeURIComponent(row.id)}/skills${
+                    row.environmentId
+                      ? `?envId=${encodeURIComponent(row.environmentId)}`
+                      : ""
+                  }`,
+                )
+              }
+            >
+              View skill files and instructions <ChevronRightRegular />
+            </Link>
+          </div>
+        </Card>
+      )}
 
       {/* 3. Channels */}
       <Card className={styles.colHalf}>

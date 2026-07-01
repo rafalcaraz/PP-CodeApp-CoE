@@ -10,6 +10,9 @@ const AgentsList = lazy(() =>
 const AgentDetail = lazy(() =>
   import("./AgentDetail").then((m) => ({ default: m.AgentDetail })),
 );
+const AgentSkills = lazy(() =>
+  import("./AgentSkills").then((m) => ({ default: m.AgentSkills })),
+);
 
 /**
  * Returns the `<Route>` elements for the Agents feature.
@@ -25,6 +28,11 @@ export function agentsRoutes() {
       key="agents-detail"
       path="/agents/:agentId"
       element={<AgentDetail />}
+    />,
+    <Route
+      key="agents-skills"
+      path="/agents/:agentId/skills"
+      element={<AgentSkills />}
     />,
   ];
 }
