@@ -19,6 +19,13 @@ export {
   shortResourceType,
 } from "../../data/inventory";
 
+/**
+ * Per-record admin enrichment used by the Skills download fallback to resolve
+ * an environment's Dataverse org URL (`EnvironmentResponse.url`). Kept behind
+ * this feature barrel so views never deep-import `../../data/adminEnrichment`.
+ */
+export { getEnvironmentAdminDetails } from "../../data/adminEnrichment";
+
 export type {
   AgentRow,
   AgentFilters,
