@@ -112,4 +112,39 @@ describe("EnvironmentDetail — Solutions section", () => {
       expect(screen.getByText("Couldn't retrieve solutions")).toBeInTheDocument();
     });
   });
+
+  it("paginates solutions 10 per page", async () => {
+    const rows = Array.from({ length: 25 }, (_, i) => ({
+      id: `s${i}`,
+      uniqueName: `Solution${i}`,
+      friendlyName: `Solution ${i}`,
+      version: "1.0.0.0",
+      isManaged: false,
+      modifiedOn: "2025-03-22T11:25:00Z",
+      raw: {},
+    }));
+    vi.mocked(listSolutions).mockResolvedValue({ ok: true, data: rows });
+
+    renderEnvDetail();
+
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Retrieve solutions" }),
+    );
+
+    // Page 1: first 10 rows visible, 11th is not.
+    await waitFor(() => {
+      expect(screen.getByText("Solution 0")).toBeInTheDocument();
+    });
+    expect(screen.getByText("Solution 9")).toBeInTheDocument();
+    expect(screen.queryByText("Solution 10")).not.toBeInTheDocument();
+    expect(screen.getByText("Page 1 of 3")).toBeInTheDocument();
+
+    // Advance to page 2.
+    await userEvent.click(screen.getByRole("button", { name: /Next/ }));
+    await waitFor(() => {
+      expect(screen.getByText("Solution 10")).toBeInTheDocument();
+    });
+    expect(screen.queryByText("Solution 0")).not.toBeInTheDocument();
+    expect(screen.getByText("Page 2 of 3")).toBeInTheDocument();
+  });
 });
