@@ -4,6 +4,7 @@ import { FluentProvider, webLightTheme } from "@fluentui/react-components";
 
 import { SkillFileViewer } from "./SkillFileViewer";
 import { buildSkillTree, type SkillFileNode } from "./skillTree";
+import * as skillDownload from "./skillDownload";
 
 const RAW_MD = "---\nname: demo\n---\n# Hello Skill\n\nbody text";
 
@@ -54,5 +55,24 @@ describe("SkillFileViewer markdown raw toggle", () => {
     await waitFor(() =>
       expect(screen.getByRole("button", { name: /copied/i })).toBeInTheDocument(),
     );
+  });
+});
+
+describe("SkillFileViewer download", () => {
+  it("downloads inline text content as a file", () => {
+    const spy = vi
+      .spyOn(skillDownload, "downloadTextFile")
+      .mockImplementation(() => {});
+    renderViewer(mdFile());
+    fireEvent.click(screen.getByRole("button", { name: /^download$/i }));
+    expect(spy).toHaveBeenCalledWith(RAW_MD, "SKILL.md");
+    spy.mockRestore();
+  });
+
+  it("does not offer the Dataverse direct link for inline files (no recordId)", () => {
+    renderViewer(mdFile());
+    expect(
+      screen.queryByRole("button", { name: /dataverse/i }),
+    ).not.toBeInTheDocument();
   });
 });

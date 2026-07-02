@@ -16,10 +16,17 @@ import {
   DocumentRegular,
   CopyRegular,
   CheckmarkRegular,
+  OpenRegular,
 } from "@fluentui/react-icons";
 import ReactMarkdown from "react-markdown";
 import { splitFrontmatter, type SkillFileNode } from "./skillTree";
 import { fetchSkillFileContent, type FetchedFileContent } from "./skillFiles";
+import { resolveEnvironmentOrgUrl } from "./orgUrl";
+import {
+  dataverseFileValueUrl,
+  downloadTextFile,
+  triggerUrlDownload,
+} from "./skillDownload";
 import type { DataverseResult } from "../../shared/dataverse";
 
 const useStyles = makeStyles({
@@ -230,6 +237,10 @@ export function SkillFileViewer({
 
   const [mdView, setMdView] = useState<"preview" | "raw">("preview");
   const [copied, setCopied] = useState(false);
+  const [directState, setDirectState] = useState<{
+    loading: boolean;
+    error?: string;
+  }>({ loading: false });
 
   // Reset the preview/raw toggle and copy affordance when switching files.
   // (Adjusting state during render per the React docs, rather than an effect.)
@@ -239,6 +250,7 @@ export function SkillFileViewer({
     setPrevFileKey(fileKey);
     setMdView("preview");
     setCopied(false);
+    setDirectState({ loading: false });
   }
 
   const copyRaw = () => {
@@ -247,6 +259,49 @@ export function SkillFileViewer({
       setCopied(true);
       window.setTimeout(() => setCopied(false), 1500);
     });
+  };
+
+  // Whether the file's bytes are already available on the client (decoded text
+  // content, or a binary `data:` URL) so we can download without another call.
+  const canClientDownload =
+    !resolved.loading && (content !== undefined || downloadUrl !== undefined);
+  // Whether a direct Dataverse Web API download is possible (bundle files carry
+  // a `recordId`; we also need the environment to resolve the org URL).
+  const canDirectDownload =
+    !resolved.loading && !!file?.recordId && !!environmentId;
+
+  /** Download from the content we already hold (text → Blob, binary → data URL). */
+  const handleClientDownload = () => {
+    if (!file) return;
+    if (downloadUrl) {
+      triggerUrlDownload(downloadUrl, file.name);
+      return;
+    }
+    if (content !== undefined) {
+      downloadTextFile(content, file.name);
+    }
+  };
+
+  /**
+   * Fallback: resolve the environment's org URL and open the Dataverse Web API
+   * `filedata/$value` link in a new tab. Relies on the user's existing browser
+   * auth to that org.
+   */
+  const handleDirectDownload = async () => {
+    if (!file?.recordId || !environmentId) return;
+    setDirectState({ loading: true });
+    const orgUrl = await resolveEnvironmentOrgUrl(environmentId);
+    if (!orgUrl) {
+      setDirectState({
+        loading: false,
+        error:
+          "Couldn't resolve the environment's Dataverse URL for a direct download.",
+      });
+      return;
+    }
+    setDirectState({ loading: false });
+    const url = dataverseFileValueUrl(orgUrl, file.recordId);
+    window.open(url, "_blank", "noopener,noreferrer");
   };
 
   const { rendered, isFrontmatterBody } = useMemo(() => {
@@ -315,22 +370,32 @@ export function SkillFileViewer({
               </Button>
             </>
           )}
-          {downloadUrl && (
+          {canClientDownload && (
             <Button
               size="small"
               icon={<ArrowDownloadRegular />}
-              as="a"
-              href={downloadUrl}
-              download={file.name}
+              onClick={handleClientDownload}
             >
               Download
+            </Button>
+          )}
+          {canDirectDownload && (
+            <Button
+              size="small"
+              appearance="subtle"
+              icon={<OpenRegular />}
+              onClick={handleDirectDownload}
+              disabled={directState.loading}
+              title="Downloads the file directly from Dataverse (opens a new tab)"
+            >
+              {directState.loading ? "Opening…" : "Download from Dataverse"}
             </Button>
           )}
         </div>
       </div>
 
       <div className={styles.body}>
-        {resolved.loading && <Spinner size="small" label="Downloading file…" />}
+        {resolved.loading && <Spinner size="small" label="Retrieving content…" />}
 
         {!resolved.loading && resolved.error && (
           <MessageBar intent="warning">
@@ -340,6 +405,12 @@ export function SkillFileViewer({
                 ? " Showing sample content instead."
                 : ""}
             </MessageBarBody>
+          </MessageBar>
+        )}
+
+        {!resolved.loading && directState.error && (
+          <MessageBar intent="error">
+            <MessageBarBody>{directState.error}</MessageBarBody>
           </MessageBar>
         )}
 
@@ -374,12 +445,26 @@ export function SkillFileViewer({
                 <Button
                   appearance="primary"
                   icon={<ArrowDownloadRegular />}
-                  as="a"
-                  href={downloadUrl}
-                  download={file.name}
+                  onClick={handleClientDownload}
                 >
                   Download file
                 </Button>
+              ) : canDirectDownload ? (
+                <>
+                  <Button
+                    appearance="primary"
+                    icon={<OpenRegular />}
+                    onClick={handleDirectDownload}
+                    disabled={directState.loading}
+                  >
+                    {directState.loading
+                      ? "Opening…"
+                      : "Download from Dataverse"}
+                  </Button>
+                  <Text size={200}>
+                    Opens the file directly from Dataverse in a new tab.
+                  </Text>
+                </>
               ) : (
                 !resolved.error && (
                   <MessageBar intent="info">

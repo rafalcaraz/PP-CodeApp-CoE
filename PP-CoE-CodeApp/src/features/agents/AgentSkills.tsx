@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type MouseEvent } from "react";
 import {
   makeStyles,
   tokens,
@@ -9,17 +9,22 @@ import {
   BreadcrumbDivider,
   Card,
   Badge,
+  Button,
+  Spinner,
   Tree,
   TreeItem,
   TreeItemLayout,
   MessageBar,
   MessageBarBody,
+  MessageBarActions,
   mergeClasses,
 } from "@fluentui/react-components";
 import {
   FolderRegular,
   DocumentRegular,
   DocumentBulletListRegular,
+  ArrowDownloadRegular,
+  DismissRegular,
 } from "@fluentui/react-icons";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { ErrorPane, LoadingPane } from "../../components/Status";
@@ -27,6 +32,8 @@ import { getAgent, type AgentRow } from "./data";
 import { listAgentSkills, type AgentSkillsResult } from "./skills";
 import type { SkillFileNode, SkillNode, SkillSummary } from "./skillTree";
 import { SkillFileViewer } from "./SkillFileViewer";
+import { buildSkillZip } from "./skillZip";
+import { triggerBlobDownload } from "./skillDownload";
 
 const useStyles = makeStyles({
   root: {
@@ -230,6 +237,7 @@ function ReadyView({
 }) {
   const styles = useStyles();
   const openItems = useMemo(() => collectOpenItems(skills.skills), [skills.skills]);
+  const [zipError, setZipError] = useState<string | null>(null);
 
   if (skills.skills.length === 0) {
     return (
@@ -249,6 +257,21 @@ function ReadyView({
           </MessageBarBody>
         </MessageBar>
       )}
+      {zipError && (
+        <MessageBar intent="error">
+          <MessageBarBody>{zipError}</MessageBarBody>
+          <MessageBarActions
+            containerAction={
+              <Button
+                appearance="transparent"
+                icon={<DismissRegular />}
+                aria-label="Dismiss"
+                onClick={() => setZipError(null)}
+              />
+            }
+          />
+        </MessageBar>
+      )}
       <div className={styles.panes}>
         <Card className={styles.treeCard}>
           <Tree aria-label="Agent skills" defaultOpenItems={openItems}>
@@ -258,6 +281,8 @@ function ReadyView({
                 skill={skill}
                 selected={selected}
                 onSelect={onSelect}
+                environmentId={environmentId}
+                onZipError={setZipError}
               />
             ))}
           </Tree>
@@ -274,16 +299,70 @@ function SkillBranch({
   skill,
   selected,
   onSelect,
+  environmentId,
+  onZipError,
 }: {
   skill: SkillSummary;
   selected: SkillFileNode | null;
   onSelect: (file: SkillFileNode) => void;
+  environmentId?: string;
+  onZipError: (message: string | null) => void;
 }) {
   const styles = useStyles();
+  const [zipping, setZipping] = useState(false);
+  // Only bundled skills group multiple files worth zipping; single skills are
+  // one inline markdown file already downloadable from the viewer.
+  const canZip = skill.kind === "bundled" && skill.tree.length > 0;
+
+  const handleDownloadZip = async (e: MouseEvent) => {
+    // Don't let the click toggle the tree branch open/closed.
+    e.stopPropagation();
+    onZipError(null);
+    setZipping(true);
+    try {
+      const res = await buildSkillZip(skill, environmentId);
+      if (!res.ok || !res.blob) {
+        onZipError(
+          `Couldn't build a zip for "${skill.name}": ${
+            res.errors[0]?.error ?? "no files could be downloaded."
+          }`,
+        );
+        return;
+      }
+      triggerBlobDownload(res.blob, res.filename ?? `${skill.name}.zip`);
+      if (res.errors.length > 0) {
+        onZipError(
+          `Downloaded "${skill.name}" with ${res.errors.length} file(s) skipped — see _download-errors.txt in the zip.`,
+        );
+      }
+    } catch (err) {
+      onZipError(
+        `Couldn't build a zip for "${skill.name}": ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
+    } finally {
+      setZipping(false);
+    }
+  };
+
   return (
     <TreeItem itemType="branch" value={`skill::${skill.id}`}>
       <TreeItemLayout
         iconBefore={<DocumentBulletListRegular />}
+        actions={
+          canZip ? (
+            <Button
+              appearance="subtle"
+              size="small"
+              icon={zipping ? <Spinner size="tiny" /> : <ArrowDownloadRegular />}
+              aria-label={`Download ${skill.name} as a zip`}
+              title="Download all files as a .zip"
+              disabled={zipping}
+              onClick={handleDownloadZip}
+            />
+          ) : undefined
+        }
         aside={
           <Badge appearance="tint" color={skill.kind === "single" ? "brand" : "informative"} size="small">
             {skill.kind}
