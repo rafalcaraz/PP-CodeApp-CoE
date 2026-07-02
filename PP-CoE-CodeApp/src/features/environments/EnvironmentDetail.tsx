@@ -31,7 +31,7 @@ import {
   type OptionOnSelectData,
   type SelectionEvents,
 } from "@fluentui/react-components";
-import { ChevronDownRegular, ChevronRightRegular, OpenRegular } from "@fluentui/react-icons";
+import { ChevronDownRegular, ChevronRightRegular, ChevronLeftRegular, OpenRegular } from "@fluentui/react-icons";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   countResourcesByTypeForEnvironment,
@@ -100,6 +100,22 @@ const usePageStyles = makeStyles({
     display: "flex",
     alignItems: "center",
     gap: tokens.spacingHorizontalM,
+  },
+  pagination: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: tokens.spacingHorizontalM,
+    paddingTop: tokens.spacingVerticalS,
+  },
+  paginationControls: {
+    display: "flex",
+    alignItems: "center",
+    gap: tokens.spacingHorizontalS,
+  },
+  paginationStatus: {
+    color: tokens.colorNeutralForeground3,
+    fontSize: tokens.fontSizeBase200,
   },
   resourcesIdle: {
     display: "flex",
@@ -385,6 +401,9 @@ function ReadyView({
 
   // Client-side solutions search.
   const [solutionQuery, setSolutionQuery] = useState("");
+  // Client-side pagination (0-based) over the filtered solutions.
+  const SOLUTIONS_PAGE_SIZE = 10;
+  const [solutionPage, setSolutionPage] = useState(0);
 
   const filteredSolutions = useMemo(() => {
     const rows = solutions.kind === "ready" ? (solutions.data ?? []) : [];
@@ -396,6 +415,21 @@ function ReadyView({
         r.uniqueName.toLowerCase().includes(term),
     );
   }, [solutions, solutionQuery]);
+
+  const solutionPageCount = Math.max(
+    1,
+    Math.ceil(filteredSolutions.length / SOLUTIONS_PAGE_SIZE),
+  );
+
+  // Derive the effective page rather than storing a clamped value — keeps the
+  // current page in range when the filtered set shrinks (search narrows /
+  // list refreshed) without a setState-in-effect cascade.
+  const currentSolutionPage = Math.min(solutionPage, solutionPageCount - 1);
+
+  const pagedSolutions = useMemo(() => {
+    const start = currentSolutionPage * SOLUTIONS_PAGE_SIZE;
+    return filteredSolutions.slice(start, start + SOLUTIONS_PAGE_SIZE);
+  }, [filteredSolutions, currentSolutionPage]);
 
   // Append an "Open in maker portal" action to the data columns supplied by
   // the parent — deep-links each solution into make.powerapps.com.
@@ -775,35 +809,74 @@ function ReadyView({
                 <SearchBox
                   placeholder="Search solutions…"
                   value={solutionQuery}
-                  onChange={(_, data) => setSolutionQuery(data.value)}
+                  onChange={(_, data) => {
+                    setSolutionQuery(data.value);
+                    setSolutionPage(0);
+                  }}
                   aria-label="Search solutions"
                 />
               </div>
               {filteredSolutions.length === 0 ? (
                 <EmptyPane message="No solutions match your search." />
               ) : (
-                <DataGrid
-                  items={filteredSolutions}
-                  columns={solutionColumnsWithActions}
-                  getRowId={(r) => r.id}
-                  sortable={false}
-                  focusMode="composite"
-                >
-                  <DataGridHeader>
-                    <DataGridRow>
-                      {({ renderHeaderCell }) => (
-                        <DataGridHeaderCell>{renderHeaderCell()}</DataGridHeaderCell>
-                      )}
-                    </DataGridRow>
-                  </DataGridHeader>
-                  <DataGridBody<SolutionRow>>
-                    {({ item, rowId }) => (
-                      <DataGridRow<SolutionRow> key={rowId}>
-                        {({ renderCell }) => <DataGridCell>{renderCell(item)}</DataGridCell>}
+                <>
+                  <DataGrid
+                    items={pagedSolutions}
+                    columns={solutionColumnsWithActions}
+                    getRowId={(r) => r.id}
+                    sortable={false}
+                    focusMode="composite"
+                  >
+                    <DataGridHeader>
+                      <DataGridRow>
+                        {({ renderHeaderCell }) => (
+                          <DataGridHeaderCell>{renderHeaderCell()}</DataGridHeaderCell>
+                        )}
                       </DataGridRow>
-                    )}
-                  </DataGridBody>
-                </DataGrid>
+                    </DataGridHeader>
+                    <DataGridBody<SolutionRow>>
+                      {({ item, rowId }) => (
+                        <DataGridRow<SolutionRow> key={rowId}>
+                          {({ renderCell }) => <DataGridCell>{renderCell(item)}</DataGridCell>}
+                        </DataGridRow>
+                      )}
+                    </DataGridBody>
+                  </DataGrid>
+                  <div className={page.pagination}>
+                    <Text className={page.paginationStatus}>
+                      {`${currentSolutionPage * SOLUTIONS_PAGE_SIZE + 1}–${Math.min(
+                        (currentSolutionPage + 1) * SOLUTIONS_PAGE_SIZE,
+                        filteredSolutions.length,
+                      )} of ${filteredSolutions.length}`}
+                    </Text>
+                    <div className={page.paginationControls}>
+                      <Button
+                        appearance="subtle"
+                        icon={<ChevronLeftRegular />}
+                        disabled={currentSolutionPage === 0}
+                        onClick={() => setSolutionPage((p) => Math.max(0, p - 1))}
+                      >
+                        Previous
+                      </Button>
+                      <Text className={page.paginationStatus}>
+                        {`Page ${currentSolutionPage + 1} of ${solutionPageCount}`}
+                      </Text>
+                      <Button
+                        appearance="subtle"
+                        icon={<ChevronRightRegular />}
+                        iconPosition="after"
+                        disabled={currentSolutionPage >= solutionPageCount - 1}
+                        onClick={() =>
+                          setSolutionPage(
+                            Math.min(solutionPageCount - 1, currentSolutionPage + 1),
+                          )
+                        }
+                      >
+                        Next
+                      </Button>
+                    </div>
+                  </div>
+                </>
               )}
             </>
           )}
