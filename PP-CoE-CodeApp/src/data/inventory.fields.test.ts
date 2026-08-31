@@ -18,7 +18,7 @@ describe("FIELDS_BY_RESOURCE_TYPE", () => {
     expect(actual).toEqual(expected);
   });
 
-  it("every type bag includes the shared base fields", () => {
+  it("every operational type bag includes the shared base fields", () => {
     const baseRequired = [
       "type",
       "name",
@@ -28,10 +28,37 @@ describe("FIELDS_BY_RESOURCE_TYPE", () => {
       "properties.createdBy",
     ];
     for (const [rt, fields] of Object.entries(FIELDS_BY_RESOURCE_TYPE)) {
+      if (rt === ResourceType.Connector) continue;
       const paths = fields.map((f) => f.path);
       for (const required of baseRequired) {
         expect(paths, `${rt} missing ${required}`).toContain(required);
       }
+    }
+  });
+
+  it("connector catalog fields exclude environment and lifecycle assumptions", () => {
+    const paths = FIELDS_BY_RESOURCE_TYPE[ResourceType.Connector].map(
+      (f) => f.path,
+    );
+    for (const required of [
+      "properties.connectorId",
+      "properties.description",
+      "properties.publisher",
+      "properties.tier",
+      "properties.releaseTag",
+      "properties.isDeprecated",
+      "properties.operations",
+    ]) {
+      expect(paths).toContain(required);
+    }
+    for (const excluded of [
+      "location",
+      "properties.environmentId",
+      "properties.ownerId",
+      "properties.createdAt",
+      "properties.lastModifiedAt",
+    ]) {
+      expect(paths).not.toContain(excluded);
     }
   });
 
@@ -92,6 +119,8 @@ describe("FIELDS_BY_RESOURCE_TYPE", () => {
     for (const required of [
       "properties.status",
       "properties.flowTriggerType",
+      "properties.trigger",
+      "properties.triggerOperation",
       "properties.trigger.connectorId",
       "properties.workflowEntityId",
     ]) {
@@ -130,12 +159,13 @@ describe("getFieldSuggestions", () => {
     expect(paths).toContain("properties.schemaName"); // agent
   });
 
-  it("empty resourceTypes falls back to union of all types", () => {
+  it("empty resourceTypes uses reportable fields and excludes catalog-only fields", () => {
     const paths = getFieldSuggestions([], "groupBy").map((f) => f.path);
     expect(paths).toContain("properties.appType");
     expect(paths).toContain("properties.schemaName");
     expect(paths).toContain("properties.flowTriggerType");
     expect(paths).toContain("properties.environmentType");
+    expect(paths).not.toContain("properties.releaseTag");
   });
 
   it("dateField intent only returns date kinds", () => {
@@ -183,6 +213,16 @@ describe("getFieldSuggestions", () => {
       [ResourceType.Environment],
       "filter"
     ).map((f) => f.path);
+    expect(paths).not.toContain("__connector");
+    expect(paths).not.toContain("__operation");
+  });
+
+  it("connector catalog fields do not get connector-usage sentinels", () => {
+    const paths = getFieldSuggestions(
+      [ResourceType.Connector],
+      "filter",
+    ).map((f) => f.path);
+    expect(paths).toContain("properties.connectorId");
     expect(paths).not.toContain("__connector");
     expect(paths).not.toContain("__operation");
   });

@@ -30,6 +30,7 @@ import {
   listAgentsPage,
   listAppsPage,
   listFlowsPage,
+  OWNER_SCANNABLE_APP_TYPES,
   type ResourceTypeValue,
   type DataResult,
 } from "../../../data/inventory";
@@ -299,7 +300,13 @@ export async function startScan(): Promise<void> {
     // well under the cap.
     await Promise.all([
       walkStream(
-        (token, skip) => listAppsPage({}, token, PAGE_SIZE, skip),
+        (token, skip) =>
+          listAppsPage(
+            { types: OWNER_SCANNABLE_APP_TYPES },
+            token,
+            PAGE_SIZE,
+            skip,
+          ),
         collect,
         reportPage,
         signal,

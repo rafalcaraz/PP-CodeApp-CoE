@@ -1078,15 +1078,20 @@ for the rare "find by uncommon property" path.
 
 
 
-- **Connector inventory rollup** — top-level view that fans out across all
-  apps/flows/agents and rolls up which connectors are most used, which
-  envs use SQL, etc. The data is already in our existing detail-row
-  payload (`row.connectors`). The server-side primitive now exists
-  (see the connector sentinel filter shipped in the Queries view) —
-  `runAggregateCount` could group by the connector bag with a custom
-  `extend`/`mv-expand` shim, though `mv-expand` isn't in the Clause
-  builder today so a flattened-string `summarize` is the path of least
-  resistance.
+- **Connector usage rollup — shipped.** `/connectors/:connectorId` joins the
+  standalone Preview Connector catalog metadata with deployed-resource usage
+  from the explicit app/flow/agent inventory types. It shows usage and
+  environment KPIs, 15-row cursor-paged resource tabs, and guarded active-tab
+  or all-usage CSV exports. Catalog totals remain separate from operational
+  resource totals.
+- **Connector operations explorer — partially shipped.** Connector detail now
+  shows operation IDs, display names, HTTP methods, and descriptions from
+  `microsoft.powerplatformconnector/connectors.properties.operations`.
+  Operation search and links into prefilled usage queries remain future work.
+- **Connector adoption and risk reporting** — report Standard/Premium,
+  publisher, release stage, deprecated connectors still in use, and resources
+  using operations missing from the current catalog. Treat a catalog miss as
+  custom/Premium only when the inventory catalog is complete.
 - **Bundle splitting** — see the **Bundle optimization** section below for the full plan.
 - **Lazy route loading** — covered in the **Bundle optimization** section.
 - **Env picker → Combobox with typeahead** — the current Dropdown shows
@@ -1659,5 +1664,3 @@ every point. Don't merge stages.
   already how `listEnvironmentsInGroup` works. Pass those env ids
   into the same `queryDlpImpact`-style filter with a "scope source =
   group membership" label in the result banner.
-
-

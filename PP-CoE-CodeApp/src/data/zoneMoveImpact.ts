@@ -277,9 +277,8 @@ function toImpactedResource(item: ResourceItem): ImpactedResource {
  *      sometimes carries ARM paths)
  *    - `properties.connectors[].id` (alternate key seen on some
  *      app-builder payloads)
- *    - `properties.trigger.connectorId` (cloud-flow trigger — separate
- *      from the connector array because flows can have a connector
- *      that's *only* the trigger and never appears in the body)
+ *    - `properties.trigger` (current cloud-flow trigger connector)
+ *    - `properties.trigger.connectorId` (legacy cloud-flow trigger shape)
  *
  *  Returns the raw published form (post `lastPathSegment` strip).
  *  Caller normalizes to bare form. Pulling raw lets us surface the
@@ -306,10 +305,13 @@ export function readPublishedConnectorIds(item: ResourceItem): string[] {
     if (slug) out.push(slug);
   }
 
-  // Trigger-only connector for cloud flows. Same shape as a single
-  // entry in `powerPlatformConnectors` but published separately.
+  // Trigger-only connector for cloud flows. The current schema publishes a
+  // scalar connector ID; older payloads used a nested trigger object.
   const trigger = props.trigger;
-  if (trigger && typeof trigger === "object") {
+  if (typeof trigger === "string") {
+    const tSlug = lastPathSegment(trigger);
+    if (tSlug) out.push(tSlug);
+  } else if (trigger && typeof trigger === "object") {
     const t = trigger as Record<string, unknown>;
     const rawTrig =
       typeof t.connectorId === "string"

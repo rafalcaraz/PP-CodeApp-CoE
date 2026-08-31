@@ -1,7 +1,9 @@
 import { describe, it, expect } from "vitest";
 import {
   buildClausesFromSpec,
+  CONNECTOR_USAGE_RESOURCE_TYPES,
   CONNECTOR_FIELD,
+  DEFAULT_QUERY_RESOURCE_TYPES,
   OPERATION_FIELD,
   ResourceType,
   type QuerySpec,
@@ -25,9 +27,18 @@ function spec(overrides: Partial<QuerySpec> = {}): QuerySpec {
 }
 
 describe("buildClausesFromSpec — resource-type clause", () => {
-  it("emits no type clause when no resourceTypes are selected", () => {
+  it("emits the stable reportable scope when no resourceTypes are selected", () => {
     const clauses = buildClausesFromSpec(spec()) as unknown as Array<Record<string, unknown>>;
-    expect(clauses.find((c) => c.$type === "where")).toBeUndefined();
+    expect(clauses[0]).toEqual({
+      $type: "where",
+      FieldName: "type",
+      Operator: "in~",
+      Values: DEFAULT_QUERY_RESOURCE_TYPES.map((t) => `'${t}'`),
+    });
+
+    expect(
+      (clauses[0] as { Values: string[] }).Values,
+    ).not.toContain(`'${ResourceType.Connector}'`);
   });
 
   it("emits a single-value == clause when exactly one type is selected", () => {
@@ -59,6 +70,22 @@ describe("buildClausesFromSpec — resource-type clause", () => {
       `'${ResourceType.CanvasApp}'`,
       `'${ResourceType.CloudFlow}'`,
     ]);
+  });
+});
+
+describe("inventory resource universes", () => {
+  it("keeps connector usage analysis on the documented usage-bearing types", () => {
+    expect(CONNECTOR_USAGE_RESOURCE_TYPES).toEqual([
+      ResourceType.CanvasApp,
+      ResourceType.ModelDrivenApp,
+      ResourceType.CodeApp,
+      ResourceType.AppBuilderApp,
+      ResourceType.CloudFlow,
+      ResourceType.AgentFlow,
+      ResourceType.WorkflowAgentFlow,
+      ResourceType.CopilotStudioAgent,
+    ]);
+    expect(CONNECTOR_USAGE_RESOURCE_TYPES).not.toContain(ResourceType.Connector);
   });
 });
 
@@ -151,7 +178,11 @@ describe("buildClausesFromSpec — filter value formatting", () => {
         filters: [{ field: "   ", op: "==", value: "anything" }],
       }),
     ) as unknown as Array<Record<string, unknown>>;
-    expect(clauses).toEqual([]);
+    expect(clauses).toHaveLength(1);
+    expect(clauses[0]).toMatchObject({
+      $type: "where",
+      FieldName: "type",
+    });
   });
 });
 
@@ -219,6 +250,7 @@ describe("buildClausesFromSpec — sentinel fields", () => {
     // can live, otherwise the filter misses some resource types.
     expect(extendClause?.Expression).toContain("powerPlatformConnectors");
     expect(extendClause?.Expression).toContain("trigger");
+    expect(extendClause?.Expression).toContain("triggerOperation");
 
     const whereClause = clauses.find(
       (c) =>

@@ -66,10 +66,9 @@ const useStyles = makeStyles({
 
 function AppShell() {
   const styles = useStyles();
-  // Bootstrap the tenant connector catalog once on mount. Used by the
-  // Apps and Flows lists to flag premium resources. Fire-and-forget —
-  // the catalog hook re-renders consumers when it lands. Hydrates from
-  // localStorage instantly if the cached snapshot is < 24h old.
+  // Bootstrap the tenant connector catalog once on mount. QueryResources is
+  // primary; the legacy environment probe is retained as a preview/sovereign
+  // fallback. Consumers re-render when the cached snapshot lands.
   useEffect(() => {
     void loadCatalog();
   }, []);

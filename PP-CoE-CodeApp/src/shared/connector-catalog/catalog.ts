@@ -1,106 +1,73 @@
 /**
  * Tenant-wide connector catalog.
  *
- * Why this exists: the Power Platform for Admins `ListConnectors`
- * action is per-environment, but the Microsoft-published connector
- * catalog is global — `shared_sql` is Premium in every environment it
- * appears in. So a single `ListConnectors(envId)` call against any env
- * the signed-in admin can reach is enough to classify every `shared_*`
- * reference any app or flow in the tenant uses.
+ * The inventory schema now exposes
+ * `microsoft.powerplatformconnector/connectors` as a tenant catalog resource.
+ * It is the primary source because it removes environment fan-out and adds
+ * release, deprecation, description, and operation metadata.
  *
- * Strategy:
- *
- *  1. On first access, try to hydrate from localStorage (24h TTL).
- *  2. If cache is missing or stale, list envs, pick the first one that
- *     actually returns connectors, persist its catalog.
- *  3. Expose a sync `classify(connectorId)` that other code (apps and
- *     flows lists) calls at render time. Returns `Unknown` when the
- *     catalog hasn't loaded yet or when the id is not in the snapshot —
- *     callers treat Unknown as "premium / custom" since custom
- *     connectors aren't in the OOB Microsoft catalog and are billed as
- *     premium per Microsoft licensing.
- *  4. Subscribers (the `useConnectorCatalog` hook) re-render when the
- *     catalog finishes loading so the columns flip from `—` to a real
- *     badge with no extra wiring at the call site.
- *
- * Notes:
- *
- *  - We don't enumerate custom connectors per-env. That would require
- *    a tenant-wide fanout and yield no extra classification signal —
- *    every custom connector is premium by definition.
- *  - localStorage payload is small (~600 entries × small object = under
- *    100 KB), well within the 5 MB browser budget.
- *  - This module imports `data/inventory` (for `listEnvironmentsPage`)
- *    and `generated/` (for `ListConnectors`). It MUST NOT import from
- *    `features/*` per the boundary rules in copilot-instructions.md.
+ * The resource is still Preview and unavailable in sovereign clouds, so the
+ * established environment-scoped `ListConnectors` path remains as a fallback.
+ * Consumers keep one stable catalog/classification API regardless of source.
  */
 
 import { useEffect, useReducer } from "react";
 import { PowerPlatformforAdminsV2Service } from "../../generated";
+import type {
+  Clause,
+  ResourceItem,
+  ResourceQueryRequest,
+} from "../../generated/models/PowerPlatformforAdminsV2Model";
 
-/** Shape-compatible with the app-wide `DataResult` in `data/inventory`
- *  but defined locally because `shared/*` modules aren't allowed to
- *  import from `data/inventory` (boundary rule in copilot-instructions).
- *  Callers can interop with the app-wide `DataResult` transparently. */
 type CatalogResult<T> = { ok: true; data: T } | { ok: false; error: string };
 
-/** localStorage key. Bumped if the serialized shape changes — the
- *  hydrator throws away any value it can't deserialize cleanly. */
-const STORAGE_KEY = "ppcoe.connectorCatalog.v1";
-
-/** Cached catalogs older than this are ignored on hydrate and silently
- *  refreshed on the next `loadCatalog` call. */
+const STORAGE_KEY = "ppcoe.connectorCatalog.v2";
 const TTL_MS = 24 * 60 * 60 * 1000;
-
-/** Matches the api-version used elsewhere on the V2 admin connector. */
 const API_VERSION = "2024-10-01";
-
-/** Defensive cap on how many environments we'll probe looking for one
- *  that returns connectors. Practically every env returns the full
- *  catalog, so the very first hit usually succeeds — but a brand-new
- *  trial env can briefly return an empty list while it provisions. */
+const TABLE = "PowerPlatformResources";
+const CONNECTOR_RESOURCE_TYPE =
+  "microsoft.powerplatformconnector/connectors";
+const PAGE_SIZE = 500;
+const MAX_CATALOG_PAGES = 25;
 const MAX_ENVS_TRIED = 5;
 
-/** One row of the catalog. Pruned to the fields apps/flows actually
- *  need at render time — the full payload stays out of memory. */
-export interface ConnectorEntry {
-  /** Stable connector slug, e.g. `shared_sql`. */
-  connectorId: string;
-  /** Friendly name from the connector metadata. */
+export interface ConnectorCatalogOperation {
+  operationId: string;
   displayName: string;
-  /** Raw tier string from the connector (`"Standard"`, `"Premium"`, or
-   *  occasionally other values). Kept as the source string so callers
-   *  can read it as-is; the normalized form is on `Classification`. */
-  tier: string;
-  /** Publisher string (e.g. `"Microsoft"`, `"Plumsail"`). Empty when
-   *  the connector didn't include it. */
-  publisher: string;
+  description: string;
+  method: string;
 }
 
-/** The in-memory representation of the catalog. */
+export interface ConnectorEntry {
+  connectorId: string;
+  displayName: string;
+  description: string;
+  tier: string;
+  publisher: string;
+  releaseTag: string;
+  isDeprecated: boolean;
+  operations: ConnectorCatalogOperation[];
+}
+
+export type CatalogSource =
+  | "inventory"
+  | "list-connectors-fallback";
+
 export interface ConnectorCatalog {
   entries: Map<string, ConnectorEntry>;
-  /** When the snapshot was taken (epoch ms). Drives TTL eviction. */
   fetchedAt: number;
-  /** Which env id the snapshot was sourced from. Useful for
-   *  diagnostics — the catalog itself is the same across envs but it's
-   *  occasionally useful to know "this came from env X". */
-  envId: string;
+  source: CatalogSource;
+  /** True only after the source was paged to exhaustion. */
+  complete: boolean;
 }
 
-/** Normalized classification result returned by `classify`. */
 export interface Classification {
-  /** "Standard" / "Premium" — or "Unknown" when the connector isn't
-   *  in the OOB snapshot. Callers should treat Unknown as Premium for
-   *  licensing purposes (custom connectors are billed as premium). */
   tier: "Standard" | "Premium" | "Unknown";
-  /** Empty string when the connector isn't in the catalog. */
   publisher: string;
-  /** True when the connector was found in the catalog. */
   known: boolean;
+  reason: "catalog" | "not-found" | "catalog-unavailable";
 }
 
-/** Catalog status — drives loading/error UI on the Connectors page. */
 export type CatalogStatus = "idle" | "loading" | "ready" | "error";
 
 let _catalog: ConnectorCatalog | undefined;
@@ -110,10 +77,9 @@ let _loadPromise: Promise<CatalogResult<ConnectorCatalog>> | undefined;
 const _listeners = new Set<() => void>();
 
 function notify(): void {
-  for (const l of _listeners) l();
+  for (const listener of _listeners) listener();
 }
 
-/** Subscribe to catalog state changes. Returns an unsubscribe function. */
 export function subscribeCatalog(listener: () => void): () => void {
   _listeners.add(listener);
   return () => {
@@ -121,12 +87,10 @@ export function subscribeCatalog(listener: () => void): () => void {
   };
 }
 
-/** Read the current catalog without triggering a load. */
 export function getCatalog(): ConnectorCatalog | undefined {
   return _catalog;
 }
 
-/** Read the current catalog status without triggering a load. */
 export function getCatalogStatus(): {
   status: CatalogStatus;
   error: string;
@@ -134,70 +98,111 @@ export function getCatalogStatus(): {
   return { status: _status, error: _lastError };
 }
 
-/** Synchronous classification. Safe to call before the catalog loads —
- *  returns `{ tier: "Unknown", known: false }` in that case. */
+function normalizeSlug(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) return "";
+  const idx = trimmed.lastIndexOf("/");
+  return (idx >= 0 ? trimmed.substring(idx + 1) : trimmed).toLowerCase();
+}
+
 export function classify(connectorId: string): Classification {
-  if (!connectorId) {
-    return { tier: "Unknown", publisher: "", known: false };
+  const slug = normalizeSlug(connectorId);
+  if (!slug || !_catalog) {
+    return {
+      tier: "Unknown",
+      publisher: "",
+      known: false,
+      reason: "catalog-unavailable",
+    };
   }
-  const cat = _catalog;
-  if (!cat) {
-    return { tier: "Unknown", publisher: "", known: false };
-  }
-  const entry = cat.entries.get(connectorId);
+  const alternateSlug = slug.startsWith("shared_")
+    ? slug.substring("shared_".length)
+    : `shared_${slug}`;
+  const entry =
+    _catalog.entries.get(slug) ||
+    _catalog.entries.get(alternateSlug);
   if (!entry) {
-    return { tier: "Unknown", publisher: "", known: false };
+    return {
+      tier: "Unknown",
+      publisher: "",
+      known: false,
+      reason: _catalog.complete ? "not-found" : "catalog-unavailable",
+    };
   }
-  const t = entry.tier.toLowerCase();
+  const tier = entry.tier.toLowerCase();
   return {
-    tier: t === "premium" ? "Premium" : t === "standard" ? "Standard" : "Unknown",
+    tier:
+      tier === "premium"
+        ? "Premium"
+        : tier === "standard"
+          ? "Standard"
+          : "Unknown",
     publisher: entry.publisher,
     known: true,
+    reason: "catalog",
   };
 }
 
-/** Convenience rollup: any connector in the list is premium-or-unknown.
- *  Apps/flows that pull this come back `true` when ANY of their
- *  connectors is Premium OR not in the OOB catalog (custom). */
+/** Unknown connectors are treated as premium only when a complete catalog is
+ * available and the connector is absent. A catalog that has not loaded cannot
+ * support a licensing inference. */
 export function anyConnectorPremium(connectorIds: string[]): boolean {
   for (const id of connectorIds) {
-    const c = classify(id);
-    if (c.tier === "Premium" || c.tier === "Unknown") return true;
+    const classification = classify(id);
+    if (
+      classification.tier === "Premium" ||
+      classification.reason === "not-found"
+    ) {
+      return true;
+    }
   }
   return false;
 }
 
 interface PersistShape {
   fetchedAt: number;
-  envId: string;
+  source: CatalogSource;
+  complete: boolean;
   entries: ConnectorEntry[];
+}
+
+function isCatalogSource(value: unknown): value is CatalogSource {
+  return (
+    value === "inventory" ||
+    value === "list-connectors-fallback"
+  );
 }
 
 function loadFromStorage(): ConnectorCatalog | undefined {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return undefined;
-    const parsed = JSON.parse(raw) as PersistShape;
+    const parsed = JSON.parse(raw) as Partial<PersistShape>;
     if (
-      !parsed ||
       typeof parsed.fetchedAt !== "number" ||
-      !Array.isArray(parsed.entries)
+      !isCatalogSource(parsed.source) ||
+      parsed.complete !== true ||
+      !Array.isArray(parsed.entries) ||
+      Date.now() - parsed.fetchedAt > TTL_MS
     ) {
       return undefined;
     }
-    if (Date.now() - parsed.fetchedAt > TTL_MS) {
-      return undefined;
-    }
     const entries = new Map<string, ConnectorEntry>();
-    for (const e of parsed.entries) {
-      if (e && typeof e.connectorId === "string" && e.connectorId) {
-        entries.set(e.connectorId, e);
+    for (const entry of parsed.entries) {
+      if (
+        entry &&
+        typeof entry.connectorId === "string" &&
+        entry.connectorId
+      ) {
+        entries.set(normalizeSlug(entry.connectorId), entry);
       }
     }
+    if (entries.size === 0) return undefined;
     return {
       entries,
       fetchedAt: parsed.fetchedAt,
-      envId: typeof parsed.envId === "string" ? parsed.envId : "",
+      source: parsed.source,
+      complete: true,
     };
   } catch {
     return undefined;
@@ -208,133 +213,301 @@ function persist(catalog: ConnectorCatalog): void {
   try {
     const payload: PersistShape = {
       fetchedAt: catalog.fetchedAt,
-      envId: catalog.envId,
+      source: catalog.source,
+      complete: catalog.complete,
       entries: Array.from(catalog.entries.values()),
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
   } catch {
-    // Quota / privacy mode — keep going with the in-memory catalog.
+    // Storage can be unavailable in privacy mode. The in-memory catalog stays valid.
   }
 }
 
-function normalizeSlug(armId: string): string {
-  if (!armId) return "";
-  const idx = armId.lastIndexOf("/");
-  return idx >= 0 ? armId.substring(idx + 1) : armId;
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object"
+    ? (value as Record<string, unknown>)
+    : {};
 }
 
-/** Probe one env. Returns ok with a (possibly empty) catalog, or fails
- *  with a stringified error suitable for surfacing. */
-async function fetchCatalogFromEnv(
-  envId: string,
-): Promise<CatalogResult<ConnectorCatalog>> {
-  const $filter = `environment eq '${envId}'`;
-  const result = await PowerPlatformforAdminsV2Service.ListConnectors(
-    envId,
-    $filter,
-    API_VERSION,
-  );
-  if (!result.success) {
-    const err = result.error;
-    const msg =
-      err instanceof Error
-        ? err.message
-        : typeof err === "string"
-          ? err
-          : (() => {
-              try {
-                return JSON.stringify(err);
-              } catch {
-                return String(err);
-              }
-            })();
-    return { ok: false, error: msg };
-  }
-  const items = result.data?.value ?? [];
-  const entries = new Map<string, ConnectorEntry>();
-  for (const item of items) {
-    const armId = item.id ?? "";
-    const slug = normalizeSlug(armId) || item.name || "";
-    if (!slug) continue;
-    const props = item.properties ?? {};
-    entries.set(slug, {
-      connectorId: slug,
-      displayName:
-        (typeof props.displayName === "string" && props.displayName) ||
-        item.name ||
-        slug,
-      tier: typeof props.tier === "string" ? props.tier : "",
-      publisher: typeof props.publisher === "string" ? props.publisher : "",
+function readString(record: Record<string, unknown>, key: string): string {
+  const value = record[key];
+  return typeof value === "string" ? value : "";
+}
+
+function readBoolean(record: Record<string, unknown>, key: string): boolean {
+  return record[key] === true;
+}
+
+function readOperations(value: unknown): ConnectorCatalogOperation[] {
+  if (!Array.isArray(value)) return [];
+  const operations: ConnectorCatalogOperation[] = [];
+  const seen = new Set<string>();
+  for (const raw of value) {
+    const operation = asRecord(raw);
+    const operationId = readString(operation, "operationId");
+    if (!operationId || seen.has(operationId)) continue;
+    seen.add(operationId);
+    operations.push({
+      operationId,
+      displayName: readString(operation, "displayName"),
+      description: readString(operation, "description"),
+      method: readString(operation, "method"),
     });
   }
+  return operations.sort((a, b) =>
+    (a.displayName || a.operationId).localeCompare(
+      b.displayName || b.operationId,
+    ),
+  );
+}
+
+function toConnectorEntry(item: ResourceItem): ConnectorEntry | null {
+  const properties = asRecord(item.properties);
+  const connectorId = normalizeSlug(
+    readString(properties, "connectorId") ||
+      item.name ||
+      item.id ||
+      "",
+  );
+  if (!connectorId) return null;
   return {
-    ok: true,
-    data: { entries, fetchedAt: Date.now(), envId },
+    connectorId,
+    displayName:
+      readString(properties, "displayName") ||
+      item.name ||
+      connectorId,
+    description: readString(properties, "description"),
+    tier: readString(properties, "tier"),
+    publisher: readString(properties, "publisher"),
+    releaseTag: readString(properties, "releaseTag"),
+    isDeprecated: readBoolean(properties, "isDeprecated"),
+    operations: readOperations(properties.operations),
   };
 }
 
-/** Walk the env list returned by `ListEnvironmentsForUser` (the admin
- *  V2 connector's per-user env listing — only envs the calling admin
- *  can actually reach) and try each until one returns a non-empty
- *  catalog. Capped at MAX_ENVS_TRIED to avoid pathological fanout if
- *  the tenant has a long tail of broken envs.
- *
- *  We call the generated service directly rather than going through
- *  `data/inventory.listEnvironmentsPage` because `shared/` modules are
- *  not allowed to import from `data/inventory` (boundary rule). The
- *  generated service is leaf-safe to import from anywhere.
- */
-async function doLoad(): Promise<CatalogResult<ConnectorCatalog>> {
-  const envsResult = await PowerPlatformforAdminsV2Service.ListEnvironmentsForUser(
-    API_VERSION,
+function formatError(error: unknown): string {
+  if (error instanceof Error) return error.message || error.name;
+  if (typeof error === "string") return error;
+  if (error && typeof error === "object") {
+    const record = error as Record<string, unknown>;
+    const parts: string[] = [];
+    if (typeof record.message === "string") parts.push(record.message);
+    if (typeof record.status === "number") {
+      parts.push(`HTTP ${record.status}`);
+    }
+    if (typeof record.requestId === "string") {
+      parts.push(`requestId ${record.requestId}`);
+    }
+    if (parts.length > 0) return parts.join(" - ");
+    try {
+      return JSON.stringify(error);
+    } catch {
+      return String(error);
+    }
+  }
+  return String(error || "Unknown error");
+}
+
+function isRateLimit(error: unknown): boolean {
+  return /(\b429\b|rate ?limit|throttle|too many requests)/i.test(
+    formatError(error),
   );
-  if (!envsResult.success) {
-    const err = envsResult.error;
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function queryCatalogPage(
+  skip: number,
+  skipToken: string,
+): Promise<CatalogResult<{ items: ResourceItem[]; skipToken: string }>> {
+  const typeClause = {
+    $type: "where",
+    FieldName: "type",
+    Operator: "==",
+    Values: [`'${CONNECTOR_RESOURCE_TYPE}'`],
+  } as unknown as Clause;
+  const body: ResourceQueryRequest = {
+    TableName: TABLE,
+    Clauses: [typeClause],
+    Options: { Top: PAGE_SIZE, Skip: skip, SkipToken: skipToken },
+  };
+
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const result =
+        await PowerPlatformforAdminsV2Service.QueryResources(
+          API_VERSION,
+          body,
+        );
+      if (result.success) {
+        return {
+          ok: true,
+          data: {
+            items: result.data?.data ?? [],
+            skipToken: result.data?.skipToken ?? "",
+          },
+        };
+      }
+      if (attempt === 0 && isRateLimit(result.error)) {
+        await sleep(500);
+        continue;
+      }
+      return { ok: false, error: formatError(result.error) };
+    } catch (error) {
+      if (attempt === 0 && isRateLimit(error)) {
+        await sleep(500);
+        continue;
+      }
+      return { ok: false, error: formatError(error) };
+    }
+  }
+  return { ok: false, error: "Connector catalog query failed." };
+}
+
+async function fetchInventoryCatalog(): Promise<
+  CatalogResult<ConnectorCatalog>
+> {
+  const entries = new Map<string, ConnectorEntry>();
+  let skip = 0;
+  let skipToken = "";
+  let previousToken = "";
+
+  for (let page = 0; page < MAX_CATALOG_PAGES; page++) {
+    const result = await queryCatalogPage(skip, skipToken);
+    if (!result.ok) return result;
+    for (const item of result.data.items) {
+      const entry = toConnectorEntry(item);
+      if (entry) entries.set(entry.connectorId, entry);
+    }
+    if (!result.data.skipToken) {
+      if (entries.size === 0) {
+        return {
+          ok: false,
+          error: "Connector inventory returned an empty catalog.",
+        };
+      }
+      return {
+        ok: true,
+        data: {
+          entries,
+          fetchedAt: Date.now(),
+          source: "inventory",
+          complete: true,
+        },
+      };
+    }
+    if (result.data.skipToken === previousToken) {
+      return {
+        ok: false,
+        error: "Connector inventory pagination repeated its continuation token.",
+      };
+    }
+    previousToken = result.data.skipToken;
+    skipToken = result.data.skipToken;
+    skip += result.data.items.length;
+  }
+
+  return {
+    ok: false,
+    error: `Connector inventory exceeded the ${MAX_CATALOG_PAGES}-page safety cap.`,
+  };
+}
+
+async function fetchCatalogFromEnvironment(
+  envId: string,
+): Promise<CatalogResult<ConnectorCatalog>> {
+  try {
+    const result = await PowerPlatformforAdminsV2Service.ListConnectors(
+      envId,
+      `environment eq '${envId}'`,
+      API_VERSION,
+    );
+    if (!result.success) {
+      return { ok: false, error: formatError(result.error) };
+    }
+    const entries = new Map<string, ConnectorEntry>();
+    for (const rawItem of result.data?.value ?? []) {
+      const item = rawItem as unknown as ResourceItem;
+      const entry = toConnectorEntry(item);
+      if (entry) entries.set(entry.connectorId, entry);
+    }
+    return {
+      ok: true,
+      data: {
+        entries,
+        fetchedAt: Date.now(),
+        source: "list-connectors-fallback",
+        // One environment is enough to enrich known connectors, but absence
+        // from it does not prove a connector is tenant-wide unknown/custom.
+        complete: false,
+      },
+    };
+  } catch (error) {
+    return { ok: false, error: formatError(error) };
+  }
+}
+
+async function fetchFallbackCatalog(): Promise<
+  CatalogResult<ConnectorCatalog>
+> {
+  try {
+    const envResult =
+      await PowerPlatformforAdminsV2Service.ListEnvironmentsForUser(
+        API_VERSION,
+      );
+    if (!envResult.success) {
+      return { ok: false, error: formatError(envResult.error) };
+    }
+    const environments = envResult.data?.value ?? [];
+    if (environments.length === 0) {
+      return { ok: false, error: "No environments available to query." };
+    }
+
+    let lastError = "";
+    for (
+      let index = 0;
+      index < environments.length && index < MAX_ENVS_TRIED;
+      index++
+    ) {
+      const envId = environments[index].id;
+      if (!envId) continue;
+      const result = await fetchCatalogFromEnvironment(envId);
+      if (result.ok && result.data.entries.size > 0) return result;
+      if (!result.ok) lastError = result.error;
+    }
     return {
       ok: false,
       error:
-        err instanceof Error
-          ? err.message
-          : typeof err === "string"
-            ? err
-            : "ListEnvironmentsForUser failed",
+        lastError ||
+        `ListConnectors returned no connectors from the first ${MAX_ENVS_TRIED} environments tried.`,
     };
+  } catch (error) {
+    return { ok: false, error: formatError(error) };
   }
-  const envs = envsResult.data?.value ?? [];
-  if (envs.length === 0) {
-    return { ok: false, error: "No environments available to query." };
-  }
-  let lastError = "";
-  for (let i = 0; i < envs.length && i < MAX_ENVS_TRIED; i++) {
-    const envId = envs[i].id;
-    if (!envId) continue;
-    const result = await fetchCatalogFromEnv(envId);
-    if (result.ok && result.data.entries.size > 0) {
-      return result;
-    }
-    if (!result.ok) lastError = result.error;
-  }
+}
+
+async function doLoad(): Promise<CatalogResult<ConnectorCatalog>> {
+  const inventory = await fetchInventoryCatalog();
+  if (inventory.ok) return inventory;
+
+  const fallback = await fetchFallbackCatalog();
+  if (fallback.ok) return fallback;
   return {
     ok: false,
     error:
-      lastError ||
-      `ListConnectors returned no connectors from the first ${MAX_ENVS_TRIED} environments tried.`,
+      `Connector inventory failed: ${inventory.error}. ` +
+      `ListConnectors fallback failed: ${fallback.error}`,
   };
 }
 
-/**
- * Public load entrypoint. Idempotent — concurrent callers share the
- * same in-flight promise. Pass `{ force: true }` to skip the cache and
- * refresh from the connector.
- */
 export async function loadCatalog(opts?: {
   force?: boolean;
 }): Promise<CatalogResult<ConnectorCatalog>> {
   const force = Boolean(opts?.force);
+  if (!force && _catalog) return { ok: true, data: _catalog };
 
-  if (!force && _catalog) {
-    return { ok: true, data: _catalog };
-  }
   if (!force) {
     const cached = loadFromStorage();
     if (cached) {
@@ -345,26 +518,17 @@ export async function loadCatalog(opts?: {
       return { ok: true, data: cached };
     }
   }
-  if (_loadPromise && !force) {
-    return _loadPromise;
-  }
+  if (_loadPromise) return _loadPromise;
 
   _status = "loading";
-  if (force) {
-    // Keep the existing _catalog populated while refreshing so the UI
-    // doesn't blink back to "Unknown" badges mid-refresh.
-    notify();
-  } else {
-    notify();
-  }
-
+  notify();
   _loadPromise = (async () => {
     const result = await doLoad();
     if (result.ok) {
       _catalog = result.data;
       _status = "ready";
       _lastError = "";
-      persist(result.data);
+      if (result.data.complete) persist(result.data);
     } else {
       _status = _catalog ? "ready" : "error";
       _lastError = result.error;
@@ -380,15 +544,13 @@ export async function loadCatalog(opts?: {
   }
 }
 
-/** React hook. Returns the current catalog + a classifier; rerenders
- *  the consuming component when the catalog state changes. */
 export function useConnectorCatalog(): {
   catalog: ConnectorCatalog | undefined;
   status: CatalogStatus;
   error: string;
   classify: (connectorId: string) => Classification;
 } {
-  const [, forceUpdate] = useReducer((x: number) => x + 1, 0);
+  const [, forceUpdate] = useReducer((value: number) => value + 1, 0);
   useEffect(() => subscribeCatalog(() => forceUpdate()), []);
   return {
     catalog: _catalog,
@@ -408,7 +570,6 @@ export function __resetCatalogForTests(): void {
   try {
     localStorage.removeItem(STORAGE_KEY);
   } catch {
-    // ignore
+    // Ignore storage restrictions in test environments.
   }
 }
-

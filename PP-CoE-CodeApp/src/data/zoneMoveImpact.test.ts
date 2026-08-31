@@ -169,6 +169,23 @@ describe("readPublishedConnectorIds", () => {
     ]);
   });
 
+  it("includes the current scalar cloud-flow trigger connector", () => {
+    const item = cloudFlow({
+      id: "f2",
+      displayName: "F2",
+      connectorIds: ["sharepointonline"],
+    });
+    item.properties = {
+      ...item.properties,
+      trigger: "/providers/Microsoft.PowerApps/apis/shared_office365",
+      triggerOperation: "OnNewEmailV3",
+    };
+    expect(readPublishedConnectorIds(item)).toEqual([
+      "sharepointonline",
+      "shared_office365",
+    ]);
+  });
+
   it("returns an empty array when no connectors are declared", () => {
     const item = canvasApp({ id: "a", displayName: "A" });
     expect(readPublishedConnectorIds(item)).toEqual([]);

@@ -718,7 +718,7 @@ export function QueriesView() {
 
   const typeText =
     spec.resourceTypes.length === 0
-      ? "All resource types"
+      ? "All reportable resources"
       : spec.resourceTypes.map(resourceTypeShort).join(", ");
 
   const suggestionsFor = useMemo(() => {
@@ -893,7 +893,7 @@ export function QueriesView() {
                 <Dropdown
                   style={{ minWidth: 360 }}
                   multiselect
-                  placeholder="All resource types"
+                  placeholder="All reportable resources"
                   value={typeText}
                   selectedOptions={spec.resourceTypes}
                   onOptionSelect={(_e, data) =>
@@ -1122,8 +1122,9 @@ export function QueriesView() {
               }
             />
             <Text className={styles.helper}>
-              1–500 rows per request. The full tenant-wide count is shown in the results
-              header; use <strong>Load more</strong> to walk additional pages.
+              1–500 rows per request. The visual builder always emits an explicit
+              resource-type scope; the connector catalog is opt-in and excluded
+              from the default reporting total.
             </Text>
           </div>
 

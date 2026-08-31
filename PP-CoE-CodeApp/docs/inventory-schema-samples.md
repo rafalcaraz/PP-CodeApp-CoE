@@ -108,7 +108,7 @@ When you actually need to know which kind of identity a GUID points to:
 
 ## Resource types covered
 
-These are the **10 resource types** the inventory exposes today, per the
+These are the **11 resource types** the inventory exposes today, per the
 [official schema docs](https://learn.microsoft.com/power-platform/admin/inventory-schema).
 All of them are read by this app — there are no unmodeled types as of now.
 
@@ -124,10 +124,16 @@ All of them are read by this app — there are no unmodeled types as of now.
 | `microsoft.powerautomate/agentflows` | Agent flows | shape matches cloud flows | `/flows` |
 | `microsoft.powerautomate/m365agentflows` | Workflow agent flows | shape matches cloud flows | `/flows` |
 | `microsoft.copilotstudio/agents` | Copilot Studio agents | ✅ real | `/agents` |
+| `microsoft.powerplatformconnector/connectors` | Connector catalog (Preview) | structural (no live capture yet) | `/connectors` |
 
 > Items marked **structural** are reconstructed from the official schema docs
 > rather than captured from a live tenant. Update them with a real payload
 > when one is available.
+>
+> Connector records are catalog entities, not environment-owned operational
+> resources. The app includes Connector only when it is explicitly selected;
+> empty visual-query scopes resolve to the stable ten-type reporting universe
+> so catalog growth cannot inflate existing resource totals.
 
 ## KQL / clause-builder gotchas
 
@@ -152,7 +158,8 @@ Captured while building the data layer. Don't relearn these the hard way:
    trailing slug; `friendlyConnectorName()` tries both with and without the
    `shared_` prefix when looking up display names.
 5. **Pagination.** Single response capped via `Top` (we use 500). Continue
-   with the returned `skipToken`. `totalRecords` is reliably populated.
+   with the returned `skipToken` and also send `Skip=rowsLoaded`.
+   `skipToken` is authoritative; treat `totalRecords` as approximate.
 6. **Errors are not `Error` instances.** The runtime throws
    `PowerDataRuntimeHttpError = { message, status, requestId, innerError }`
    where `innerError` is a stringified JSON of the ARG
@@ -163,7 +170,7 @@ Captured while building the data layer. Don't relearn these the hard way:
    view exposes a `__connector` sentinel field (see `translateFilter` in
    `inventory.ts`) that emits an `extend` shim concatenating the three
    shapes (`properties.powerPlatformConnectors`, `properties.connectors`,
-   `properties.trigger`) into a single string column, then a single `has`
+   `properties.trigger`, and `properties.triggerOperation`) into a single string column, then a single `has`
    against it — covers canvas/flow/agent/app-builder in one clause without
    needing `mv-expand` (which isn't in the Clause whitelist).
 
@@ -455,12 +462,61 @@ Also applies (similar shape) to `microsoft.powerautomate/agentflows` and
   up; the data layer falls back to those.)
 - `properties.flowTriggerType` — `"Instant"`, `"Automated"`, `"Recurrence"`,
   `"Manual"`.
-- `properties.trigger` — object describing what fires the flow:
+- `properties.trigger` — current Preview schema: scalar connector ID describing
+  what fires the flow. Empty for non-connector triggers.
+- `properties.triggerOperation` — current Preview schema: scalar trigger
+  operation ID.
+- Older captured payloads used a nested `properties.trigger` object with
   `{ operationId, connectorId, connectorDisplayName, operationDisplayName }`.
-  `connectorId` is often empty for first-party connectors (e.g. Power Apps).
+  The data layer and flow dashboard templates coalesce both shapes.
 - `properties.workflowEntityId` — Dataverse-side ID for cross-referencing.
 - `properties.powerPlatformConnectors` uses bare connector IDs like
   `commondataserviceforapps` (no `shared_` prefix).
+
+## Connector catalog (Preview)
+
+`type: "microsoft.powerplatformconnector/connectors"`
+
+**Structural sample (per the official schema):**
+
+```json
+{
+  "name": "shared_sharepointonline",
+  "type": "microsoft.powerplatformconnector/connectors",
+  "properties": {
+    "displayName": "SharePoint",
+    "connectorId": "shared_sharepointonline",
+    "description": "SharePoint helps organizations share and collaborate.",
+    "publisher": "Microsoft",
+    "tier": "Standard",
+    "releaseTag": "Production",
+    "isDeprecated": false,
+    "operations": [
+      {
+        "operationId": "GetItems",
+        "displayName": "Get items",
+        "description": "Gets items from a SharePoint list.",
+        "method": "GET"
+      }
+    ]
+  }
+}
+```
+
+**Important semantics:**
+
+- Connector catalog records don't have meaningful environment, owner,
+  location, created, or modified fields.
+- Catalog count is a separate metric from counts of deployed apps, flows,
+  agents, environments, and groups.
+- The catalog supplies display name, publisher, tier, release stage,
+  deprecation status, and operation metadata for enriching connector usage.
+- Connector inventory is Preview and isn't available in every cloud. The app
+  falls back to environment-probed `ListConnectors` when the inventory query
+  fails; fallback results are marked incomplete.
+- Absence from an incomplete or unavailable catalog is not proof that a
+  connector is custom or Premium. The app only makes that inference after a
+  complete inventory catalog loads.
 
 ## Copilot Studio agents
 

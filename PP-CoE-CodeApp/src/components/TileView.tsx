@@ -651,7 +651,7 @@ export function TileView({ tile, editable, onEdit, onDelete, onDuplicate, classN
         header={<Text weight="semibold">{tile.title}</Text>}
         description={
           <Text size={200}>
-            {tile.spec.resourceTypes.map((t) => shortResourceType(t)).join(", ") || "All types"}
+            {tile.spec.resourceTypes.map((t) => shortResourceType(t)).join(", ") || "All reportable resources"}
           </Text>
         }
         action={

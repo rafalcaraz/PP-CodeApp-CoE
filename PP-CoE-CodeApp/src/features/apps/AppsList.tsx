@@ -126,18 +126,18 @@ export function AppsList() {
         columnId: "premium",
         renderHeaderCell: () => "Tier",
         renderCell: (row) => {
-          // Roll the row's connectors up to a single tier. Any Premium
-          // wins; otherwise any Unknown (i.e. a custom connector not in
-          // the OOB catalog) wins; else Standard. The catalog hook
-          // re-renders the whole grid when the snapshot loads, so the
-          // badge flips from `—` to a real value with no extra wiring.
+          // Roll the row's connectors up to a single tier. Only a connector
+          // absent from a successfully loaded catalog is inferred custom.
+          // Catalog-unavailable and missing-tier states stay unassessed.
           if (row.connectors.length === 0) return "—";
           let sawPremium = false;
-          let sawUnknown = false;
+          let sawInferredCustom = false;
+          let sawUnassessed = false;
           for (const c of row.connectors) {
-            const t = classify(c.connectorId).tier;
-            if (t === "Premium") sawPremium = true;
-            else if (t === "Unknown") sawUnknown = true;
+            const classification = classify(c.connectorId);
+            if (classification.tier === "Premium") sawPremium = true;
+            else if (classification.reason === "not-found") sawInferredCustom = true;
+            else if (classification.tier === "Unknown") sawUnassessed = true;
           }
           if (sawPremium) {
             return (
@@ -146,13 +146,14 @@ export function AppsList() {
               </Badge>
             );
           }
-          if (sawUnknown) {
+          if (sawInferredCustom) {
             return (
-              <Badge appearance="outline" color="warning" title="Uses a connector not in the OOB catalog — likely custom (treated as Premium for licensing).">
+              <Badge appearance="outline" color="warning" title="Uses a connector absent from the complete catalog - likely custom (treated as Premium for licensing).">
                 Premium (custom)
               </Badge>
             );
           }
+          if (sawUnassessed) return "—";
           return (
             <Badge appearance="outline" color="informative">
               Standard

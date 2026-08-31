@@ -29,7 +29,7 @@
 import type { PolicyV2 } from "../generated/models/PowerPlatformforAdminsModel";
 import { policyEnvEntryId } from "./dlpPolicies";
 import {
-  ALL_RESOURCE_TYPES,
+  CONNECTOR_USAGE_RESOURCE_TYPES,
   CONNECTOR_FIELD,
   ResourceType,
   buildClausesFromSpec,
@@ -359,9 +359,9 @@ export function resolveDlpScope(policy: PolicyV2): DlpResolvedScope {
 /** Resource types we surface as "potentially impacted" — every app,
  *  flow, and agent shape that can declare a connector reference. We
  *  intentionally exclude `Environment` and `EnvironmentGroup`. */
-const IMPACT_RESOURCE_TYPES: ResourceTypeValue[] = ALL_RESOURCE_TYPES.filter(
-  (t) => t !== ResourceType.Environment && t !== ResourceType.EnvironmentGroup
-);
+const IMPACT_RESOURCE_TYPES: ResourceTypeValue[] = [
+  ...CONNECTOR_USAGE_RESOURCE_TYPES,
+];
 
 export interface DlpImpactRow {
   /** Inventory `name` field (resource GUID). */

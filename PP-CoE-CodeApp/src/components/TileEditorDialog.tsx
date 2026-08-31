@@ -722,7 +722,7 @@ export function TileEditorDialog({ open, initialTile, onClose, onSave }: TileEdi
 
   const typeText =
     tile.spec.resourceTypes.length === 0
-      ? "All resource types"
+      ? "All reportable resources"
       : tile.spec.resourceTypes.map(resourceTypeShort).join(", ");
 
   // Memoize field suggestions per intent so the editor's four field
@@ -1221,7 +1221,7 @@ export function TileEditorDialog({ open, initialTile, onClose, onSave }: TileEdi
                 <Dropdown
                   style={{ flex: 1, minWidth: 320 }}
                   multiselect
-                  placeholder="All resource types"
+                  placeholder="All reportable resources"
                   value={typeText}
                   selectedOptions={tile.spec.resourceTypes}
                   onOptionSelect={(_e, data) =>

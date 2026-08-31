@@ -1,15 +1,10 @@
 /**
  * Connectors view — tenant connector catalog.
  *
- * Reads the shared connector catalog (a single `ListConnectors` call
- * against the first reachable env, cached for 24h in localStorage) and
- * shows every Microsoft / certified third-party connector along with
- * its tier and publisher. This is the same catalog the Apps and Flows
- * lists use to flag premium resources.
- *
- * No env picker — the catalog auto-bootstraps from the user's first
- * available environment. Refresh button forces a re-fetch and updates
- * the cached snapshot.
+ * Reads the shared connector catalog from the first-class inventory resource,
+ * with the legacy environment-scoped API retained as a compatibility fallback.
+ * A complete inventory snapshot classifies connector usage across Apps and
+ * Flows; the fallback enriches known connectors without absence-based guesses.
  */
 import { useCallback, useMemo, useState } from "react";
 import {
@@ -23,6 +18,7 @@ import {
   DataGridHeaderCell,
   DataGridRow,
   Input,
+  Link,
   Text,
   Title2,
   createTableColumn,
@@ -35,6 +31,7 @@ import {
   ArrowClockwiseRegular,
   ArrowDownloadRegular,
 } from "@fluentui/react-icons";
+import { useNavigate } from "react-router-dom";
 import { LoadingPane, ErrorPane, EmptyPane } from "../../components/Status";
 import { downloadCsv, rowsToCsv } from "../../utils/csv";
 import {
@@ -45,11 +42,17 @@ import {
 
 /** Maps a connector entry to a CSV row with friendly, stable column
  *  headers matching the on-screen grid order. */
-function connectorToCsvRow(entry: ConnectorEntry): Record<string, string> {
+function connectorToCsvRow(
+  entry: ConnectorEntry,
+): Record<string, string | number | boolean> {
   return {
     "Display name": entry.displayName,
+    Description: entry.description,
     Tier: entry.tier,
+    "Release stage": entry.releaseTag,
+    Deprecated: entry.isDeprecated,
     Publisher: entry.publisher,
+    Operations: entry.operations.length,
     "Connector id": entry.connectorId,
   };
 }
@@ -98,6 +101,23 @@ const useStyles = makeStyles({
     alignItems: "center",
     gap: tokens.spacingHorizontalS,
   },
+  connectorCell: {
+    minWidth: 0,
+    maxWidth: "320px",
+  },
+  connectorName: {
+    display: "block",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+  },
+  connectorDescription: {
+    display: "block",
+    color: tokens.colorNeutralForeground3,
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+  },
 });
 
 function tierBadgeColor(
@@ -117,12 +137,61 @@ function tierBadgeColor(
   return "subtle";
 }
 
+function ConnectorNameCell({ row }: { row: ConnectorEntry }) {
+  const styles = useStyles();
+  const navigate = useNavigate();
+  return (
+    <div className={styles.connectorCell}>
+      <Link
+        className={styles.connectorName}
+        onClick={() =>
+          navigate(`/connectors/${encodeURIComponent(row.connectorId)}`)
+        }
+      >
+        {row.displayName}
+      </Link>
+      {row.description && (
+        <Caption1
+          className={styles.connectorDescription}
+          title={row.description}
+        >
+          {row.description}
+        </Caption1>
+      )}
+    </div>
+  );
+}
+
 const COLUMNS: TableColumnDefinition<ConnectorEntry>[] = [
   createTableColumn<ConnectorEntry>({
     columnId: "displayName",
     compare: (a, b) => a.displayName.localeCompare(b.displayName),
     renderHeaderCell: () => "Display name",
-    renderCell: (row) => <Text weight="semibold">{row.displayName}</Text>,
+    renderCell: (row) => <ConnectorNameCell row={row} />,
+  }),
+  createTableColumn<ConnectorEntry>({
+    columnId: "releaseTag",
+    compare: (a, b) => a.releaseTag.localeCompare(b.releaseTag),
+    renderHeaderCell: () => "Release",
+    renderCell: (row) =>
+      row.releaseTag ? (
+        <Badge appearance="outline">{row.releaseTag}</Badge>
+      ) : (
+        <Caption1>—</Caption1>
+      ),
+  }),
+  createTableColumn<ConnectorEntry>({
+    columnId: "isDeprecated",
+    compare: (a, b) => Number(a.isDeprecated) - Number(b.isDeprecated),
+    renderHeaderCell: () => "Status",
+    renderCell: (row) =>
+      row.isDeprecated ? (
+        <Badge appearance="filled" color="danger">
+          Deprecated
+        </Badge>
+      ) : (
+        <Caption1>Active</Caption1>
+      ),
   }),
   createTableColumn<ConnectorEntry>({
     columnId: "tier",
@@ -136,6 +205,12 @@ const COLUMNS: TableColumnDefinition<ConnectorEntry>[] = [
       ) : (
         <Caption1>—</Caption1>
       ),
+  }),
+  createTableColumn<ConnectorEntry>({
+    columnId: "operations",
+    compare: (a, b) => a.operations.length - b.operations.length,
+    renderHeaderCell: () => "Operations",
+    renderCell: (row) => row.operations.length.toLocaleString(),
   }),
   createTableColumn<ConnectorEntry>({
     columnId: "publisher",
@@ -192,12 +267,25 @@ export function ConnectorsList() {
       (r) =>
         r.displayName.toLowerCase().includes(q) ||
         r.connectorId.toLowerCase().includes(q) ||
-        r.publisher.toLowerCase().includes(q),
+        r.publisher.toLowerCase().includes(q) ||
+        r.description.toLowerCase().includes(q) ||
+        r.releaseTag.toLowerCase().includes(q),
     );
   }, [allEntries, filterText]);
 
   const premiumCount = useMemo(
     () => allEntries.filter((r) => r.tier.toLowerCase() === "premium").length,
+    [allEntries],
+  );
+  const deprecatedCount = useMemo(
+    () => allEntries.filter((r) => r.isDeprecated).length,
+    [allEntries],
+  );
+  const previewCount = useMemo(
+    () =>
+      allEntries.filter((r) =>
+        r.releaseTag.toLowerCase().includes("preview"),
+      ).length,
     [allEntries],
   );
 
@@ -224,18 +312,17 @@ export function ConnectorsList() {
       <div className={styles.header}>
         <Title2>Connectors</Title2>
         <Text className={styles.subtitle}>
-          Tenant-wide catalog of Microsoft and certified third-party
-          connectors, with their tier (Standard / Premium) and publisher.
-          Sourced from a single <code>ListConnectors</code> call against the
-          first reachable environment and cached for 24 hours — used by the
-          Apps and Flows lists to flag premium resources.
+          Tenant-wide connector catalog with licensing tier, release stage,
+          deprecation status, publisher, and operations. Inventory catalog
+          records are metadata, so they are intentionally excluded from
+          operational resource totals and environment rollups.
         </Text>
       </div>
 
       <div className={styles.toolbar}>
         <div className={styles.controlGroup}>
           <Caption1 className={styles.controlLabel}>
-            Filter (name / id / publisher)
+            Filter (name / id / publisher / release)
           </Caption1>
           <Input
             className={styles.filterInput}
@@ -248,7 +335,10 @@ export function ConnectorsList() {
         <div className={styles.refreshGroup}>
           {catalog && (
             <Caption1 className={styles.controlLabel}>
-              Refreshed {formatAge(catalog.fetchedAt)}
+              {catalog.source === "inventory"
+                ? "Inventory preview"
+                : "ListConnectors fallback (partial)"}
+              {" · "}refreshed {formatAge(catalog.fetchedAt)}
             </Caption1>
           )}
           <Button
@@ -293,6 +383,14 @@ export function ConnectorsList() {
             <Text>•</Text>
             <Text>
               <strong>{premiumCount}</strong> premium
+            </Text>
+            <Text>•</Text>
+            <Text>
+              <strong>{previewCount}</strong> preview
+            </Text>
+            <Text>•</Text>
+            <Text>
+              <strong>{deprecatedCount}</strong> deprecated
             </Text>
             {filterText.trim() && (
               <>

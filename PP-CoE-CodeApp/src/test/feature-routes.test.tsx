@@ -111,7 +111,7 @@ const FEATURES: Array<{
   {
     name: "connectors",
     routes: connectorsRoutes,
-    expectedPaths: ["/connectors"],
+    expectedPaths: ["/connectors", "/connectors/:connectorId"],
   },
   {
     name: "deep-inventory",
@@ -149,6 +149,5 @@ describe("feature routes", () => {
     });
   }
 });
-
 
 

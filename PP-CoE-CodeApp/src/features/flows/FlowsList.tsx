@@ -193,11 +193,9 @@ export function FlowsList() {
         columnId: "premium",
         renderHeaderCell: () => "Tier",
         renderCell: (row) => {
-          // Roll the flow's connectors (and its trigger connector) up
-          // to a single tier. Any Premium wins; otherwise any Unknown
-          // (a custom connector not in the OOB catalog) wins; else
-          // Standard. Catalog hook re-renders the grid when the
-          // snapshot loads so the badge fills in with no extra wiring.
+          // Roll the flow's connectors (and trigger) up to one tier. Only
+          // absence from a complete catalog is inferred custom; an unavailable
+          // catalog or a catalog row with no tier remains unassessed.
           const ids = new Set<string>();
           for (const c of row.connectors) {
             if (c.connectorId) ids.add(c.connectorId);
@@ -205,11 +203,13 @@ export function FlowsList() {
           if (row.trigger?.connectorId) ids.add(row.trigger.connectorId);
           if (ids.size === 0) return "—";
           let sawPremium = false;
-          let sawUnknown = false;
+          let sawInferredCustom = false;
+          let sawUnassessed = false;
           for (const id of ids) {
-            const t = classify(id).tier;
-            if (t === "Premium") sawPremium = true;
-            else if (t === "Unknown") sawUnknown = true;
+            const classification = classify(id);
+            if (classification.tier === "Premium") sawPremium = true;
+            else if (classification.reason === "not-found") sawInferredCustom = true;
+            else if (classification.tier === "Unknown") sawUnassessed = true;
           }
           if (sawPremium) {
             return (
@@ -218,13 +218,14 @@ export function FlowsList() {
               </Badge>
             );
           }
-          if (sawUnknown) {
+          if (sawInferredCustom) {
             return (
-              <Badge appearance="outline" color="warning" title="Uses a connector not in the OOB catalog — likely custom (treated as Premium for licensing).">
+              <Badge appearance="outline" color="warning" title="Uses a connector absent from the complete catalog - likely custom (treated as Premium for licensing).">
                 Premium (custom)
               </Badge>
             );
           }
+          if (sawUnassessed) return "—";
           return (
             <Badge appearance="outline" color="informative">
               Standard

@@ -27,11 +27,60 @@ export const ResourceType = {
   AgentFlow: "microsoft.powerautomate/agentflows",
   WorkflowAgentFlow: "microsoft.powerautomate/m365agentflows",
   CopilotStudioAgent: "microsoft.copilotstudio/agents",
+  Connector: "microsoft.powerplatformconnector/connectors",
   Environment: "microsoft.powerplatform/environments",
   EnvironmentGroup: "microsoft.powerplatform/environmentgroups",
 } as const;
 
 export type ResourceTypeValue = (typeof ResourceType)[keyof typeof ResourceType];
+
+/** Every currently modeled inventory type. Used only for explicit selection
+ * surfaces; adding a type here must not silently broaden reporting scopes. */
+export const ALL_RESOURCE_TYPES: ResourceTypeValue[] = [
+  ResourceType.EnvironmentGroup,
+  ResourceType.Environment,
+  ResourceType.CanvasApp,
+  ResourceType.ModelDrivenApp,
+  ResourceType.CodeApp,
+  ResourceType.AppBuilderApp,
+  ResourceType.CloudFlow,
+  ResourceType.AgentFlow,
+  ResourceType.WorkflowAgentFlow,
+  ResourceType.CopilotStudioAgent,
+  ResourceType.Connector,
+];
+
+/** Stable default for visual-query "all reportable resources".
+ *
+ * Connector catalog rows are tenant metadata, not environment-owned assets,
+ * so they are opt-in. Keeping this list explicit also prevents future schema
+ * additions from changing saved dashboard totals without user action. */
+export const DEFAULT_QUERY_RESOURCE_TYPES: ResourceTypeValue[] = [
+  ResourceType.EnvironmentGroup,
+  ResourceType.Environment,
+  ResourceType.CanvasApp,
+  ResourceType.ModelDrivenApp,
+  ResourceType.CodeApp,
+  ResourceType.AppBuilderApp,
+  ResourceType.CloudFlow,
+  ResourceType.AgentFlow,
+  ResourceType.WorkflowAgentFlow,
+  ResourceType.CopilotStudioAgent,
+];
+
+/** Resource shapes that can carry connector-usage declarations. This is
+ * intentionally explicit: catalog rows and structural resources must never
+ * enter DLP/ACP impact scans just because the schema gains a new type. */
+export const CONNECTOR_USAGE_RESOURCE_TYPES: ResourceTypeValue[] = [
+  ResourceType.CanvasApp,
+  ResourceType.ModelDrivenApp,
+  ResourceType.CodeApp,
+  ResourceType.AppBuilderApp,
+  ResourceType.CloudFlow,
+  ResourceType.AgentFlow,
+  ResourceType.WorkflowAgentFlow,
+  ResourceType.CopilotStudioAgent,
+];
 
 export type DataResult<T> =
   | { ok: true; data: T }
@@ -645,6 +694,14 @@ export const ALL_APP_TYPES: ResourceTypeValue[] = [
   ResourceType.AppBuilderApp,
 ];
 
+/** App types with a meaningful owner in the inventory schema. Model-driven
+ * apps are environment/solution-owned and must not be reported as orphaned. */
+export const OWNER_SCANNABLE_APP_TYPES: ResourceTypeValue[] = [
+  ResourceType.CanvasApp,
+  ResourceType.CodeApp,
+  ResourceType.AppBuilderApp,
+];
+
 export interface FlowTrigger {
   operationId: string;
   connectorId: string;
@@ -867,7 +924,7 @@ export function friendlyConnectorName(connectorId: string): string {
 /** Strip an ARM-style `.../apis/<connectorSlug>` path down to just `<connectorSlug>`
  *  so the friendly-name lookup works regardless of which shape the inventory
  *  payload uses (app-builder apps publish full ARM IDs). */
-function normalizeConnectorId(id: string): string {
+export function normalizeConnectorId(id: string): string {
   if (!id) return "";
   const idx = id.lastIndexOf("/");
   return idx >= 0 ? id.substring(idx + 1) : id;
@@ -1092,7 +1149,7 @@ export async function getEnvironmentNameMap(): Promise<Map<string, string>> {
 /** Mutates rows in place to backfill `environmentName` from the cached
  *  env map when the resource payload didn't include one (e.g. agents).
  *  No-op on rows that already have a name. */
-async function backfillEnvironmentNames<T extends { environmentId?: string; environmentName?: string }>(
+export async function backfillEnvironmentNames<T extends { environmentId?: string; environmentName?: string }>(
   rows: T[]
 ): Promise<void> {
   if (!rows.some((r) => r.environmentId && !r.environmentName)) return;
@@ -1682,6 +1739,8 @@ export function friendlyResourceType(type: string): string {
       return "Workflow agent flows";
     case ResourceType.CopilotStudioAgent:
       return "Copilot Studio agents";
+    case ResourceType.Connector:
+      return "Connector catalog";
     case ResourceType.Environment:
       return "Environments";
     case ResourceType.EnvironmentGroup:
@@ -1710,6 +1769,8 @@ export function shortResourceType(type: string): string {
       return "Workflow agent flow";
     case ResourceType.CopilotStudioAgent:
       return "Copilot Studio agent";
+    case ResourceType.Connector:
+      return "Connector";
     default:
       return type;
   }
@@ -1750,20 +1811,38 @@ export function toAppRow(item: ResourceItem): AppRow {
   };
 }
 
-function toFlowRow(item: ResourceItem): FlowRow {
+export function toFlowRow(item: ResourceItem): FlowRow {
   const raw = item as unknown as Record<string, unknown>;
   const props = (item.properties ?? {}) as Record<string, unknown>;
-  const triggerObj = props.trigger;
+  const triggerValue = props.trigger;
+  const triggerOperation =
+    typeof props.triggerOperation === "string"
+      ? props.triggerOperation
+      : "";
   let trigger: FlowTrigger | null = null;
-  if (triggerObj && typeof triggerObj === "object") {
-    const t = triggerObj as Record<string, unknown>;
+  if (triggerValue && typeof triggerValue === "object") {
+    const t = triggerValue as Record<string, unknown>;
     trigger = {
       operationId: typeof t.operationId === "string" ? t.operationId : "",
-      connectorId: typeof t.connectorId === "string" ? t.connectorId : "",
+      connectorId:
+        typeof t.connectorId === "string"
+          ? normalizeConnectorId(t.connectorId)
+          : "",
       connectorDisplayName:
         typeof t.connectorDisplayName === "string" ? t.connectorDisplayName : "",
       operationDisplayName:
         typeof t.operationDisplayName === "string" ? t.operationDisplayName : "",
+    };
+  } else if (typeof triggerValue === "string" || triggerOperation) {
+    const connectorId =
+      typeof triggerValue === "string"
+        ? normalizeConnectorId(triggerValue.trim())
+        : "";
+    trigger = {
+      connectorId,
+      operationId: triggerOperation,
+      connectorDisplayName: friendlyConnectorName(connectorId),
+      operationDisplayName: "",
     };
   }
   // `status` is the canonical flow run-state field in the inventory schema.
@@ -2205,6 +2284,35 @@ export interface QueryTemplate {
   spec: QuerySpec;
 }
 
+/** Resolve a visual-query type selection to a stable, explicit scope.
+ * An empty selection means the legacy reporting universe, never an
+ * unrestricted backend query. */
+export function resolveQueryResourceTypes(
+  resourceTypes: ResourceTypeValue[],
+): ResourceTypeValue[] {
+  return resourceTypes.length > 0
+    ? resourceTypes
+    : DEFAULT_QUERY_RESOURCE_TYPES;
+}
+
+function appendResourceTypeScope(
+  clauses: Clause[],
+  resourceTypes: ResourceTypeValue[],
+): void {
+  const resolved = resolveQueryResourceTypes(resourceTypes);
+  if (resolved.length === 1) {
+    clauses.push(where("type", "==", [`'${resolved[0]}'`]));
+    return;
+  }
+  clauses.push(
+    where(
+      "type",
+      "in~",
+      resolved.map((t) => `'${t}'`),
+    ),
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Sentinel field paths for "smart" filters.
 //
@@ -2212,7 +2320,8 @@ export interface QueryTemplate {
 // docs/inventory-schema-samples.md):
 //   - canvas / cloud-flow / agent: properties.powerPlatformConnectors[].connectorId
 //   - app-builder apps:            properties.connectors[].connectorId   (ARM path)
-//   - cloud-flow trigger:          properties.trigger.connectorId
+//   - cloud-flow trigger (current): properties.trigger + properties.triggerOperation
+//   - cloud-flow trigger (legacy):  properties.trigger.connectorId / operationId
 //
 // Each is an array of objects (or a nested object). Naïve `==` won't work;
 // `mv-expand` isn't in the Clause builder; so the helper below extends a
@@ -2329,7 +2438,8 @@ function translateFilter(
           // agent, or app-builder app.
           "strcat(tostring(properties.powerPlatformConnectors),'|'," +
             "tostring(properties.connectors),'|'," +
-            "tostring(properties.trigger))"
+            "tostring(properties.trigger),'|'," +
+            "tostring(properties.triggerOperation))"
         )
       );
     }
@@ -2345,18 +2455,7 @@ function translateFilter(
 /** Translate a user-facing QuerySpec into the connector's `Clauses[]` shape. */
 export function buildClausesFromSpec(spec: QuerySpec): Clause[] {
   const clauses: Clause[] = [];
-
-  if (spec.resourceTypes.length === 1) {
-    clauses.push(where("type", "==", [`'${spec.resourceTypes[0]}'`]));
-  } else if (spec.resourceTypes.length > 1) {
-    clauses.push(
-      where(
-        "type",
-        "in~",
-        spec.resourceTypes.map((t) => `'${t}'`)
-      )
-    );
-  }
+  appendResourceTypeScope(clauses, spec.resourceTypes);
 
   const emittedExtends = new Set<string>();
   for (const f of spec.filters) {
@@ -2523,20 +2622,6 @@ export const COMMON_FIELD_SUGGESTIONS: string[] = [
   "properties.trigger.connectorId",
 ];
 
-/** All resource types, useful for the multi-select. */
-export const ALL_RESOURCE_TYPES: ResourceTypeValue[] = [
-  ResourceType.EnvironmentGroup,
-  ResourceType.Environment,
-  ResourceType.CanvasApp,
-  ResourceType.ModelDrivenApp,
-  ResourceType.CodeApp,
-  ResourceType.AppBuilderApp,
-  ResourceType.CloudFlow,
-  ResourceType.AgentFlow,
-  ResourceType.WorkflowAgentFlow,
-  ResourceType.CopilotStudioAgent,
-];
-
 /** Friendly short labels for the resource-type chip. */
 export function resourceTypeShort(t: ResourceTypeValue): string {
   switch (t) {
@@ -2560,6 +2645,8 @@ export function resourceTypeShort(t: ResourceTypeValue): string {
       return "Workflow agent flow";
     case ResourceType.CopilotStudioAgent:
       return "Copilot Studio agent";
+    case ResourceType.Connector:
+      return "Connector catalog";
     default:
       return t;
   }
@@ -2586,18 +2673,7 @@ export async function runAggregateCount(
     return { ok: true, data: [] };
   }
   const clauses: Clause[] = [];
-
-  if (spec.resourceTypes.length === 1) {
-    clauses.push(where("type", "==", [`'${spec.resourceTypes[0]}'`]));
-  } else if (spec.resourceTypes.length > 1) {
-    clauses.push(
-      where(
-        "type",
-        "in~",
-        spec.resourceTypes.map((t) => `'${t}'`)
-      )
-    );
-  }
+  appendResourceTypeScope(clauses, spec.resourceTypes);
 
   const emittedAggExtends = new Set<string>();
   for (const f of spec.filters) {
@@ -2607,10 +2683,30 @@ export async function runAggregateCount(
   }
 
   // For dynamic `properties.*` group keys, extend to a flat alias.
+  // Flow trigger fields changed from a nested object to scalar properties.
+  // Coalesce both shapes so existing tenant payloads and saved tiles continue
+  // to aggregate correctly during the preview-schema transition.
   let groupKey = groupBy.trim();
   if (groupKey.startsWith("properties.")) {
     const alias = "g_" + groupKey.replace(/\./g, "_");
-    clauses.push(extend(alias, `tostring(${groupKey})`));
+    let expression = `tostring(${groupKey})`;
+    if (
+      groupKey === "properties.trigger" ||
+      groupKey === "properties.trigger.connectorId"
+    ) {
+      expression =
+        "coalesce(tostring(properties.trigger.connectorId), tostring(properties.trigger))";
+    } else if (
+      groupKey === "properties.triggerOperation" ||
+      groupKey === "properties.trigger.operationId"
+    ) {
+      expression =
+        "coalesce(tostring(properties.triggerOperation), tostring(properties.trigger.operationId))";
+    } else if (groupKey === "properties.trigger.connectorDisplayName") {
+      expression =
+        "coalesce(tostring(properties.trigger.connectorDisplayName), tostring(properties.trigger.connectorId), tostring(properties.trigger))";
+    }
+    clauses.push(extend(alias, expression));
     groupKey = alias;
   }
 
@@ -2620,12 +2716,12 @@ export async function runAggregateCount(
     clauses.push(take(opts.topN));
   }
 
-  const res = await runQuery(clauses, { Top: 500, Skip: 0, SkipToken: "" }, cacheOpts);
+  const res = await runQueryAllPages(clauses, 500, 25, cacheOpts);
   if (!res.ok) return res;
 
   return {
     ok: true,
-    data: res.data.items.map((item) => {
+    data: res.data.map((item) => {
       const raw = item as unknown as Record<string, unknown>;
       const props = (item.properties ?? {}) as Record<string, unknown>;
       const rawName = raw[groupKey] ?? props[groupKey];
@@ -2671,18 +2767,7 @@ export async function runTimeSeriesAggregate(
   const lookback = Math.max(1, Math.floor(lookbackDays || 90));
 
   const clauses: Clause[] = [];
-
-  if (spec.resourceTypes.length === 1) {
-    clauses.push(where("type", "==", [`'${spec.resourceTypes[0]}'`]));
-  } else if (spec.resourceTypes.length > 1) {
-    clauses.push(
-      where(
-        "type",
-        "in~",
-        spec.resourceTypes.map((t) => `'${t}'`)
-      )
-    );
-  }
+  appendResourceTypeScope(clauses, spec.resourceTypes);
 
   const emittedTrendExtends = new Set<string>();
   for (const f of spec.filters) {
@@ -2794,17 +2879,7 @@ export async function runCumulativeSeries(
   //    counted in the baseline and NOT double-counted in the first delta
   //    bucket (whose lower bound is `> ago(Nd)` in `runTimeSeriesAggregate`).
   const baselineClauses: Clause[] = [];
-  if (spec.resourceTypes.length === 1) {
-    baselineClauses.push(where("type", "==", [`'${spec.resourceTypes[0]}'`]));
-  } else if (spec.resourceTypes.length > 1) {
-    baselineClauses.push(
-      where(
-        "type",
-        "in~",
-        spec.resourceTypes.map((t) => `'${t}'`)
-      )
-    );
-  }
+  appendResourceTypeScope(baselineClauses, spec.resourceTypes);
 
   const baselineEmittedExtends = new Set<string>();
   for (const f of spec.filters) {

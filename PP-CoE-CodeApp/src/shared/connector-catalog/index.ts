@@ -16,7 +16,9 @@ export {
 
 export type {
   ConnectorEntry,
+  ConnectorCatalogOperation,
   ConnectorCatalog,
   Classification,
   CatalogStatus,
+  CatalogSource,
 } from "./catalog";

@@ -20,7 +20,12 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { AppRow, FlowRow, AgentRow } from "../../../data/inventory";
+import {
+  OWNER_SCANNABLE_APP_TYPES,
+  type AppRow,
+  type FlowRow,
+  type AgentRow,
+} from "../../../data/inventory";
 import type { UserRef } from "../../../data/userEnrichment";
 
 const {
@@ -326,6 +331,9 @@ describe("startScan — happy path", () => {
 
     await startScan();
 
+    expect(listAppsPageMock.mock.calls[0][0]).toEqual({
+      types: OWNER_SCANNABLE_APP_TYPES,
+    });
     const progress = getProgress();
     expect(progress.phase).toBe("completed");
     expect(progress.error).toBeNull();

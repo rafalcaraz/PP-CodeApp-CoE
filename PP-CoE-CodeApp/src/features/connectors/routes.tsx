@@ -7,6 +7,9 @@ import { Route } from "react-router-dom";
 const ConnectorsList = lazy(() =>
   import("./ConnectorsList").then((m) => ({ default: m.ConnectorsList })),
 );
+const ConnectorDetail = lazy(() =>
+  import("./ConnectorDetail").then((m) => ({ default: m.ConnectorDetail })),
+);
 
 /**
  * Returns the `<Route>` elements for the connectors feature.
@@ -21,6 +24,11 @@ export function connectorsRoutes() {
       key="connectors-ConnectorsList--connectors"
       path="/connectors"
       element={<ConnectorsList />}
+    />,
+    <Route
+      key="connectors-ConnectorDetail--connectors--connectorId"
+      path="/connectors/:connectorId"
+      element={<ConnectorDetail />}
     />,
   ];
 }

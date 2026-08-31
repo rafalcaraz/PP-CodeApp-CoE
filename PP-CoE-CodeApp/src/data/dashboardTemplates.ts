@@ -1595,28 +1595,40 @@ function pollingTriggerClauses(): Clause[] {
 
 function powerAppsCoupledClauses(): Clause[] {
   return [
-    extend("__top", "tostring(properties.trigger.operationId)"),
+    extend(
+      "__top",
+      "coalesce(tostring(properties.triggerOperation), tostring(properties.trigger.operationId))"
+    ),
     where("__top", "==", ["'RequestPowerAppV2'"]),
   ];
 }
 
 function emailTriggeredClauses(): Clause[] {
   return [
-    extend("__tcid", "tostring(properties.trigger.connectorId)"),
+    extend(
+      "__tcid",
+      "coalesce(tostring(properties.trigger.connectorId), tostring(properties.trigger))"
+    ),
     where("__tcid", "startswith", ["'office365'"]),
   ];
 }
 
 function sharePointEventClauses(): Clause[] {
   return [
-    extend("__tcid", "tostring(properties.trigger.connectorId)"),
+    extend(
+      "__tcid",
+      "coalesce(tostring(properties.trigger.connectorId), tostring(properties.trigger))"
+    ),
     where("__tcid", "==", ["'sharepointonline'"]),
   ];
 }
 
 function dataverseEventClauses(): Clause[] {
   return [
-    extend("__tcid", "tostring(properties.trigger.connectorId)"),
+    extend(
+      "__tcid",
+      "coalesce(tostring(properties.trigger.connectorId), tostring(properties.trigger))"
+    ),
     where("__tcid", "==", ["'commondataserviceforapps'"]),
   ];
 }
@@ -1924,14 +1936,14 @@ function powerAutomateEstateLayout(): { tabs: DashboardTab[]; tiles: DashboardTi
     flowBarTile("Flows by type", "type", "medium", 6, t.config),
     flowPieTile(
       "Trigger source (connector)",
-      "properties.trigger.connectorDisplayName",
+      "properties.trigger",
       "medium",
       10,
       t.config
     ),
     flowBarTile(
       "Top trigger operations",
-      "properties.trigger.operationId",
+      "properties.triggerOperation",
       "large",
       12,
       t.config

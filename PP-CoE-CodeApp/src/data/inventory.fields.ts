@@ -25,7 +25,11 @@
  * catalog entries cost nothing beyond a missing suggestion.
  */
 
-import { ResourceType, type ResourceTypeValue } from "./inventory";
+import {
+  DEFAULT_QUERY_RESOURCE_TYPES,
+  ResourceType,
+  type ResourceTypeValue,
+} from "./inventory";
 
 /** Best-effort logical type of a field — drives intent-based filtering
  *  (e.g. only `kind: "date"` fields appear in the dateField picker)
@@ -75,6 +79,14 @@ const BASE_FIELDS: InventoryField[] = [
   { path: "properties.displayName", label: "Display name", kind: "string", group: "Identity" },
   { path: "properties.createdAt", label: "Created at", kind: "date", group: "Lifecycle" },
   { path: "properties.createdBy", label: "Created by", kind: "string", group: "Lifecycle" },
+];
+
+/** Connector catalog rows are tenant metadata rather than environment-owned
+ * resources. They keep only the meaningful common identity fields. */
+const CONNECTOR_BASE_FIELDS: InventoryField[] = [
+  { path: "type", label: "Resource type", kind: "string", group: "Identity" },
+  { path: "name", label: "Resource ID", kind: "string", group: "Identity" },
+  { path: "properties.displayName", label: "Display name", kind: "string", group: "Identity" },
 ];
 
 /** Fields shared by *almost* every type — included by default in each
@@ -149,8 +161,10 @@ const FLOW_SHARED: InventoryField[] = [
   { path: "properties.status", label: "Status", kind: "string", group: "Lifecycle", help: "Canonical run-state. Values: Activated, Suspended, Stopped, Started, NotStarted." },
   { path: "properties.state", label: "State (legacy)", kind: "string", group: "Lifecycle", help: "Older / alternate run-state field. Prefer 'status'." },
   { path: "properties.flowTriggerType", label: "Trigger type", kind: "string", group: "Behavior", help: "Instant, Automated, Recurrence, Manual." },
-  { path: "properties.trigger.connectorId", label: "Trigger connector ID", kind: "string", group: "Behavior" },
-  { path: "properties.trigger.operationId", label: "Trigger operation ID", kind: "string", group: "Behavior" },
+  { path: "properties.trigger", label: "Trigger connector ID", kind: "string", group: "Behavior", help: "Current schema shape. Older payloads may return a nested trigger object." },
+  { path: "properties.triggerOperation", label: "Trigger operation ID", kind: "string", group: "Behavior", help: "Current schema shape." },
+  { path: "properties.trigger.connectorId", label: "Trigger connector ID (legacy)", kind: "string", group: "Behavior" },
+  { path: "properties.trigger.operationId", label: "Trigger operation ID (legacy)", kind: "string", group: "Behavior" },
   { path: "properties.workflowEntityId", label: "Workflow entity ID", kind: "string", group: "Behavior", help: "Dataverse-side ID for cross-referencing." },
   { path: "properties.powerPlatformConnectors", label: "Connectors (raw array)", kind: "array", group: "Connectors", help: "Use the 'Connector (any location)' sentinel for filtering." },
 ];
@@ -208,6 +222,18 @@ const ENVIRONMENT_GROUP_FIELDS: InventoryField[] = [
   ...COMMON_LIFECYCLE,
 ];
 
+/** Connector catalog (`microsoft.powerplatformconnector/connectors`) fields.
+ * No environment, owner, location, or lifecycle fields are meaningful. */
+const CONNECTOR_FIELDS: InventoryField[] = [
+  { path: "properties.connectorId", label: "Connector ID", kind: "string", group: "Identity" },
+  { path: "properties.description", label: "Description", kind: "string", group: "Identity" },
+  { path: "properties.publisher", label: "Publisher", kind: "string", group: "Catalog" },
+  { path: "properties.tier", label: "Tier", kind: "string", group: "Catalog", help: "Typically Standard or Premium." },
+  { path: "properties.releaseTag", label: "Release stage", kind: "string", group: "Catalog", help: "For example Preview or Production." },
+  { path: "properties.isDeprecated", label: "Is deprecated", kind: "boolean", group: "Governance" },
+  { path: "properties.operations", label: "Operations (raw array)", kind: "array", group: "Operations", help: "Array of operationId, displayName, description, and method metadata." },
+];
+
 // ---------------------------------------------------------------------------
 // Public map: every resource type → its full field bag (BASE + per-type).
 // ---------------------------------------------------------------------------
@@ -226,6 +252,7 @@ export const FIELDS_BY_RESOURCE_TYPE: Record<ResourceTypeValue, InventoryField[]
   [ResourceType.CopilotStudioAgent]: [...BASE_FIELDS, ...COPILOT_STUDIO_AGENT_FIELDS],
   [ResourceType.Environment]: [...BASE_FIELDS, ...ENVIRONMENT_FIELDS],
   [ResourceType.EnvironmentGroup]: [...BASE_FIELDS, ...ENVIRONMENT_GROUP_FIELDS],
+  [ResourceType.Connector]: [...CONNECTOR_BASE_FIELDS, ...CONNECTOR_FIELDS],
 };
 
 // ---------------------------------------------------------------------------
@@ -281,9 +308,8 @@ const INTENT_ALLOWS_SENTINELS: ReadonlySet<FieldPickerIntent> = new Set<FieldPic
  *  suggestions for a tile editor combobox.
  *
  *  Behavior:
- *  - When `resourceTypes` is empty → union across every type (closest
- *    thing to "show me everything"). Useful for the "all resource
- *    types" tile case.
+ *  - When `resourceTypes` is empty → union across the stable default
+ *    reporting types. Connector catalog fields remain opt-in.
  *  - When non-empty → union across exactly the listed types. We pick
  *    union (not intersection) so the user sees every field they might
  *    plausibly want; the `group` label shows which scope contributes
@@ -302,7 +328,7 @@ export function getFieldSuggestions(
   const types =
     resourceTypes.length > 0
       ? resourceTypes
-      : (Object.keys(FIELDS_BY_RESOURCE_TYPE) as ResourceTypeValue[]);
+      : DEFAULT_QUERY_RESOURCE_TYPES;
 
   // First-occurrence-wins dedup. We rely on insertion order to keep the
   // grouping stable: shared/base fields first, then per-type extras in

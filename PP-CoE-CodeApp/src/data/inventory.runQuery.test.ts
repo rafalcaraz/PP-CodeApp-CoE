@@ -40,6 +40,9 @@ import {
   invalidateInventoryCache,
   listAppsPage,
   listEnvironmentsPage,
+  listFlowsPage,
+  runAggregateCount,
+  ResourceType,
 } from "./inventory";
 
 beforeEach(() => {
@@ -148,6 +151,103 @@ describe("listAppsPage — envelope mapping", () => {
   });
 });
 
+describe("listFlowsPage — trigger schema compatibility", () => {
+  it("maps the current scalar trigger and triggerOperation fields", async () => {
+    queryResourcesMock.mockResolvedValue({
+      success: true,
+      data: {
+        totalRecords: 1,
+        data: [
+          {
+            name: "flow-current",
+            type: "microsoft.powerautomate/cloudflows",
+            properties: {
+              displayName: "Current trigger",
+              trigger: "shared_teams",
+              triggerOperation: "OnNewMessage",
+            },
+          },
+        ],
+      },
+    });
+
+    const result = await listFlowsPage({});
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.data.rows[0].trigger).toEqual({
+      connectorId: "shared_teams",
+      operationId: "OnNewMessage",
+      connectorDisplayName: "Microsoft Teams",
+      operationDisplayName: "",
+    });
+  });
+
+  it("continues to map the observed legacy nested trigger object", async () => {
+    queryResourcesMock.mockResolvedValue({
+      success: true,
+      data: {
+        totalRecords: 1,
+        data: [
+          {
+            name: "flow-legacy",
+            type: "microsoft.powerautomate/cloudflows",
+            properties: {
+              displayName: "Legacy trigger",
+              trigger: {
+                connectorId:
+                  "/providers/Microsoft.PowerApps/apis/shared_sharepointonline",
+                operationId: "OnItemCreated",
+                connectorDisplayName: "SharePoint",
+                operationDisplayName: "When an item is created",
+              },
+            },
+          },
+        ],
+      },
+    });
+
+    const result = await listFlowsPage({});
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.data.rows[0].trigger).toEqual({
+      connectorId: "shared_sharepointonline",
+      operationId: "OnItemCreated",
+      connectorDisplayName: "SharePoint",
+      operationDisplayName: "When an item is created",
+    });
+  });
+
+  it("keeps current non-connector trigger operations when trigger is empty", async () => {
+    queryResourcesMock.mockResolvedValue({
+      success: true,
+      data: {
+        totalRecords: 1,
+        data: [
+          {
+            name: "flow-power-apps",
+            type: "microsoft.powerautomate/cloudflows",
+            properties: {
+              displayName: "Power Apps flow",
+              trigger: "",
+              triggerOperation: "RequestPowerAppV2",
+            },
+          },
+        ],
+      },
+    });
+
+    const result = await listFlowsPage({});
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.data.rows[0].trigger).toEqual({
+      connectorId: "",
+      operationId: "RequestPowerAppV2",
+      connectorDisplayName: "",
+      operationDisplayName: "",
+    });
+  });
+});
+
 // ---------------------------------------------------------------------------
 // Cache behavior — same body returns cached result without a second call
 // ---------------------------------------------------------------------------
@@ -195,6 +295,117 @@ describe("runQuery cache (via listEnvironmentsPage)", () => {
     const second = await listEnvironmentsPage();
     expect(second.ok).toBe(true);
     expect(queryResourcesMock).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("runAggregateCount schema compatibility", () => {
+  it("follows aggregate continuation tokens with the cumulative skip", async () => {
+    queryResourcesMock
+      .mockResolvedValueOnce({
+        success: true,
+        data: {
+          totalRecords: 501,
+          skipToken: "aggregate-page-2",
+          data: [
+            {
+              g_properties_environmentId: "env-1",
+              resourceCount: 3,
+            },
+          ],
+        },
+      })
+      .mockResolvedValueOnce({
+        success: true,
+        data: {
+          totalRecords: 501,
+          skipToken: null,
+          data: [
+            {
+              g_properties_environmentId: "env-501",
+              resourceCount: 1,
+            },
+          ],
+        },
+      });
+
+    const result = await runAggregateCount(
+      {
+        resourceTypes: [ResourceType.CanvasApp],
+        filters: [],
+        orderField: "",
+        orderDirection: "desc",
+        limit: 500,
+      },
+      "properties.environmentId",
+    );
+
+    expect(result).toEqual({
+      ok: true,
+      data: [
+        { name: "env-1", value: 3 },
+        { name: "env-501", value: 1 },
+      ],
+    });
+    expect(queryResourcesMock.mock.calls[1][1].Options).toEqual({
+      Top: 500,
+      Skip: 1,
+      SkipToken: "aggregate-page-2",
+    });
+  });
+
+  it.each([
+    [
+      "properties.trigger",
+      "coalesce(tostring(properties.trigger.connectorId), tostring(properties.trigger))",
+    ],
+    [
+      "properties.triggerOperation",
+      "coalesce(tostring(properties.triggerOperation), tostring(properties.trigger.operationId))",
+    ],
+    [
+      "properties.trigger.connectorId",
+      "coalesce(tostring(properties.trigger.connectorId), tostring(properties.trigger))",
+    ],
+    [
+      "properties.trigger.operationId",
+      "coalesce(tostring(properties.triggerOperation), tostring(properties.trigger.operationId))",
+    ],
+    [
+      "properties.trigger.connectorDisplayName",
+      "coalesce(tostring(properties.trigger.connectorDisplayName), tostring(properties.trigger.connectorId), tostring(properties.trigger))",
+    ],
+  ])("coalesces current and legacy %s fields", async (groupBy, expression) => {
+    queryResourcesMock.mockResolvedValue({
+      success: true,
+      data: { totalRecords: 0, skipToken: null, data: [] },
+    });
+
+    await runAggregateCount(
+      {
+        resourceTypes: [],
+        filters: [],
+        orderField: "",
+        orderDirection: "desc",
+        limit: 500,
+      },
+      groupBy,
+    );
+
+    const body = queryResourcesMock.mock.calls[0][1] as {
+      Clauses: Array<Record<string, unknown>>;
+    };
+    expect(body.Clauses[0]).toMatchObject({
+      $type: "where",
+      FieldName: "type",
+    });
+    expect((body.Clauses[0].Values as string[])).not.toContain(
+      `'${ResourceType.Connector}'`,
+    );
+    expect(body.Clauses).toContainEqual({
+      $type: "extend",
+      FieldName: `g_${groupBy.replace(/\./g, "_")}`,
+      Expression: expression,
+    });
   });
 });
 

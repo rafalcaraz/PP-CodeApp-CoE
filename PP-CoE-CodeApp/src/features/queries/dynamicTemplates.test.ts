@@ -8,7 +8,8 @@ import type { ConnectorCatalog } from "../../shared/connector-catalog";
 function makeCatalog(entries: { id: string; tier: string }[]): ConnectorCatalog {
   return {
     fetchedAt: Date.now(),
-    envId: "env-1",
+    source: "inventory",
+    complete: true,
     entries: new Map(
       entries.map((e) => [
         e.id,
@@ -17,6 +18,10 @@ function makeCatalog(entries: { id: string; tier: string }[]): ConnectorCatalog 
           displayName: e.id,
           tier: e.tier,
           publisher: "Microsoft",
+          description: "",
+          releaseTag: "",
+          isDeprecated: false,
+          operations: [],
         },
       ]),
     ),

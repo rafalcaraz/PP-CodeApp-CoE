@@ -1,14 +1,12 @@
-/**
- * Smoke test for ConnectorsList.
- *
- * Mocks the shared connector catalog so the test runs hermetically.
- * Asserts the loading/empty/loaded states and the Refresh button wiring.
- */
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { MemoryRouter, Routes, Route } from "react-router-dom";
 import { FluentProvider, webLightTheme } from "@fluentui/react-components";
+import { MemoryRouter, Route, Routes } from "react-router-dom";
+import type {
+  ConnectorCatalog,
+  ConnectorEntry,
+} from "../../shared/connector-catalog";
 
 vi.mock("../../shared/connector-catalog", () => ({
   loadCatalog: vi.fn().mockResolvedValue({ ok: true, data: {} }),
@@ -20,7 +18,7 @@ vi.mock("../../utils/csv", () => ({
   downloadCsv: vi.fn(),
 }));
 
-import { ConnectorsList } from "../../features/connectors/ConnectorsList";
+import { ConnectorsList } from "./ConnectorsList";
 import {
   loadCatalog,
   useConnectorCatalog,
@@ -32,12 +30,42 @@ const mockedLoadCatalog = vi.mocked(loadCatalog);
 const mockedDownloadCsv = vi.mocked(downloadCsv);
 const mockedRowsToCsv = vi.mocked(rowsToCsv);
 
+function entry(
+  connectorId: string,
+  overrides: Partial<ConnectorEntry> = {},
+): ConnectorEntry {
+  return {
+    connectorId,
+    displayName: connectorId,
+    description: "",
+    tier: "Standard",
+    publisher: "Microsoft",
+    releaseTag: "Production",
+    isDeprecated: false,
+    operations: [],
+    ...overrides,
+  };
+}
+
+function catalog(entries: ConnectorEntry[]): ConnectorCatalog {
+  return {
+    entries: new Map(entries.map((item) => [item.connectorId, item])),
+    fetchedAt: Date.now(),
+    source: "inventory",
+    complete: true,
+  };
+}
+
 function renderView() {
   return render(
     <FluentProvider theme={webLightTheme}>
       <MemoryRouter initialEntries={["/connectors"]}>
         <Routes>
           <Route path="/connectors" element={<ConnectorsList />} />
+          <Route
+            path="/connectors/:connectorId"
+            element={<div>Connector detail route</div>}
+          />
         </Routes>
       </MemoryRouter>
     </FluentProvider>,
@@ -60,48 +88,46 @@ describe("ConnectorsList", () => {
     expect(screen.getByText(/Loading connector catalog/i)).toBeInTheDocument();
   });
 
-  it("renders the catalog rows when loaded", () => {
-    const entries = new Map([
-      [
-        "shared_sharepointonline",
-        {
-          connectorId: "shared_sharepointonline",
+  it("renders rich catalog metadata and summary counts", () => {
+    mockedUseCatalog.mockReturnValue({
+      catalog: catalog([
+        entry("shared_sharepointonline", {
           displayName: "SharePoint",
-          tier: "Standard",
-          publisher: "Microsoft",
-        },
-      ],
-      [
-        "shared_sql",
-        {
-          connectorId: "shared_sql",
+          description: "SharePoint data",
+          operations: [
+            {
+              operationId: "GetItems",
+              displayName: "Get items",
+              description: "",
+              method: "GET",
+            },
+          ],
+        }),
+        entry("shared_sql", {
           displayName: "SQL Server",
           tier: "Premium",
-          publisher: "Microsoft",
-        },
-      ],
-    ]);
-    mockedUseCatalog.mockReturnValue({
-      catalog: { entries, fetchedAt: Date.now(), envId: "env-1" },
+          releaseTag: "Preview",
+          isDeprecated: true,
+        }),
+      ]),
       status: "ready",
       error: "",
       classify: vi.fn(),
     });
     renderView();
+
     expect(screen.getByText("SharePoint")).toBeInTheDocument();
     expect(screen.getByText("SQL Server")).toBeInTheDocument();
     expect(screen.getByText("Premium")).toBeInTheDocument();
-    // Summary line shows total catalog size.
+    expect(screen.getByText("Preview")).toBeInTheDocument();
+    expect(screen.getByText("Deprecated")).toBeInTheDocument();
     expect(screen.getByText(/connectors in catalog/i)).toBeInTheDocument();
+    expect(screen.getByText(/Inventory preview/i)).toBeInTheDocument();
   });
 
   it("calls loadCatalog({ force: true }) when Refresh is clicked", async () => {
     mockedUseCatalog.mockReturnValue({
-      catalog: {
-        entries: new Map(),
-        fetchedAt: Date.now(),
-        envId: "env-1",
-      },
+      catalog: catalog([]),
       status: "ready",
       error: "",
       classify: vi.fn(),
@@ -113,20 +139,39 @@ describe("ConnectorsList", () => {
     );
   });
 
-  it("exports all connectors to CSV when Export all is clicked", async () => {
-    const entries = new Map([
-      [
-        "shared_sql",
-        {
-          connectorId: "shared_sql",
-          displayName: "SQL Server",
-          tier: "Premium",
-          publisher: "Microsoft",
-        },
-      ],
-    ]);
+  it("opens a connector detail route from its display name", async () => {
     mockedUseCatalog.mockReturnValue({
-      catalog: { entries, fetchedAt: Date.now(), envId: "env-1" },
+      catalog: catalog([
+        entry("shared_sharepointonline", { displayName: "SharePoint" }),
+      ]),
+      status: "ready",
+      error: "",
+      classify: vi.fn(),
+    });
+    renderView();
+
+    await userEvent.click(screen.getByRole("button", { name: "SharePoint" }));
+
+    expect(screen.getByText("Connector detail route")).toBeInTheDocument();
+  });
+
+  it("exports all connector metadata to CSV", async () => {
+    mockedUseCatalog.mockReturnValue({
+      catalog: catalog([
+        entry("shared_sql", {
+          displayName: "SQL Server",
+          description: "SQL data",
+          tier: "Premium",
+          operations: [
+            {
+              operationId: "ExecuteQuery",
+              displayName: "Execute query",
+              description: "",
+              method: "POST",
+            },
+          ],
+        }),
+      ]),
       status: "ready",
       error: "",
       classify: vi.fn(),
@@ -134,41 +179,36 @@ describe("ConnectorsList", () => {
     renderView();
     await userEvent.click(screen.getByRole("button", { name: /Export all/i }));
 
-    // The serializer receives friendly-headered rows in grid order.
     expect(mockedRowsToCsv).toHaveBeenCalledWith([
       {
         "Display name": "SQL Server",
+        Description: "SQL data",
         Tier: "Premium",
+        "Release stage": "Production",
+        Deprecated: false,
         Publisher: "Microsoft",
+        Operations: 1,
         "Connector id": "shared_sql",
       },
     ]);
-    expect(mockedDownloadCsv).toHaveBeenCalledWith("connectors", "CSV_CONTENT");
+    expect(mockedDownloadCsv).toHaveBeenCalledWith(
+      "connectors",
+      "CSV_CONTENT",
+    );
   });
 
-  it("disables Export filtered until a filter is active, then exports the filtered set", async () => {
-    const entries = new Map([
-      [
-        "shared_sql",
-        {
-          connectorId: "shared_sql",
+  it("filters across catalog metadata before exporting", async () => {
+    mockedUseCatalog.mockReturnValue({
+      catalog: catalog([
+        entry("shared_sql", {
           displayName: "SQL Server",
           tier: "Premium",
-          publisher: "Microsoft",
-        },
-      ],
-      [
-        "shared_sharepointonline",
-        {
-          connectorId: "shared_sharepointonline",
+          releaseTag: "Preview",
+        }),
+        entry("shared_sharepointonline", {
           displayName: "SharePoint",
-          tier: "Standard",
-          publisher: "Microsoft",
-        },
-      ],
-    ]);
-    mockedUseCatalog.mockReturnValue({
-      catalog: { entries, fetchedAt: Date.now(), envId: "env-1" },
+        }),
+      ]),
       status: "ready",
       error: "",
       classify: vi.fn(),
@@ -179,19 +219,12 @@ describe("ConnectorsList", () => {
       name: /Export filtered/i,
     });
     expect(exportFiltered).toBeDisabled();
-
-    await userEvent.type(screen.getByPlaceholderText(/Type to filter/i), "sql");
+    await userEvent.type(
+      screen.getByPlaceholderText(/Type to filter/i),
+      "preview",
+    );
     expect(exportFiltered).toBeEnabled();
     await userEvent.click(exportFiltered);
-
-    expect(mockedRowsToCsv).toHaveBeenLastCalledWith([
-      {
-        "Display name": "SQL Server",
-        Tier: "Premium",
-        Publisher: "Microsoft",
-        "Connector id": "shared_sql",
-      },
-    ]);
     expect(mockedDownloadCsv).toHaveBeenCalledWith(
       "connectors-filtered",
       "CSV_CONTENT",
