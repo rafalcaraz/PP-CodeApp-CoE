@@ -46,9 +46,11 @@ in the main inventory store.
 
 > **Exception — explicit tenant scans.** The **Tenant scans** feature
 > (`/tenant-scans`, source at `src/shared/deep-inventory/`) deliberately
-> fans `Get_AdminApps` out across every environment in scope, with
+> fans read-only calls out across every environment in scope, with
 > bounded concurrency (4 envs in flight) and a 10-minute per-env LRU
-> cache. It's exempt from the "no fan-out" half of the rule because:
+> cache. Sources currently include `Get_AdminApps` and a Copilot Studio
+> agent scan backed by the `ListRows-Dataverse` passthrough. It's exempt
+> from the "no fan-out" half of the rule because:
 >
 > 1. It's still **user-initiated** — the user picks the scope and
 >    clicks "Run scan"; nothing fans out passively.
@@ -62,11 +64,76 @@ in the main inventory store.
 > `src/shared/deep-inventory/catalog/` for the curated / observed
 > property catalog that drives the filter and column picker.
 
+### Copilot Studio agent property scans
+
+The `copilot-agents-dataverse` source uses a two-stage scan so Dataverse
+is only queried for relevant agents:
+
+1. Load Copilot Studio agents from the Inventory API for each environment
+   and apply the user-authored **candidate filters**.
+2. Query `bots` and `botcomponents` through `ListRows-Dataverse`, batching
+   candidate bot IDs into FetchXML `in` conditions.
+3. Join the rows into one result per agent, decode `bot.configuration`
+   JSON, parse `botcomponent.data` YAML/OBI, and expose both friendly
+   capability flags and observed raw paths.
+
+Initial friendly detections are memory enabled, external trigger present,
+and recurrence trigger present. These flags describe configuration only;
+the app intentionally does not label capabilities as preview, GA, or
+deprecated. External-trigger detection requires parsed component YAML with
+`kind: ExternalTriggerConfiguration`; `componenttype = 17` is retained as raw
+evidence but is not sufficient to assert the capability.
+
+Observed properties remain broad enough for ad-hoc discovery, but noisy raw
+namespaces (`inventory.*`, component-record payloads, capability evidence
+messages, and diagnostic item details) are hidden from property pickers. They
+remain available in the searchable evidence dialog for audit. Schema-drift
+alerts monitor curated properties, ignore value-only changes, suppress
+low-presence noise for this normalized source, and render as one grouped
+summary instead of one warning per property.
+
+Candidate properties come from the same Copilot Studio agent field catalog
+used by the Queries view. Compatible visual agent queries saved in Queries
+can be loaded directly into the candidate-filter stage. Advanced/raw saved
+queries remain in Queries because their arbitrary clause shapes cannot be
+safely translated into client-side candidate predicates.
+
+Use **Preview candidates** to run only the Inventory API stage before a scan.
+The preview reports the total matching agents and shows up to 20 agent and
+environment names. It does not invoke `ListRows-Dataverse`; a zero-candidate
+preview means the flow will intentionally be skipped until the candidate
+filters are broadened.
+
+The Dataverse calls use the solution flow named **ListRows-Dataverse**
+(`33b80a7f-176c-f111-a826-000d3a34206e`). The bot projection is deliberately
+limited to columns consumed by normalization; optional table columns must not
+be added without checking their logical names against Dataverse metadata.
+
+Cross-environment Dataverse actions run with the passthrough flow's
+connection identity. That identity must have read permission in each
+target environment. A denied environment is reported as a per-environment
+error while the scan continues elsewhere.
+
+The Power Automate List Rows action returns at most one FetchXML page to
+the current app contract. Candidate IDs are chunked to keep normal calls
+small, but if Dataverse still returns `@odata.nextLink`, the source yields
+any records already received and then marks the environment as errored.
+Never interpret that environment's non-matches as complete until the flow
+contract supports continuing the next link.
+
+Implementation:
+
+- `src/shared/deep-inventory/sources/copilotAgentsDataverse.ts`
+- `src/shared/deep-inventory/agent-evidence/`
+- `src/shared/deep-inventory/catalog/curated.agents.ts`
+- `src/features/deep-inventory/data.ts#resolveAgentCandidates`
+
 ## Current connector wiring
 
 | Connector | Connection ref id | Status | Methods used today |
 | --- | --- | --- | --- |
-| **Power Platform for Admins V2** (`powerplatformadminv2`) | `aaedf328-30da-4325-8925-c2d33cce2d38` | ✅ Wired in `power.config.json` | `QueryResources` (bulk inventory via `src/data/inventory.ts`); `GetEnvironmentByIdForUser`, `Get_AdminApp`, `Get_AdminApps`, `GetEnvironmentGroup`, `ListEnvironmentGroupRoleAssignments`, `GetRuleSet`, `ListRuleAssignmentsByEnvironmentGroupId`, `GetRuleBasedPolicyByID` (supplemental enrichments via `src/data/adminEnrichment.ts` and the deep-inventory scan runner at `src/shared/deep-inventory/`) |
+| **Power Platform for Admins V2** (`powerplatformadminv2`) | `aaedf328-30da-4325-8925-c2d33cce2d38` | ✅ Wired in `power.config.json` | `QueryResources` (bulk inventory and Copilot agent scan candidate pruning via `src/data/inventory.ts`); `GetEnvironmentByIdForUser`, `Get_AdminApp`, `Get_AdminApps`, `GetEnvironmentGroup`, `ListEnvironmentGroupRoleAssignments`, `GetRuleSet`, `ListRuleAssignmentsByEnvironmentGroupId`, `GetRuleBasedPolicyByID` (supplemental enrichments via `src/data/adminEnrichment.ts` and the deep-inventory scan runner at `src/shared/deep-inventory/`) |
+| **ListRows-Dataverse flow** (`listrows_dataverse`) | Logic flows connection reference in `power.config.json` | ✅ Wired | Generic environment + entity-set + FetchXML passthrough. Used by the agent Skills viewer and the Tenant Scans Copilot agent source for `bot` / `botcomponent` evidence. |
 | PowerApps for Admins (`shared_powerappsforadmins`) | — | ❌ Not yet added | — |
 | Power Automate for Admins (`shared_powerautomateforadmins`) | — | ❌ Not yet added | — |
 | Power Automate Management (`shared_flowmanagement`) | — | ❌ Not yet added | — |

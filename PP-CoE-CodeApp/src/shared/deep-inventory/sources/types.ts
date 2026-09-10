@@ -9,6 +9,7 @@
  */
 
 import type {
+  DeepQuerySpec,
   DeepRecord,
   DeepRecordIdentity,
   DeepSourceId,
@@ -30,6 +31,25 @@ export interface SourcePage {
   records: DeepRecord[];
   /** When true, this is the last page for the scope unit. */
   isLast: boolean;
+  /** Optional source-specific work counters for richer progress reporting. */
+  stats?: {
+    candidatesConsidered?: number;
+    sourceRecordsProcessed?: number;
+    scopeUnitsSkipped?: number;
+  };
+}
+
+/** Resolve inexpensive Inventory API candidates for one environment. */
+export type CandidateResolver = (
+  spec: DeepQuerySpec,
+  scopeUnit: ScopeUnit,
+  signal: AbortSignal
+) => Promise<DeepRecord[]>;
+
+/** Per-run services and query context available to a source fetcher. */
+export interface SourceFetchContext {
+  spec: DeepQuerySpec;
+  resolveCandidates?: CandidateResolver;
 }
 
 /** Source contract. v1 wires `admin-apps`; future sources for flows /
@@ -52,7 +72,11 @@ export interface DeepSource {
    * iterable is allowed; the runner converts it to a per-scope-unit
    * error event and continues with the next scope unit.
    */
-  fetch(scopeUnit: ScopeUnit, signal: AbortSignal): AsyncIterable<SourcePage>;
+  fetch(
+    scopeUnit: ScopeUnit,
+    signal: AbortSignal,
+    context?: SourceFetchContext
+  ): AsyncIterable<SourcePage>;
   /**
    * Extract canonical identity from a record. Lets the result table
    * link rows back to the existing detail pages without forcing every

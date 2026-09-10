@@ -70,6 +70,20 @@ describe("detectDrift", () => {
     expect(warnings.some((w) => w.kind === "presence-low")).toBe(true);
   });
 
+  it("can suppress low-presence noise for optional normalized properties", () => {
+    const records = [
+      { properties: { embeddedApp: { type: "SharepointFormApp" } } },
+      ...Array.from({ length: 50 }, () => ({ unrelated: 1 })),
+    ];
+    const observed = buildObserved(records);
+
+    const warnings = detectDrift(CURATED, observed, {
+      includePresenceLow: false,
+    });
+
+    expect(warnings.some((warning) => warning.kind === "presence-low")).toBe(false);
+  });
+
   it("flags type-shift when inferred type contradicts curated filter kind", () => {
     // usesPremiumApi declared as boolean — feed string values.
     const records = Array.from({ length: 30 }, () => ({

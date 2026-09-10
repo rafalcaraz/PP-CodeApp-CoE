@@ -11,11 +11,19 @@
 import type { DeepSourceId } from "../catalog/types";
 import type { DeepSource } from "./types";
 import { adminAppsSource } from "./adminApps";
+import { copilotAgentsDataverseSource } from "./copilotAgentsDataverse";
 
-export type { DeepSource, ScopeUnit, SourcePage } from "./types";
+export type {
+  CandidateResolver,
+  DeepSource,
+  ScopeUnit,
+  SourceFetchContext,
+  SourcePage,
+} from "./types";
 
 export const SOURCES: Record<DeepSourceId, DeepSource> = {
   "admin-apps": adminAppsSource,
+  "copilot-agents-dataverse": copilotAgentsDataverseSource,
 };
 
 export { ADMIN_APPS_EXCLUDE_PREFIXES } from "./adminApps";

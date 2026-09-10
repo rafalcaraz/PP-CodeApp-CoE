@@ -60,6 +60,9 @@ export interface DetectDriftOptions {
   presenceThresholdPct?: number;
   /** Override the minimum window-records gate. */
   minWindowRecordsForDrift?: number;
+  /** Include low-presence warnings. Disable for normalized sources where
+   * optional properties are expected and absence is not structural drift. */
+  includePresenceLow?: boolean;
 }
 
 /** Map a curated `FilterSpec.kind` to the set of inferred types that
@@ -110,6 +113,7 @@ export function detectDrift(
   if (observed.windowRecords < minRecords) return [];
   const threshold =
     options.presenceThresholdPct ?? DEFAULT_PRESENCE_THRESHOLD_PCT;
+  const includePresenceLow = options.includePresenceLow !== false;
 
   const missing: DriftWarning[] = [];
   const sparse: DriftWarning[] = [];
@@ -128,7 +132,7 @@ export function detectDrift(
       });
       continue;
     }
-    if (obs.presentInPct < threshold) {
+    if (includePresenceLow && obs.presentInPct < threshold) {
       sparse.push({
         kind: "presence-low",
         property: c,

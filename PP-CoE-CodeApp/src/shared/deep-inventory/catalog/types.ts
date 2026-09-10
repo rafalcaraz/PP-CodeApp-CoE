@@ -30,7 +30,7 @@
  *  returns a bag of rich payload records for a scope unit. v1 ships
  *  only `admin-apps`. Future sources (flows, connections, websites)
  *  add new string literals here. */
-export type DeepSourceId = "admin-apps";
+export type DeepSourceId = "admin-apps" | "copilot-agents-dataverse";
 
 // ---------------------------------------------------------------------------
 // Filter specification
@@ -67,8 +67,11 @@ export type FilterOp =
   | "in"
   | "notIn"
   | "contains"
+  | "notContains"
   | "startsWith"
+  | "notStartsWith"
   | "endsWith"
+  | "notEndsWith"
   | "gt"
   | "gte"
   | "lt"
@@ -220,6 +223,12 @@ export interface DeepQuerySpec {
   source: DeepSourceId;
   /** Where to scan. */
   scope: DeepScanScope;
+  /**
+   * Optional inexpensive filters applied to base Inventory API records before
+   * a source performs richer per-environment enrichment. Sources that don't
+   * use inventory candidates ignore this list.
+   */
+  candidateFilters?: DeepFilterClause[];
   /** Filter clauses (AND). Empty array → "match everything in scope". */
   filters: DeepFilterClause[];
   /** Ordered list of property ids (or paths) to include in result rows.
@@ -288,6 +297,9 @@ export type ScanEvent =
       scopeUnitsDone: number;
       recordsScanned: number;
       matches: number;
+      candidatesConsidered?: number;
+      sourceRecordsProcessed?: number;
+      scopeUnitsSkipped?: number;
     }
   | {
       kind: "scopeUnitError";
@@ -309,6 +321,12 @@ export interface ScanSummary {
   scopeUnitsErrored: number;
   recordsScanned: number;
   matches: number;
+  /** Inventory API candidates that reached source enrichment. */
+  candidatesConsidered?: number;
+  /** Raw source rows processed while producing normalized records. */
+  sourceRecordsProcessed?: number;
+  /** Environments skipped because candidate filtering produced no records. */
+  scopeUnitsSkipped?: number;
   errors: DeepScanScopeError[];
   /** When true, the user cancelled the scan via the abort signal. */
   cancelled: boolean;

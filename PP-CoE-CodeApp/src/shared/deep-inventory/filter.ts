@@ -60,10 +60,16 @@ export function evaluateFilter(
       return !arrayIncludes(clause.value, actual);
     case "contains":
       return stringContains(actual, clause.value);
+    case "notContains":
+      return !stringContains(actual, clause.value);
     case "startsWith":
       return stringStartsWith(actual, clause.value);
+    case "notStartsWith":
+      return !stringStartsWith(actual, clause.value);
     case "endsWith":
       return stringEndsWith(actual, clause.value);
+    case "notEndsWith":
+      return !stringEndsWith(actual, clause.value);
     case "gt":
       return numericCompare(actual, clause.value) > 0;
     case "gte":
@@ -76,6 +82,9 @@ export function evaluateFilter(
 }
 
 function equals(actual: unknown, expected: unknown): boolean {
+  if (Array.isArray(actual)) {
+    return actual.some((item) => equals(item, expected));
+  }
   if (actual === expected) return true;
   if (typeof actual === "boolean" || typeof expected === "boolean") {
     return toBool(actual) === toBool(expected);
@@ -91,6 +100,9 @@ function equals(actual: unknown, expected: unknown): boolean {
 
 function arrayIncludes(haystack: unknown, needle: unknown): boolean {
   if (!Array.isArray(haystack)) return false;
+  if (Array.isArray(needle)) {
+    return needle.some((item) => arrayIncludes(haystack, item));
+  }
   for (const item of haystack) {
     if (equals(needle, item)) return true;
   }
@@ -99,6 +111,9 @@ function arrayIncludes(haystack: unknown, needle: unknown): boolean {
 
 function stringContains(actual: unknown, expected: unknown): boolean {
   if (expected === null || expected === undefined) return false;
+  if (Array.isArray(actual)) {
+    return actual.some((item) => stringContains(item, expected));
+  }
   const a = String(actual).toLowerCase();
   const e = String(expected).toLowerCase();
   if (e === "") return true;
@@ -107,11 +122,17 @@ function stringContains(actual: unknown, expected: unknown): boolean {
 
 function stringStartsWith(actual: unknown, expected: unknown): boolean {
   if (expected === null || expected === undefined) return false;
+  if (Array.isArray(actual)) {
+    return actual.some((item) => stringStartsWith(item, expected));
+  }
   return String(actual).toLowerCase().startsWith(String(expected).toLowerCase());
 }
 
 function stringEndsWith(actual: unknown, expected: unknown): boolean {
   if (expected === null || expected === undefined) return false;
+  if (Array.isArray(actual)) {
+    return actual.some((item) => stringEndsWith(item, expected));
+  }
   return String(actual).toLowerCase().endsWith(String(expected).toLowerCase());
 }
 

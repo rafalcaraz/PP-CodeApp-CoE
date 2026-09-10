@@ -4,6 +4,7 @@ import {
   clearDataverseInflight,
   mockDataverseRunner,
   resetDataverseRunner,
+  retrieveRecordPage,
   retrieveRecords,
   setDataverseRunner,
 } from "./index";
@@ -57,6 +58,28 @@ describe("retrieveRecords - happy path", () => {
     });
     const res = await retrieveRecords(REQ);
     expect(res).toEqual({ ok: true, data: rows });
+  });
+
+  it("preserves OData nextLink through retrieveRecordPage", async () => {
+    const rows = [{ botid: "a" }];
+    runMock.mockResolvedValueOnce({
+      success: true,
+      data: {
+        response: JSON.stringify({
+          value: rows,
+          "@odata.nextLink": "https://example/api/data/v9.2/bots?$skiptoken=abc",
+        }),
+      },
+    });
+
+    const res = await retrieveRecordPage(REQ);
+    expect(res).toEqual({
+      ok: true,
+      data: {
+        records: rows,
+        nextLink: "https://example/api/data/v9.2/bots?$skiptoken=abc",
+      },
+    });
   });
 
   it("returns an empty array when the table has no records", async () => {

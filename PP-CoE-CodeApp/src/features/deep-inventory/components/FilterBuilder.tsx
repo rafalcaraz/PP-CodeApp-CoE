@@ -30,7 +30,6 @@ import {
   Input,
   Option,
   OptionGroup,
-  Switch,
   Text,
   makeStyles,
   tokens,
@@ -97,7 +96,8 @@ export function FilterBuilder({
 
   const updateAt = (idx: number, next: DeepFilterClause): void => {
     const copy = filters.slice();
-    copy[idx] = next;
+    const entry = findEntryByPathOrLabel(catalogGroups, next.path);
+    copy[idx] = entry ? { ...next, path: entry.path } : next;
     onChange(copy);
   };
 
@@ -154,7 +154,7 @@ interface FilterRowProps {
 
 function FilterRow({ clause, catalogGroups, onChange, onRemove }: FilterRowProps) {
   const styles = useStyles();
-  const entry = findEntry(catalogGroups, clause.path);
+  const entry = findEntryByPathOrLabel(catalogGroups, clause.path);
 
   return (
     <div className={styles.row}>
@@ -204,15 +204,17 @@ function PropertyCombobox({
   // that fires on setState-in-useEffect, and keeps typing responsive
   // (setText from onChange doesn't trigger this branch).
   const [text, setText] = useState(expectedText);
+  const [searchText, setSearchText] = useState("");
   const [prevPath, setPrevPath] = useState(clause.path);
   if (clause.path !== prevPath) {
     setPrevPath(clause.path);
     setText(expectedText);
+    setSearchText("");
   }
 
   const filtered = useMemo(
-    () => filterCatalogGroups(catalogGroups, text),
-    [catalogGroups, text]
+    () => filterCatalogGroups(catalogGroups, searchText),
+    [catalogGroups, searchText]
   );
   const hasMatches = filtered.some((g) => g.entries.length > 0);
 
@@ -222,13 +224,21 @@ function PropertyCombobox({
       placeholder="Pick or type a property path…"
       value={text}
       selectedOptions={[clause.path]}
-      onChange={(e) => setText((e.target as HTMLInputElement).value)}
+      onOpenChange={(_e, data) => {
+        if (data.open) setSearchText("");
+      }}
+      onChange={(e) => {
+        const nextText = (e.target as HTMLInputElement).value;
+        setText(nextText);
+        setSearchText(nextText);
+      }}
       onOptionSelect={(_e, data) => {
         const path = data.optionValue;
         if (!path || path.endsWith("-label") || path.endsWith("-empty")) return;
         const next = findEntry(catalogGroups, path);
         if (next) {
           setText(labelFor(next));
+          setSearchText("");
           onChange(defaultClauseFor(next));
         } else {
           // Freeform path the user typed and selected — keep the
@@ -249,9 +259,11 @@ function PropertyCombobox({
           setText(expectedText);
           return;
         }
-        if (trimmed === clause.path) return;
-        const matched = findEntry(catalogGroups, trimmed);
+        if (trimmed === clause.path || trimmed === expectedText) return;
+        const matched = findEntryByPathOrLabel(catalogGroups, trimmed);
         if (matched) {
+          setText(labelFor(matched));
+          setSearchText("");
           onChange(defaultClauseFor(matched));
         } else {
           onChange({ ...clause, path: trimmed });
@@ -307,7 +319,18 @@ function PropertyOptionGroup({ group }: { group: CatalogGroup }) {
 const OPS_BY_KIND: Record<string, FilterOp[]> = {
   boolean: ["eq", "exists", "notExists"],
   enum: ["eq", "ne", "in", "notIn", "exists", "notExists"],
-  string: ["eq", "ne", "contains", "startsWith", "endsWith", "exists", "notExists"],
+  string: [
+    "eq",
+    "ne",
+    "contains",
+    "notContains",
+    "startsWith",
+    "notStartsWith",
+    "endsWith",
+    "notEndsWith",
+    "exists",
+    "notExists",
+  ],
   number: ["eq", "ne", "gt", "gte", "lt", "lte", "exists", "notExists"],
   date: ["eq", "ne", "gt", "gte", "lt", "lte", "exists", "notExists"],
   exists: ["exists", "notExists"],
@@ -319,8 +342,11 @@ const OP_LABELS: Record<FilterOp, string> = {
   in: "is one of",
   notIn: "is not one of",
   contains: "contains",
+  notContains: "does not contain",
   startsWith: "starts with",
+  notStartsWith: "does not start with",
   endsWith: "ends with",
+  notEndsWith: "does not end with",
   gt: ">",
   gte: "≥",
   lt: "<",
@@ -376,11 +402,17 @@ function ValueControl({
 
   if (kind === "boolean") {
     return (
-      <Switch
-        checked={!!clause.value}
-        onChange={(_e, data) => onChange({ ...clause, value: data.checked })}
-        label={clause.value ? "True" : "False"}
-      />
+      <Dropdown
+        aria-label="Boolean value"
+        value={clause.value === false ? "False" : "True"}
+        selectedOptions={[clause.value === false ? "false" : "true"]}
+        onOptionSelect={(_e, data) =>
+          onChange({ ...clause, value: data.optionValue !== "false" })
+        }
+      >
+        <Option value="true">True</Option>
+        <Option value="false">False</Option>
+      </Dropdown>
     );
   }
 
@@ -511,6 +543,22 @@ function findEntry(
     for (const e of g.entries) {
       if (e.path === path) return e;
     }
+  }
+  return undefined;
+}
+
+function findEntryByPathOrLabel(
+  groups: CatalogGroup[],
+  input: string
+): PropertyCatalogEntry | undefined {
+  const normalized = input.trim().toLowerCase();
+  for (const group of groups) {
+    const match = group.entries.find(
+      (entry) =>
+        entry.path.toLowerCase() === normalized ||
+        labelFor(entry).toLowerCase() === normalized
+    );
+    if (match) return match;
   }
   return undefined;
 }

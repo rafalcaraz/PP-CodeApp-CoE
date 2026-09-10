@@ -795,6 +795,7 @@ export interface AgentRow {
   // Roll-up counts
   distinctConnectors: number;
   distinctConnectorOperations: number;
+  distinctFlows?: number;
   connectors: ResourceConnector[];
 }
 
@@ -839,7 +840,29 @@ function propStr(item: ResourceItem, key: string): string {
 
 function propBool(item: ResourceItem, key: string): boolean {
   const props = (item.properties ?? {}) as Record<string, unknown>;
-  return Boolean(props[key]);
+  const exact = props[key];
+  const value =
+    exact !== undefined
+      ? exact
+      : props[
+          Object.keys(props).find(
+            (candidate) => candidate.toLowerCase() === key.toLowerCase(),
+          ) ?? ""
+        ];
+
+  if (typeof value === "boolean") return value;
+  if (typeof value === "number") return value !== 0;
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    return normalized === "true" || normalized === "1" || normalized === "yes";
+  }
+  if (value && typeof value === "object") {
+    const wrapped = value as Record<string, unknown>;
+    const inner = wrapped.Value ?? wrapped.value;
+    if (typeof inner === "boolean") return inner;
+    if (typeof inner === "string") return inner.trim().toLowerCase() === "true";
+  }
+  return false;
 }
 
 function propNum(item: ResourceItem, key: string): number {
@@ -1922,6 +1945,7 @@ export function toAgentRow(item: ResourceItem): AgentRow {
       "capabilitiesCounts",
       "distinctPowerPlatformConnectorsOperations"
     ),
+    distinctFlows: propNestedNum(item, "capabilitiesCounts", "distinctFlows"),
     connectors: readConnectors(item),
   };
 }

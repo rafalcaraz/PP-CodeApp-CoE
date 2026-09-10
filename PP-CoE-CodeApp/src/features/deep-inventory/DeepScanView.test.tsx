@@ -30,18 +30,26 @@ vi.mock("../../shared/deep-inventory/runner", () => ({
   runDeepScan: runDeepScanMock,
 }));
 
-vi.mock("../../data/inventory", () => ({
-  listEnvironments: vi.fn().mockResolvedValue({
-    ok: true,
-    data: [{ id: "env-1", displayName: "Env 1" }],
-  }),
-  listEnvironmentsInGroup: vi.fn().mockResolvedValue({ ok: true, data: [] }),
-  listEnvironmentGroups: vi.fn().mockResolvedValue({ ok: true, data: [] }),
-  listEnvironmentsPage: vi.fn().mockResolvedValue({
-    ok: true,
-    data: { rows: [], skipToken: undefined, totalRecords: 0 },
-  }),
-}));
+vi.mock("../../data/inventory", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../data/inventory")>();
+  return {
+    ...actual,
+    listEnvironments: vi.fn().mockResolvedValue({
+      ok: true,
+      data: [{ id: "env-1", displayName: "Env 1" }],
+    }),
+    listEnvironmentsInGroup: vi.fn().mockResolvedValue({ ok: true, data: [] }),
+    listAgentsPage: vi.fn().mockResolvedValue({
+      ok: true,
+      data: { rows: [], skipToken: undefined, totalRecords: 0 },
+    }),
+    listEnvironmentGroups: vi.fn().mockResolvedValue({ ok: true, data: [] }),
+    listEnvironmentsPage: vi.fn().mockResolvedValue({
+      ok: true,
+      data: { rows: [], skipToken: undefined, totalRecords: 0 },
+    }),
+  };
+});
 
 vi.mock("../../components/EnvironmentPicker", () => ({
   EnvironmentPicker: () => <div data-testid="env-picker">all envs</div>,
@@ -141,5 +149,52 @@ describe("DeepScanView", () => {
     });
 
     expect(runDeepScanMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows inventory candidate filters for the Copilot Studio source", async () => {
+    renderView();
+    const user = userEvent.setup();
+
+    const sourcePicker = screen.getAllByRole("combobox")[0];
+    await user.click(sourcePicker);
+    await user.click(
+      await screen.findByRole("option", {
+        name: /Copilot Studio agents \(Dataverse\)/i,
+      }),
+    );
+
+    expect(
+      screen.getByText(/Candidate filters — Inventory API/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/Match filters — Dataverse evidence/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.getAllByText(/Parsed component kind/i).length,
+    ).toBeGreaterThan(0);
+    expect(screen.queryByText(/^Memory enabled$/i)).not.toBeInTheDocument();
+  });
+
+  it("previews Inventory API candidates without starting a deep scan", async () => {
+    renderView();
+    const user = userEvent.setup();
+
+    await user.click(screen.getAllByRole("combobox")[0]);
+    await user.click(
+      await screen.findByRole("option", {
+        name: /Copilot Studio agents \(Dataverse\)/i,
+      }),
+    );
+    await user.click(
+      screen.getByRole("button", { name: /Preview candidates/i }),
+    );
+
+    expect(
+      await screen.findByText(/0 candidates across 1\/1 environments/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/ListRows-Dataverse has not run/i),
+    ).toBeInTheDocument();
+    expect(runDeepScanMock).not.toHaveBeenCalled();
   });
 });

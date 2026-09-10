@@ -19,12 +19,8 @@
  * — clicking "Run" again replaces it atomically once the new scan
  * starts emitting matches.
  *
- * **No saved-queries integration in v1.** The spec is held in
- * component state; users can re-author the filter to reproduce a
- * scan. The saved-queries plumbing is a small follow-up (extend
- * `savedQueries.ts` with a `kind: 'deep'` discriminator) but kept
- * out of v1 to ship the framework first. The plan document calls
- * this out.
+ * Visual Copilot Studio agent queries saved from the Queries view can
+ * be loaded into the Inventory API candidate-filter stage.
  */
 
 import { useMemo, useState, useSyncExternalStore } from "react";
@@ -40,9 +36,14 @@ import {
   makeStyles,
   tokens,
 } from "@fluentui/react-components";
-import { PlayRegular, ArrowDownloadRegular } from "@fluentui/react-icons";
+import {
+  PlayRegular,
+  ArrowDownloadRegular,
+  EyeRegular,
+} from "@fluentui/react-icons";
 import {
   CURATED_ADMIN_APPS,
+  CURATED_COPILOT_AGENTS,
   type DeepFilterClause,
   type DeepQuerySpec,
   type DeepScanRow,
@@ -57,11 +58,17 @@ import {
   loadObservedSchema,
   mergePropertyCatalog,
   resolveScope,
+  resolveAgentCandidates,
+  previewAgentCandidates,
+  type AgentCandidatePreview,
+  getAgentCandidateCatalog,
+  listSavedAgentCandidateQueries,
   startScan,
   subscribeToScan,
   SOURCES,
   getSource,
   ADMIN_APPS_EXCLUDE_PREFIXES,
+  COPILOT_AGENT_OBSERVED_HIDE_PREFIXES,
 } from "./data";
 import { ScopePicker } from "./components/ScopePicker";
 import { FilterBuilder } from "./components/FilterBuilder";
@@ -119,6 +126,30 @@ const useStyles = makeStyles({
     flexDirection: "column",
     gap: tokens.spacingVerticalXS,
   },
+  inlineError: {
+    color: tokens.colorPaletteRedForeground1,
+    fontSize: tokens.fontSizeBase200,
+  },
+  actionGroup: {
+    display: "flex",
+    alignItems: "center",
+    gap: tokens.spacingHorizontalS,
+    flexWrap: "wrap",
+  },
+  previewPanel: {
+    display: "flex",
+    flexDirection: "column",
+    gap: tokens.spacingVerticalXS,
+    padding: tokens.spacingHorizontalM,
+    backgroundColor: tokens.colorNeutralBackground2,
+    borderRadius: tokens.borderRadiusMedium,
+  },
+  previewList: {
+    marginBlock: 0,
+    paddingInlineStart: tokens.spacingHorizontalXL,
+    color: tokens.colorNeutralForeground2,
+    fontSize: tokens.fontSizeBase200,
+  },
 });
 
 type ScanPhase =
@@ -130,6 +161,9 @@ type ScanPhase =
         scopeUnitsDone: number;
         recordsScanned: number;
         matches: number;
+        candidatesConsidered?: number;
+        sourceRecordsProcessed?: number;
+        scopeUnitsSkipped?: number;
       };
     }
   | {
@@ -140,9 +174,18 @@ type ScanPhase =
         scopeUnitsErrored: number;
         recordsScanned: number;
         matches: number;
+        candidatesConsidered: number;
+        sourceRecordsProcessed: number;
+        scopeUnitsSkipped: number;
         cancelled: boolean;
       };
     };
+
+type CandidatePreviewPhase =
+  | { kind: "idle" }
+  | { kind: "running" }
+  | { kind: "ready"; result: AgentCandidatePreview }
+  | { kind: "error"; message: string };
 
 /** Subscribe to the shared scan store via `useSyncExternalStore`.
  *  The hook re-renders the view whenever the store emits — including
@@ -181,8 +224,14 @@ export function DeepScanView() {
     // BEFORE a new exclude was added still drop out of the picker
     // without forcing the user to clear their localStorage cache.
     const hidePrefixes =
-      sourceId === "admin-apps" ? ADMIN_APPS_EXCLUDE_PREFIXES : undefined;
-    return mergePropertyCatalog(CURATED_ADMIN_APPS, observed, { hidePrefixes });
+      sourceId === "admin-apps"
+        ? ADMIN_APPS_EXCLUDE_PREFIXES
+        : sourceId === "copilot-agents-dataverse"
+          ? COPILOT_AGENT_OBSERVED_HIDE_PREFIXES
+          : undefined;
+    return mergePropertyCatalog(curatedForSource(sourceId), observed, {
+      hidePrefixes,
+    });
     // finishedAt bump invalidates the memo after each scan.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sourceId, finishedAt]);
@@ -190,13 +239,26 @@ export function DeepScanView() {
     () => groupCatalog(catalog, { alwaysIncludeObservedGroup: true }),
     [catalog]
   );
+  const candidateCatalog = useMemo(() => getAgentCandidateCatalog(), []);
+  const candidateCatalogGroups = useMemo(
+    () => groupCatalog(mergePropertyCatalog(candidateCatalog, undefined)),
+    [candidateCatalog]
+  );
+  const savedAgentQueries = useMemo(() => listSavedAgentCandidateQueries(), []);
 
   // ── Drift warnings (derived from the most recent completed scan) ─
   // Pure derivation from the snapshot — no setState-in-effect needed.
   const drift: DriftWarning[] = useMemo(
     () =>
       snapshot.kind === "ready"
-        ? detectDrift(CURATED_ADMIN_APPS, snapshot.summary.observedAfter)
+        ? detectDrift(
+            curatedForSource(snapshot.spec.source),
+          snapshot.summary.observedAfter,
+          {
+            includePresenceLow:
+              snapshot.spec.source !== "copilot-agents-dataverse",
+          },
+        )
         : [],
     [snapshot]
   );
@@ -210,18 +272,64 @@ export function DeepScanView() {
   const [filters, setFilters] = useState<DeepFilterClause[]>(() =>
     seedFiltersForSharepointForm()
   );
+  const [candidateFilters, setCandidateFilters] = useState<DeepFilterClause[]>(
+    []
+  );
+  const [savedCandidateQueryId, setSavedCandidateQueryId] = useState("");
+  const [savedCandidateQueryError, setSavedCandidateQueryError] = useState("");
+  const [candidatePreview, setCandidatePreview] =
+    useState<CandidatePreviewPhase>({ kind: "idle" });
   const [columns, setColumns] = useState<string[]>([]);
 
   const canRun = isScopeValid(scope) && phase.kind !== "scanning";
+  const normalizedCandidateFilters = useMemo(
+    () =>
+      candidateFilters.map((filter) => {
+        const normalizedInput = filter.path.trim().toLowerCase();
+        const entry = candidateCatalog.find(
+          (candidate) =>
+            candidate.path.toLowerCase() === normalizedInput ||
+            candidate.label.toLowerCase() === normalizedInput
+        );
+        return entry ? { ...filter, path: entry.path } : filter;
+      }),
+    [candidateCatalog, candidateFilters]
+  );
 
   const start = (): void => {
     const spec: DeepQuerySpec = {
       source: sourceId,
       scope,
+      candidateFilters: normalizedCandidateFilters,
       filters,
       columns,
     };
-    startScan(spec, resolveScope);
+
+    startScan(spec, resolveScope, {
+      resolveCandidates: resolveAgentCandidates,
+    });
+  };
+
+  const previewCandidates = async (): Promise<void> => {
+    setCandidatePreview({ kind: "running" });
+    try {
+      const result = await previewAgentCandidates(
+        {
+          source: "copilot-agents-dataverse",
+          scope,
+          candidateFilters: normalizedCandidateFilters,
+          filters: [],
+          columns: [],
+        },
+        new AbortController().signal,
+      );
+      setCandidatePreview({ kind: "ready", result });
+    } catch (error) {
+      setCandidatePreview({
+        kind: "error",
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
   };
 
   const cancel = (): void => {
@@ -231,10 +339,17 @@ export function DeepScanView() {
   const changeSource = (id: DeepSourceId): void => {
     if (id === sourceId) return;
     setSourceId(id);
+    setCandidateFilters([]);
+    setSavedCandidateQueryId("");
+    setSavedCandidateQueryError("");
+    setCandidatePreview({ kind: "idle" });
+    setFilters(seedFiltersForSource(id));
+    setColumns([]);
   };
 
   const changeScope = (next: DeepScanScope): void => {
     setScope(next);
+    setCandidatePreview({ kind: "idle" });
   };
 
   // observedTick is now derived above as `finishedAt`. The
@@ -255,8 +370,9 @@ export function DeepScanView() {
         </Text>
         <Text size={300}>
           Find resources by properties the base inventory doesn't carry —{" "}
-          fans out admin-scope calls across environments and filters in real
-          time. Results are cached for 10 minutes per environment.
+          fans out bounded admin or Dataverse calls across environments and
+          filters in real time. Results are cached for 10 minutes per
+          environment.
         </Text>
       </div>
 
@@ -292,8 +408,162 @@ export function DeepScanView() {
             <ScopePicker value={scope} onChange={changeScope} />
           </div>
 
+          {sourceId === "copilot-agents-dataverse" && (
+            <div className={styles.field}>
+              <Text className={styles.fieldLabel}>
+                Candidate filters — Inventory API
+              </Text>
+              <Text size={200}>
+                Applied before Dataverse calls. Leave empty to inspect every
+                Copilot Studio agent in scope.
+              </Text>
+              <Dropdown
+                placeholder="Load a saved Copilot Studio agent query…"
+                value={
+                  savedAgentQueries.find(
+                    (query) => query.id === savedCandidateQueryId
+                  )?.name ?? ""
+                }
+                selectedOptions={
+                  savedCandidateQueryId ? [savedCandidateQueryId] : []
+                }
+                onOptionSelect={(_e, data) => {
+                  const query = savedAgentQueries.find(
+                    (item) => item.id === data.optionValue
+                  );
+                  if (!query) return;
+                  setSavedCandidateQueryId(query.id);
+                  if (query.error) {
+                    setSavedCandidateQueryError(query.error);
+                    return;
+                  }
+                  setSavedCandidateQueryError("");
+                  setCandidateFilters(query.filters);
+                  setCandidatePreview({ kind: "idle" });
+                }}
+              >
+                {savedAgentQueries.map((query) => (
+                  <Option key={query.id} value={query.id} text={query.name}>
+                    {query.name}
+                    {query.error ? " — incompatible filter" : ""}
+                  </Option>
+                ))}
+              </Dropdown>
+              {savedAgentQueries.length === 0 && (
+                <Text size={200}>
+                  No saved visual agent queries yet.{" "}
+                  <Link href="#/queries">Create one in Queries</Link>.
+                </Text>
+              )}
+              {savedCandidateQueryError && (
+                <Text className={styles.inlineError}>
+                  {savedCandidateQueryError}
+                </Text>
+              )}
+              <FilterBuilder
+                catalogGroups={candidateCatalogGroups}
+                filters={candidateFilters}
+                onChange={(next) => {
+                  setCandidateFilters(next);
+                  setSavedCandidateQueryId("");
+                  setSavedCandidateQueryError("");
+                  setCandidatePreview({ kind: "idle" });
+                }}
+              />
+              <div className={styles.actionGroup}>
+                <Button
+                  appearance="secondary"
+                  icon={<EyeRegular />}
+                  onClick={() => void previewCandidates()}
+                  disabled={!isScopeValid(scope) || candidatePreview.kind === "running"}
+                >
+                  {candidatePreview.kind === "running"
+                    ? "Previewing candidates…"
+                    : "Preview candidates"}
+                </Button>
+                <Text size={200}>
+                  Inventory API only — this does not run ListRows-Dataverse.
+                </Text>
+              </div>
+              {candidatePreview.kind === "error" && (
+                <Text className={styles.inlineError}>
+                  Candidate preview failed: {candidatePreview.message}
+                </Text>
+              )}
+              {candidatePreview.kind === "ready" && (
+                <div className={styles.previewPanel}>
+                  <Text weight="semibold">
+                    {candidatePreview.result.count.toLocaleString()} candidate
+                    {candidatePreview.result.count === 1 ? "" : "s"} across{" "}
+                    {candidatePreview.result.environmentsScanned}/
+                    {candidatePreview.result.environmentsTotal} environments.
+                  </Text>
+                  {candidateFilters.length > 0 && (
+                    <Text size={200}>
+                      {candidatePreview.result.countBeforeFilters.toLocaleString()}{" "}
+                      agents were found before applying the candidate filters.
+                    </Text>
+                  )}
+                  {candidatePreview.result.filterDiagnostics.map(
+                    (diagnostic) => (
+                      <Text key={diagnostic.path} size={200}>
+                        {diagnostic.path}:{" "}
+                        {diagnostic.matched.toLocaleString()} matched; observed{" "}
+                        {Object.entries(diagnostic.observedValues)
+                          .map(
+                            ([value, count]) =>
+                              `${value} (${count.toLocaleString()})`,
+                          )
+                          .join(", ") || "no values"}.
+                      </Text>
+                    ),
+                  )}
+                  <Text size={200}>
+                    ListRows-Dataverse has not run. Running the scan will query
+                    Dataverse only for these candidates.
+                  </Text>
+                  {candidatePreview.result.sample.length > 0 && (
+                    <>
+                      <Text size={200}>
+                        Showing the first{" "}
+                        {candidatePreview.result.sample.length.toLocaleString()}:
+                      </Text>
+                      <ul className={styles.previewList}>
+                        {candidatePreview.result.sample.map((candidate) => (
+                          <li
+                            key={`${candidate.environmentId}::${candidate.id}`}
+                          >
+                            {candidate.displayName} —{" "}
+                            {candidate.environmentName}
+                          </li>
+                        ))}
+                      </ul>
+                    </>
+                  )}
+                  {candidatePreview.result.errors.length > 0 && (
+                    <Text className={styles.inlineError}>
+                      {candidatePreview.result.errors.length} environment
+                      {candidatePreview.result.errors.length === 1 ? "" : "s"}{" "}
+                      could not be previewed.
+                    </Text>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
           <div className={styles.field}>
-            <Text className={styles.fieldLabel}>Filters</Text>
+            <Text className={styles.fieldLabel}>
+              {sourceId === "copilot-agents-dataverse"
+                ? "Match filters — Dataverse evidence"
+                : "Filters"}
+            </Text>
+            {sourceId === "copilot-agents-dataverse" && (
+              <Text size={200}>
+                Capability flags describe detected configuration. The app does
+                not classify features as preview or generally available.
+              </Text>
+            )}
             <FilterBuilder
               catalogGroups={catalogGroups}
               filters={filters}
@@ -312,17 +582,23 @@ export function DeepScanView() {
           </div>
 
           <div className={styles.toolbar}>
-            <Button
-              appearance="primary"
-              icon={<PlayRegular />}
-              onClick={start}
-              disabled={!canRun}
-            >
-              Run scan
-            </Button>
+            <div className={styles.actionGroup}>
+              <Button
+                appearance="primary"
+                icon={<PlayRegular />}
+                onClick={start}
+                disabled={!canRun}
+              >
+                Run scan
+              </Button>
+            </div>
             <Link
               onClick={() => {
-                setFilters([]);
+                setFilters(seedFiltersForSource(sourceId));
+                setCandidateFilters([]);
+                setSavedCandidateQueryId("");
+                setSavedCandidateQueryError("");
+                setCandidatePreview({ kind: "idle" });
                 setColumns([]);
                 setScope({ kind: "tenant" });
               }}
@@ -339,6 +615,9 @@ export function DeepScanView() {
           scopeUnitsDone={phase.progress.scopeUnitsDone}
           recordsScanned={phase.progress.recordsScanned}
           matches={phase.progress.matches}
+          candidatesConsidered={phase.progress.candidatesConsidered}
+          sourceRecordsProcessed={phase.progress.sourceRecordsProcessed}
+          scopeUnitsSkipped={phase.progress.scopeUnitsSkipped}
           onCancel={cancel}
         />
       )}
@@ -349,6 +628,9 @@ export function DeepScanView() {
           scopeUnitsDone={snapshot.summary.scopeUnitsDone}
           recordsScanned={snapshot.summary.recordsScanned}
           matches={snapshot.summary.matches}
+          candidatesConsidered={snapshot.summary.candidatesConsidered}
+          sourceRecordsProcessed={snapshot.summary.sourceRecordsProcessed}
+          scopeUnitsSkipped={snapshot.summary.scopeUnitsSkipped}
           summary={snapshot.summary}
         />
       )}
@@ -446,6 +728,9 @@ function snapshotToPhase(snapshot: ScanSnapshot): ScanPhase {
       scopeUnitsErrored: snapshot.summary.scopeUnitsErrored,
       recordsScanned: snapshot.summary.recordsScanned,
       matches: snapshot.summary.matches,
+      candidatesConsidered: snapshot.summary.candidatesConsidered ?? 0,
+      sourceRecordsProcessed: snapshot.summary.sourceRecordsProcessed ?? 0,
+      scopeUnitsSkipped: snapshot.summary.scopeUnitsSkipped ?? 0,
       cancelled: snapshot.summary.cancelled,
     },
   };
@@ -464,4 +749,12 @@ function seedFiltersForSharepointForm(): DeepFilterClause[] {
   ];
 }
 
+function seedFiltersForSource(sourceId: DeepSourceId): DeepFilterClause[] {
+  return sourceId === "admin-apps" ? seedFiltersForSharepointForm() : [];
+}
 
+function curatedForSource(sourceId: DeepSourceId) {
+  return sourceId === "admin-apps"
+    ? CURATED_ADMIN_APPS
+    : CURATED_COPILOT_AGENTS;
+}
