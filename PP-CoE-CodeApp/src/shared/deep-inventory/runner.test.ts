@@ -61,6 +61,7 @@ import { runDeepScan } from "./runner";
 import { cacheClear } from "./cache";
 import type { DeepQuerySpec, ScanEvent } from "./catalog/types";
 import type { ScopeResolver } from "./runner";
+import type { SourceFetchContext } from "./sources/types";
 
 void clearCacheMock;
 
@@ -236,5 +237,56 @@ describe("runDeepScan", () => {
       expect(done.summary.recordsScanned).toBe(1);
       expect(done.summary.matches).toBe(0);
     }
+  });
+
+  it("passes the candidate resolver to sources and isolates cache entries by candidate filters", async () => {
+    const resolveCandidates = vi.fn().mockResolvedValue([]);
+    fakeFetchMock.mockImplementation(
+      async function* (
+        _unit: unknown,
+        _signal: unknown,
+        context: SourceFetchContext,
+      ) {
+        expect(context.resolveCandidates).toBe(resolveCandidates);
+        yield {
+          records: [
+            {
+              name: "app-1",
+              properties: { embeddedApp: { type: "SharepointFormApp" } },
+            },
+          ],
+          isLast: true,
+        };
+      },
+    );
+    fakeIdentifyMock.mockReturnValue({
+      id: "app-1",
+      environmentId: "env-A",
+      displayName: "App 1",
+    });
+    const resolveOne: ScopeResolver = async () => [{ envId: "env-A" }];
+
+    await collect(
+      runDeepScan(
+        {
+          ...SPEC,
+          candidateFilters: [{ path: "isCLIAgent", op: "eq", value: true }],
+        },
+        resolveOne,
+        { resolveCandidates },
+      ),
+    );
+    await collect(
+      runDeepScan(
+        {
+          ...SPEC,
+          candidateFilters: [{ path: "isCLIAgent", op: "eq", value: false }],
+        },
+        resolveOne,
+        { resolveCandidates },
+      ),
+    );
+
+    expect(fakeFetchMock).toHaveBeenCalledTimes(2);
   });
 });

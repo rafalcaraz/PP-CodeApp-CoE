@@ -43,6 +43,11 @@ const MAX_ENTRIES = 200;
 export interface CachedScopeUnit {
   records: DeepRecord[];
   errors: { message: string }[];
+  stats?: {
+    candidatesConsidered: number;
+    sourceRecordsProcessed: number;
+    scopeUnitsSkipped: number;
+  };
   fetchedAt: number;
   expiresAt: number;
 }
@@ -55,9 +60,10 @@ function makeKey(
   source: DeepSourceId,
   scopeKind: string,
   scopeId: string,
-  scopeUnitId: string
+  scopeUnitId: string,
+  queryFingerprint: string
 ): string {
-  return `${source}|${scopeKind}|${scopeId}|${scopeUnitId}`;
+  return `${source}|${scopeKind}|${scopeId}|${scopeUnitId}|${queryFingerprint}`;
 }
 
 const store: CacheStore = { map: new Map() };
@@ -67,6 +73,8 @@ export interface CacheGetParams {
   scopeKind: string;
   scopeId: string;
   scopeUnitId: string;
+  /** Stable fingerprint for source options that affect fetched records. */
+  queryFingerprint?: string;
 }
 
 export function cacheGet(params: CacheGetParams): CachedScopeUnit | undefined {
@@ -74,7 +82,8 @@ export function cacheGet(params: CacheGetParams): CachedScopeUnit | undefined {
     params.source,
     params.scopeKind,
     params.scopeId,
-    params.scopeUnitId
+    params.scopeUnitId,
+    params.queryFingerprint ?? ""
   );
   const entry = store.map.get(key);
   if (!entry) return undefined;
@@ -88,6 +97,7 @@ export function cacheGet(params: CacheGetParams): CachedScopeUnit | undefined {
 export interface CacheSetParams extends CacheGetParams {
   records: DeepRecord[];
   errors: { message: string }[];
+  stats?: CachedScopeUnit["stats"];
   ttlMs?: number;
 }
 
@@ -97,7 +107,8 @@ export function cacheSet(params: CacheSetParams): void {
     params.source,
     params.scopeKind,
     params.scopeId,
-    params.scopeUnitId
+    params.scopeUnitId,
+    params.queryFingerprint ?? ""
   );
   // Insertion-order LRU: when adding a brand-new key past the cap,
   // evict the oldest first. Updates to an existing key implicitly
@@ -109,6 +120,7 @@ export function cacheSet(params: CacheSetParams): void {
   store.map.set(key, {
     records: params.records,
     errors: params.errors,
+    stats: params.stats,
     fetchedAt: Date.now(),
     expiresAt: Date.now() + ttlMs,
   });

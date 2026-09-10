@@ -1,0 +1,20 @@
+{
+  "inventory": {
+    "id": "11111111-1111-1111-1111-111111111111",
+    "schemaName": "contoso_agent"
+  },
+  "bot": {
+    "botid": "11111111-1111-1111-1111-111111111111",
+    "authenticationmode": "Integrated",
+    "configuration": "{\"agentSettings\":{\"enableMemory\":true}}"
+  },
+  "components": [
+    {
+      "botcomponentid": "22222222-2222-2222-2222-222222222222",
+      "componenttype": 17,
+      "name": "Daily trigger",
+      "schemaname": "contoso_daily",
+      "data": "kind: ExternalTriggerConfiguration\nexternalTriggerSource:\n  kind: AgentRecurrenceTrigger"
+    }
+  ]
+}

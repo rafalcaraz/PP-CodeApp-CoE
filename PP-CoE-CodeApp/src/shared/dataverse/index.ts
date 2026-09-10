@@ -7,7 +7,11 @@
  * for wiring the real Power Automate flow once it's added to the project.
  */
 
-export { retrieveRecords, clearDataverseInflight } from "./client";
+export {
+  retrieveRecordPage,
+  retrieveRecords,
+  clearDataverseInflight,
+} from "./client";
 export {
   downloadDataverseFile,
   clearDataverseFileInflight,
@@ -36,6 +40,7 @@ export type {
 export { mockDataverseRunner, MOCK_SOLUTIONS } from "./mock";
 export type {
   DataverseCollectionResponse,
+  DataversePage,
   DataverseRecord,
   DataverseResult,
   DataverseRetrieveRequest,

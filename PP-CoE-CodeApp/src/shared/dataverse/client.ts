@@ -17,12 +17,13 @@
 import { runDataverseFlow } from "./flowContract";
 import type {
   DataverseRecord,
+  DataversePage,
   DataverseResult,
   DataverseRetrieveRequest,
 } from "./types";
 
 /** Module-level in-flight map. Keyed by env + table to merge dupes. */
-const inflight = new Map<string, Promise<DataverseResult<DataverseRecord[]>>>();
+const inflight = new Map<string, Promise<DataverseResult<DataversePage>>>();
 
 /** Reset hook for tests and for an eventual "Refresh" UI affordance. */
 export function clearDataverseInflight(): void {
@@ -38,6 +39,14 @@ export function clearDataverseInflight(): void {
 export async function retrieveRecords(
   req: DataverseRetrieveRequest,
 ): Promise<DataverseResult<DataverseRecord[]>> {
+  const result = await retrieveRecordPage(req);
+  return result.ok ? { ok: true, data: result.data.records } : result;
+}
+
+/** Retrieve one collection page while preserving OData paging metadata. */
+export async function retrieveRecordPage(
+  req: DataverseRetrieveRequest,
+): Promise<DataverseResult<DataversePage>> {
   const key = `${req.environmentId}::${req.pluralName}::${req.fetchXml}`;
   const existing = inflight.get(key);
   if (existing) return existing;
@@ -51,7 +60,7 @@ export async function retrieveRecords(
 
 async function invokeOnce(
   req: DataverseRetrieveRequest,
-): Promise<DataverseResult<DataverseRecord[]>> {
+): Promise<DataverseResult<DataversePage>> {
   let raw: { success: boolean; data?: { response?: string }; error?: unknown };
   try {
     raw = await runDataverseFlow({
@@ -94,15 +103,15 @@ async function invokeOnce(
   const errEnvelope = detectErrorEnvelope(parsed);
   if (errEnvelope) return { ok: false, error: errEnvelope };
 
-  const records = extractRecords(parsed);
-  if (!records) {
+  const page = extractPage(parsed);
+  if (!page) {
     return {
       ok: false,
       error: "Unexpected Dataverse response shape (could not find a records array)",
     };
   }
 
-  return { ok: true, data: records };
+  return { ok: true, data: page };
 }
 
 /**
@@ -119,15 +128,15 @@ async function invokeOnce(
  *
  * Returns `null` only when no array can be recovered.
  */
-function extractRecords(parsed: unknown, depth = 0): DataverseRecord[] | null {
+function extractPage(parsed: unknown, depth = 0): DataversePage | null {
   // Guard against pathological self-referential strings.
   if (depth > 4) return null;
 
-  if (Array.isArray(parsed)) return parsed as DataverseRecord[];
+  if (Array.isArray(parsed)) return { records: parsed as DataverseRecord[] };
 
   if (typeof parsed === "string") {
     try {
-      return extractRecords(JSON.parse(parsed), depth + 1);
+      return extractPage(JSON.parse(parsed), depth + 1);
     } catch {
       return null;
     }
@@ -135,9 +144,16 @@ function extractRecords(parsed: unknown, depth = 0): DataverseRecord[] | null {
 
   if (parsed && typeof parsed === "object") {
     const obj = parsed as Record<string, unknown>;
+    if (Array.isArray(obj.value)) {
+      const nextLink = obj["@odata.nextLink"];
+      return {
+        records: obj.value as DataverseRecord[],
+        nextLink: typeof nextLink === "string" ? nextLink : undefined,
+      };
+    }
     for (const key of ["value", "result"]) {
       if (key in obj) {
-        const inner = extractRecords(obj[key], depth + 1);
+        const inner = extractPage(obj[key], depth + 1);
         if (inner) return inner;
       }
     }

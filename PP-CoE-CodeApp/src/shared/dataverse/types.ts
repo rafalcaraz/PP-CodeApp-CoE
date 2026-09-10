@@ -36,6 +36,14 @@ export interface DataverseCollectionResponse<
   "@odata.nextLink"?: string;
 }
 
+/** One parsed Dataverse collection page with paging metadata preserved. */
+export interface DataversePage<
+  T extends DataverseRecord = DataverseRecord,
+> {
+  records: T[];
+  nextLink?: string;
+}
+
 /** Ergonomic request for a single retrieve. */
 export interface DataverseRetrieveRequest {
   /** Target environment GUID. */

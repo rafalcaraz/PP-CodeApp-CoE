@@ -37,7 +37,7 @@ import type {
   ScanEvent,
   ScanSummary,
 } from "./catalog/types";
-import type { ScopeResolver } from "./runner";
+import type { RunDeepScanOptions, ScopeResolver } from "./runner";
 import { runDeepScan } from "./runner";
 
 /** Snapshot of the active scan's state. Either nothing has ever run,
@@ -55,6 +55,9 @@ export type ScanSnapshot =
         scopeUnitsDone: number;
         recordsScanned: number;
         matches: number;
+        candidatesConsidered?: number;
+        sourceRecordsProcessed?: number;
+        scopeUnitsSkipped?: number;
       };
     }
   | {
@@ -120,7 +123,8 @@ export function getScanSnapshot(): ScanSnapshot {
  *  background — callers don't have to await it. */
 export function startScan(
   spec: DeepQuerySpec,
-  resolveScope: ScopeResolver
+  resolveScope: ScopeResolver,
+  options: Pick<RunDeepScanOptions, "resolveCandidates"> = {}
 ): void {
   // Supersede any in-flight scan.
   if (state.controller) {
@@ -145,18 +149,20 @@ export function startScan(
   emit();
 
   // Fire-and-forget; we'll mutate state.snapshot as events arrive.
-  void drain(spec, resolveScope, controller, startedAt);
+  void drain(spec, resolveScope, controller, startedAt, options);
 }
 
 async function drain(
   spec: DeepQuerySpec,
   resolveScope: ScopeResolver,
   controller: AbortController,
-  startedAt: number
+  startedAt: number,
+  options: Pick<RunDeepScanOptions, "resolveCandidates">
 ): Promise<void> {
   try {
     for await (const event of runDeepScan(spec, resolveScope, {
       signal: controller.signal,
+      resolveCandidates: options.resolveCandidates,
     })) {
       // If a later scan superseded us, stop pushing events into the
       // shared snapshot — they belong to a stale scan.
@@ -231,6 +237,9 @@ function applyEvent(
         scopeUnitsDone: event.scopeUnitsDone,
         recordsScanned: event.recordsScanned,
         matches: event.matches,
+        candidatesConsidered: event.candidatesConsidered,
+        sourceRecordsProcessed: event.sourceRecordsProcessed,
+        scopeUnitsSkipped: event.scopeUnitsSkipped,
       },
     };
     return;

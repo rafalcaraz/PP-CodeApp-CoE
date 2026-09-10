@@ -18,8 +18,11 @@ export interface FetchCondition {
   attribute: string;
   /** OData/FetchXML operator, e.g. `eq`, `ne`, `like`. Defaults to `eq`. */
   operator?: string;
-  /** Comparison value. Omitted for value-less operators (e.g. `null`). */
-  value?: string | number | boolean;
+  /**
+   * Comparison value. Arrays emit child `<value>` nodes for operators such as
+   * `in` and `not-in`. Omitted for value-less operators such as `null`.
+   */
+  value?: string | number | boolean | Array<string | number | boolean>;
 }
 
 /** Spec describing the FetchXML query to build. */
@@ -83,7 +86,15 @@ export function buildFetchXml(spec: FetchXmlSpec): string {
     lines.push('    <filter type="and">');
     for (const c of spec.conditions) {
       const op = c.operator ?? "eq";
-      if (c.value === undefined) {
+      if (Array.isArray(c.value)) {
+        lines.push(
+          `      <condition attribute="${escapeXmlAttr(c.attribute)}" operator="${escapeXmlAttr(op)}">`,
+        );
+        for (const value of c.value) {
+          lines.push(`        <value>${escapeXmlText(String(value))}</value>`);
+        }
+        lines.push("      </condition>");
+      } else if (c.value === undefined) {
         lines.push(
           `      <condition attribute="${escapeXmlAttr(c.attribute)}" operator="${escapeXmlAttr(op)}" />`,
         );
@@ -93,6 +104,13 @@ export function buildFetchXml(spec: FetchXmlSpec): string {
             op,
           )}" value="${escapeXmlAttr(String(c.value))}" />`,
         );
+      }
+
+      function escapeXmlText(value: string): string {
+        return value
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;");
       }
     }
     lines.push("    </filter>");

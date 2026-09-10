@@ -41,6 +41,11 @@ const useStyles = makeStyles({
     color: tokens.colorNeutralForeground3,
     fontSize: tokens.fontSizeBase200,
   },
+  skippedExplanation: {
+    color: tokens.colorNeutralForeground2,
+    fontSize: tokens.fontSizeBase200,
+    fontWeight: tokens.fontWeightSemibold,
+  },
 });
 
 interface ScanProgressProps {
@@ -48,6 +53,9 @@ interface ScanProgressProps {
   scopeUnitsDone: number;
   recordsScanned: number;
   matches: number;
+  candidatesConsidered?: number;
+  sourceRecordsProcessed?: number;
+  scopeUnitsSkipped?: number;
   /** When provided, the runner is still active and the cancel button
    *  is shown. */
   onCancel?: () => void;
@@ -60,6 +68,9 @@ export function ScanProgress({
   scopeUnitsDone,
   recordsScanned,
   matches,
+  candidatesConsidered,
+  sourceRecordsProcessed,
+  scopeUnitsSkipped,
   onCancel,
   summary,
 }: ScanProgressProps) {
@@ -78,8 +89,23 @@ export function ScanProgress({
           {summary.scopeUnitsErrored > 0
             ? `, ${summary.scopeUnitsErrored} env errors`
             : ""}
+          {typeof summary.candidatesConsidered === "number"
+            ? `, ${summary.candidatesConsidered.toLocaleString()} candidates`
+            : ""}
+          {typeof summary.scopeUnitsSkipped === "number" &&
+          summary.scopeUnitsSkipped > 0
+            ? `, ${summary.scopeUnitsSkipped} envs skipped`
+            : ""}
           .
         </Text>
+        {summary.candidatesConsidered === 0 &&
+          (summary.scopeUnitsSkipped ?? 0) > 0 && (
+            <Text className={styles.skippedExplanation}>
+              Dataverse was not called because the Inventory API candidate
+              filters matched no agents. Remove or broaden the candidate
+              filters to inspect agents in this scope.
+            </Text>
+          )}
       </div>
     );
   }
@@ -101,6 +127,16 @@ export function ScanProgress({
       <Text className={styles.counts}>
         Scanning environments — {scopeUnitsDone}/{scopeUnitsTotal} envs,{" "}
         {recordsScanned.toLocaleString()} records, {matches.toLocaleString()} matches
+        {typeof candidatesConsidered === "number"
+          ? `, ${candidatesConsidered.toLocaleString()} candidates`
+          : ""}
+        {typeof sourceRecordsProcessed === "number" &&
+        sourceRecordsProcessed > 0
+          ? `, ${sourceRecordsProcessed.toLocaleString()} Dataverse rows`
+          : ""}
+        {typeof scopeUnitsSkipped === "number" && scopeUnitsSkipped > 0
+          ? `, ${scopeUnitsSkipped} envs skipped`
+          : ""}
       </Text>
     </div>
   );

@@ -72,4 +72,34 @@ describe("evaluateFilter", () => {
     expect(eval0(sample, "properties.missing", "eq", "anything")).toBe(false);
     expect(eval0(sample, "properties.missing", "contains", "x")).toBe(false);
   });
+
+  it("uses any-element semantics for primitive array fields", () => {
+    const payload = {
+      components: {
+        kinds: ["AdaptiveDialog", "ExternalTriggerConfiguration"],
+      },
+    };
+
+    expect(
+      eval0(
+        payload,
+        "components.kinds",
+        "eq",
+        "ExternalTriggerConfiguration",
+      ),
+    ).toBe(true);
+    expect(eval0(payload, "components.kinds", "contains", "trigger")).toBe(true);
+    expect(
+      eval0(payload, "components.kinds", "notContains", "knowledge"),
+    ).toBe(true);
+    expect(
+      eval0(payload, "components.kinds", "notStartsWith", "external"),
+    ).toBe(false);
+    expect(
+      eval0(payload, "components.kinds", "in", [
+        "KnowledgeSourceConfiguration",
+        "AdaptiveDialog",
+      ]),
+    ).toBe(true);
+  });
 });

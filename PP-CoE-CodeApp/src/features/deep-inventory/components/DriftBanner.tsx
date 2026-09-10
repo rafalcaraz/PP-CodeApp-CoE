@@ -32,27 +32,43 @@ interface DriftBannerProps {
 export function DriftBanner({ warnings }: DriftBannerProps) {
   const styles = useStyles();
   if (warnings.length === 0) return null;
+  const counts = {
+    missing: warnings.filter((warning) => warning.kind === "missing").length,
+    sparse: warnings.filter((warning) => warning.kind === "presence-low").length,
+    typeShift: warnings.filter((warning) => warning.kind === "type-shift").length,
+  };
+  const summary = [
+    counts.missing > 0
+      ? `${counts.missing} watched ${plural(counts.missing, "property", "properties")} missing`
+      : "",
+    counts.typeShift > 0
+      ? `${counts.typeShift} ${plural(counts.typeShift, "type", "types")} changed`
+      : "",
+    counts.sparse > 0
+      ? `${counts.sparse} rarely observed`
+      : "",
+  ]
+    .filter(Boolean)
+    .join(" · ");
+  const affected = warnings
+    .slice(0, 5)
+    .map((warning) => warning.property.label)
+    .join(", ");
+
   return (
     <div className={styles.root}>
-      {warnings.map((w, idx) => (
-        <MessageBar key={`${w.kind}:${w.property.id}:${idx}`} intent="warning">
-          <MessageBarBody>
-            <MessageBarTitle>Schema drift — {titleFor(w.kind)}</MessageBarTitle>
-            {w.message}
-          </MessageBarBody>
-        </MessageBar>
-      ))}
+      <MessageBar intent="warning">
+        <MessageBarBody>
+          <MessageBarTitle>Schema drift — {summary}</MessageBarTitle>
+          Watched curated properties affected: {affected}
+          {warnings.length > 5 ? ` and ${warnings.length - 5} more` : ""}.
+          Discovered values alone do not create drift alerts.
+        </MessageBarBody>
+      </MessageBar>
     </div>
   );
 }
 
-function titleFor(kind: DriftWarning["kind"]): string {
-  switch (kind) {
-    case "missing":
-      return "missing curated property";
-    case "presence-low":
-      return "rarely observed";
-    case "type-shift":
-      return "type changed";
-  }
+function plural(count: number, singular: string, pluralValue: string): string {
+  return count === 1 ? singular : pluralValue;
 }

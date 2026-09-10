@@ -54,7 +54,11 @@ import type {
 } from "./catalog/types";
 import { cacheGet, cacheSet } from "./cache";
 import { evaluateFilter } from "./filter";
-import { getSource, type ScopeUnit } from "./sources";
+import {
+  getSource,
+  type CandidateResolver,
+  type ScopeUnit,
+} from "./sources";
 
 /** Default upper bound on concurrent in-flight scope-unit fetches.
  *  Tuned to stay under the connector's per-tenant rate limit while
@@ -83,6 +87,8 @@ export interface RunDeepScanOptions {
   /** Override the per-source flatten options used by introspection.
    *  Defaults to the source's own `flattenOptions`. */
   flattenOptions?: FlattenOptions;
+  /** Optional Inventory API candidate resolver used by enrichment sources. */
+  resolveCandidates?: CandidateResolver;
 }
 
 /**
@@ -129,6 +135,9 @@ export async function* runDeepScan(
       scopeUnitsErrored: 0,
       recordsScanned: 0,
       matches: 0,
+      candidatesConsidered: 0,
+      sourceRecordsProcessed: 0,
+      scopeUnitsSkipped: 0,
       errors: [
         {
           scopeUnitId: "<scope-resolve>",
@@ -149,6 +158,9 @@ export async function* runDeepScan(
       scopeUnitsErrored: 0,
       recordsScanned: 0,
       matches: 0,
+      candidatesConsidered: 0,
+      sourceRecordsProcessed: 0,
+      scopeUnitsSkipped: 0,
       errors: [],
       cancelled: true,
       observedAfter: loadObservedSchema(spec.source),
@@ -194,6 +206,7 @@ export async function* runDeepScan(
       scopeKind,
       scopeId,
       signal,
+      resolveCandidates: options.resolveCandidates,
     })
       .then((result) => {
         queue.push(result);
@@ -208,6 +221,7 @@ export async function* runDeepScan(
           records: [],
           errors: [{ message }],
           fromCache: false,
+          stats: emptyStats(),
         });
       })
       .finally(() => {
@@ -262,6 +276,15 @@ export async function* runDeepScan(
       }
 
       // Project + filter every record.
+      summary.candidatesConsidered =
+        (summary.candidatesConsidered ?? 0) +
+        result.stats.candidatesConsidered;
+      summary.sourceRecordsProcessed =
+        (summary.sourceRecordsProcessed ?? 0) +
+        result.stats.sourceRecordsProcessed;
+      summary.scopeUnitsSkipped =
+        (summary.scopeUnitsSkipped ?? 0) + result.stats.scopeUnitsSkipped;
+
       for (const record of result.records) {
         summary.recordsScanned += 1;
         const flat = flatten(record, flattenOptions);
@@ -284,6 +307,9 @@ export async function* runDeepScan(
         scopeUnitsDone: summary.scopeUnitsDone,
         recordsScanned: summary.recordsScanned,
         matches: summary.matches,
+        candidatesConsidered: summary.candidatesConsidered,
+        sourceRecordsProcessed: summary.sourceRecordsProcessed,
+        scopeUnitsSkipped: summary.scopeUnitsSkipped,
       };
 
       // Top up the in-flight pool now that we have headroom.
@@ -313,6 +339,11 @@ interface ScopeUnitResult {
   records: DeepRecord[];
   errors: { message: string }[];
   fromCache: boolean;
+  stats: {
+    candidatesConsidered: number;
+    sourceRecordsProcessed: number;
+    scopeUnitsSkipped: number;
+  };
 }
 
 interface FetchOneScopeUnitParams {
@@ -322,12 +353,22 @@ interface FetchOneScopeUnitParams {
   scopeKind: string;
   scopeId: string;
   signal: AbortSignal;
+  resolveCandidates?: CandidateResolver;
 }
 
 async function fetchOneScopeUnit(
   params: FetchOneScopeUnitParams
 ): Promise<ScopeUnitResult> {
-  const { unit, source, spec, scopeKind, scopeId, signal } = params;
+  const {
+    unit,
+    source,
+    spec,
+    scopeKind,
+    scopeId,
+    signal,
+    resolveCandidates,
+  } = params;
+  const queryFingerprint = fingerprintCandidateFilters(spec);
 
   // Cache hit short-circuits.
   if (!spec.forceRefresh) {
@@ -336,6 +377,7 @@ async function fetchOneScopeUnit(
       scopeKind,
       scopeId,
       scopeUnitId: unit.envId,
+      queryFingerprint,
     });
     if (cached) {
       return {
@@ -343,17 +385,25 @@ async function fetchOneScopeUnit(
         records: cached.records,
         errors: cached.errors,
         fromCache: true,
+        stats: cached.stats ?? emptyStats(),
       };
     }
   }
 
   const records: DeepRecord[] = [];
   const errors: { message: string }[] = [];
+  const stats = emptyStats();
 
   try {
-    for await (const page of source.fetch(unit, signal)) {
+    for await (const page of source.fetch(unit, signal, {
+      spec,
+      resolveCandidates,
+    })) {
       if (signal.aborted) break;
       records.push(...page.records);
+      stats.candidatesConsidered += page.stats?.candidatesConsidered ?? 0;
+      stats.sourceRecordsProcessed += page.stats?.sourceRecordsProcessed ?? 0;
+      stats.scopeUnitsSkipped += page.stats?.scopeUnitsSkipped ?? 0;
       if (page.isLast) break;
     }
   } catch (err) {
@@ -369,12 +419,26 @@ async function fetchOneScopeUnit(
       scopeKind,
       scopeId,
       scopeUnitId: unit.envId,
+      queryFingerprint,
       records,
       errors,
+      stats,
     });
   }
 
-  return { unit, records, errors, fromCache: false };
+  return { unit, records, errors, fromCache: false, stats };
+}
+
+function fingerprintCandidateFilters(spec: DeepQuerySpec): string {
+  return JSON.stringify(spec.candidateFilters ?? []);
+}
+
+function emptyStats(): ScopeUnitResult["stats"] {
+  return {
+    candidatesConsidered: 0,
+    sourceRecordsProcessed: 0,
+    scopeUnitsSkipped: 0,
+  };
 }
 
 function matchesAllFilters(

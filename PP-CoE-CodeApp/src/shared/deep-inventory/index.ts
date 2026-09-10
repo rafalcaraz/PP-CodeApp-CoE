@@ -28,10 +28,18 @@ export type {
   ScanEvent,
   ScanSummary,
 } from "./catalog/types";
-export type { ScopeUnit } from "./sources";
+export type {
+  CandidateResolver,
+  ScopeUnit,
+  SourceFetchContext,
+} from "./sources";
 
 // ── Catalog ──────────────────────────────────────────────────────────
 export { CURATED_ADMIN_APPS } from "./catalog/curated.apps";
+export {
+  CURATED_AGENT_CANDIDATES,
+  CURATED_COPILOT_AGENTS,
+} from "./catalog/curated.agents";
 export {
   mergePropertyCatalog,
   groupCatalog,
@@ -58,8 +66,14 @@ export {
 } from "./catalog/flatten";
 
 // ── Runner / sources / cache ─────────────────────────────────────────
-export { runDeepScan, type ScopeResolver, MAX_CONCURRENT_SCOPE_UNITS } from "./runner";
+export {
+  runDeepScan,
+  type RunDeepScanOptions,
+  type ScopeResolver,
+  MAX_CONCURRENT_SCOPE_UNITS,
+} from "./runner";
 export { SOURCES, getSource, ADMIN_APPS_EXCLUDE_PREFIXES } from "./sources";
+export { COPILOT_AGENT_OBSERVED_HIDE_PREFIXES } from "./sources/copilotAgentsDataverse";
 export {
   subscribeToScan,
   getScanSnapshot,
@@ -78,3 +92,24 @@ export {
 // ── Filter eval (mostly used internally; exposed so tests + advanced
 //    callers can evaluate clauses without the runner) ────────────────
 export { evaluateFilter } from "./filter";
+
+// ── Copilot Studio agent evidence normalization ─────────────────────
+export {
+  AGENT_CAPABILITY_REGISTRY,
+  decodeBotConfiguration,
+  detectCapabilities,
+  normalizeAgentEvidence,
+  normalizeComponents,
+} from "./agent-evidence";
+export type {
+  AgentEvidenceCapabilities,
+  AgentEvidenceComponents,
+  AgentEvidenceDiagnostic,
+  AgentEvidenceDiagnostics,
+  CapabilityDetection,
+  CapabilityDetector,
+  NormalizeAgentEvidenceInput,
+  NormalizedAgentEvidence,
+  OpenRecord,
+  ParsedComponentEvidence,
+} from "./agent-evidence";

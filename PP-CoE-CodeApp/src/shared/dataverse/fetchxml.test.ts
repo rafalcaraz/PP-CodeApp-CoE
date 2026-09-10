@@ -54,4 +54,22 @@ describe("buildFetchXml", () => {
     expect(xml).toContain('top="50"');
     expect(xml).toContain('<order attribute="friendlyname" descending="true" />');
   });
+
+  it("emits child values for an in condition", () => {
+    const xml = buildFetchXml({
+      entity: "bot",
+      attributes: ["botid"],
+      conditions: [
+        {
+          attribute: "botid",
+          operator: "in",
+          value: ["agent-1", "agent<&2"],
+        },
+      ],
+    });
+
+    expect(xml).toContain('<condition attribute="botid" operator="in">');
+    expect(xml).toContain("<value>agent-1</value>");
+    expect(xml).toContain("<value>agent&lt;&amp;2</value>");
+  });
 });
