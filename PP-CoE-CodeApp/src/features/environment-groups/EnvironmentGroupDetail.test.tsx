@@ -53,6 +53,7 @@ function groupRow(overrides: Partial<Record<string, unknown>> = {}) {
     description: "Top-tier production environments",
     location: "unitedstates",
     createdAt: "2024-01-01T00:00:00Z",
+    lastModifiedAt: "2026-10-01T10:00:00Z",
     ...overrides,
   };
 }
@@ -99,6 +100,8 @@ describe("EnvironmentGroupDetail smoke", () => {
     expect(getEnvironmentGroup).toHaveBeenCalledWith("grp-1");
     expect(listEnvironmentsInGroup).toHaveBeenCalledWith("grp-1");
     expect(countResourcesByTypeForGroup).toHaveBeenCalledWith("grp-1");
+    expect(screen.getByText("Last modified")).toBeInTheDocument();
+    expect(screen.getByText(/Oct 1, 2026|10\/1\/2026|1\/10\/2026/)).toBeInTheDocument();
   });
 
   it("renders the missing-state EmptyPane when getEnvironmentGroup returns ok:true but no data", async () => {

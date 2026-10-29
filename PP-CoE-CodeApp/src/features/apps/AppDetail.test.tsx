@@ -136,6 +136,18 @@ describe("AppDetail smoke", () => {
 describe("AppDetail — admin details enrichment wiring", () => {
   beforeEach(() => vi.clearAllMocks());
 
+  it.each([
+    ["microsoft.powerapps/codeapps", "vibeApp", "Vibe app"],
+    ["microsoft.powerapps/apps", "microsoftApp", "Managed app"],
+  ])("labels %s / %s correctly", async (type, subType, label) => {
+    vi.mocked(getApp).mockResolvedValue({
+      ok: true,
+      data: { row: appRow({ type, subType }) as never, raw: {} },
+    });
+    renderAppDetail();
+    expect(await screen.findByText(label)).toBeInTheDocument();
+  });
+
   it("clicking 'Load admin details' calls getAppAdminDetails(envId, appId)", async () => {
     vi.mocked(getApp).mockResolvedValue({
       ok: true,

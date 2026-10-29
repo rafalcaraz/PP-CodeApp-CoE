@@ -25,6 +25,7 @@ import {
   Text,
   createTableColumn,
   makeStyles,
+  mergeClasses,
   tokens,
   type SelectTabData,
   type SelectTabEvent,
@@ -39,6 +40,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { ErrorPane, LoadingPane } from "../../components/Status";
 import { Meta, useDetailStyles } from "../../components/detail";
 import { downloadCsv, rowsToCsv } from "../../utils/csv";
+import { ConnectorOperationUsage, type ConnectorOperationUsageHandle } from "./ConnectorOperationUsage";
 import {
   exportConnectorUsage,
   getConnectorDetail,
@@ -55,6 +57,17 @@ import {
 const PAGE_SIZE = 15;
 
 const usePageStyles = makeStyles({
+  layout: {
+    minWidth: 0,
+    "& > *": { minWidth: 0 },
+    "@media (max-width: 900px)": {
+      gridTemplateColumns: "minmax(0, 1fr)",
+    },
+  },
+  breadcrumbItem: {
+    minWidth: 0,
+    flexShrink: 1,
+  },
   overview: {
     maxWidth: "75ch",
     color: tokens.colorNeutralForeground2,
@@ -90,6 +103,9 @@ const usePageStyles = makeStyles({
     maxHeight: "420px",
     overflow: "auto",
   },
+  operationsGrid: {
+    minWidth: "900px",
+  },
   usageHeader: {
     display: "flex",
     alignItems: "center",
@@ -108,6 +124,7 @@ const usePageStyles = makeStyles({
     flexDirection: "column",
     gap: tokens.spacingVerticalM,
     padding: `${tokens.spacingVerticalM} ${tokens.spacingHorizontalL} ${tokens.spacingVerticalL}`,
+    overflowX: "auto",
   },
   pager: {
     display: "flex",
@@ -129,7 +146,7 @@ const usePageStyles = makeStyles({
   },
   cellText: {
     display: "block",
-    maxWidth: "320px",
+    maxWidth: "100%",
     overflow: "hidden",
     textOverflow: "ellipsis",
     whiteSpace: "nowrap",
@@ -215,7 +232,7 @@ function usageToCsvRow(
           ? "Flow"
           : "Agent",
     Name: record.row.displayName || record.row.id,
-    "Resource type": shortResourceType(record.row.type),
+    "Resource type": shortResourceType(record.row.type, record.kind === "apps" ? record.row.subType : undefined),
     Environment: record.row.environmentName,
     "Environment ID": record.row.environmentId,
     Owner: record.row.ownerDisplayName || record.row.ownerId,
@@ -253,6 +270,7 @@ export function ConnectorDetail() {
   const [tabs, setTabs] = useState(emptyTabs);
   const [exporting, setExporting] = useState<"active" | "all" | null>(null);
   const [exportError, setExportError] = useState("");
+  const operationUsageRef = useRef<ConnectorOperationUsageHandle>(null);
   const connectorIdRef = useRef(connectorId);
 
   useEffect(() => {
@@ -477,7 +495,7 @@ export function ConnectorDetail() {
       createTableColumn<ConnectorUsageRecord>({
         columnId: "type",
         renderHeaderCell: () => "Type",
-        renderCell: (record) => shortResourceType(record.row.type),
+        renderCell: (record) => shortResourceType(record.row.type, record.kind === "apps" ? record.row.subType : undefined),
       }),
       createTableColumn<ConnectorUsageRecord>({
         columnId: "environment",
@@ -547,6 +565,16 @@ export function ConnectorDetail() {
         ),
       }),
       createTableColumn({
+        columnId: "usage",
+        renderHeaderCell: () => "Find resources",
+        renderCell: (operation) => (
+          <Button size="small" aria-label={`Find usage of ${operation.operationId}`}
+            onClick={() => operationUsageRef.current?.find(operation.operationId)}>
+            Find usage
+          </Button>
+        ),
+      }),
+      createTableColumn({
         columnId: "description",
         renderHeaderCell: () => "Description",
         renderCell: (operation) => operation.description || "—",
@@ -556,7 +584,7 @@ export function ConnectorDetail() {
   );
 
   return (
-    <div className={detailStyles.root}>
+    <div className={mergeClasses(detailStyles.root, page.layout)}>
       <div className={detailStyles.colFull}>
         <Breadcrumb size="medium">
           <BreadcrumbItem>
@@ -565,8 +593,8 @@ export function ConnectorDetail() {
             </BreadcrumbButton>
           </BreadcrumbItem>
           <BreadcrumbDivider />
-          <BreadcrumbItem>
-            <BreadcrumbButton current>
+          <BreadcrumbItem className={page.breadcrumbItem}>
+            <BreadcrumbButton current className={page.cellText}>
               {detail.kind === "ready"
                 ? detail.data.entry.displayName
                 : connectorId}
@@ -640,7 +668,7 @@ export function ConnectorDetail() {
           <Card className={detailStyles.colFull}>
             <div className={page.stats}>
               <Stat
-                label="Total usage"
+                label="Reported usage"
                 value={
                   summary.kind === "ready" ? summary.data.total : undefined
                 }
@@ -728,7 +756,8 @@ export function ConnectorDetail() {
               }
               description={
                 <Text size={200}>
-                  Actions and triggers exposed by this connector.
+                  Available actions and triggers, not evidence that a resource uses them.
+                  Select Find usage to inspect reported operation references.
                 </Text>
               }
             />
@@ -742,6 +771,7 @@ export function ConnectorDetail() {
             ) : (
               <div className={page.operations}>
                 <DataGrid
+                  className={page.operationsGrid}
                   items={detail.data.entry.operations}
                   columns={operationColumns}
                   getRowId={(operation) => operation.operationId}
@@ -770,7 +800,21 @@ export function ConnectorDetail() {
             )}
           </Card>
 
+          <div className={detailStyles.colFull}>
+            <ConnectorOperationUsage
+              key={connectorId}
+              entry={detail.data.entry}
+              ref={operationUsageRef}
+            />
+          </div>
+
           <Card className={detailStyles.colFull}>
+            <CardHeader
+              header={<Text weight="semibold">Connector references</Text>}
+              description={<Text size={200}>
+                All reported references, including data sources without specific operation IDs.
+              </Text>}
+            />
             <div className={page.usageHeader}>
               <TabList
                 selectedValue={activeTab}
@@ -823,6 +867,14 @@ export function ConnectorDetail() {
             </div>
             <Divider />
             <div className={page.usageBody}>
+              <Text size={200} className={page.muted}>
+                Reported inventory usage only, not a complete dependency audit.
+                Code and vibe apps, managed apps, and App Builder apps are not
+                covered by the current connector-usage preview. Legacy usage is
+                shown when available. Model-driven apps rarely report connectors;
+                embedded canvas-page usage is recorded on the canvas page.
+                Built-in Power Automate actions, including HTTP, are not captured.
+              </Text>
               {exportError && (
                 <MessageBar intent="error">
                   <MessageBarBody>

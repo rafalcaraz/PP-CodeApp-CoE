@@ -30,6 +30,8 @@ import {
 import {
   ArrowClockwiseRegular,
   ArrowDownloadRegular,
+  ChevronLeftRegular,
+  ChevronRightRegular,
 } from "@fluentui/react-icons";
 import { useNavigate } from "react-router-dom";
 import { LoadingPane, ErrorPane, EmptyPane } from "../../components/Status";
@@ -39,6 +41,8 @@ import {
   useConnectorCatalog,
   type ConnectorEntry,
 } from "./data";
+
+const PAGE_SIZE = 25;
 
 /** Maps a connector entry to a CSV row with friendly, stable column
  *  headers matching the on-screen grid order. */
@@ -62,6 +66,7 @@ const useStyles = makeStyles({
     display: "flex",
     flexDirection: "column",
     gap: tokens.spacingVerticalL,
+    minWidth: 0,
   },
   header: {
     display: "flex",
@@ -92,21 +97,27 @@ const useStyles = makeStyles({
   },
   summary: {
     display: "flex",
+    flexWrap: "wrap",
     alignItems: "center",
     gap: tokens.spacingHorizontalM,
     color: tokens.colorNeutralForeground3,
   },
   refreshGroup: {
     display: "flex",
+    flexWrap: "wrap",
     alignItems: "center",
     gap: tokens.spacingHorizontalS,
   },
   connectorCell: {
     minWidth: 0,
-    maxWidth: "320px",
+    width: "100%",
+    overflow: "hidden",
   },
   connectorName: {
     display: "block",
+    width: "100%",
+    maxWidth: "100%",
+    textAlign: "left",
     overflow: "hidden",
     textOverflow: "ellipsis",
     whiteSpace: "nowrap",
@@ -117,6 +128,36 @@ const useStyles = makeStyles({
     overflow: "hidden",
     textOverflow: "ellipsis",
     whiteSpace: "nowrap",
+  },
+  gridScroll: {
+    overflowX: "auto",
+  },
+  grid: {
+    display: "block",
+    minWidth: "1200px",
+  },
+  gridGroup: {
+    display: "block",
+  },
+  gridRow: {
+    display: "grid",
+    gridTemplateColumns: "minmax(280px, 2fr) 120px 110px 110px 110px minmax(150px, 1fr) minmax(220px, 1fr)",
+  },
+  gridCell: {
+    minWidth: 0,
+    overflow: "hidden",
+    overflowWrap: "anywhere",
+  },
+  pager: {
+    display: "flex",
+    flexWrap: "wrap",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: tokens.spacingHorizontalM,
+  },
+  pagerButtons: {
+    display: "flex",
+    gap: tokens.spacingHorizontalS,
   },
 });
 
@@ -144,6 +185,7 @@ function ConnectorNameCell({ row }: { row: ConnectorEntry }) {
     <div className={styles.connectorCell}>
       <Link
         className={styles.connectorName}
+        title={row.displayName}
         onClick={() =>
           navigate(`/connectors/${encodeURIComponent(row.connectorId)}`)
         }
@@ -240,8 +282,14 @@ export function ConnectorsList() {
   const { catalog, status, error } = useConnectorCatalog();
   const [filterText, setFilterText] = useState("");
   const [refreshing, setRefreshing] = useState(false);
+  const [pageIndex, setPageIndex] = useState(0);
+  const [sortState, setSortState] = useState<{
+    sortColumn: string;
+    sortDirection: "ascending" | "descending";
+  }>({ sortColumn: "displayName", sortDirection: "ascending" });
 
   const onRefresh = useCallback(async () => {
+    setPageIndex(0);
     setRefreshing(true);
     try {
       await loadCatalog({ force: true });
@@ -272,6 +320,20 @@ export function ConnectorsList() {
         r.releaseTag.toLowerCase().includes(q),
     );
   }, [allEntries, filterText]);
+
+  const sortedEntries = useMemo(() => {
+    const column = COLUMNS.find((item) => item.columnId === sortState.sortColumn);
+    const direction = sortState.sortDirection === "ascending" ? 1 : -1;
+    return [...filteredEntries].sort(
+      (a, b) => direction * (
+        (column?.compare(a, b) ?? 0) || a.connectorId.localeCompare(b.connectorId)
+      ),
+    );
+  }, [filteredEntries, sortState]);
+  const pageCount = Math.max(1, Math.ceil(sortedEntries.length / PAGE_SIZE));
+  const currentPage = Math.min(pageIndex, pageCount - 1);
+  const pageStart = currentPage * PAGE_SIZE;
+  const pageEntries = sortedEntries.slice(pageStart, pageStart + PAGE_SIZE);
 
   const premiumCount = useMemo(
     () => allEntries.filter((r) => r.tier.toLowerCase() === "premium").length,
@@ -329,7 +391,10 @@ export function ConnectorsList() {
             value={filterText}
             placeholder="Type to filter…"
             disabled={!catalog}
-            onChange={(_e, data: InputOnChangeData) => setFilterText(data.value)}
+            onChange={(_e, data: InputOnChangeData) => {
+              setFilterText(data.value);
+              setPageIndex(0);
+            }}
           />
         </div>
         <div className={styles.refreshGroup}>
@@ -405,30 +470,63 @@ export function ConnectorsList() {
           {filteredEntries.length === 0 ? (
             <EmptyPane message="No connectors match the current filter." />
           ) : (
-            <DataGrid
-              items={filteredEntries}
-              columns={COLUMNS}
-              sortable
-              getRowId={(row) => row.connectorId}
-              focusMode="composite"
-            >
-              <DataGridHeader>
-                <DataGridRow>
-                  {({ renderHeaderCell }) => (
-                    <DataGridHeaderCell>{renderHeaderCell()}</DataGridHeaderCell>
-                  )}
-                </DataGridRow>
-              </DataGridHeader>
-              <DataGridBody<ConnectorEntry>>
-                {({ item, rowId }) => (
-                  <DataGridRow<ConnectorEntry> key={rowId}>
-                    {({ renderCell }) => (
-                      <DataGridCell>{renderCell(item)}</DataGridCell>
+            <>
+              <div className={styles.gridScroll} role="region" aria-label="Connector catalog" tabIndex={0}>
+                <DataGrid
+                  className={styles.grid}
+                  items={pageEntries}
+                  columns={COLUMNS}
+                  sortable
+                  sortState={sortState}
+                  onSortChange={(_event, data) => {
+                    setSortState({
+                      sortColumn: String(data.sortColumn ?? "displayName"),
+                      sortDirection: data.sortDirection,
+                    });
+                    setPageIndex(0);
+                  }}
+                  getRowId={(row) => row.connectorId}
+                  focusMode="composite"
+                >
+                  <DataGridHeader className={styles.gridGroup}>
+                    <DataGridRow className={styles.gridRow}>
+                      {({ renderHeaderCell }) => (
+                        <DataGridHeaderCell className={styles.gridCell}>
+                          {renderHeaderCell()}
+                        </DataGridHeaderCell>
+                      )}
+                    </DataGridRow>
+                  </DataGridHeader>
+                  <DataGridBody<ConnectorEntry> className={styles.gridGroup}>
+                    {({ item, rowId }) => (
+                      <DataGridRow<ConnectorEntry> key={rowId} className={styles.gridRow}>
+                        {({ renderCell }) => (
+                          <DataGridCell className={styles.gridCell}>{renderCell(item)}</DataGridCell>
+                        )}
+                      </DataGridRow>
                     )}
-                  </DataGridRow>
-                )}
-              </DataGridBody>
-            </DataGrid>
+                  </DataGridBody>
+                </DataGrid>
+              </div>
+              <div className={styles.pager}>
+                <Text aria-live="polite">
+                  Page {currentPage + 1} of {pageCount} · {pageStart + 1}–
+                  {Math.min(pageStart + PAGE_SIZE, sortedEntries.length)} of{" "}
+                  {sortedEntries.length.toLocaleString()} connectors
+                </Text>
+                <div className={styles.pagerButtons}>
+                  <Button icon={<ChevronLeftRegular />} disabled={currentPage === 0}
+                    onClick={() => setPageIndex(currentPage - 1)}>
+                    Previous
+                  </Button>
+                  <Button icon={<ChevronRightRegular />} iconPosition="after"
+                    disabled={currentPage >= pageCount - 1}
+                    onClick={() => setPageIndex(currentPage + 1)}>
+                    Next
+                  </Button>
+                </div>
+              </div>
+            </>
           )}
         </>
       )}

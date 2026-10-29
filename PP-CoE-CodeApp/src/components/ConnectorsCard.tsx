@@ -160,7 +160,7 @@ export function ConnectorsCard({ connectors }: ConnectorsCardProps) {
             <Text size={200}>
               {totalOps > 0
                 ? `${totalOps} declared operation${totalOps === 1 ? "" : "s"}`
-                : "No specific operations declared"}
+                : "No specific operations reported; tabular data sources can have empty operation lists."}
             </Text>
           ) : undefined
         }
@@ -169,6 +169,7 @@ export function ConnectorsCard({ connectors }: ConnectorsCardProps) {
       {connectors.length === 0 ? (
         <div className={styles.empty}>
           No connector usage reported by the inventory schema for this resource.
+          {" "}This does not prove that the resource has no connector dependencies.
         </div>
       ) : (
         <div className={styles.body}>
@@ -219,4 +220,3 @@ export function ConnectorsCard({ connectors }: ConnectorsCardProps) {
     </Card>
   );
 }
-

@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Routes, Route } from "react-router-dom";
 import { FluentProvider, webLightTheme } from "@fluentui/react-components";
 import { FeatureFlagsProvider } from "../../featureFlags";
@@ -66,6 +67,46 @@ function renderAgentDetail(route = "/agents/agent-1") {
 
 describe("AgentDetail smoke", () => {
   beforeEach(() => vi.clearAllMocks());
+
+  it("shows new identity, harness, and quarantine metadata", async () => {
+    vi.mocked(getAgent).mockResolvedValue({
+      ok: true,
+      data: {
+        row: agentRow({
+          harness: "Standard",
+          botId: "bot-1",
+          entraAgentId: "identity-1",
+          entraAgentBlueprintId: "blueprint-1",
+          quarantinedAt: "2026-10-01T10:00:00Z",
+          isManaged: null,
+        }) as never,
+        raw: {},
+      },
+    });
+    renderAgentDetail();
+    expect(await screen.findByText("Standard")).toBeInTheDocument();
+    expect(screen.getByText("Not applicable / not reported")).toBeInTheDocument();
+    expect(screen.queryByText("Unmanaged")).not.toBeInTheDocument();
+    const quarantine = screen.getByText("Last quarantined").parentElement!;
+    expect(within(quarantine).getByText(/2026/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Identifiers" }));
+    expect(screen.getByText("bot-1")).toBeInTheDocument();
+    expect(screen.getByText("identity-1")).toBeInTheDocument();
+    expect(screen.getByText("blueprint-1")).toBeInTheDocument();
+  });
+
+  it.each([[true, "Managed"], [false, "Unmanaged"]] as const)(
+    "distinguishes explicit managed status %s",
+    async (isManaged, label) => {
+      vi.mocked(getAgent).mockResolvedValue({
+        ok: true,
+        data: { row: agentRow({ isManaged }) as never, raw: {} },
+      });
+      renderAgentDetail();
+      await waitFor(() => expect(screen.getAllByText(label).length).toBeGreaterThan(0));
+      expect(screen.queryByText("Not applicable / not reported")).not.toBeInTheDocument();
+    },
+  );
 
   it("loads and renders the agent display name", async () => {
     vi.mocked(getAgent).mockResolvedValue({
