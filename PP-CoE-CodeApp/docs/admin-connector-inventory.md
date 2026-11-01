@@ -20,6 +20,11 @@
 
 ## The supplemental-only rule
 
+For ad-hoc, single-call exploration of the bundled Admins V2 operations, use
+the [Connector playground](connector-playground.md). It includes read and
+write-capable actions; writes require per-request confirmation. It does not
+prefetch, paginate, or fan out calls.
+
 These enrichments are **strictly on-demand, user-initiated**. They are
 never:
 

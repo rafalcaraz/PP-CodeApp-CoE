@@ -140,6 +140,7 @@ After committing a meaningful chunk of work (a feature, a phase of tests, a refa
 
 - **UI**: Fluent UI v9 (`@fluentui/react-components`, `@fluentui/react-icons`). Do not introduce v8 imports or other UI libraries.
 - **Styling**: `makeStyles` + `tokens` from Fluent. No inline `style={...}` except for one-off computed values (chart sizing, etc.).
+- **Connector playgrounds**: new connectors must reuse the request/response layout and `ResponseViewer` under `shared/api-explorer/`, including highlighted search, match navigation, line wrapping, and explicit write confirmation. Keep them in the **Playgrounds** navigation group. See `docs/connector-playground.md`.
 - **Router**: `react-router-dom` v7 `HashRouter` — required because the app runs inside the Power Apps player iframe.
 - **State**: local component state + `useMemo`/`useCallback`. No Redux, no Zustand, no context proliferation. The user-lookup provider and the feature-flags provider are the only app-wide contexts.
 - **Async data**: every inventory call returns `DataResult<T> = { ok: true; data } | { ok: false; error }`. Surface errors via `<ErrorPane>`. Use `LoadingPane` while loading.

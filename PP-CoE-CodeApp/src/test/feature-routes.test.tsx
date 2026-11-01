@@ -30,6 +30,8 @@ import { queriesRoutes } from "../features/queries";
 import { connectorsRoutes } from "../features/connectors";
 import { deepInventoryRoutes } from "../features/deep-inventory";
 import { settingsRoutes } from "../features/settings";
+import { connectorPlaygroundRoutes } from "../features/connector-playground";
+import { powerPlatformApiRoutes } from "../features/power-platform-api";
 
 type RouteProps = { path: string; element: ReactElement };
 
@@ -119,6 +121,16 @@ const FEATURES: Array<{
     expectedPaths: ["/tenant-scans"],
   },
   {
+    name: "power-platform-api",
+    routes: powerPlatformApiRoutes,
+    expectedPaths: ["/power-platform-api"],
+  },
+  {
+    name: "connector-playground",
+    routes: connectorPlaygroundRoutes,
+    expectedPaths: ["/connector-playground"],
+  },
+  {
     name: "settings",
     routes: settingsRoutes,
     expectedPaths: ["/settings"],
@@ -149,5 +161,3 @@ describe("feature routes", () => {
     });
   }
 });
-
-
