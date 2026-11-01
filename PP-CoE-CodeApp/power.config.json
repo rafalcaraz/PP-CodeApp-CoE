@@ -97,6 +97,28 @@
           "shared_powerplatformadminv2_1": "20675a14-287e-49e2-a575-1a7dd31c611e"
         }
       }
+    },
+    "cf711018-f202-4da8-8370-98dcceb33b4c": {
+      "id": "/providers/Microsoft.PowerApps/apis/shared_logicflows",
+      "displayName": "Logic flows",
+      "dataSources": [
+        "pp_api_wrapper_flow"
+      ],
+      "workflowDetails": {
+        "workflowEntityId": "99612410-b2d3-f111-a05b-7ced8d703e00",
+        "workflowDisplayName": "PP-API-Wrapper-Flow",
+        "workflowName": "6f1f8c1f-2c23-33c4-8afc-a0aaa39f3953",
+        "dependencies": {
+          "shared_webcontents": "9227eabd-b8f1-4fbb-aaa0-32b5d4aacc9d"
+        }
+      }
+    },
+    "9227eabd-b8f1-4fbb-aaa0-32b5d4aacc9d": {
+      "id": "/providers/microsoft.powerapps/apis/shared_webcontents",
+      "displayName": "HTTP with Microsoft Entra ID (preauthorized)",
+      "authenticationType": "EntraAuth",
+      "sharedConnectionId": "/providers/Microsoft.PowerApps/apis/shared_webcontents/connections/<connection-id>",
+      "xrmConnectionReferenceLogicalName": "msftcsa_HTTPWithEntraPPAPI"
     }
   },
   "databaseReferences": {

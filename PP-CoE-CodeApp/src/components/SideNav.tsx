@@ -27,6 +27,7 @@ import {
   PersonAccountsRegular,
   PersonQuestionMarkRegular,
   PlugConnectedRegular,
+  PlayRegular,
   SearchSquareRegular,
   ScanRegular,
   SettingsRegular,
@@ -250,10 +251,18 @@ const POST_ZONES_SECTIONS: NavSection[] = [
     ],
   },
   {
-    key: "settings",
+    key: "playgrounds",
+    label: "Playgrounds",
+    icon: <PlayRegular />,
+    defaultOpen: true,
     items: [
-      { key: "settings", label: "Settings", icon: <SettingsRegular />, path: "/settings" },
+      { key: "connector-playground", label: "Connector playground", icon: <PlugConnectedRegular />, path: "/connector-playground" },
+      { key: "power-platform-api", label: "Power Platform API", icon: <PlayRegular />, path: "/power-platform-api" },
     ],
+  },
+  {
+    key: "settings",
+    items: [{ key: "settings", label: "Settings", icon: <SettingsRegular />, path: "/settings" }],
   },
 ];
 
@@ -439,4 +448,3 @@ export function SideNav() {
     </nav>
   );
 }
-

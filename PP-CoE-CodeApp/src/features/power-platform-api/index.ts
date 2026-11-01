@@ -1,0 +1,1 @@
+export { powerPlatformApiRoutes } from "./routes";

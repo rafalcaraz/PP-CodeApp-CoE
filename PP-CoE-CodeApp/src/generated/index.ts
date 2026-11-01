@@ -11,6 +11,7 @@ export * as HTTPwithMicrosoftEntraID_preauthorized_Model from './models/HTTPwith
 export * as ListRows_DataverseModel from './models/ListRows_DataverseModel';
 export * as MicrosoftCopilotStudioModel from './models/MicrosoftCopilotStudioModel';
 export * as PPLicensingAPI_Wrapper_FlowModel from './models/PPLicensingAPI_Wrapper_FlowModel';
+export * as PP_API_Wrapper_FlowModel from './models/PP_API_Wrapper_FlowModel';
 export * as PowerPlatformforAdminsModel from './models/PowerPlatformforAdminsModel';
 export * as PowerPlatformforAdminsV2Model from './models/PowerPlatformforAdminsV2Model';
 
@@ -21,5 +22,6 @@ export * from './services/HTTPwithMicrosoftEntraID_preauthorized_Service';
 export * from './services/ListRows_DataverseService';
 export * from './services/MicrosoftCopilotStudioService';
 export * from './services/PPLicensingAPI_Wrapper_FlowService';
+export * from './services/PP_API_Wrapper_FlowService';
 export * from './services/PowerPlatformforAdminsService';
 export * from './services/PowerPlatformforAdminsV2Service';
