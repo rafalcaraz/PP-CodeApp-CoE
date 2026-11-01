@@ -2,7 +2,7 @@
   "source": {
     "url": "https://learn.microsoft.com/en-us/rest/api/toc.json",
     "revision": "92813e8ead95f02f8f28e750c0f54f4cbb5eb00f,9d5f2974d5b8a7c5df33a967224d25e0d0868f5d,adb4825fa3bb3a54aabe7499ed131d01fcd69ce6,d511c0d9a19292903acc7046c7fdf16a844e3801,fa1bd063a5c3a90c6bb9b0be14cb3abd32834d9e",
-    "generatedAt": "2026-10-29T16:49:51.763Z",
+    "generatedAt": "2026-11-01T22:10:46.639Z",
     "license": "API interface metadata only; source documentation subject to Microsoft Learn terms.",
     "operationCount": 217,
     "contentHash": "2aab97d74820a6010e3f6d1c14b516d1b626cf366081e039c2a1899aeaa1c49b"
@@ -12442,14 +12442,9 @@
         "required": true,
         "description": "Documented JSON request body. Review the operation documentation for business rules.",
         "schema": {
-          "type": "object",
-          "properties": {
-            "body": {
-              "type": "array",
-              "items": {
-                "type": "string"
-              }
-            }
+          "type": "array",
+          "items": {
+            "type": "string"
           }
         }
       },

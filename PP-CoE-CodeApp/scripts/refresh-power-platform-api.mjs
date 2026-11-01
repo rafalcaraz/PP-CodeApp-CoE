@@ -165,10 +165,12 @@ const operations = entries.map((entry, index) => {
   }
   const bodyText = block(page, "Request Body");
   const bodyRows = table(bodyText);
+  // A sole "body" row describes the payload itself, not an object property.
+  const rootBody = bodyRows.length === 1 && bodyRows[0].Name === "body";
   const body = bodyText ? {
     required: true,
     description: "Documented JSON request body. Review the operation documentation for business rules.",
-    schema: bodyRows.length ? objectSchema(bodyRows) : {},
+    schema: rootBody ? typeSchema(bodyRows[0].Type) : bodyRows.length ? objectSchema(bodyRows) : {},
   } : undefined;
   const responses = table(block(page, "Responses")).map((row) => ({
     status: row.Name, description: row.Name, ...(row.Type ? { schema: typeSchema(row.Type) } : {}),

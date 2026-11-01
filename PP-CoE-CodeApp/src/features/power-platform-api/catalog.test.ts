@@ -100,4 +100,25 @@ describe("Power Platform API catalog", () => {
     });
     expect(() => schemaTools.validateValue({ notifyIfOverCapacity: "true" }, bodySchema, "body")).toThrow("choose true or false");
   });
+
+  it("sends Delete Waf Custom Rules as a top-level string array, not a body wrapper", () => {
+    const operation = apiOperations.find((entry) => entry.title === "Delete Waf Custom Rules");
+    if (!operation?.body) throw new Error("Missing documented WAF deletion body.");
+    expect(operation.body.schema).toEqual({ type: "array", items: { type: "string" } });
+    expect(schemaTools.schemaTemplate(operation.body.schema, true)).toEqual([]);
+    const inputs = initialApiInputs(operation);
+    inputs.parameters["path:environmentId"] = "test-environment";
+    inputs.parameters["path:id"] = "test-website";
+    inputs.body = '["rule-to-remove"]';
+    expect(buildApiRequest(inputs)).toEqual({
+      method: "PUT",
+      url: "https://api.powerplatform.com/powerpages/environments/test-environment/websites/test-website/deleteWafCustomRules?api-version=2024-10-01",
+      body: '["rule-to-remove"]',
+    });
+    expect(isReadOnly(operation)).toBe(false);
+    inputs.body = '{"body":["rule-to-remove"]}';
+    expect(() => buildApiRequest(inputs)).toThrow("enter a JSON array");
+    inputs.body = "[123]";
+    expect(() => buildApiRequest(inputs)).toThrow("body[0]: enter text");
+  });
 });

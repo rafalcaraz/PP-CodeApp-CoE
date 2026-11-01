@@ -28,6 +28,10 @@ required values, types, enums, and documented bounds. The API remains
 authoritative for authorization, business rules, and constraints not expressed
 in the documentation.
 
+**Delete Waf Custom Rules** requires a top-level string array, such as
+`["rule-to-remove"]`, not an object containing a `body` property. Its generated
+template is `[]`; replace it with the rule names you intend to remove.
+
 GET and HEAD requests require an explicit click. All other methods require
 reviewing the exact method, URL, and body and typing the operation title.
 Nothing runs on selection or page load. There are no automatic retries,
