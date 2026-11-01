@@ -44,8 +44,15 @@ function formatDate(value: string): string {
 const TYPE_OPTIONS: { value: ResourceTypeValue; label: string }[] = [
   { value: ResourceType.CanvasApp, label: "Canvas" },
   { value: ResourceType.ModelDrivenApp, label: "Model-driven" },
-  { value: ResourceType.CodeApp, label: "Code" },
-  { value: ResourceType.AppBuilderApp, label: "App Builder" },
+  { value: ResourceType.CodeApp, label: "Code / Vibe" },
+  { value: ResourceType.AppBuilderApp, label: "Managed / App Builder" },
+];
+
+const SUBTYPE_OPTIONS = [
+  { value: "byocApp", label: "Code app", type: ResourceType.CodeApp },
+  { value: "vibeApp", label: "Vibe app", type: ResourceType.CodeApp },
+  { value: "microsoftApp", label: "Managed app", type: ResourceType.AppBuilderApp },
+  { value: "appBuilderApp", label: "App Builder app", type: ResourceType.AppBuilderApp },
 ];
 
 export function AppsList() {
@@ -53,6 +60,7 @@ export function AppsList() {
   const navigate = useNavigate();
   const { classify } = useConnectorCatalog();
   const [types, setTypes] = useState<ResourceTypeValue[]>([]);
+  const [subType, setSubType] = useState("");
   const [envId, setEnvId] = useState<string | undefined>(undefined);
   const [queryInput, setQueryInput] = useState("");
   const debouncedQuery = useDebouncedValue(queryInput, 350);
@@ -60,16 +68,18 @@ export function AppsList() {
   const filters: AppFilters = useMemo(
     () => ({
       types: types.length === 0 ? undefined : types,
+      subType: subType || undefined,
       environmentId: envId,
       nameContains: debouncedQuery.trim() || undefined,
     }),
-    [types, envId, debouncedQuery]
+    [types, subType, envId, debouncedQuery]
   );
 
   const filterKey = useMemo(
     () =>
       JSON.stringify([
         (filters.types ?? ALL_APP_TYPES).slice().sort(),
+        filters.subType ?? "",
         filters.environmentId ?? "",
         filters.nameContains ?? "",
       ]),
@@ -97,7 +107,7 @@ export function AppsList() {
         renderHeaderCell: () => "Type",
         renderCell: (row) => (
           <Badge appearance="outline" color="informative">
-            {shortResourceType(row.type)}
+            {shortResourceType(row.type, row.subType)}
           </Badge>
         ),
       }),
@@ -172,8 +182,12 @@ export function AppsList() {
 
   const onTypeSelect = (_e: unknown, data: { selectedOptions: string[] }) => {
     setTypes(data.selectedOptions as ResourceTypeValue[]);
+    setSubType("");
   };
 
+  const subTypeOptions = SUBTYPE_OPTIONS.filter(
+    (option) => types.length === 0 || types.includes(option.type),
+  );
   const typeText =
     types.length === 0
       ? "All types"
@@ -182,13 +196,13 @@ export function AppsList() {
   return (
     <ResourceListPage<AppRow>
       title="Apps"
-      subtitle="Canvas, model-driven, code, and app-builder apps across all environments."
+      subtitle="Canvas, model-driven, code, vibe, managed, and App Builder apps across all environments."
       filterKey={filterKey}
       fetchPage={fetchPage}
       columns={columns}
       getRowId={(row) => row.id}
       emptyMessage={
-        debouncedQuery || envId || types.length
+        debouncedQuery || envId || types.length || subType
           ? "No apps match the current filters."
           : "No apps found."
       }
@@ -198,6 +212,7 @@ export function AppsList() {
             className={styles.typeDropdown}
             multiselect
             placeholder="All types"
+            aria-label="App resource types"
             value={typeText}
             selectedOptions={types}
             onOptionSelect={onTypeSelect}
@@ -205,6 +220,21 @@ export function AppsList() {
             {TYPE_OPTIONS.map((opt) => (
               <Option key={opt.value} value={opt.value} text={opt.label}>
                 {opt.label}
+              </Option>
+            ))}
+          </Dropdown>
+          <Dropdown
+            className={styles.typeDropdown}
+            aria-label="App sub-type"
+            value={SUBTYPE_OPTIONS.find((option) => option.value === subType)?.label ?? "All sub-types"}
+            selectedOptions={[subType]}
+            disabled={subTypeOptions.length === 0}
+            onOptionSelect={(_event, data) => setSubType(data.optionValue ?? "")}
+          >
+            <Option value="">All sub-types</Option>
+            {subTypeOptions.map((option) => (
+              <Option key={option.value} value={option.value}>
+                {option.label}
               </Option>
             ))}
           </Dropdown>

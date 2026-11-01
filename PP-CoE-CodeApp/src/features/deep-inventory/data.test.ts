@@ -21,7 +21,7 @@ import {
   resolveAgentCandidates,
 } from "./data";
 import type { DeepQuerySpec } from "./data";
-import { ResourceType } from "../../data/inventory";
+import { ResourceType, toAgentRow } from "../../data/inventory";
 import { createSavedQuery } from "../../data/savedQueries";
 
 const BASE_SPEC: DeepQuerySpec = {
@@ -95,6 +95,26 @@ describe("resolveAgentCandidates", () => {
     ).rejects.toThrow(/Inventory unavailable/);
   });
 
+  it("does not match unavailable managed status as explicitly unmanaged", async () => {
+    listAgentsPageMock.mockResolvedValueOnce({
+      ok: true,
+      data: {
+        rows: [
+          toAgentRow({ name: "unavailable", properties: { isManaged: null } }),
+          toAgentRow({ name: "unmanaged", properties: { isManaged: false } }),
+          toAgentRow({ name: "managed", properties: { isManaged: true } }),
+        ],
+        totalRecords: 3,
+      },
+    });
+    const rows = await resolveAgentCandidates(
+      { ...BASE_SPEC, candidateFilters: [{ path: "isManaged", op: "eq", value: false }] },
+      { envId: "env-1" },
+      new AbortController().signal,
+    );
+    expect(rows.map((row) => row.id)).toEqual(["unmanaged"]);
+  });
+
   it("stops before calling inventory when cancelled", async () => {
     const controller = new AbortController();
     controller.abort();
@@ -114,6 +134,11 @@ describe("resolveAgentCandidates", () => {
         expect.objectContaining({ label: "Schema name", path: "schemaName" }),
         expect.objectContaining({ label: "Model", path: "model" }),
         expect.objectContaining({ label: "Owner ID", path: "ownerId" }),
+        expect.objectContaining({ path: "harness" }),
+        expect.objectContaining({ path: "botId" }),
+        expect.objectContaining({ path: "entraAgentId" }),
+        expect.objectContaining({ path: "entraAgentBlueprintId" }),
+        expect.objectContaining({ path: "quarantinedAt", filter: { kind: "date" } }),
         expect.objectContaining({
           label: "Distinct flows",
           path: "distinctFlows",

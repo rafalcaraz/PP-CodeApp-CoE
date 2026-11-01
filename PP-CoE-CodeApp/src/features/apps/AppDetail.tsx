@@ -156,7 +156,7 @@ function ReadyView({
         </Text>
         <div className={styles.badgeRow}>
           <Badge appearance="filled" color="brand">
-            {shortResourceType(row.type)}
+            {shortResourceType(row.type, row.subType)}
           </Badge>
           {row.isFeatured && (
             <Badge appearance="outline" color="success">

@@ -9,6 +9,7 @@ const {
   loadConnectorUsageSummaryMock,
   listConnectorUsagePageMock,
   exportConnectorUsageMock,
+  loadConnectorOperationUsageMock,
   downloadCsvMock,
   rowsToCsvMock,
 } = vi.hoisted(() => ({
@@ -16,15 +17,18 @@ const {
   loadConnectorUsageSummaryMock: vi.fn(),
   listConnectorUsagePageMock: vi.fn(),
   exportConnectorUsageMock: vi.fn(),
+  loadConnectorOperationUsageMock: vi.fn(),
   downloadCsvMock: vi.fn(),
   rowsToCsvMock: vi.fn(() => "CSV_CONTENT"),
 }));
 
-vi.mock("./data", () => ({
+vi.mock("./data", async () => ({
+  ...await vi.importActual<typeof import("./data")>("./data"),
   getConnectorDetail: getConnectorDetailMock,
   loadConnectorUsageSummary: loadConnectorUsageSummaryMock,
   listConnectorUsagePage: listConnectorUsagePageMock,
   exportConnectorUsage: exportConnectorUsageMock,
+  loadConnectorOperationUsage: loadConnectorOperationUsageMock,
   shortResourceType: (type: string) =>
     type.includes("canvasapps") ? "Canvas app" : type,
 }));
@@ -119,9 +123,20 @@ beforeEach(() => {
     data: { records: [], totalRecords: 0 },
   });
   exportConnectorUsageMock.mockResolvedValue({ ok: true, data: [] });
+  loadConnectorOperationUsageMock.mockResolvedValue({ ok: true, data: [] });
 });
 
 describe("ConnectorDetail", () => {
+  it("finds direct usage from a catalog operation without inferring all catalog actions are used", async () => {
+    renderView();
+    await userEvent.click(await screen.findByRole("button", { name: "Find usage of ExecuteQuery" }));
+    expect(await screen.findByRole("button", { name: "Remove ExecuteQuery" })).toBeInTheDocument();
+    await waitFor(() => expect(loadConnectorOperationUsageMock).toHaveBeenCalledWith(
+      "shared_sql", expect.any(AbortSignal),
+    ));
+    expect(screen.getByText("No resources report matching operations on this connector.")).toBeInTheDocument();
+  });
+
   it("renders catalog metadata, KPIs, operations, and usage tabs", async () => {
     renderView();
 
@@ -130,6 +145,10 @@ describe("ConnectorDetail", () => {
     expect(screen.getByText("24")).toBeInTheDocument();
     expect(screen.getByText("16")).toBeInTheDocument();
     expect(screen.getByText("Execute query")).toBeInTheDocument();
+    expect(screen.getByText("Reported usage")).toBeInTheDocument();
+    expect(screen.getByText(/not a complete dependency audit/)).toHaveTextContent(
+      /Built-in Power Automate actions, including HTTP, are not captured/,
+    );
     expect(
       screen.getByRole("tab", { name: /Apps \(16\)/i }),
     ).toBeInTheDocument();

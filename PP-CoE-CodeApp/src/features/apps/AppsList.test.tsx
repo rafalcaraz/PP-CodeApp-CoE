@@ -75,6 +75,27 @@ describe("AppsList smoke", () => {
     });
   });
 
+  it("filters by sub-type and clears it when the resource type changes", async () => {
+    renderAppsList();
+    await screen.findByText("Onboarding App");
+    await userEvent.click(screen.getByRole("combobox", { name: "App sub-type" }));
+    await userEvent.click(screen.getByRole("option", { name: "Vibe app" }));
+    await waitFor(() => {
+      expect(vi.mocked(listAppsPage).mock.calls.at(-1)?.[0]).toMatchObject({
+        subType: "vibeApp",
+      });
+    });
+    await userEvent.click(screen.getByRole("combobox", { name: "App resource types" }));
+    await userEvent.click(screen.getByRole("menuitemcheckbox", { name: "Canvas" }));
+    await waitFor(() => {
+      expect(vi.mocked(listAppsPage).mock.calls.at(-1)?.[0]).toMatchObject({
+        types: ["microsoft.powerapps/canvasapps"],
+        subType: undefined,
+      });
+    });
+    expect(screen.getByRole("combobox", { name: "App sub-type" })).toBeDisabled();
+  });
+
   it("typing in the search box eventually refetches with the nameContains filter", async () => {
     renderAppsList();
     // Initial mount fetch.

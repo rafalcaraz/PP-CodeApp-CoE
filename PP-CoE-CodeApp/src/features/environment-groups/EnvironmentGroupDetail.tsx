@@ -292,7 +292,7 @@ function ReadyView({ row, raw, envs, counts, envColumns, navigate }: ReadyViewPr
       <Card className={styles.colHalf}>
         <CardHeader
           header={<Text weight="semibold">Lifecycle</Text>}
-          description={<Text size={200}>When this group was created.</Text>}
+          description={<Text size={200}>When this group was created and last modified.</Text>}
         />
         <Divider />
         <div className={styles.cardBody}>
@@ -301,6 +301,9 @@ function ReadyView({ row, raw, envs, counts, envColumns, navigate }: ReadyViewPr
               <DateWithRelative value={row.createdAt} />
             </Meta>
             <Meta label="Created by">{row.createdBy || "—"}</Meta>
+            <Meta label="Last modified">
+              <DateWithRelative value={row.lastModifiedAt} />
+            </Meta>
           </div>
         </div>
       </Card>

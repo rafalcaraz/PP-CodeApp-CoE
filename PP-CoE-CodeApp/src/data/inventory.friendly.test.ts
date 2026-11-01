@@ -26,9 +26,24 @@ describe("friendlyResourceType", () => {
   it("falls back to the input string for unknown types", () => {
     expect(friendlyResourceType("microsoft.unknown/foo")).toContain("unknown");
   });
+
+  it("names all app families without conflating managed and App Builder apps", () => {
+    expect(friendlyResourceType(ResourceType.CodeApp)).toBe("Code and vibe apps");
+    expect(friendlyResourceType(ResourceType.AppBuilderApp)).toBe("Managed and App Builder apps");
+  });
 });
 
 describe("shortResourceType / resourceTypeShort", () => {
+  it.each([
+    [ResourceType.CodeApp, "byocApp", "Code app"],
+    [ResourceType.CodeApp, "vibeApp", "Vibe app"],
+    [ResourceType.AppBuilderApp, "microsoftApp", "Managed app"],
+    [ResourceType.AppBuilderApp, "appBuilderApp", "App Builder app"],
+    [ResourceType.AppBuilderApp, undefined, "App"],
+  ])("labels %s / %s as %s", (type, subType, label) => {
+    expect(shortResourceType(type, subType)).toBe(label);
+  });
+
   it("returns a short token for canvas apps", () => {
     expect(shortResourceType(ResourceType.CanvasApp).toLowerCase()).toContain(
       "canvas",
@@ -42,6 +57,11 @@ describe("shortResourceType / resourceTypeShort", () => {
     expect(
       shortResourceType(ResourceType.CopilotStudioAgent).toLowerCase(),
     ).toMatch(/agent/);
+  });
+
+  it("uses inclusive labels for resource-type selectors", () => {
+    expect(resourceTypeShort(ResourceType.CodeApp)).toBe("Code / vibe");
+    expect(resourceTypeShort(ResourceType.AppBuilderApp)).toBe("Managed / App Builder");
   });
 });
 

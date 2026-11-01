@@ -74,6 +74,19 @@ export interface ConnectorUsageSummary {
   environments: number;
 }
 
+export interface ConnectorOperationEvidence {
+  operationId: string;
+  role: "action" | "trigger";
+  isEnabled?: boolean;
+}
+
+export interface ConnectorOperationRecord {
+  resource: ConnectorUsageRecord;
+  operations: ConnectorOperationEvidence[];
+}
+
+export type OperationMatch = "any" | "all";
+
 export interface ConnectorDetailData {
   entry: ConnectorEntry;
   source: CatalogSource;
@@ -206,6 +219,7 @@ export async function listConnectorUsagePage(
 
   const repeatedToken =
     Boolean(result.data.skipToken) && result.data.skipToken === skipToken;
+  const emptyPageWithToken = records.length === 0 && Boolean(result.data.skipToken);
   return {
     ok: true,
     data: {
@@ -217,6 +231,8 @@ export async function listConnectorUsagePage(
       totalRecords: result.data.totalRecords,
       pagingWarning: repeatedToken
         ? "Inventory returned the same continuation token twice. Paging stopped to avoid duplicate rows."
+        : emptyPageWithToken
+        ? "Inventory returned an empty page with a continuation token. The result could be incomplete."
         : undefined,
     },
   };
@@ -267,6 +283,7 @@ function usageRecordKey(record: ConnectorUsageRecord): string {
 export async function exportConnectorUsage(
   scope: ConnectorUsageKind | "all",
   connectorId: string,
+  signal?: AbortSignal,
 ): Promise<DataResult<ConnectorUsageRecord[]>> {
   const kinds: ConnectorUsageKind[] =
     scope === "all" ? ["apps", "flows", "agents"] : [scope];
@@ -279,6 +296,9 @@ export async function exportConnectorUsage(
     let exhausted = false;
 
     for (let page = 0; page < EXPORT_PAGE_CAP; page++) {
+      if (signal?.aborted) {
+        return { ok: false, error: "Connector usage loading was cancelled." };
+      }
       const result = await listConnectorUsagePage(
         kind,
         connectorId,
@@ -318,4 +338,83 @@ export async function exportConnectorUsage(
   }
 
   return { ok: true, data: records };
+}
+
+function isConnectorMatch(connectorId: string, variants: string[]): boolean {
+  return variants.includes(normalizedSlug(connectorId));
+}
+
+/** Match operations within the selected connector, never across a resource's
+ * other connectors. A catalog operation is capability, not usage evidence. */
+export function getConnectorOperationEvidence(
+  resource: ConnectorUsageRecord,
+  connectorId: string,
+): ConnectorOperationEvidence[] {
+  const variants = connectorIdVariants(connectorId);
+  const operations: ConnectorOperationEvidence[] = [];
+  for (const connector of resource.row.connectors) {
+    if (!isConnectorMatch(connector.connectorId, variants)) continue;
+    for (const operation of connector.operations) {
+      const operationId = operation.operationId.trim();
+      if (!operationId) continue;
+      operations.push({
+        operationId,
+        role: "action",
+        isEnabled: operation.isEnabled,
+      });
+    }
+  }
+  if (resource.kind === "flows") {
+    const trigger = resource.row.trigger;
+    if (trigger && isConnectorMatch(trigger.connectorId, variants) && trigger.operationId.trim()) {
+      operations.push({ operationId: trigger.operationId.trim(), role: "trigger" });
+    }
+  }
+  const seen = new Set<string>();
+  return operations.filter((operation) => {
+    const key = `${operation.role}|${operation.operationId.toLowerCase()}|${operation.isEnabled}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+export function filterConnectorOperationUsage(
+  records: ConnectorOperationRecord[],
+  operationIds: string[],
+  match: OperationMatch,
+): ConnectorOperationRecord[] {
+  const selected = [...new Set(operationIds.map((id) => id.trim().toLowerCase()).filter(Boolean))];
+  return records.filter(({ operations }) => {
+    if (operations.length === 0) return false;
+    const reported = new Set(operations.map((operation) => operation.operationId.toLowerCase()));
+    return selected.length === 0 || (match === "all"
+      ? selected.every((id) => reported.has(id))
+      : selected.some((id) => reported.has(id)));
+  });
+}
+
+/** The clause API cannot mv-expand nested connector/operation pairs. Drain
+ * connector-prefiltered pages before exact matching, counting, or paginating;
+ * otherwise operations on another connector can create false positives. */
+export async function loadConnectorOperationUsage(
+  connectorId: string,
+  signal?: AbortSignal,
+): Promise<DataResult<ConnectorOperationRecord[]>> {
+  const result = await exportConnectorUsage("all", connectorId, signal);
+  if (!result.ok) return result;
+  const variants = connectorIdVariants(connectorId);
+  return {
+    ok: true,
+    data: result.data
+      .filter((resource) =>
+        resource.row.connectors.some((connector) => isConnectorMatch(connector.connectorId, variants)) ||
+        (resource.kind === "flows" && resource.row.trigger != null &&
+          isConnectorMatch(resource.row.trigger.connectorId, variants)),
+      )
+      .map((resource) => ({
+        resource,
+        operations: getConnectorOperationEvidence(resource, connectorId),
+      })),
+  };
 }

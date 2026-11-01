@@ -75,6 +75,11 @@ describe("FIELDS_BY_RESOURCE_TYPE", () => {
       "properties.lastPublishedAt",
       "properties.isWebSearchEnabledForKnowledge",
       "properties.entraAppId",
+      "properties.botId",
+      "properties.entraAgentId",
+      "properties.entraAgentBlueprintId",
+      "properties.harness",
+      "properties.quarantinedAt",
       // Added in the schema-audit follow-up:
       "properties.isCLIAgent",
       "properties.triggers",
@@ -126,6 +131,16 @@ describe("FIELDS_BY_RESOURCE_TYPE", () => {
     ]) {
       expect(paths).toContain(required);
     }
+  });
+
+  it("offers model-driven connector arrays with the coverage caveat", () => {
+    expect(FIELDS_BY_RESOURCE_TYPE[ResourceType.ModelDrivenApp]).toContainEqual(
+      expect.objectContaining({
+        path: "properties.powerPlatformConnectors",
+        kind: "array",
+        help: expect.stringContaining("canvas page"),
+      }),
+    );
   });
 });
 
@@ -179,6 +194,7 @@ describe("getFieldSuggestions", () => {
     const paths = fields.map((f) => f.path);
     expect(paths).toContain("properties.createdAt");
     expect(paths).toContain("properties.lastPublishedAt");
+    expect(paths).toContain("properties.quarantinedAt");
   });
 
   it("groupBy intent drops arrays and objects", () => {

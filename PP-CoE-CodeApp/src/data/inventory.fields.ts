@@ -134,6 +134,7 @@ const MODEL_DRIVEN_APP_FIELDS: InventoryField[] = [
   ...COMMON_GOVERNANCE,
   { path: "properties.logicalName", label: "Logical name", kind: "string", group: "Apps", help: "Dataverse logical name." },
   { path: "properties.appModuleId", label: "App module ID", kind: "string", group: "Apps", help: "Dataverse cross-reference." },
+  { path: "properties.powerPlatformConnectors", label: "Connectors (raw array)", kind: "array", group: "Connectors", help: "Rarely populated; embedded canvas-page usage is reported on the canvas page record." },
 ];
 
 /** Fields specific to Code apps (`microsoft.powerapps/codeapps`). */
@@ -141,15 +142,15 @@ const CODE_APP_FIELDS: InventoryField[] = [
   ...COMMON_OWNERSHIP,
   ...COMMON_LIFECYCLE,
   ...COMMON_GOVERNANCE,
-  { path: "properties.subType", label: "Sub-type", kind: "string", group: "Apps", help: "e.g. 'byocApp' for bring-your-own-code." },
+  { path: "properties.subType", label: "Sub-type", kind: "string", group: "Apps", help: "'byocApp' for code apps; 'vibeApp' for vibe apps." },
 ];
 
-/** Fields specific to App-builder apps (`microsoft.powerapps/apps`). */
+/** Fields specific to managed / App Builder apps (`microsoft.powerapps/apps`). */
 const APP_BUILDER_FIELDS: InventoryField[] = [
   ...COMMON_OWNERSHIP,
   ...COMMON_LIFECYCLE,
   ...COMMON_GOVERNANCE,
-  { path: "properties.subType", label: "Sub-type", kind: "string", group: "Apps", help: "e.g. 'appBuilderApp'." },
+  { path: "properties.subType", label: "Sub-type", kind: "string", group: "Apps", help: "'microsoftApp' for managed apps; 'appBuilderApp' for App Builder apps." },
   { path: "properties.connectors", label: "Connectors (raw array)", kind: "array", group: "Connectors", help: "App-builder shape: { connectorId, connectionType }. Use the 'Connector (any location)' sentinel for filtering." },
 ];
 
@@ -172,17 +173,22 @@ const FLOW_SHARED: InventoryField[] = [
 /** Fields specific to Copilot Studio agents (`microsoft.copilotstudio/agents`).
  *  Note: agents notably do NOT return `lastModifiedAt`, `lastModifiedBy`,
  *  `publishState`, or `state` (verified against real payloads). The only
- *  lifecycle timestamp is `lastPublishedAt`. */
+ *  publication timestamp is `lastPublishedAt`; quarantine uses `quarantinedAt`. */
 const COPILOT_STUDIO_AGENT_FIELDS: InventoryField[] = [
   ...COMMON_OWNERSHIP,
   { path: "properties.isQuarantined", label: "Is quarantined", kind: "boolean", group: "Governance" },
-  { path: "properties.isManaged", label: "Is managed", kind: "boolean", group: "Governance" },
-  { path: "properties.lastPublishedAt", label: "Last published at", kind: "date", group: "Lifecycle", help: "Agents do NOT have a lastModifiedAt — this is the only lifecycle timestamp." },
+  { path: "properties.isManaged", label: "Is managed", kind: "boolean", group: "Governance", help: "Managed Dataverse solution membership. Null means not applicable or not reported, including Agent Builder agents." },
+  { path: "properties.lastPublishedAt", label: "Last published at", kind: "date", group: "Lifecycle", help: "Empty for drafts. Agents do not have a lastModifiedAt timestamp." },
+  { path: "properties.quarantinedAt", label: "Last quarantined at", kind: "date", group: "Lifecycle" },
   { path: "properties.schemaName", label: "Schema name", kind: "string", group: "Identity", help: "Carries solution publisher prefix (msdyn_, new_, <customer>_…). Use 'does not start with msdyn_' to hide first-party agents." },
   { path: "properties.entraAppId", label: "Entra app ID", kind: "string", group: "Identity" },
+  { path: "properties.botId", label: "Dataverse bot ID", kind: "string", group: "Identity" },
+  { path: "properties.entraAgentId", label: "Entra agent ID", kind: "string", group: "Identity" },
+  { path: "properties.entraAgentBlueprintId", label: "Entra agent blueprint ID", kind: "string", group: "Identity" },
   { path: "properties.titleId", label: "Title ID", kind: "string", group: "Identity" },
   { path: "properties.createdIn", label: "Created in", kind: "string", group: "Identity", help: "Typically 'Copilot Studio'." },
   { path: "properties.authentication", label: "Authentication", kind: "string", group: "Behavior", help: "e.g. 'Microsoft Entra'." },
+  { path: "properties.harness", label: "Harness", kind: "string", group: "Behavior" },
   { path: "properties.model", label: "Model", kind: "string", group: "Behavior", help: "e.g. 'Claude Sonnet 4.5', 'GPT-5 Chat'." },
   { path: "properties.orchestration", label: "Orchestration", kind: "string", group: "Behavior", help: "e.g. 'Generative'." },
   { path: "properties.instructionsCharactersCount", label: "Instructions length (chars)", kind: "number", group: "Behavior" },

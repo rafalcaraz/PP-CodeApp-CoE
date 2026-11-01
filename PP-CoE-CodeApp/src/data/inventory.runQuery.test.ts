@@ -37,8 +37,10 @@ import {
   getAgent,
   getApp,
   getFlow,
+  getEnvironmentGroup,
   invalidateInventoryCache,
   listAppsPage,
+  listEnvironmentGroups,
   listEnvironmentsPage,
   listFlowsPage,
   runAggregateCount,
@@ -127,6 +129,25 @@ describe("listEnvironmentsPage — envelope mapping", () => {
 // ---------------------------------------------------------------------------
 
 describe("listAppsPage — envelope mapping", () => {
+  it.each(["vibeApp", "microsoftApp", "appBuilderApp", "byocApp", "maker'sApp"])(
+    "filters sub-type %s server-side and preserves pagination",
+    async (subType) => {
+      queryResourcesMock.mockResolvedValue({
+        success: true,
+        data: { data: [], totalRecords: 0 },
+      });
+      await listAppsPage({ subType }, "cursor", 20, 40);
+      const body = queryResourcesMock.mock.calls[0][1];
+      expect(body.Clauses).toContainEqual({
+        $type: "where",
+        FieldName: "properties.subType",
+        Operator: "==",
+        Values: [`'${subType.replace(/'/g, "''")}'`],
+      });
+      expect(body.Options).toMatchObject({ Top: 20, Skip: 40, SkipToken: "cursor" });
+    },
+  );
+
   it("maps rows, totalRecords, and skipToken from a real model-driven apps envelope", async () => {
     queryResourcesMock.mockResolvedValue({
       success: true,
@@ -148,6 +169,27 @@ describe("listAppsPage — envelope mapping", () => {
     expect(firstRow.ownerId).toBe(firstRaw.properties.ownerId);
     expect(firstRow.logicalName).toBe(firstRaw.properties.logicalName);
     expect(firstRow.appModuleId).toBe(firstRaw.properties.appModuleId);
+  });
+});
+
+describe("environment-group lifecycle mapping", () => {
+  it("preserves lastModifiedAt in both list and detail results", async () => {
+    const lastModifiedAt = "2026-10-01T10:00:00Z";
+    queryResourcesMock.mockResolvedValue({
+      success: true,
+      data: {
+        data: [{
+          name: "group-1",
+          type: ResourceType.EnvironmentGroup,
+          properties: { displayName: "Group", lastModifiedAt },
+        }],
+        totalRecords: 1,
+      },
+    });
+    const list = await listEnvironmentGroups();
+    expect(list).toMatchObject({ ok: true, data: [{ lastModifiedAt }] });
+    const detail = await getEnvironmentGroup("group-1");
+    expect(detail).toMatchObject({ ok: true, data: { row: { lastModifiedAt } } });
   });
 });
 

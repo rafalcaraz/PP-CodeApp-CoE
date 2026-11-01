@@ -29,7 +29,9 @@
   [Owner / creator GUID resolution](#owner--creator-guid-resolution)
   section below for what those GUIDs can actually point to** — it is *not*
   always a human user.
-- `properties.isQuarantined`, `properties.isManaged` are booleans.
+- `properties.isQuarantined`, `properties.isManaged` are booleans when
+  populated. Agent `isManaged` can be null (including Agent Builder agents);
+  preserve null as unavailable / not applicable, not explicitly unmanaged.
 
 ## Owner / creator GUID resolution
 
@@ -118,8 +120,8 @@ All of them are read by this app — there are no unmodeled types as of now.
 | `microsoft.powerplatform/environments` | Environments | structural (no live capture yet) | `/environments` |
 | `microsoft.powerapps/canvasapps` | Canvas apps | ✅ real | `/apps` |
 | `microsoft.powerapps/modeldrivenapps` | Model-driven apps | ✅ real | `/apps` |
-| `microsoft.powerapps/codeapps` | Code apps | ✅ real | `/apps` |
-| `microsoft.powerapps/apps` | App Builder apps | ✅ real | `/apps` |
+| `microsoft.powerapps/codeapps` | Code / vibe apps | ✅ real (code) | `/apps` |
+| `microsoft.powerapps/apps` | Managed / App Builder apps | ✅ real (App Builder) | `/apps` |
 | `microsoft.powerautomate/cloudflows` | Cloud flows | ✅ real | `/flows` |
 | `microsoft.powerautomate/agentflows` | Agent flows | shape matches cloud flows | `/flows` |
 | `microsoft.powerautomate/m365agentflows` | Workflow agent flows | shape matches cloud flows | `/flows` |
@@ -176,6 +178,39 @@ Captured while building the data layer. Don't relearn these the hard way:
 
 ---
 
+### Connector references versus direct operation usage
+
+The connector catalog lists **available** actions and triggers. That does not
+mean a resource uses them. In particular, a canvas app referencing `shared_sql`
+without `operations` is a connector/data-source reference, not evidence that
+the app uses SQL delete actions.
+
+The connector detail page preserves **Connector references** and adds **Direct
+operation usage**. Select one or more operation IDs with **Any selected
+operation** or **All selected operations**, or select **Find usage** beside a
+catalog operation. An empty selection finds any reported operation on that
+connector. An operation ID not present in the catalog can be added explicitly;
+observed IDs are also offered after loading.
+
+The structured clause API cannot expand nested arrays. The finder therefore
+loads connector-prefiltered candidates across apps, flows, and agents, using
+both continuation tokens and cumulative skip, then checks each operation
+**inside the matching connector entry**. Operation IDs are case-insensitive;
+connector ARM paths and bare/shared-prefix variants are normalized. Operations
+on another connector never satisfy a selected combination. Flow triggers are
+included with a **trigger** label, and disabled operations are labeled rather
+than treated as execution evidence.
+
+The complete loaded snapshot is reused while changing selections, match mode,
+or resource category. Refresh reloads it. Results and the catalog display
+25 rows per page; exports retain all matching rows, not just the current page.
+The loader rejects failed/inconsistent paging and scans exceeding the
+25-page, 500-rows-per-page safety bound per resource category rather than
+presenting partial results as complete. These guarantees concern the returned
+inventory records, **not complete dependency coverage**: missing operation IDs
+do not prove an action is unused, and reported configuration is not runtime
+execution telemetry.
+
 ## Environment groups
 
 `type: "microsoft.powerplatform/environmentgroups"`
@@ -206,7 +241,7 @@ Captured while building the data layer. Don't relearn these the hard way:
 - Only top-level + shared fields beyond these.
 
 **Currently consumed by the app:** displayName, description, createdAt,
-createdBy, location. (`lastModifiedAt` is in the schema but not yet displayed.)
+createdBy, location, lastModifiedAt (list/detail data; shown on detail).
 
 > **TODO:** Replace with a real captured payload to confirm shape and uncover
 > any undocumented fields.
@@ -366,9 +401,11 @@ createdBy, location. (`lastModifiedAt` is in the schema but not yet displayed.)
 
 - The sparsest of all app types. Don't expect connector metadata or share
   counts — they're not in the inventory schema for code apps today.
-- `properties.subType` distinguishes flavors (e.g. `"byocApp"` — bring-your-own-code).
+- `properties.subType` distinguishes `"byocApp"` (code app) from
+  `"vibeApp"` (vibe app). The Apps list labels and server-side sub-type
+  filter distinguish these without introducing a new resource type.
 
-## App-builder apps
+## Managed and App Builder apps
 
 `type: "microsoft.powerapps/apps"`
 
@@ -410,6 +447,18 @@ createdBy, location. (`lastModifiedAt` is in the schema but not yet displayed.)
   trailing slug (`shared_sharepointonline`).
 - `connectionType` values seen: `"invoker"`.
 - `subType: "appBuilderApp"`.
+- The same resource type also includes managed apps with
+  `subType: "microsoftApp"`; both are included in app inventory.
+
+**Current documented connector-usage coverage (September 28, 2026):**
+code/vibe apps, managed apps, and App Builder apps are not covered by the
+connector-usage preview. The `properties.connectors` shape above remains an
+observed legacy payload and is still read when present. Empty usage must not
+be interpreted as proof of no dependencies. Model-driven apps rarely report
+connectors; embedded canvas-page usage is on the canvas page record.
+Tabular connectors can have empty operation arrays, and built-in Power
+Automate actions (including HTTP) are not captured. Connector usage contains
+IDs; names, tiers, and publisher metadata come from the separate catalog.
 
 ## Cloud flows
 
@@ -609,8 +658,19 @@ Also applies (similar shape) to `microsoft.powerautomate/agentflows` and
     `distinctPowerPlatformConnectorsOperations`, **`distinctFlows`**
     (server-side count of the `flows` array — prefer this to
     `array_length(flows)` for filtering since it's a flat scalar).
-  - **Lifecycle:** `lastPublishedAt`, `publishState`/`state`,
-    `isManaged`, `isQuarantined`.
+  - **Lifecycle:** `lastPublishedAt`, `isManaged`, `isQuarantined`.
+    There is no documented `publishState`/`state`; an empty
+    `lastPublishedAt` indicates a draft.
+- **Documented agent schema additions (checked October 29, 2026; no live
+  capture yet):** `harness`, `botId`, `entraAgentId`,
+  `entraAgentBlueprintId`, and `quarantinedAt` are mapped, suggested in
+  query/dashboard pickers, and shown on detail. Newer agents use the Entra
+  agent/blueprint identities rather than only the legacy `entraAppId`.
+  Identity properties can be absent, especially for Agent Builder agents.
+  Null/missing `isManaged` stays null in `AgentRow`; the detail view reports
+  it as unavailable / not applicable. Newly created risk-dashboard tiles
+  score unmanaged status only when explicitly false; existing saved raw
+  tiles retain their saved clauses.
 - **Connector operations are RICH for agents** (vs. apps/flows which often
   only give `operationId`). Per-op fields:
   - `usedAs` — `"Tool"`, `"Knowledge"`, `"Topic Tool"`.

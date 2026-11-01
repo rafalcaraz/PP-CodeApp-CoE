@@ -15,6 +15,15 @@ describe("Copilot Studio Estate template", () => {
     expect(typeof tpl.buildLayout).toBe("function");
   });
 
+  it("only scores explicitly unmanaged agents, not null / unavailable status", () => {
+    const clauses = tpl.build().flatMap((tile) => tile.clauses ?? []);
+    expect(clauses).toContainEqual(expect.objectContaining({
+      $type: "extend",
+      FieldName: "__r_unmgd",
+      Expression: "iif(tobool(properties.isManaged) == false, 1, 0)",
+    }));
+  });
+
   it("buildLayout returns the ten Phase 2 tabs in order", () => {
     const layout = tpl.buildLayout!();
     expect(layout.tabs.map((t) => t.name)).toEqual([
@@ -340,4 +349,3 @@ describe("Power Automate Estate template", () => {
     expect(DASHBOARD_TEMPLATES.find((t) => t.id === "power-automate-estate")).toBeDefined();
   });
 });
-

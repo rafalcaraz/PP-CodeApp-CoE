@@ -255,6 +255,14 @@ function ReadyView({
             <Meta label="Orchestration">{row.orchestration || "—"}</Meta>
             <Meta label="Authentication">{row.authentication || "—"}</Meta>
             <Meta label="Created in">{row.createdIn || "—"}</Meta>
+            <Meta label="Harness">{row.harness || "—"}</Meta>
+            <Meta label="Managed solution">
+              {row.isManaged == null
+                ? "Not applicable / not reported"
+                : row.isManaged
+                  ? "Managed"
+                  : "Unmanaged"}
+            </Meta>
             <Meta label="Instructions">
               {row.instructionsCharactersCount > 0
                 ? `${row.instructionsCharactersCount.toLocaleString()} chars`
@@ -404,7 +412,7 @@ function ReadyView({
       <Card className={styles.colHalf}>
         <CardHeader
           header={<Text weight="semibold">Lifecycle</Text>}
-          description={<Text size={200}>When this agent was created and last published.</Text>}
+          description={<Text size={200}>Creation, publication, and quarantine timestamps.</Text>}
         />
         <Divider />
         <div className={styles.cardBody}>
@@ -415,6 +423,9 @@ function ReadyView({
             <Meta label="Last published">
               <DateWithRelative value={row.lastPublishedAt} />
             </Meta>
+            <Meta label="Last quarantined">
+              <DateWithRelative value={row.quarantinedAt} />
+            </Meta>
           </div>
         </div>
       </Card>
@@ -424,9 +435,12 @@ function ReadyView({
         className={styles.colFull}
         items={[
           { label: "Agent ID", value: row.id },
+          { label: "Dataverse bot ID", value: row.botId },
           { label: "Schema name", value: row.schemaName },
           { label: "Environment ID", value: row.environmentId },
           { label: "Entra app ID", value: row.entraAppId },
+          { label: "Entra agent ID", value: row.entraAgentId },
+          { label: "Entra agent blueprint ID", value: row.entraAgentBlueprintId },
           { label: "Title ID", value: row.titleId },
           { label: "Tenant ID", value: row.tenantId },
         ]}

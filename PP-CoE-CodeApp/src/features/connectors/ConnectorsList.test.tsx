@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { FluentProvider, webLightTheme } from "@fluentui/react-components";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
@@ -77,6 +77,86 @@ beforeEach(() => {
 });
 
 describe("ConnectorsList", () => {
+  function manyConnectors(count = 61) {
+    const entries = Array.from({ length: count }, (_, index) =>
+      entry(`shared_test_${index}`, {
+        displayName: `Connector ${String(index).padStart(3, "0")}`,
+      }),
+    );
+    mockedUseCatalog.mockReturnValue({
+      catalog: catalog(entries),
+      status: "ready",
+      error: "",
+      classify: vi.fn(),
+    });
+    return entries;
+  }
+
+  it("renders 25 connectors per page, including a partial final page", async () => {
+    manyConnectors();
+    renderView();
+    expect(screen.getAllByRole("row")).toHaveLength(26);
+    expect(screen.getByText(/Page 1 of 3/)).toBeInTheDocument();
+    expect(screen.queryByText("Connector 025")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Previous" })).toBeDisabled();
+    await userEvent.click(screen.getByRole("button", { name: "Next" }));
+    expect(screen.getByText("Connector 025")).toBeInTheDocument();
+    expect(screen.queryByText("Connector 000")).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Next" }));
+    expect(screen.getAllByRole("row")).toHaveLength(12);
+    expect(screen.getByRole("button", { name: "Next" })).toBeDisabled();
+    await userEvent.click(screen.getByRole("button", { name: "Previous" }));
+    expect(screen.getByText(/Page 2 of 3/)).toBeInTheDocument();
+  });
+
+  it("sorts the entire catalog before slicing and resets paging on sort or filter", async () => {
+    manyConnectors();
+    renderView();
+    await userEvent.click(screen.getByRole("button", { name: "Next" }));
+    await userEvent.click(screen.getByRole("columnheader", { name: /Display name/i }));
+    expect(screen.getByText(/Page 1 of 3/)).toBeInTheDocument();
+    expect(screen.getByText("Connector 060")).toBeInTheDocument();
+    expect(screen.queryByText("Connector 000")).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Next" }));
+    fireEvent.change(screen.getByPlaceholderText(/Type to filter/i), {
+      target: { value: "Connector 00" },
+    });
+    expect(screen.getByText(/Page 1 of 1/)).toBeInTheDocument();
+    expect(screen.getAllByRole("row")).toHaveLength(11);
+  });
+
+  it("exports the complete catalog and filtered results, not just the visible page", async () => {
+    manyConnectors();
+    renderView();
+    await userEvent.click(screen.getByRole("button", { name: /Export all/i }));
+    expect(mockedRowsToCsv.mock.calls.at(-1)?.[0]).toHaveLength(61);
+    fireEvent.change(screen.getByPlaceholderText(/Type to filter/i), {
+      target: { value: "Connector" },
+    });
+    await userEvent.click(screen.getByRole("button", { name: /Export filtered/i }));
+    expect(mockedRowsToCsv.mock.calls.at(-1)?.[0]).toHaveLength(61);
+  });
+
+  it("clamps the current page when a refreshed catalog shrinks", async () => {
+    manyConnectors();
+    const view = renderView();
+    await userEvent.click(screen.getByRole("button", { name: "Next" }));
+    await userEvent.click(screen.getByRole("button", { name: "Next" }));
+    manyConnectors(2);
+    view.rerender(
+      <FluentProvider theme={webLightTheme}>
+        <MemoryRouter initialEntries={["/connectors"]}>
+          <Routes>
+            <Route path="/connectors" element={<ConnectorsList />} />
+            <Route path="/connectors/:connectorId" element={<div>Connector detail route</div>} />
+          </Routes>
+        </MemoryRouter>
+      </FluentProvider>,
+    );
+    expect(screen.getByText(/Page 1 of 1/)).toBeInTheDocument();
+    expect(screen.getAllByRole("row")).toHaveLength(3);
+  });
+
   it("renders a loading state when the catalog is still loading", () => {
     mockedUseCatalog.mockReturnValue({
       catalog: undefined,

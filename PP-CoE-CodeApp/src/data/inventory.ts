@@ -600,6 +600,7 @@ export interface EnvironmentGroupRow {
   description: string;
   createdAt: string;
   createdBy: string;
+  lastModifiedAt: string;
   location: string;
 }
 
@@ -683,6 +684,7 @@ export interface AppRow {
 
 export interface AppFilters {
   types?: ResourceTypeValue[];
+  subType?: string;
   environmentId?: string;
   nameContains?: string;
 }
@@ -765,16 +767,21 @@ export interface AgentRow {
   // Note: the inventory API does NOT return `lastModifiedAt`,
   // `lastModifiedBy`, `publishState`, or `state` for
   // `microsoft.copilotstudio/agents` (verified against real payloads).
-  // `lastPublishedAt` is the only lifecycle timestamp we get for agents.
+  // Publication and quarantine have their own lifecycle timestamps.
   lastPublishedAt: string;
+  quarantinedAt: string;
   region: string;
   tenantId: string;
   // Identity / wiring
+  botId: string;
   entraAppId: string;
+  entraAgentId: string;
+  entraAgentBlueprintId: string;
   titleId: string;
   createdIn: string;
   authentication: string;
   // Behavior
+  harness: string;
   orchestration: string;
   model: string;
   instructionsCharactersCount: number;
@@ -790,7 +797,7 @@ export interface AgentRow {
   sharedWithEditors: AgentSharingCounts;
   sharedWithViewers: AgentSharingCounts;
   // Governance
-  isManaged: boolean;
+  isManaged: boolean | null;
   isQuarantined: boolean;
   // Roll-up counts
   distinctConnectors: number;
@@ -838,18 +845,22 @@ function propStr(item: ResourceItem, key: string): string {
   return typeof val === "string" ? val : "";
 }
 
-function propBool(item: ResourceItem, key: string): boolean {
+function propValueCaseInsensitive(item: ResourceItem, key: string): unknown {
   const props = (item.properties ?? {}) as Record<string, unknown>;
   const exact = props[key];
-  const value =
+  return (
     exact !== undefined
       ? exact
       : props[
           Object.keys(props).find(
             (candidate) => candidate.toLowerCase() === key.toLowerCase(),
           ) ?? ""
-        ];
+        ]
+  );
+}
 
+function propBool(item: ResourceItem, key: string): boolean {
+  const value = propValueCaseInsensitive(item, key);
   if (typeof value === "boolean") return value;
   if (typeof value === "number") return value !== 0;
   if (typeof value === "string") {
@@ -863,6 +874,10 @@ function propBool(item: ResourceItem, key: string): boolean {
     if (typeof inner === "string") return inner.trim().toLowerCase() === "true";
   }
   return false;
+}
+
+function propNullableBool(item: ResourceItem, key: string): boolean | null {
+  return propValueCaseInsensitive(item, key) == null ? null : propBool(item, key);
 }
 
 function propNum(item: ResourceItem, key: string): number {
@@ -1066,6 +1081,7 @@ export async function listEnvironmentGroups(): Promise<DataResult<EnvironmentGro
       description: propStr(item, "description"),
       createdAt: propStr(item, "createdAt"),
       createdBy: propStr(item, "createdBy"),
+      lastModifiedAt: propStr(item, "lastModifiedAt"),
       location: item.location ?? "",
     })),
   };
@@ -1092,6 +1108,7 @@ export async function getEnvironmentGroup(
         description: propStr(item, "description"),
         createdAt: propStr(item, "createdAt"),
         createdBy: propStr(item, "createdBy"),
+        lastModifiedAt: propStr(item, "lastModifiedAt"),
         location: item.location ?? "",
       },
       raw: item,
@@ -1751,9 +1768,9 @@ export function friendlyResourceType(type: string): string {
     case ResourceType.ModelDrivenApp:
       return "Model-driven apps";
     case ResourceType.CodeApp:
-      return "Code apps";
+      return "Code and vibe apps";
     case ResourceType.AppBuilderApp:
-      return "App Builder apps";
+      return "Managed and App Builder apps";
     case ResourceType.CloudFlow:
       return "Cloud flows";
     case ResourceType.AgentFlow:
@@ -1774,16 +1791,20 @@ export function friendlyResourceType(type: string): string {
 }
 
 /** Short label for inline use (e.g. table cells). */
-export function shortResourceType(type: string): string {
+export function shortResourceType(type: string, subType?: string): string {
   switch (type) {
     case ResourceType.CanvasApp:
       return "Canvas app";
     case ResourceType.ModelDrivenApp:
       return "Model-driven app";
     case ResourceType.CodeApp:
-      return "Code app";
+      return subType === "vibeApp" ? "Vibe app" : "Code app";
     case ResourceType.AppBuilderApp:
-      return "App";
+      return subType === "microsoftApp"
+        ? "Managed app"
+        : subType === "appBuilderApp"
+          ? "App Builder app"
+          : "App";
     case ResourceType.CloudFlow:
       return "Cloud flow";
     case ResourceType.AgentFlow:
@@ -1910,14 +1931,19 @@ export function toAgentRow(item: ResourceItem): AgentRow {
     createdAt: propStr(item, "createdAt"),
     createdBy: propStr(item, "createdBy") || propNestedStr(item, "createdBy", "displayName"),
     lastPublishedAt: propStr(item, "lastPublishedAt"),
+    quarantinedAt: propStr(item, "quarantinedAt"),
     region: item.location ?? "",
     tenantId: (raw.tenantId as string) ?? "",
     // Identity / wiring
+    botId: propStr(item, "botId"),
     entraAppId: propStr(item, "entraAppId"),
+    entraAgentId: propStr(item, "entraAgentId"),
+    entraAgentBlueprintId: propStr(item, "entraAgentBlueprintId"),
     titleId: propStr(item, "titleId"),
     createdIn: propStr(item, "createdIn"),
     authentication: propStr(item, "authentication"),
     // Behavior
+    harness: propStr(item, "harness"),
     orchestration: propStr(item, "orchestration"),
     model: propStr(item, "model"),
     instructionsCharactersCount: propNum(item, "instructionsCharactersCount"),
@@ -1936,7 +1962,7 @@ export function toAgentRow(item: ResourceItem): AgentRow {
       entireTenant: propNestedBool(item, "sharedWithViewers", "entireTenant"),
     },
     // Governance
-    isManaged: propBool(item, "isManaged"),
+    isManaged: propNullableBool(item, "isManaged"),
     isQuarantined: propBool(item, "isQuarantined"),
     // Roll-up counts (capabilitiesCounts is a nested object)
     distinctConnectors: propNestedNum(item, "capabilitiesCounts", "distinctPowerPlatformConnectors"),
@@ -2058,6 +2084,9 @@ export async function listAppsPage(
     typeList,
     environmentId: filters.environmentId,
     nameContains: filters.nameContains,
+    extraWhere: filters.subType?.trim()
+      ? [where("properties.subType", "==", [`'${filters.subType.trim().replace(/'/g, "''")}'`])]
+      : undefined,
   });
   const res = await runQuery(clauses, { Top: pageSize, Skip: skip, SkipToken: skipToken ?? "" });
   if (!res.ok) return res;
@@ -2658,9 +2687,9 @@ export function resourceTypeShort(t: ResourceTypeValue): string {
     case ResourceType.ModelDrivenApp:
       return "Model-driven";
     case ResourceType.CodeApp:
-      return "Code app";
+      return "Code / vibe";
     case ResourceType.AppBuilderApp:
-      return "App Builder";
+      return "Managed / App Builder";
     case ResourceType.CloudFlow:
       return "Cloud flow";
     case ResourceType.AgentFlow:

@@ -319,7 +319,7 @@ function riskScoreExtends(): Clause[] {
       "__r_orph",
       `iif(tostring(properties.ownerId) == '${ZERO_GUID}', 1, 0)`
     ),
-    extend("__r_unmgd", "iif(tobool(properties.isManaged), 0, 1)"),
+    extend("__r_unmgd", "iif(tobool(properties.isManaged) == false, 1, 0)"),
     extend("__risk", "__r_tw + __r_noauth + __r_qu + __r_orph + __r_unmgd"),
   ];
 }
@@ -1130,14 +1130,14 @@ function canvasMdaEstateLayout(): { tabs: DashboardTab[]; tiles: DashboardTile[]
       t.overview
     ),
     appKpiTile(
-      "Code apps",
+      "Code and vibe apps",
       "Cross-link from Modern template",
       [...appScope([ResourceType.CodeApp])],
       "xs",
       t.overview
     ),
     appKpiTile(
-      "App-builder apps",
+      "Managed and App Builder apps",
       "Cross-link from Modern template",
       [...appScope([ResourceType.AppBuilderApp])],
       "xs",
@@ -1415,21 +1415,21 @@ function modernAppsEstateLayout(): { tabs: DashboardTab[]; tiles: DashboardTile[
   const tiles: DashboardTile[] = [
     // ── Overview ─────────────────────────────────────────────────────────
     appKpiTile(
-      "Code apps",
+      "Code and vibe apps",
       "Total customer-built",
       [...appScope([ResourceType.CodeApp])],
       "xs",
       t.overview
     ),
     appKpiTile(
-      "App-builder apps",
+      "Managed and App Builder apps",
       "Total customer-built",
       [...appScope([ResourceType.AppBuilderApp])],
       "xs",
       t.overview
     ),
     appKpiTile(
-      "Code apps — new this month",
+      "Code and vibe apps — new this month",
       "Created in last 30 days",
       [
         ...appScope([ResourceType.CodeApp]),
@@ -1439,7 +1439,7 @@ function modernAppsEstateLayout(): { tabs: DashboardTab[]; tiles: DashboardTile[
       t.overview
     ),
     appKpiTile(
-      "App-builder apps — new this month",
+      "Managed and App Builder apps — new this month",
       "Created in last 30 days",
       [
         ...appScope([ResourceType.AppBuilderApp]),
@@ -1449,7 +1449,7 @@ function modernAppsEstateLayout(): { tabs: DashboardTab[]; tiles: DashboardTile[
       t.overview
     ),
     appComputedTile(
-      "Code app sub-types",
+      "Code / vibe sub-types",
       APP_AGGREGATOR_IDS.byCodeSubType,
       "pie",
       { size: "medium", tabId: t.overview }
@@ -1457,19 +1457,19 @@ function modernAppsEstateLayout(): { tabs: DashboardTab[]; tiles: DashboardTile[
 
     // ── Inventory ────────────────────────────────────────────────────────
     appTableTile(
-      "All Code apps",
+      "All code and vibe apps",
       [...appScope([ResourceType.CodeApp]), appOrderByCreatedDesc()],
       { rows: 30, size: "large", columns: modernColumns, tabId: t.inventory }
     ),
     appTableTile(
-      "All App-builder apps",
+      "All managed and App Builder apps",
       [...appScope([ResourceType.AppBuilderApp]), appOrderByCreatedDesc()],
       { rows: 30, size: "large", columns: modernColumns, tabId: t.inventory }
     ),
 
     // ── Trends ───────────────────────────────────────────────────────────
     appComputedTile(
-      "Code + App-builder creation trend (monthly, 12 mo)",
+      "Modern apps creation trend (monthly, 12 mo)",
       APP_AGGREGATOR_IDS.createdTrend,
       "line",
       {
@@ -2169,10 +2169,10 @@ export const DASHBOARD_TEMPLATES: DashboardTemplate[] = [
   },
   {
     id: "modern-apps-estate",
-    name: "Modern Apps Estate (Code + App Builder)",
+    name: "Modern Apps Estate (Code, Vibe, Managed + App Builder)",
     description:
       "Inventory and creation trends for the newer Power Apps modalities — " +
-      "Code apps (BYOC) and App Builder apps. Kept separate from the Canvas + " +
+      "code apps (BYOC), vibe apps, managed apps, and App Builder apps. Kept separate from the Canvas + " +
       "MDA template so growth in these emerging surfaces is visible at a glance " +
       "rather than buried under the larger canvas / model-driven population.",
     build: modernAppsEstateTiles,
