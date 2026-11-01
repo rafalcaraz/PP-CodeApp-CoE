@@ -1,5 +1,5 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
-<ImportExportXml xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" OrganizationVersion="9.2.26081.172" OrganizationSchemaType="Standard" CRMServerServiceabilityVersion="9.2.26081.00172">
+<ImportExportXml xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" OrganizationVersion="9.2.26094.166" OrganizationSchemaType="Standard" CRMServerServiceabilityVersion="9.2.26094.00166">
   <Entities />
   <Roles />
   <Workflows />
@@ -16,6 +16,15 @@
     <connectionreference connectionreferencelogicalname="msftcsa_HTTPEntraPreAuthGraph">
       <connectionreferencedisplayname>HTTP Entra PreAuth - Graph</connectionreferencedisplayname>
       <connectorid>/providers/Microsoft.PowerApps/apis/shared_webcontents</connectorid>
+      <iscustomizable>1</iscustomizable>
+      <promptingbehavior>0</promptingbehavior>
+      <statecode>0</statecode>
+      <statuscode>1</statuscode>
+    </connectionreference>
+    <connectionreference connectionreferencelogicalname="msftcsa_HTTPWithEntraPPAPI">
+      <connectionreferencedisplayname>HTTP With Entra - PPAPI</connectionreferencedisplayname>
+      <connectorid>/providers/Microsoft.PowerApps/apis/shared_webcontents</connectorid>
+      <description>https://api.powerplatform.com</description>
       <iscustomizable>1</iscustomizable>
       <promptingbehavior>0</promptingbehavior>
       <statecode>0</statecode>
