@@ -1,12 +1,12 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
-<ImportExportXml version="9.2.26081.172" SolutionPackageVersion="9.2" languagecode="1033" generatedBy="CrmLive" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" OrganizationVersion="9.2.26081.172" OrganizationSchemaType="Standard" CRMServerServiceabilityVersion="9.2.26081.00172">
+<ImportExportXml version="9.2.26094.166" SolutionPackageVersion="9.2" languagecode="1033" generatedBy="CrmLive" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" OrganizationVersion="9.2.26094.166" OrganizationSchemaType="Standard" CRMServerServiceabilityVersion="9.2.26094.00166">
   <SolutionManifest>
     <UniqueName>PPCoECodeApp</UniqueName>
     <LocalizedNames>
       <LocalizedName description="PP-CoE-CodeApp" languagecode="1033" />
     </LocalizedNames>
     <Descriptions />
-    <Version>1.1.0.0</Version>
+    <Version>1.1.0.1</Version>
     <Managed>0</Managed>
     <Publisher>
       <UniqueName>MicrosoftCSA</UniqueName>
@@ -83,6 +83,7 @@
       <RootComponent type="29" id="{33b80a7f-176c-f111-a826-000d3a34206e}" behavior="0" />
       <RootComponent type="29" id="{78b5e751-d55e-f111-a826-000d3a34206e}" behavior="0" />
       <RootComponent type="29" id="{8eee7be1-6d75-f111-ab0f-000d3a34206e}" behavior="0" />
+      <RootComponent type="29" id="{99612410-b2d3-f111-a05b-7ced8d703e00}" behavior="0" />
       <RootComponent type="300" schemaName="msftcsa_ppcoecodeapp_63a36" behavior="0" />
     </RootComponents>
     <MissingDependencies>
@@ -93,8 +94,8 @@
         <Dependent type="300" schemaName="msftcsa_ppcoecodeapp_63a36" displayName="PP-COE-CodeApp" />
       </MissingDependency>
       <MissingDependency>
-        <Required type="1" schemaName="botcomponent" displayName="Agent component" solution="PowerVirtualAgents (2026.5.4.21205268)">
-          <package appName="CCI Bots" version="2026.5.4.21205268">msdynce_CustomerCareIntelligenceBots_Anchor (2026.5.4.21205268)</package>
+        <Required type="1" schemaName="botcomponent" displayName="Agent component" solution="PowerVirtualAgents (2026.9.1.22429117)">
+          <package appName="CCI Bots" version="2026.9.1.22429117">msdynce_CustomerCareIntelligenceBots_Anchor (2026.9.1.22429117)</package>
         </Required>
         <Dependent type="29" displayName="DownloadFile-Dataverse" id="{8eee7be1-6d75-f111-ab0f-000d3a34206e}" />
       </MissingDependency>
