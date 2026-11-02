@@ -1,4 +1,5 @@
 <environmentvariabledefinition schemaname="msftcsa_MACCostControlsClientSecret">
+  <defaultvalue>CLIENT-SECRET</defaultvalue>
   <displayname default="MAC CostControls ClientSecret">
     <label description="MAC CostControls ClientSecret" languagecode="1033" />
   </displayname>
