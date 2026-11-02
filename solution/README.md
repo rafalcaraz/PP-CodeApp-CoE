@@ -14,7 +14,8 @@ This folder holds the **unpacked** Power Platform solution that wraps the
 The Cost Controls connector is included with
 `msftcsa_MACCostControlsConnRef`. Its OAuth settings reference
 `msftcsa_MACCostControlsClientId` and `msftcsa_MACCostControlsClientSecret`;
-their committed definitions intentionally have no credential defaults.
+their committed definitions contain only the nonfunctional placeholders
+`MAC-CLIENT-ID` and `CLIENT-SECRET`, never actual credentials.
 Supply the values privately in the destination environment and create/bind
 the connector connection there. Never commit exported defaults containing
 credentials, signed connector download URLs, or resolved connection IDs.
