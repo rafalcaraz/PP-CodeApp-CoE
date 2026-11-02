@@ -210,6 +210,16 @@ const PRE_ZONES_SECTIONS: NavSection[] = [
 
 const POST_ZONES_SECTIONS: NavSection[] = [
   {
+    key: "cost-controls",
+    label: "Cost Controls",
+    icon: <DataPieRegular />,
+    defaultOpen: true,
+    items: [
+      { key: "cost-reporting", label: "Credit reporting", icon: <ChartMultipleRegular />, path: "/cost-controls/reporting" },
+      { key: "cost-management", label: "Policy management", icon: <SettingsRegular />, path: "/cost-controls/management" },
+    ],
+  },
+  {
     key: "insights",
     label: "Insights",
     icon: <DataTrending24Regular />,
@@ -258,6 +268,7 @@ const POST_ZONES_SECTIONS: NavSection[] = [
     items: [
       { key: "connector-playground", label: "Connector playground", icon: <PlugConnectedRegular />, path: "/connector-playground" },
       { key: "power-platform-api", label: "Power Platform API", icon: <PlayRegular />, path: "/power-platform-api" },
+      { key: "cost-management-api", label: "Cost Management API", icon: <PlayRegular />, path: "/cost-management-api" },
     ],
   },
   {

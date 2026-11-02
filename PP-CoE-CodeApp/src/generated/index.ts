@@ -6,6 +6,7 @@
 // Models
 export * as AadusersModel from './models/AadusersModel';
 export * as CommonModels from './models/CommonModels';
+export * as CostControsl_CustomConnModel from './models/CostControsl_CustomConnModel';
 export * as DownloadFile_DataverseModel from './models/DownloadFile_DataverseModel';
 export * as HTTPwithMicrosoftEntraID_preauthorized_Model from './models/HTTPwithMicrosoftEntraID_preauthorized_Model';
 export * as ListRows_DataverseModel from './models/ListRows_DataverseModel';
@@ -17,6 +18,7 @@ export * as PowerPlatformforAdminsV2Model from './models/PowerPlatformforAdminsV
 
 // Services
 export * from './services/AadusersService';
+export * from './services/CostControsl_CustomConnService';
 export * from './services/DownloadFile_DataverseService';
 export * from './services/HTTPwithMicrosoftEntraID_preauthorized_Service';
 export * from './services/ListRows_DataverseService';

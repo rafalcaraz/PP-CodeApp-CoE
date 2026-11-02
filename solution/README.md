@@ -11,6 +11,16 @@ This folder holds the **unpacked** Power Platform solution that wraps the
 
 > **Note:** The compiled Code App bundle (`CanvasApps/<appName>_CodeAppPackages/`) is gitignored — it's regenerated on every `npx power-apps push` and on every `node scripts/pack-solution.mjs`. Only the `.meta.xml` stub is tracked.
 
+The Cost Controls connector is included with
+`msftcsa_MACCostControlsConnRef`. Its OAuth settings reference
+`msftcsa_MACCostControlsClientId` and `msftcsa_MACCostControlsClientSecret`;
+their committed definitions intentionally have no credential defaults.
+Supply the values privately in the destination environment and create/bind
+the connector connection there. Never commit exported defaults containing
+credentials, signed connector download URLs, or resolved connection IDs.
+The tracked Code App metadata preserves logical connection references without
+source-environment connection IDs; resolve bindings in the destination.
+
 ---
 
 ## ⬇️ Pull cloud changes back into the repo

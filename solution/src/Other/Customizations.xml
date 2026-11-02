@@ -12,10 +12,12 @@
   <CustomControls />
   <EntityDataProviders />
   <CanvasApps />
+  <Connectors />
   <connectionreferences>
     <connectionreference connectionreferencelogicalname="msftcsa_HTTPEntraPreAuthGraph">
       <connectionreferencedisplayname>HTTP Entra PreAuth - Graph</connectionreferencedisplayname>
       <connectorid>/providers/Microsoft.PowerApps/apis/shared_webcontents</connectorid>
+      <description>Use https://graph.microsoft.com</description>
       <iscustomizable>1</iscustomizable>
       <promptingbehavior>0</promptingbehavior>
       <statecode>0</statecode>
@@ -24,7 +26,18 @@
     <connectionreference connectionreferencelogicalname="msftcsa_HTTPWithEntraPPAPI">
       <connectionreferencedisplayname>HTTP With Entra - PPAPI</connectionreferencedisplayname>
       <connectorid>/providers/Microsoft.PowerApps/apis/shared_webcontents</connectorid>
-      <description>https://api.powerplatform.com</description>
+      <description>Use https://api.powerplatform.com</description>
+      <iscustomizable>1</iscustomizable>
+      <promptingbehavior>0</promptingbehavior>
+      <statecode>0</statecode>
+      <statuscode>1</statuscode>
+    </connectionreference>
+    <connectionreference connectionreferencelogicalname="msftcsa_MACCostControlsConnRef">
+      <connectionreferencedisplayname>MAC CostControls ConnRef</connectionreferencedisplayname>
+      <connectorid>/providers/Microsoft.PowerApps/apis/shared_msftcsa-5fcostcontrosl-2dcustomconn-5f55e4fbc80e016c41</connectorid>
+      <customconnectorid>
+        <connectorid>e0dbad29-b3dd-4ded-a387-6134407015a4</connectorid>
+      </customconnectorid>
       <iscustomizable>1</iscustomizable>
       <promptingbehavior>0</promptingbehavior>
       <statecode>0</statecode>
@@ -65,6 +78,7 @@
     <connectionreference connectionreferencelogicalname="msftcsa_PPLicensingAPI">
       <connectionreferencedisplayname>PPLicensingAPI</connectionreferencedisplayname>
       <connectorid>/providers/Microsoft.PowerApps/apis/shared_webcontents</connectorid>
+      <description>Use https://licensing.powerplatform.microsoft.com</description>
       <iscustomizable>1</iscustomizable>
       <promptingbehavior>0</promptingbehavior>
       <statecode>0</statecode>

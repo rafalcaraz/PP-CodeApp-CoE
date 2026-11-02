@@ -35,7 +35,7 @@
         "webcontents"
       ],
       "authenticationType": "EntraAuth",
-      "sharedConnectionId": "/providers/Microsoft.PowerApps/apis/shared_webcontents/connections/b0b935afcb3a445caf00c0aed03be18e",
+      "sharedConnectionId": "/providers/Microsoft.PowerApps/apis/shared_webcontents/connections/<connection-id>",
       "dataSets": {},
       "xrmConnectionReferenceLogicalName": "msftcsa_HTTPEntraPreAuthGraph"
     },
@@ -107,7 +107,7 @@
       "workflowDetails": {
         "workflowEntityId": "99612410-b2d3-f111-a05b-7ced8d703e00",
         "workflowDisplayName": "PP-API-Wrapper-Flow",
-        "workflowName": "6f1f8c1f-2c23-33c4-8afc-a0aaa39f3953",
+        "workflowName": "99612410-b2d3-f111-a05b-7ced8d703e00",
         "dependencies": {
           "shared_webcontents": "9227eabd-b8f1-4fbb-aaa0-32b5d4aacc9d"
         }
@@ -119,6 +119,15 @@
       "authenticationType": "EntraAuth",
       "sharedConnectionId": "/providers/Microsoft.PowerApps/apis/shared_webcontents/connections/<connection-id>",
       "xrmConnectionReferenceLogicalName": "msftcsa_HTTPWithEntraPPAPI"
+    },
+    "84314172-45ee-4af9-a76e-cded5bca1bf2": {
+      "id": "/providers/Microsoft.PowerApps/apis/shared_msftcsa-5fcostcontrosl-2dcustomconn-5f55e4fbc80e016c41",
+      "displayName": "CostControsl-CustomConn",
+      "dataSources": [
+        "msftcsa_5fcostcontrosl_2dcustomconn_5f55e4fbc80e016c41"
+      ],
+      "dataSets": {},
+      "xrmConnectionReferenceLogicalName": "msftcsa_MACCostControlsConnRef"
     }
   },
   "databaseReferences": {

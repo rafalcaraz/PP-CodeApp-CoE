@@ -41,6 +41,8 @@ import { deepInventoryRoutes } from "./features/deep-inventory";
 import { settingsRoutes } from "./features/settings";
 import { connectorPlaygroundRoutes } from "./features/connector-playground";
 import { powerPlatformApiRoutes } from "./features/power-platform-api";
+import { costManagementApiRoutes } from "./features/cost-management-api";
+import { costControlsRoutes } from "./features/cost-controls";
 
 const CopilotChatLauncher = lazy(() =>
   import("./components/CopilotChat").then((m) => ({ default: m.CopilotChatLauncher }))
@@ -100,6 +102,8 @@ function AppShell() {
               {settingsRoutes()}
               {connectorPlaygroundRoutes()}
               {powerPlatformApiRoutes()}
+              {costManagementApiRoutes()}
+              {costControlsRoutes()}
               {securityRoutes()}
               {zonesRoutes()}
               <Route path="*" element={<HomeRedirect />} />
