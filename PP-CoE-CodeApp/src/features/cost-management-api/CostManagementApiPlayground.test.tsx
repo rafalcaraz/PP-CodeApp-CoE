@@ -39,7 +39,7 @@ describe("Cost Management API playground", () => {
     expect(screen.getByText("Beta")).toBeInTheDocument();
     expect(screen.getByText(/No passthrough flow/)).toBeInTheDocument();
     expect(screen.getByText(/List actions return one page only/)).toBeInTheDocument();
-    expect(screen.getByText(/https:\/\/graph.microsoft.com\/beta\/copilot\/costManagement\/getTenantCreditBalance/)).toBeInTheDocument();
+    expect(screen.getByText(/https:\/\/graph\.microsoft\.com\/beta\/copilot\/costManagement\/getTenantCreditBalance/)).toBeInTheDocument();
     expect(screen.queryByRole("textbox", { name: /connectionId/ })).not.toBeInTheDocument();
     expect(screen.getAllByRole("option").length).toBeGreaterThan(24);
     expect(executeCostRequest).not.toHaveBeenCalled();
