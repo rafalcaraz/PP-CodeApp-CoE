@@ -19,13 +19,17 @@
       "workflowDetails": {
         "workflowEntityId": "78b5e751-d55e-f111-a826-000d3a34206e",
         "workflowDisplayName": "PPLicensingAPI-Wrapper-Flow",
-        "workflowName": "496a336f-3040-b3cc-a8c7-466bd1d3f5b4"
+        "workflowName": "496a336f-3040-b3cc-a8c7-466bd1d3f5b4",
+        "dependencies": {
+          "shared_webcontents-1": "6427e5dd-15d9-4a11-b90f-1e41b8fb75b8"
+        }
       }
     },
     "6427e5dd-15d9-4a11-b90f-1e41b8fb75b8": {
       "id": "/providers/microsoft.powerapps/apis/shared_webcontents",
       "displayName": "HTTP with Microsoft Entra ID (preauthorized)",
       "authenticationType": "EntraAuth",
+      "sharedConnectionId": "/providers/Microsoft.PowerApps/apis/shared_webcontents/connections/<connection-id>",
       "xrmConnectionReferenceLogicalName": "msftcsa_PPLicensingAPI"
     },
     "d81f91ed-7d13-48cf-8b7f-1abbf1ca6172": {
