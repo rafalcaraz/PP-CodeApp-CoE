@@ -12,9 +12,13 @@
  * file exports only a component).
  */
 
-import { useCallback, useState, type ReactNode } from "react";
-import { UserLookupDialog } from "./UserLookupDialog";
+import { lazy, Suspense, useCallback, useState, type ReactNode } from "react";
 import { UserLookupContext, type OpenUserLookup } from "../hooks/useUserLookup";
+import { LoadingPane } from "./Status";
+
+const UserLookupDialog = lazy(() =>
+  import("./UserLookupDialog").then((module) => ({ default: module.UserLookupDialog })),
+);
 
 export function UserLookupProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<{ open: boolean; guid?: string }>({
@@ -34,12 +38,16 @@ export function UserLookupProvider({ children }: { children: ReactNode }) {
       {children}
       {/* Keyed remount on each open clears the dialog's internal state
           (input + result) without a setState-in-effect. */}
-      <UserLookupDialog
-        key={state.open ? `open-${state.guid ?? ""}` : "closed"}
-        open={state.open}
-        onClose={close}
-        initialGuid={state.guid}
-      />
+      {state.open && (
+        <Suspense fallback={<LoadingPane label="Loading user lookup..." />}>
+          <UserLookupDialog
+            key={`open-${state.guid ?? ""}`}
+            open={state.open}
+            onClose={close}
+            initialGuid={state.guid}
+          />
+        </Suspense>
+      )}
     </UserLookupContext.Provider>
   );
 }

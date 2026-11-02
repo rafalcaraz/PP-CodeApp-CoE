@@ -15,7 +15,7 @@ import {
   getScanSnapshot,
   subscribeToScan,
   type ScanSnapshot,
-} from "../shared/deep-inventory";
+} from "../shared/deep-inventory/status";
 
 const useStyles = makeStyles({
   root: {
