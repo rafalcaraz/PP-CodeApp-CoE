@@ -33,6 +33,12 @@ a subgroup stay together; the readable condition summary includes explicit
 parentheses. Resource types always constrain the entire condition tree,
 regardless of the root operator.
 
+The root has a neutral surface; lavender-tinted boxes, numbered legends, and
+spacing mark subgroup boundaries. The tint indicates containment, not AND/OR,
+validity, or a relationship between separate subgroups. Changing a match
+operator or removing a sibling does not change the tint. High-contrast mode
+uses system-colored borders and labels rather than depending on color.
+
 For example:
 
 ```text
