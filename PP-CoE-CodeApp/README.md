@@ -59,6 +59,22 @@ src/
 └── featureFlags/   # cross-cutting feature flags
 ```
 
+## Bundle loading
+
+Feature routes are lazy-loaded. The user-lookup dialog loads on first open.
+The shell reads scan status through `shared/deep-inventory/status`, avoiding
+the full feature barrel. Agent-evidence normalization and its YAML parser
+stay out of startup; they load with the scan feature or on demand when a
+Copilot agent scan retrieves evidence to process.
+Vite splits Fluent
+components by usage rather than forcing every widget into an initial vendor
+chunk. React, charts, and routing retain separate cacheable vendor chunks.
+
+The Power Platform API playground includes a large generated schema catalog.
+Its chunk may exceed the 700 kB build-warning threshold, but is fetched only
+when visiting that playground. Keep the warning enabled to catch growth;
+chunk size alone does not measure startup cost.
+
 ## Testing
 
 Tests live next to the code they test (`*.test.ts` / `*.test.tsx`). Pure

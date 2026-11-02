@@ -3,10 +3,7 @@ import {
   retrieveRecordPage,
   type DataverseRecord,
 } from "../../dataverse";
-import {
-  normalizeAgentEvidence,
-  type OpenRecord,
-} from "../agent-evidence";
+import type { OpenRecord } from "../agent-evidence";
 import type { DeepRecord, DeepRecordIdentity } from "../catalog/types";
 import type {
   DeepSource,
@@ -139,6 +136,9 @@ async function* fetchCopilotAgentPages(
       componentsResult.data.records,
       (record) => readString(record, "_parentbotid_value", "parentbotid")
     );
+
+    const { normalizeAgentEvidence } = await import("../agent-evidence");
+    if (signal.aborted) return;
 
     const records = batch.map((candidate) =>
       normalizeAgentEvidence({

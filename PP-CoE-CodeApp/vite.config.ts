@@ -6,21 +6,18 @@ import { powerApps } from "@microsoft/power-apps-vite/plugin"
 export default defineConfig({
   plugins: [react(), powerApps()],
   build: {
-    // The fluent vendor chunk is intentionally ~650 kB — Fluent UI as a whole
-    // doesn't shrink meaningfully without per-component imports we don't do.
-    // Bump the warning past it so the build log only shouts when *something
-    // new* breaks the budget.
     chunkSizeWarningLimit: 700,
     rollupOptions: {
       output: {
+        onlyExplicitManualChunks: true,
         // Pull big third-party libs into their own long-lived cache chunks so
         // app-code changes don't bust the vendor caches (and vice-versa).
         // The route chunks Vite already emits via React.lazy() pick these up
         // automatically when they need a vendor.
         manualChunks: {
-          // Fluent is the heaviest dependency by a wide margin (components +
-          // icons together). Splitting it isolates the bulk of the bundle.
-          fluent: ["@fluentui/react-components", "@fluentui/react-icons"],
+          // Keep the runtime cacheable, but let Vite split Fluent by actual
+          // usage so route-only widgets don't all get fetched at startup.
+          react: ["react", "react-dom/client"],
           // Recharts is only used inside the dashboards subtree but lives in
           // its own ~300 kB chunk regardless, so other routes don't pay for
           // it on first load.

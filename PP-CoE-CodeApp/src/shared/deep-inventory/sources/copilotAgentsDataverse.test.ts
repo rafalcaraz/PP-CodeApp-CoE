@@ -119,6 +119,32 @@ describe("copilotAgentsDataverseSource", () => {
     ).rejects.toThrow(/ListRows-Dataverse.*Forbidden/);
   });
 
+  it("does not emit evidence after cancellation during retrieval", async () => {
+    const controller = new AbortController();
+    retrieveRecordPageMock
+      .mockResolvedValueOnce({ ok: true, data: { records: [{ botid: "agent-1" }] } })
+      .mockImplementationOnce(async () => {
+        controller.abort();
+        return { ok: true, data: { records: [] } };
+      });
+
+    const pages = [];
+    for await (const page of copilotAgentsDataverseSource.fetch(
+      { envId: "env-1" },
+      controller.signal,
+      {
+        spec: SPEC,
+        resolveCandidates: vi.fn().mockResolvedValue([{ id: "agent-1", environmentId: "env-1" }]),
+      },
+    )) {
+      pages.push(page);
+    }
+
+    expect(pages).toHaveLength(1);
+    expect(pages[0].records).toEqual([]);
+    expect(retrieveRecordPageMock).toHaveBeenCalledTimes(2);
+  });
+
   it("yields partial records and then fails when Dataverse reports another page", async () => {
     retrieveRecordPageMock
       .mockResolvedValueOnce({

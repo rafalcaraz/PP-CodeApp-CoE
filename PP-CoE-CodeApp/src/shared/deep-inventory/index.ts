@@ -6,6 +6,8 @@
  * helpers, etc.) are intentionally NOT re-exported — keep them
  * private so refactors inside `shared/deep-inventory/` don't ripple
  * into the feature surface.
+ * Shell status consumers use `./status` to avoid eagerly evaluating
+ * the evidence-processing exports below.
  */
 
 // ── Types ────────────────────────────────────────────────────────────
