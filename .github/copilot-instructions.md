@@ -152,6 +152,41 @@ After committing a meaningful chunk of work (a feature, a phase of tests, a refa
 
 ## Commands
 
+### Publishing and releases: mandatory safety rules
+
+Read `solution/README.md` before publishing, packaging, exporting for another
+tenant, or changing connection registration. Local worktrees isolate files,
+**not** the cloud app: sessions using the same app ID update the same source
+deployment. Do not publish concurrently with another session. Before an
+authorized publish, confirm the source environment/app identity, capture a
+private backup export, and check that another session has not published newer
+work. Do not overwrite that work with an older checkout.
+
+- A passing build or successful CLI exit does **not** prove deployability.
+- Do not use `pa app push` with CLI 1.3.0: its mapper drops logical connection
+  reference names. Use `scripts/prepare-code-app-publish.mjs` with privately
+  resolved modern configuration, followed by `pac code push` from the generated
+  private directory. Do not run `pac code push` directly against modern
+  `workflowDetails` configuration. See `solution/README.md` for the exact steps.
+- Never publish placeholder bindings, reuse Graph's HTTP connection for another
+  audience, or change a flow's invoker/run-only model as a shortcut. Keep each
+  HTTP audience and its solution reference distinct.
+- Run the root Node connection/publishing tests before publishing. Afterward,
+  export the actual solution and run `scripts/verify-code-app-export.mjs`
+  against its expanded `customizations.xml`. Repeat against the final managed
+  ZIP before handing it off. Stop on any missing logical reference, HTTP
+  solution dependency, or changed flow invoker/dependency mapping.
+- Managed and unmanaged exports can generate different runtime connection IDs
+  and flow names. Compare logical references, workflow entity IDs and dependency
+  graphs, not byte-for-byte export equality.
+- Do not release an unchecked ZIP or claim cross-tenant success from source
+  checks. Confirm import, consent, and relevant calls in the destination, or
+  explicitly leave that check to the user when access is unavailable.
+- A new CLI version is not evidence that the publishing defect is fixed.
+  Remove the workaround only after verifying a fresh export and destination
+  consent using that version. Do not modify the release workflow without
+  explicit user direction.
+
 Run from `PP-CoE-CodeApp/`:
 
 ```

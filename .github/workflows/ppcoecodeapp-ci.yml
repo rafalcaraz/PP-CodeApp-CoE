@@ -5,11 +5,19 @@ on:
     branches: [main]
     paths:
       - 'PP-CoE-CodeApp/**'
+      - 'scripts/**'
+      - 'solution/src/Workflows/**'
+      - 'solution/src/CanvasApps/*.meta.xml'
+      - 'solution/src/Other/Solution.xml'
       - '.github/workflows/ppcoecodeapp-ci.yml'
   pull_request:
     branches: [main]
     paths:
       - 'PP-CoE-CodeApp/**'
+      - 'scripts/**'
+      - 'solution/src/Workflows/**'
+      - 'solution/src/CanvasApps/*.meta.xml'
+      - 'solution/src/Other/Solution.xml'
       - '.github/workflows/ppcoecodeapp-ci.yml'
 
 # Cancel in-progress runs when a new commit is pushed to the same branch
@@ -40,6 +48,10 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Connection and publishing regression tests
+        working-directory: .
+        run: node --test scripts/connection-config.test.mjs scripts/prepare-code-app-publish.test.mjs scripts/verify-code-app-export.test.mjs
 
       - name: Lint
         run: npm run lint

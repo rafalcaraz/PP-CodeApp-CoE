@@ -14,12 +14,75 @@ This folder holds the **unpacked** Power Platform solution that wraps the
 The Cost Controls connector is included with
 `msftcsa_MACCostControlsConnRef`. Its OAuth settings reference
 `msftcsa_MACCostControlsClientId` and `msftcsa_MACCostControlsClientSecret`;
-their committed definitions intentionally have no credential defaults.
+their committed definitions contain only the nonfunctional placeholders
+`MAC-CLIENT-ID` and `CLIENT-SECRET`, never actual credentials.
 Supply the values privately in the destination environment and create/bind
 the connector connection there. Never commit exported defaults containing
 credentials, signed connector download URLs, or resolved connection IDs.
 The tracked Code App metadata preserves logical connection references without
 source-environment connection IDs; resolve bindings in the destination.
+
+Before publishing, run `node --test scripts/connection-config.test.mjs` from
+the repository root. This checks that each exported flow's invoker connections
+are mapped to the matching app dependencies, including the licensing wrapper.
+The checked-in HTTP connection IDs are placeholders: resolve Graph, licensing,
+and Power Platform API bindings privately in the source environment before
+pushing. This check verifies source wiring, not published metadata or player
+consent. Inspect the exported app's logical references and flow dependencies
+after publishing, before releasing the managed ZIP.
+
+### Connection-safe publishing workaround (`pa` 1.3.0)
+
+The `pa` 1.3.0 push mapper omits `xrmConnectionReferenceLogicalName`, even when
+registration saved it correctly. Publishing with it can drop solution-aware
+HTTP bindings from the exported app. The older `pac code push` preserves those
+fields, but requires flow connections in its older dependency/hint format,
+not the modern `workflowDetails` format.
+
+After building, use the adapter below with a **privately resolved modern
+configuration**. It preserves logical reference names, translates flow
+dependencies and Dataverse metadata, and rejects unresolved HTTP bindings.
+It writes only to a new directory outside the repository and does not publish.
+
+```powershell
+node --test scripts\connection-config.test.mjs scripts\prepare-code-app-publish.test.mjs
+node scripts\prepare-code-app-publish.mjs --config "<private-resolved-power.config.json>" --output "<new-private-publish-directory>"
+Push-Location "<new-private-publish-directory>"
+pac code push --environment "<source-environment-id>" --solutionName PPCoECodeApp
+Pop-Location
+```
+
+Verify a fresh solution export before releasing: the app's
+`ConnectionReferences` and `CdsDependencies` must retain
+`msftcsa_HTTPEntraPreAuthGraph`, `msftcsa_PPLicensingAPI`, and
+`msftcsa_HTTPWithEntraPPAPI`. The licensing flow must depend on its HTTP entry
+through `parameterHintsV2.shared_webcontents-1`; the Dataverse wrapper flows
+must still depend on the Admins V2 connector. A successful CLI exit is not
+sufficient evidence. Do not feed the translated publish configuration back
+into modern `pa app add` commands, or publish again with `pa` 1.3.0 and undo
+the workaround.
+
+Run the export verifier on the actual ZIP's expanded metadata (not the older
+tracked `.meta.xml`). For example, from the repository root:
+
+```powershell
+Expand-Archive -LiteralPath "<exported-managed.zip>" -DestinationPath "<new-private-export-directory>"
+node scripts\verify-code-app-export.mjs --xml "<new-private-export-directory>\customizations.xml"
+```
+
+The verifier checks every app connection identity, logical reference, HTTP
+solution dependency, flow entity ID, invoker alias, and both directions of the
+dependency graph against modern `power.config.json`. An export-created runtime
+connection ID or `workflowName` may legitimately differ; those are not used as
+equality checks. A failure is a release blocker, not a reason to edit the ZIP
+to conceal the dependency. If the export contains multiple apps, pass the
+individual app's exported metadata file instead of the combined customizations.
+
+CI runs the root connection and publishing regression tests, including the
+verifier's rejection cases. It does not publish or authenticate to a tenant.
+Only one session should publish to the shared source app at a time; take a
+private backup and check for newer cloud changes before publishing from a
+worktree.
 
 ---
 

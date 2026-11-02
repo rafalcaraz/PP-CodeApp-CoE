@@ -1,4 +1,5 @@
 <environmentvariabledefinition schemaname="msftcsa_MACCostControlsClientId">
+  <defaultvalue>MAC-CLIENT-ID</defaultvalue>
   <displayname default="MAC CostControls ClientId">
     <label description="MAC CostControls ClientId" languagecode="1033" />
   </displayname>
