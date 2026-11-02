@@ -1,0 +1,13 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Connector xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <connectorid>e0dbad29-b3dd-4ded-a387-6134407015a4</connectorid>
+  <description>Microsoft Graph beta Copilot Cost Management: credit balances, spending policies, group assignments, service settings, notify-only alerts and user diagnostics. Beta APIs are not supported for production. Delegated work/school sign-in only. Existing-policy mutations require the current parent policy ETag. No currency costs, historical reporting or per-agent attribution.</description>
+  <displayname>CostControsl-CustomConn</displayname>
+  <iconbrandcolor>#007ee5</iconbrandcolor>
+  <name>msftcsa_5Fcostcontrosl-2Dcustomconn</name>
+  <connectortype>1</connectortype>
+  <openapidefinition>/Connector/msftcsa_5Fcostcontrosl-2Dcustomconn_openapidefinition.json</openapidefinition>
+  <connectionparameters>/Connector/msftcsa_5Fcostcontrosl-2Dcustomconn_connectionparameters.json</connectionparameters>
+  <policytemplateinstances>/Connector/msftcsa_5Fcostcontrosl-2Dcustomconn_policytemplateinstances.json</policytemplateinstances>
+  <iconblob>/Connector/msftcsa_5Fcostcontrosl-2Dcustomconn_iconblob.Png</iconblob>
+</Connector>

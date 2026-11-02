@@ -6,7 +6,7 @@
       <LocalizedName description="PP-CoE-CodeApp" languagecode="1033" />
     </LocalizedNames>
     <Descriptions />
-    <Version>1.1.0.1</Version>
+    <Version>1.1.0.4</Version>
     <Managed>0</Managed>
     <Publisher>
       <UniqueName>MicrosoftCSA</UniqueName>
@@ -85,6 +85,7 @@
       <RootComponent type="29" id="{8eee7be1-6d75-f111-ab0f-000d3a34206e}" behavior="0" />
       <RootComponent type="29" id="{99612410-b2d3-f111-a05b-7ced8d703e00}" behavior="0" />
       <RootComponent type="300" schemaName="msftcsa_ppcoecodeapp_63a36" behavior="0" />
+      <RootComponent type="372" id="{e0dbad29-b3dd-4ded-a387-6134407015a4}" schemaName="msftcsa_5Fcostcontrosl-2Dcustomconn" behavior="0" />
     </RootComponents>
     <MissingDependencies>
       <MissingDependency>

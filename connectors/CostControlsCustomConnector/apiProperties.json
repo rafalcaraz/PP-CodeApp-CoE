@@ -1,0 +1,46 @@
+{
+  "properties": {
+    "connectionParameters": {
+      "token": {
+        "type": "oauthSetting",
+        "oAuthSettings": {
+          "identityProvider": "aad",
+          "clientId": "REPLACE_ME_CLIENT_ID",
+          "scopes": [],
+          "redirectMode": "Global",
+          "redirectUrl": "https://global.consent.azure-apim.net/redirect",
+          "properties": {
+            "IsFirstParty": "False"
+          },
+          "customParameters": {
+            "loginUri": {
+              "value": "https://login.microsoftonline.com"
+            },
+            "tenantId": {
+              "value": "REPLACE_ME_TENANT_ID"
+            },
+            "resourceUri": {
+              "value": "https://graph.microsoft.com"
+            }
+          }
+        }
+      },
+      "token:TenantId": {
+        "type": "string",
+        "metadata": {
+          "sourceType": "AzureActiveDirectoryTenant"
+        },
+        "uiDefinition": {
+          "constraints": {
+            "required": "false",
+            "hidden": "true"
+          }
+        }
+      }
+    },
+    "iconBrandColor": "#0078D4",
+    "capabilities": [],
+    "publisher": "",
+    "stackOwner": ""
+  }
+}

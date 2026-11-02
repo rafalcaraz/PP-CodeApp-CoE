@@ -354,6 +354,856 @@ export const dataSourcesInfo = {
       }
     }
   },
+  "msftcsa_5fcostcontrosl_2dcustomconn_5f55e4fbc80e016c41": {
+    "tableId": "",
+    "version": "",
+    "primaryKey": "",
+    "dataSourceType": "Connector",
+    "apis": {
+      "GetTenantCreditBalance": {
+        "path": "/{connectionId}/getTenantCreditBalance",
+        "method": "GET",
+        "parameters": [
+          {
+            "name": "connectionId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responseInfo": {
+          "200": {
+            "type": "object"
+          },
+          "default": {
+            "type": "void"
+          }
+        }
+      },
+      "ListSpendingPolicies": {
+        "path": "/{connectionId}/spendingPolicies",
+        "method": "GET",
+        "parameters": [
+          {
+            "name": "connectionId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "$select",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "$top",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "$count",
+            "in": "query",
+            "required": false,
+            "type": "boolean"
+          },
+          {
+            "name": "$filter",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "$orderby",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "responseInfo": {
+          "200": {
+            "type": "object"
+          },
+          "default": {
+            "type": "void"
+          }
+        }
+      },
+      "CreateSpendingPolicy": {
+        "path": "/{connectionId}/spendingPolicies",
+        "method": "POST",
+        "parameters": [
+          {
+            "name": "connectionId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "type": "object"
+          }
+        ],
+        "responseInfo": {
+          "201": {
+            "type": "object"
+          },
+          "default": {
+            "type": "void"
+          }
+        }
+      },
+      "GetSpendingPolicy": {
+        "path": "/{connectionId}/spendingPolicies/{id}",
+        "method": "GET",
+        "parameters": [
+          {
+            "name": "connectionId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "$select",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "responseInfo": {
+          "200": {
+            "type": "object"
+          },
+          "default": {
+            "type": "void"
+          }
+        }
+      },
+      "DeleteSpendingPolicy": {
+        "path": "/{connectionId}/spendingPolicies/{id}",
+        "method": "DELETE",
+        "parameters": [
+          {
+            "name": "connectionId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responseInfo": {
+          "204": {
+            "type": "void"
+          },
+          "default": {
+            "type": "void"
+          }
+        }
+      },
+      "UpdateSpendingPolicy": {
+        "path": "/{connectionId}/spendingPolicies/{id}",
+        "method": "PATCH",
+        "parameters": [
+          {
+            "name": "connectionId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "type": "object"
+          }
+        ],
+        "responseInfo": {
+          "200": {
+            "type": "object"
+          },
+          "default": {
+            "type": "void"
+          }
+        }
+      },
+      "ListAssignedGroups": {
+        "path": "/{connectionId}/spendingPolicies/{id}/microsoft.graph.selectedGroupsSpendingPolicy/assignedGroups",
+        "method": "GET",
+        "parameters": [
+          {
+            "name": "connectionId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responseInfo": {
+          "200": {
+            "type": "object"
+          },
+          "default": {
+            "type": "void"
+          }
+        }
+      },
+      "ListAssignedGroupReferences": {
+        "path": "/{connectionId}/spendingPolicies/{id}/microsoft.graph.selectedGroupsSpendingPolicy/assignedGroups/$ref",
+        "method": "GET",
+        "parameters": [
+          {
+            "name": "connectionId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responseInfo": {
+          "200": {
+            "type": "object"
+          },
+          "default": {
+            "type": "void"
+          }
+        }
+      },
+      "AddAssignedGroup": {
+        "path": "/{connectionId}/spendingPolicies/{id}/microsoft.graph.selectedGroupsSpendingPolicy/assignedGroups/$ref",
+        "method": "POST",
+        "parameters": [
+          {
+            "name": "connectionId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "type": "object"
+          }
+        ],
+        "responseInfo": {
+          "204": {
+            "type": "void"
+          },
+          "default": {
+            "type": "void"
+          }
+        }
+      },
+      "RemoveAssignedGroup": {
+        "path": "/{connectionId}/spendingPolicies/{id}/microsoft.graph.selectedGroupsSpendingPolicy/assignedGroups/{groupId}/$ref",
+        "method": "DELETE",
+        "parameters": [
+          {
+            "name": "connectionId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "groupId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responseInfo": {
+          "204": {
+            "type": "void"
+          },
+          "default": {
+            "type": "void"
+          }
+        }
+      },
+      "ListServiceSettings": {
+        "path": "/{connectionId}/spendingPolicies/{id}/serviceSettings",
+        "method": "GET",
+        "parameters": [
+          {
+            "name": "connectionId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "$select",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "responseInfo": {
+          "200": {
+            "type": "object"
+          },
+          "default": {
+            "type": "void"
+          }
+        }
+      },
+      "CreateServiceSetting": {
+        "path": "/{connectionId}/spendingPolicies/{id}/serviceSettings",
+        "method": "POST",
+        "parameters": [
+          {
+            "name": "connectionId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "type": "object"
+          }
+        ],
+        "responseInfo": {
+          "201": {
+            "type": "object"
+          },
+          "default": {
+            "type": "void"
+          }
+        }
+      },
+      "GetServiceSetting": {
+        "path": "/{connectionId}/spendingPolicies/{id}/serviceSettings/{serviceId}",
+        "method": "GET",
+        "parameters": [
+          {
+            "name": "connectionId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "serviceId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "$select",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "responseInfo": {
+          "200": {
+            "type": "object"
+          },
+          "default": {
+            "type": "void"
+          }
+        }
+      },
+      "UpdateServiceSetting": {
+        "path": "/{connectionId}/spendingPolicies/{id}/serviceSettings/{serviceId}",
+        "method": "PATCH",
+        "parameters": [
+          {
+            "name": "connectionId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "serviceId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "type": "object"
+          }
+        ],
+        "responseInfo": {
+          "200": {
+            "type": "object"
+          },
+          "default": {
+            "type": "void"
+          }
+        }
+      },
+      "GetAlertSetting": {
+        "path": "/{connectionId}/spendingPolicies/{id}/emailThresholdSettings",
+        "method": "GET",
+        "parameters": [
+          {
+            "name": "connectionId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "$select",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "responseInfo": {
+          "200": {
+            "type": "object"
+          },
+          "default": {
+            "type": "void"
+          }
+        }
+      },
+      "DeleteAlertSetting": {
+        "path": "/{connectionId}/spendingPolicies/{id}/emailThresholdSettings",
+        "method": "DELETE",
+        "parameters": [
+          {
+            "name": "connectionId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responseInfo": {
+          "204": {
+            "type": "void"
+          },
+          "default": {
+            "type": "void"
+          }
+        }
+      },
+      "UpdateAlertSetting": {
+        "path": "/{connectionId}/spendingPolicies/{id}/emailThresholdSettings",
+        "method": "PATCH",
+        "parameters": [
+          {
+            "name": "connectionId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "type": "object"
+          }
+        ],
+        "responseInfo": {
+          "200": {
+            "type": "object"
+          },
+          "default": {
+            "type": "void"
+          }
+        }
+      },
+      "ListRecipients": {
+        "path": "/{connectionId}/spendingPolicies/{id}/emailThresholdSettings/recipients",
+        "method": "GET",
+        "parameters": [
+          {
+            "name": "connectionId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responseInfo": {
+          "200": {
+            "type": "object"
+          },
+          "default": {
+            "type": "void"
+          }
+        }
+      },
+      "ListRecipientReferences": {
+        "path": "/{connectionId}/spendingPolicies/{id}/emailThresholdSettings/recipients/$ref",
+        "method": "GET",
+        "parameters": [
+          {
+            "name": "connectionId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responseInfo": {
+          "200": {
+            "type": "object"
+          },
+          "default": {
+            "type": "void"
+          }
+        }
+      },
+      "AddRecipient": {
+        "path": "/{connectionId}/spendingPolicies/{id}/emailThresholdSettings/recipients/$ref",
+        "method": "POST",
+        "parameters": [
+          {
+            "name": "connectionId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "type": "object"
+          }
+        ],
+        "responseInfo": {
+          "204": {
+            "type": "void"
+          },
+          "default": {
+            "type": "void"
+          }
+        }
+      },
+      "RemoveRecipient": {
+        "path": "/{connectionId}/spendingPolicies/{id}/emailThresholdSettings/recipients/{userId}/$ref",
+        "method": "DELETE",
+        "parameters": [
+          {
+            "name": "connectionId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "userId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responseInfo": {
+          "204": {
+            "type": "void"
+          },
+          "default": {
+            "type": "void"
+          }
+        }
+      },
+      "GetUserBalance": {
+        "path": "/{connectionId}/userBalances/{userId}",
+        "method": "GET",
+        "parameters": [
+          {
+            "name": "connectionId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "userId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "$select",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "$expand",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "responseInfo": {
+          "200": {
+            "type": "object"
+          },
+          "default": {
+            "type": "void"
+          }
+        }
+      },
+      "ListUserServiceBalances": {
+        "path": "/{connectionId}/userBalances/{userId}/serviceBalances",
+        "method": "GET",
+        "parameters": [
+          {
+            "name": "connectionId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "userId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "$select",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "$top",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "$count",
+            "in": "query",
+            "required": false,
+            "type": "boolean"
+          },
+          {
+            "name": "$filter",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "$orderby",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "responseInfo": {
+          "200": {
+            "type": "object"
+          },
+          "default": {
+            "type": "void"
+          }
+        }
+      },
+      "GetUserServiceBalance": {
+        "path": "/{connectionId}/userBalances/{userId}/serviceBalances/{serviceId}",
+        "method": "GET",
+        "parameters": [
+          {
+            "name": "connectionId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "userId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "serviceId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "$select",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "responseInfo": {
+          "200": {
+            "type": "object"
+          },
+          "default": {
+            "type": "void"
+          }
+        }
+      }
+    }
+  },
   "powerplatformadminv2": {
     "tableId": "",
     "version": "",

@@ -34,6 +34,7 @@
 import { readFileSync, writeFileSync, readdirSync, existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join, resolve } from "node:path";
+import { fixGeneratedModels } from "./fixup-generated-models.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const SERVICES_DIR = resolve(
@@ -148,3 +149,5 @@ for (const file of files) {
 if (totalChanged === 0) {
   console.log("[fixup] All generated connector files already clean. No changes.");
 }
+
+fixGeneratedModels();

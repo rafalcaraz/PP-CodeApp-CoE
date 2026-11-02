@@ -77,11 +77,60 @@ are not used or repointed.
 The checked-in HTTP `sharedConnectionId` uses a `<connection-id>` placeholder.
 Register the flow and its dedicated connection locally with
 `pa app add flow --flow-id <flow-id>` from `PP-CoE-CodeApp`; do not commit the
-resulting environment-specific connection ID. The repository includes the app's flow
-contract, not the flow definition or a deployed HTTP connection. A local
-`InvokerConnectionOverrideFailed` error still requires checking player
-authorization and the flow's run-only connection binding; UI changes do not
-resolve that binding.
+resulting environment-specific connection ID. The solution source also includes
+the wrapper flow definition, but not a deployed HTTP connection.
+
+**Portable source is not publish-ready connection configuration.** A build and
+CI tests do not need resolved bindings, but `pa app push` does. Keep your resolved
+working `power.config.json` locally; sanitize the staged copy before committing
+instead of replacing a working binding with a placeholder. Do not blindly stage
+raw connection metadata or exported credential defaults. After a fresh checkout,
+resolve and verify every required connection before publishing.
+
+**Re-adding does not necessarily replace a stale dependency.** In the inspected
+`pa` 1.3.0 implementation, flow registration retrieves the current invoker
+connection, then matches an existing app dependency by connector ID and connection
+reference logical name. When it finds a match, it retains the existing
+`sharedConnectionId` and authentication fields; only gateway fields are updated.
+The flow's `workflowName` can therefore refresh successfully while a previously
+committed `<connection-id>` remains unchanged. The repository's connector fixup
+scripts only repair generated TypeScript; they do not sanitize `power.config.json`.
+
+A valid solution reference and a malformed local shared-connection hint can
+coexist. Inspect the dependency reached through
+`workflowDetails.dependencies.shared_webcontents`, rather than another direct
+HTTP connection or a similarly named licensing wrapper. Do not copy the Graph
+HTTP connection ID or change the flow's run-only access model to work around it.
+The current solution source declares the PP-API HTTP dependency as an invoker
+connection; a maker's valid bound connection alone does not prove player consent.
+
+For a stale placeholder or an outdated connection ID after rebinding, obtain
+fresh CLI-generated dependency metadata without
+the stale matching entry (preferably in a separate local diagnostic copy), then
+reconcile only that dependency into the working app configuration. Preserve the
+flow registration, logical reference name and other connections; never guess the
+connection ID. Simply repeating `add flow` against the unchanged configuration
+hits the same reuse branch. `pa connection list-references --json` lists solution
+component names/descriptions, not the bound `connectionid`, and requires
+`--solution-id` in non-interactive mode. The precise read-only Dataverse lookup
+for the binding is `connectionreferences` filtered by
+`connectionreferencelogicalname`, selecting `connectionid` and
+`connectionreferencelogicalname`. Resolve it in the app's actual environment;
+do not request credentials or commit the returned connection ID.
+
+The inspected `pa` 1.3.0 publish mapper also sends `sharedConnectionId` without
+the local `xrmConnectionReferenceLogicalName`. Two references bound to the same
+HTTP connection can therefore leave the published app associated with the
+unintended reference. Use a distinct, correctly configured PP-API connection
+for `msftcsa_HTTPWithEntraPPAPI`, reconcile its local dependency after rebinding,
+and verify the published app's reference and solution dependencies after pushing.
+Do not delete a reference based only on its display name or edit an export
+manifest to conceal a dependency.
+
+This corrects local registration evidence, not a proven tenant/runtime fix.
+An ambiguous HTTP consent warning cannot identify which wrapper failed; use the
+player's failing dependency/request details to distinguish PP-API from licensing.
+No UI change or offline build proves that consent now succeeds.
 
 Custom headers cannot be forwarded by this three-field flow. Required-header
 operations are visible but blocked with an explanation; optional headers are

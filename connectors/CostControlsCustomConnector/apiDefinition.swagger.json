@@ -1,0 +1,712 @@
+{
+  "swagger": "2.0",
+  "info": {
+    "title": "CostControlsCustomConnector",
+    "version": "1.0.0",
+    "description": "Microsoft Graph beta Copilot Cost Management: credit balances, spending policies, group assignments, service settings, notify-only alerts and user diagnostics. Beta APIs are not supported for production. Delegated work/school sign-in only. Existing-policy mutations require the current parent policy ETag. No currency costs, historical reporting or per-agent attribution."
+  },
+  "host": "graph.microsoft.com",
+  "basePath": "/beta/copilot/costManagement",
+  "schemes": ["https"],
+  "consumes": ["application/json"],
+  "produces": ["application/json"],
+  "securityDefinitions": {
+    "oauth2": {
+      "type": "oauth2",
+      "flow": "accessCode",
+      "authorizationUrl": "https://login.microsoftonline.com/common/oauth2/authorize",
+      "tokenUrl": "https://login.microsoftonline.com/common/oauth2/token",
+      "scopes": {}
+    }
+  },
+  "security": [{"oauth2": []}],
+  "tags": [
+    {"name": "Tenant balance"},
+    {"name": "Spending policies"},
+    {"name": "Group assignments"},
+    {"name": "Service settings"},
+    {"name": "Alerts"},
+    {"name": "User balances"}
+  ],
+  "paths": {
+    "/getTenantCreditBalance": {
+      "get": {
+        "operationId": "GetTenantCreditBalance",
+        "summary": "Get tenant credit balance",
+        "description": "Delegated CopilotCostManagement.Read.All. One credit balance row per billing method; no OData query options. Purchased and remaining quantities can be absent for pay-as-you-go. See setup guide for runtime-role caveats.",
+        "tags": ["Tenant balance"],
+        "externalDocs": {"url": "https://learn.microsoft.com/en-us/microsoft-365/copilot/extensibility/api/admin-settings/cost-management/costmanagementroot-gettenantcreditbalance"},
+        "responses": {
+          "200": {"description": "Tenant credit balance snapshot.", "schema": {"$ref": "#/definitions/TenantCreditBalance"}},
+          "default": {"$ref": "#/responses/GraphError"}
+        }
+      }
+    },
+    "/spendingPolicies": {
+      "get": {
+        "operationId": "ListSpendingPolicies",
+        "summary": "List spending policies",
+        "description": "Delegated CopilotCostManagement-Policy.Read.All or ReadWrite.All. Filter only status/displayName/createdDateTime with eq/ne and and/or; status requires a qualified microsoft.graph.spendingPolicyStatus literal. Order only displayName/createdDateTime. No expand, skip or search. Follow @odata.nextLink unchanged when present; this connector returns one page.",
+        "tags": ["Spending policies"],
+        "externalDocs": {"url": "https://learn.microsoft.com/en-us/microsoft-365/copilot/extensibility/api/admin-settings/cost-management/spendingpolicy-list"},
+        "parameters": [
+          {"$ref": "#/parameters/Select"},
+          {"$ref": "#/parameters/Top"},
+          {"$ref": "#/parameters/Count"},
+          {"name": "$filter", "in": "query", "type": "string", "description": "eq/ne on status (qualified enum), displayName (string up to 64 characters), createdDateTime (whole-second offsetDateTime); combine with and/or only. No functions, null or property comparisons."},
+          {"name": "$orderby", "in": "query", "type": "string", "description": "displayName or createdDateTime, optionally asc/desc."}
+        ],
+        "responses": {
+          "200": {"description": "One page of polymorphic policies.", "schema": {"$ref": "#/definitions/SpendingPolicyCollection"}},
+          "default": {"$ref": "#/responses/GraphError"}
+        }
+      },
+      "post": {
+        "operationId": "CreateSpendingPolicy",
+        "summary": "Create spending policy",
+        "description": "Delegated CopilotCostManagement-Policy.ReadWrite.All plus Billing Administrator or Global Administrator at runtime. A nonempty initial assignedGroups additionally requires CopilotCostManagement-Assignment.ReadWrite.All. Policy is created disabled; audience type is immutable. No If-Match on creation. Safest group sequence: omit audience, create disabled, then add group references with a fresh ETag.",
+        "tags": ["Spending policies"],
+        "externalDocs": {"url": "https://learn.microsoft.com/en-us/microsoft-365/copilot/extensibility/api/admin-settings/cost-management/spendingpolicy-create"},
+        "parameters": [{"name": "body", "in": "body", "required": true, "schema": {"$ref": "#/definitions/CreateSpendingPolicy"}}],
+        "responses": {
+          "201": {
+            "description": "Created disabled policy.",
+            "schema": {"$ref": "#/definitions/SpendingPolicy"},
+            "headers": {
+              "ETag": {"type": "string", "description": "Parent policy concurrency token, including weak prefix and quotes."},
+              "Location": {"type": "string", "description": "Created resource URL."}
+            }
+          },
+          "default": {"$ref": "#/responses/GraphError"}
+        }
+      }
+    },
+    "/spendingPolicies/{id}": {
+      "get": {
+        "operationId": "GetSpendingPolicy",
+        "summary": "Get spending policy",
+        "description": "Delegated CopilotCostManagement-Policy.Read.All or ReadWrite.All. Read a fresh policy before each mutation. Relationships are not expandable. Preserve any ETag header exactly; see setup guide if Graph omits it.",
+        "tags": ["Spending policies"],
+        "externalDocs": {"url": "https://learn.microsoft.com/en-us/microsoft-365/copilot/extensibility/api/admin-settings/cost-management/spendingpolicy-get"},
+        "parameters": [{"$ref": "#/parameters/PolicyId"}, {"$ref": "#/parameters/Select"}],
+        "responses": {
+          "200": {
+            "description": "Polymorphic policy; ETag is declared for concurrency, although the operation page's example omits it.",
+            "schema": {"$ref": "#/definitions/SpendingPolicy"},
+            "headers": {"ETag": {"type": "string", "description": "Current parent policy ETag, if returned."}}
+          },
+          "default": {"$ref": "#/responses/GraphError"}
+        }
+      },
+      "patch": {
+        "operationId": "UpdateSpendingPolicy",
+        "summary": "Update spending policy",
+        "description": "Delegated CopilotCostManagement-Policy.ReadWrite.All. Requires current parent If-Match. Only displayName, periodLimit, perUserLimit and billingMethods are writable; status and audit fields are server managed. Audience type cannot change.",
+        "tags": ["Spending policies"],
+        "externalDocs": {"url": "https://learn.microsoft.com/en-us/microsoft-365/copilot/extensibility/api/admin-settings/cost-management/spendingpolicy-update"},
+        "parameters": [
+          {"$ref": "#/parameters/PolicyId"},
+          {"$ref": "#/parameters/IfMatch"},
+          {"name": "body", "in": "body", "required": true, "schema": {"$ref": "#/definitions/UpdateSpendingPolicy"}}
+        ],
+        "responses": {
+          "200": {
+            "description": "Updated policy.",
+            "schema": {"$ref": "#/definitions/SpendingPolicy"},
+            "headers": {"ETag": {"type": "string", "description": "Advanced parent policy ETag."}}
+          },
+          "default": {"$ref": "#/responses/GraphError"}
+        }
+      },
+      "delete": {
+        "operationId": "DeleteSpendingPolicy",
+        "summary": "Delete spending policy",
+        "description": "Delegated CopilotCostManagement-Policy.ReadWrite.All. Deletes the policy using its current parent ETag.",
+        "tags": ["Spending policies"],
+        "externalDocs": {"url": "https://learn.microsoft.com/en-us/microsoft-365/copilot/extensibility/api/admin-settings/cost-management/spendingpolicy-delete"},
+        "parameters": [{"$ref": "#/parameters/PolicyId"}, {"$ref": "#/parameters/IfMatch"}],
+        "responses": {
+          "204": {"description": "Policy deleted; no response body."},
+          "default": {"$ref": "#/responses/GraphError"}
+        }
+      }
+    },
+    "/spendingPolicies/{id}/microsoft.graph.selectedGroupsSpendingPolicy/assignedGroups": {
+      "get": {
+        "operationId": "ListAssignedGroups",
+        "summary": "List assigned groups",
+        "description": "Delegated CopilotCostManagement-Assignment.Read.All or ReadWrite.All. Selected-groups policies only. No OData query options. Returns group objects; use ListAssignedGroupReferences for reference URLs.",
+        "tags": ["Group assignments"],
+        "externalDocs": {"url": "https://learn.microsoft.com/en-us/microsoft-365/copilot/extensibility/api/admin-settings/cost-management/selectedgroupsspendingpolicy-list-assignedgroups"},
+        "parameters": [{"$ref": "#/parameters/PolicyId"}],
+        "responses": {
+          "200": {"description": "Assigned group objects.", "schema": {"$ref": "#/definitions/GroupCollection"}},
+          "default": {"$ref": "#/responses/GraphError"}
+        }
+      }
+    },
+    "/spendingPolicies/{id}/microsoft.graph.selectedGroupsSpendingPolicy/assignedGroups/$ref": {
+      "get": {
+        "operationId": "ListAssignedGroupReferences",
+        "summary": "List assigned group references",
+        "description": "Documented $ref variant of ListAssignedGroups. Delegated CopilotCostManagement-Assignment.Read.All or ReadWrite.All. No OData query options.",
+        "tags": ["Group assignments"],
+        "externalDocs": {"url": "https://learn.microsoft.com/en-us/microsoft-365/copilot/extensibility/api/admin-settings/cost-management/selectedgroupsspendingpolicy-list-assignedgroups"},
+        "parameters": [{"$ref": "#/parameters/PolicyId"}],
+        "responses": {
+          "200": {"description": "Group reference links.", "schema": {"$ref": "#/definitions/ReferenceCollection"}},
+          "default": {"$ref": "#/responses/GraphError"}
+        }
+      },
+      "post": {
+        "operationId": "AddAssignedGroup",
+        "summary": "Add assigned group",
+        "description": "Delegated CopilotCostManagement-Assignment.ReadWrite.All. Supply a group @odata.id reference URL and the current parent policy ETag, not a group ETag.",
+        "tags": ["Group assignments"],
+        "externalDocs": {"url": "https://learn.microsoft.com/en-us/microsoft-365/copilot/extensibility/api/admin-settings/cost-management/selectedgroupsspendingpolicy-post-assignedgroups"},
+        "parameters": [
+          {"$ref": "#/parameters/PolicyId"},
+          {"$ref": "#/parameters/IfMatch"},
+          {"name": "body", "in": "body", "required": true, "schema": {"$ref": "#/definitions/GroupReference"}}
+        ],
+        "responses": {
+          "204": {
+            "description": "Group linked; no response body.",
+            "headers": {"ETag": {"type": "string", "description": "Advanced parent policy ETag."}}
+          },
+          "default": {"$ref": "#/responses/GraphError"}
+        }
+      }
+    },
+    "/spendingPolicies/{id}/microsoft.graph.selectedGroupsSpendingPolicy/assignedGroups/{groupId}/$ref": {
+      "delete": {
+        "operationId": "RemoveAssignedGroup",
+        "summary": "Remove assigned group",
+        "description": "Delegated CopilotCostManagement-Assignment.ReadWrite.All. Removes only the policy reference, not the directory group. Removing the last group fails with 409 lastAssignedGroup.",
+        "tags": ["Group assignments"],
+        "externalDocs": {"url": "https://learn.microsoft.com/en-us/microsoft-365/copilot/extensibility/api/admin-settings/cost-management/selectedgroupsspendingpolicy-delete-assignedgroups"},
+        "parameters": [{"$ref": "#/parameters/PolicyId"}, {"$ref": "#/parameters/GroupId"}, {"$ref": "#/parameters/IfMatch"}],
+        "responses": {
+          "204": {"description": "Group reference removed; no response body."},
+          "default": {"$ref": "#/responses/GraphError"}
+        }
+      }
+    },
+    "/spendingPolicies/{id}/serviceSettings": {
+      "get": {
+        "operationId": "ListServiceSettings",
+        "summary": "List service settings",
+        "description": "Delegated CopilotCostManagement-Policy.Read.All or ReadWrite.All. Supports select only. Each setting exposes the parent's ETag and status; settings have no independent ETag.",
+        "tags": ["Service settings"],
+        "externalDocs": {"url": "https://learn.microsoft.com/en-us/microsoft-365/copilot/extensibility/api/admin-settings/cost-management/spendingpolicyservicesetting-list"},
+        "parameters": [{"$ref": "#/parameters/PolicyId"}, {"$ref": "#/parameters/Select"}],
+        "responses": {
+          "200": {"description": "Service settings.", "schema": {"$ref": "#/definitions/ServiceSettingCollection"}},
+          "default": {"$ref": "#/responses/GraphError"}
+        }
+      },
+      "post": {
+        "operationId": "CreateServiceSetting",
+        "summary": "Create service setting",
+        "description": "Delegated CopilotCostManagement-Policy.ReadWrite.All. Requires current parent If-Match. Adds a service category, not an individual agent. No DELETE exists; update state to disabled to exclude a service.",
+        "tags": ["Service settings"],
+        "externalDocs": {"url": "https://learn.microsoft.com/en-us/microsoft-365/copilot/extensibility/api/admin-settings/cost-management/spendingpolicyservicesetting-create"},
+        "parameters": [
+          {"$ref": "#/parameters/PolicyId"},
+          {"$ref": "#/parameters/IfMatch"},
+          {"name": "body", "in": "body", "required": true, "schema": {"$ref": "#/definitions/CreateServiceSetting"}}
+        ],
+        "responses": {
+          "201": {
+            "description": "Created service setting.",
+            "schema": {"$ref": "#/definitions/ServiceSetting"},
+            "headers": {
+              "ETag": {"type": "string", "description": "Advanced parent policy ETag."},
+              "Location": {"type": "string", "description": "Created setting URL."}
+            }
+          },
+          "default": {"$ref": "#/responses/GraphError"}
+        }
+      }
+    },
+    "/spendingPolicies/{id}/serviceSettings/{serviceId}": {
+      "get": {
+        "operationId": "GetServiceSetting",
+        "summary": "Get service setting",
+        "description": "Delegated CopilotCostManagement-Policy.Read.All or ReadWrite.All. Returns parentEtag and parentStatus; use parentEtag, not a separate child token, for mutations.",
+        "tags": ["Service settings"],
+        "externalDocs": {"url": "https://learn.microsoft.com/en-us/microsoft-365/copilot/extensibility/api/admin-settings/cost-management/spendingpolicyservicesetting-get"},
+        "parameters": [{"$ref": "#/parameters/PolicyId"}, {"$ref": "#/parameters/ServiceId"}, {"$ref": "#/parameters/Select"}],
+        "responses": {
+          "200": {"description": "Service setting.", "schema": {"$ref": "#/definitions/ServiceSetting"}},
+          "default": {"$ref": "#/responses/GraphError"}
+        }
+      },
+      "patch": {
+        "operationId": "UpdateServiceSetting",
+        "summary": "Update or disable service setting",
+        "description": "Delegated CopilotCostManagement-Policy.ReadWrite.All. Only state is writable. Disabled excludes the service but retains the entry; it does not delete it. Disabling the last enabled service can fail with 409 atLeastOneServiceRequired.",
+        "tags": ["Service settings"],
+        "externalDocs": {"url": "https://learn.microsoft.com/en-us/microsoft-365/copilot/extensibility/api/admin-settings/cost-management/spendingpolicyservicesetting-update"},
+        "parameters": [
+          {"$ref": "#/parameters/PolicyId"},
+          {"$ref": "#/parameters/ServiceId"},
+          {"$ref": "#/parameters/IfMatch"},
+          {"name": "body", "in": "body", "required": true, "schema": {"$ref": "#/definitions/UpdateServiceSetting"}}
+        ],
+        "responses": {
+          "200": {
+            "description": "Updated service setting.",
+            "schema": {"$ref": "#/definitions/ServiceSetting"},
+            "headers": {"ETag": {"type": "string", "description": "Advanced parent policy ETag."}}
+          },
+          "default": {"$ref": "#/responses/GraphError"}
+        }
+      }
+    },
+    "/spendingPolicies/{id}/emailThresholdSettings": {
+      "get": {
+        "operationId": "GetAlertSetting",
+        "summary": "Get alert setting",
+        "description": "Delegated CopilotCostManagement-Policy.Read.All or ReadWrite.All. Notify-only alert configuration; recipients are managed separately.",
+        "tags": ["Alerts"],
+        "externalDocs": {"url": "https://learn.microsoft.com/en-us/microsoft-365/copilot/extensibility/api/admin-settings/cost-management/costmanagementalertsetting-get"},
+        "parameters": [{"$ref": "#/parameters/PolicyId"}, {"$ref": "#/parameters/Select"}],
+        "responses": {
+          "200": {"description": "Alert configuration.", "schema": {"$ref": "#/definitions/AlertSetting"}},
+          "default": {"$ref": "#/responses/GraphError"}
+        }
+      },
+      "patch": {
+        "operationId": "UpdateAlertSetting",
+        "summary": "Create or update alert setting",
+        "description": "Delegated CopilotCostManagement-Policy.ReadWrite.All. Merge PATCH; omitted fields stay unchanged, explicit null is rejected, thresholds [] clears thresholds. Empty {} is valid on an existing configuration. Create disabled, add recipient references, then enable. Requires parent If-Match even on first write.",
+        "tags": ["Alerts"],
+        "externalDocs": {"url": "https://learn.microsoft.com/en-us/microsoft-365/copilot/extensibility/api/admin-settings/cost-management/costmanagementalertsetting-update"},
+        "parameters": [
+          {"$ref": "#/parameters/PolicyId"},
+          {"$ref": "#/parameters/IfMatch"},
+          {"name": "body", "in": "body", "required": true, "schema": {"$ref": "#/definitions/UpdateAlertSetting"}}
+        ],
+        "responses": {
+          "200": {
+            "description": "Created or updated alert configuration.",
+            "schema": {"$ref": "#/definitions/AlertSetting"},
+            "headers": {"ETag": {"type": "string", "description": "Advanced parent policy ETag."}}
+          },
+          "default": {"$ref": "#/responses/GraphError"}
+        }
+      },
+      "delete": {
+        "operationId": "DeleteAlertSetting",
+        "summary": "Delete alert setting",
+        "description": "Delegated CopilotCostManagement-Policy.ReadWrite.All. Turns alerting off without removing the separately managed recipient references. Requires parent If-Match.",
+        "tags": ["Alerts"],
+        "externalDocs": {"url": "https://learn.microsoft.com/en-us/microsoft-365/copilot/extensibility/api/admin-settings/cost-management/costmanagementalertsetting-delete"},
+        "parameters": [{"$ref": "#/parameters/PolicyId"}, {"$ref": "#/parameters/IfMatch"}],
+        "responses": {
+          "204": {"description": "Alert configuration deleted; no response body."},
+          "default": {"$ref": "#/responses/GraphError"}
+        }
+      }
+    },
+    "/spendingPolicies/{id}/emailThresholdSettings/recipients": {
+      "get": {
+        "operationId": "ListRecipients",
+        "summary": "List alert recipients",
+        "description": "Delegated CopilotCostManagement-Policy.Read.All or ReadWrite.All. No OData query options. Returns user objects; use ListRecipientReferences for reference URLs.",
+        "tags": ["Alerts"],
+        "externalDocs": {"url": "https://learn.microsoft.com/en-us/microsoft-365/copilot/extensibility/api/admin-settings/cost-management/costmanagementalertsetting-list-recipients"},
+        "parameters": [{"$ref": "#/parameters/PolicyId"}],
+        "responses": {
+          "200": {"description": "Recipient user objects.", "schema": {"$ref": "#/definitions/UserCollection"}},
+          "default": {"$ref": "#/responses/GraphError"}
+        }
+      }
+    },
+    "/spendingPolicies/{id}/emailThresholdSettings/recipients/$ref": {
+      "get": {
+        "operationId": "ListRecipientReferences",
+        "summary": "List alert recipient references",
+        "description": "Documented $ref variant of ListRecipients. Delegated CopilotCostManagement-Policy.Read.All or ReadWrite.All. No OData query options.",
+        "tags": ["Alerts"],
+        "externalDocs": {"url": "https://learn.microsoft.com/en-us/microsoft-365/copilot/extensibility/api/admin-settings/cost-management/costmanagementalertsetting-list-recipients"},
+        "parameters": [{"$ref": "#/parameters/PolicyId"}],
+        "responses": {
+          "200": {"description": "User reference links.", "schema": {"$ref": "#/definitions/ReferenceCollection"}},
+          "default": {"$ref": "#/responses/GraphError"}
+        }
+      },
+      "post": {
+        "operationId": "AddRecipient",
+        "summary": "Add alert recipient",
+        "description": "Delegated CopilotCostManagement-Policy.ReadWrite.All. Supply a real tenant user's @odata.id reference URL. Addresses are resolved at notification time. Requires parent If-Match.",
+        "tags": ["Alerts"],
+        "externalDocs": {"url": "https://learn.microsoft.com/en-us/microsoft-365/copilot/extensibility/api/admin-settings/cost-management/costmanagementalertsetting-post-recipients"},
+        "parameters": [
+          {"$ref": "#/parameters/PolicyId"},
+          {"$ref": "#/parameters/IfMatch"},
+          {"name": "body", "in": "body", "required": true, "schema": {"$ref": "#/definitions/UserReference"}}
+        ],
+        "responses": {
+          "204": {
+            "description": "Recipient linked; no response body.",
+            "headers": {"ETag": {"type": "string", "description": "Advanced parent policy ETag."}}
+          },
+          "default": {"$ref": "#/responses/GraphError"}
+        }
+      }
+    },
+    "/spendingPolicies/{id}/emailThresholdSettings/recipients/{userId}/$ref": {
+      "delete": {
+        "operationId": "RemoveRecipient",
+        "summary": "Remove alert recipient",
+        "description": "Delegated CopilotCostManagement-Policy.ReadWrite.All. Removes only the alert reference, not the user. Removing the last recipient while alerting is enabled fails with 400 alertRecipientsRequired. Requires parent If-Match.",
+        "tags": ["Alerts"],
+        "externalDocs": {"url": "https://learn.microsoft.com/en-us/microsoft-365/copilot/extensibility/api/admin-settings/cost-management/costmanagementalertsetting-delete-recipients"},
+        "parameters": [{"$ref": "#/parameters/PolicyId"}, {"$ref": "#/parameters/UserId"}, {"$ref": "#/parameters/IfMatch"}],
+        "responses": {
+          "204": {"description": "Recipient reference removed; no response body."},
+          "default": {"$ref": "#/responses/GraphError"}
+        }
+      }
+    },
+    "/userBalances/{userId}": {
+      "get": {
+        "operationId": "GetUserBalance",
+        "summary": "Get user balance",
+        "description": "Delegated CopilotCostManagement-UserData.Read.All. Read a named user; the parent userBalances collection is not listable. Expand serviceBalances to inline balances. Inspect unevaluatedServices for partial results and selectionDataStatus for source freshness; all-service failure returns 503.",
+        "tags": ["User balances"],
+        "externalDocs": {"url": "https://learn.microsoft.com/en-us/microsoft-365/copilot/extensibility/api/admin-settings/cost-management/costmanagementuserbalance-get"},
+        "parameters": [
+          {"$ref": "#/parameters/UserId"},
+          {"$ref": "#/parameters/Select"},
+          {"name": "$expand", "in": "query", "type": "string", "enum": ["serviceBalances"], "description": "Only serviceBalances is documented for expansion. Nested options are not assumed."}
+        ],
+        "responses": {
+          "200": {"description": "User balance; may be partial or contain no service balances.", "schema": {"$ref": "#/definitions/UserBalance"}},
+          "default": {"$ref": "#/responses/GraphError"}
+        }
+      }
+    },
+    "/userBalances/{userId}/serviceBalances": {
+      "get": {
+        "operationId": "ListUserServiceBalances",
+        "summary": "List user service balances",
+        "description": "Delegated CopilotCostManagement-UserData.Read.All. Case-sensitive serviceId eq/in and isConsumptionAllowed eq; combine with and only. Order only serviceId. No skip/search. Top is an upper bound, not a page-size guarantee. Follow @odata.nextLink unchanged when present; this connector returns one page.",
+        "tags": ["User balances"],
+        "externalDocs": {"url": "https://learn.microsoft.com/en-us/microsoft-365/copilot/extensibility/api/admin-settings/cost-management/costmanagementuserservicebalance-list"},
+        "parameters": [
+          {"$ref": "#/parameters/UserId"},
+          {"$ref": "#/parameters/Select"},
+          {"$ref": "#/parameters/Top"},
+          {"$ref": "#/parameters/Count"},
+          {"name": "$filter", "in": "query", "type": "string", "description": "serviceId eq (either side) or in (property on left, literal string collection on right); isConsumptionAllowed eq (either side); and only. Repeated clauses intersect; contradictions return no rows. No ne, or, not, functions, ranges or null."},
+          {"name": "$orderby", "in": "query", "type": "string", "description": "serviceId, optionally asc/desc."}
+        ],
+        "responses": {
+          "200": {"description": "One page of service balance rows.", "schema": {"$ref": "#/definitions/UserServiceBalanceCollection"}},
+          "default": {"$ref": "#/responses/GraphError"}
+        }
+      }
+    },
+    "/userBalances/{userId}/serviceBalances/{serviceId}": {
+      "get": {
+        "operationId": "GetUserServiceBalance",
+        "summary": "Get user service balance",
+        "description": "Delegated CopilotCostManagement-UserData.Read.All. Gets one case-sensitive service category's credit balance and access diagnosis, not an individual agent's cost.",
+        "tags": ["User balances"],
+        "externalDocs": {"url": "https://learn.microsoft.com/en-us/microsoft-365/copilot/extensibility/api/admin-settings/cost-management/costmanagementuserservicebalance-get"},
+        "parameters": [{"$ref": "#/parameters/UserId"}, {"$ref": "#/parameters/ServiceId"}, {"$ref": "#/parameters/Select"}],
+        "responses": {
+          "200": {"description": "Service balance row.", "schema": {"$ref": "#/definitions/UserServiceBalance"}},
+          "default": {"$ref": "#/responses/GraphError"}
+        }
+      }
+    }
+  },
+  "parameters": {
+    "PolicyId": {"name": "id", "in": "path", "required": true, "type": "string", "description": "Spending policy identifier.", "x-ms-summary": "Spending policy ID"},
+    "GroupId": {"name": "groupId", "in": "path", "required": true, "type": "string", "description": "Assigned directory group identifier."},
+    "UserId": {"name": "userId", "in": "path", "required": true, "type": "string", "description": "Directory user identifier."},
+    "ServiceId": {"name": "serviceId", "in": "path", "required": true, "type": "string", "description": "Case-sensitive service category, for example cowork or workIQ. Not an agent ID."},
+    "IfMatch": {
+      "name": "If-Match", "in": "header", "required": true, "type": "string",
+      "minLength": 1,
+      "description": "Fresh PARENT spending policy ETag, copied verbatim including W/ and quotes. Required for every existing-policy mutation and child/reference edit. Do not invent a token or use a wildcard.",
+      "x-ms-summary": "Parent policy ETag"
+    },
+    "Select": {"name": "$select", "in": "query", "type": "string", "description": "Comma-separated documented structural properties; omit for the default response.", "x-ms-visibility": "advanced"},
+    "Top": {"name": "$top", "in": "query", "type": "integer", "format": "int32", "description": "Upper bound on returned rows, not a guaranteed page size. No undocumented maximum or default is imposed.", "x-ms-visibility": "advanced"},
+    "Count": {"name": "$count", "in": "query", "type": "boolean", "description": "Request @odata.count.", "x-ms-visibility": "advanced"}
+  },
+  "responses": {
+    "GraphError": {
+      "description": "Standard Graph OData failure. Inspect error.code and innerError.code. Common statuses: 400 invalidRequest/unsupportedQuery, 403 Authorization_RequestDenied, 404 (including out-of-scope tenant resources), 409 conflict, 412 preconditionFailed, 429 tooManyRequests, 503 sourceUnavailable. Do not interpret omitted/failed data as zero.",
+      "schema": {"$ref": "#/definitions/GraphErrorEnvelope"},
+      "headers": {
+        "Retry-After": {"type": "string", "description": "Server retry guidance when returned, notably for throttling."},
+        "request-id": {"type": "string", "description": "Graph diagnostic request ID, when returned."}
+      }
+    }
+  },
+  "definitions": {
+    "Quantity": {
+      "type": "object",
+      "description": "Swagger 2.0 flattened union. Limited requires numeric value (zero means no consumption); unlimited MUST omit value. Never infer unlimited from zero or missing balance data. Conditional rules are described, not expressible with oneOf in Swagger 2.0.",
+      "required": ["@odata.type", "unit"],
+      "properties": {
+        "@odata.type": {"type": "string", "enum": ["#microsoft.graph.limitedCostManagementQuantity", "#microsoft.graph.unlimitedCostManagementQuantity"]},
+        "unit": {"type": "string", "description": "copilotCredit; unknownFutureValue is the evolvable-enum sentinel."},
+        "value": {"type": "number", "format": "double", "description": "Required only for limited quantities; MUST be omitted for unlimited. No undocumented numeric bounds are imposed."}
+      }
+    },
+    "CreateSpendingPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["@odata.type", "displayName", "periodLimit", "perUserLimit", "serviceSettings"],
+      "properties": {
+        "@odata.type": {"type": "string", "enum": ["#microsoft.graph.allUsersSpendingPolicy", "#microsoft.graph.selectedGroupsSpendingPolicy"], "description": "Concrete immutable audience type."},
+        "displayName": {"type": "string", "minLength": 10, "maxLength": 64, "description": "10-64 characters; letters, digits and spaces only."},
+        "periodLimit": {"$ref": "#/definitions/Quantity"},
+        "perUserLimit": {"$ref": "#/definitions/Quantity"},
+        "billingMethods": {"type": "string", "description": "Flags string: notSpecified (default), prepaidCredits, payAsYouGo, unknownFutureValue; combinations such as prepaidCredits,payAsYouGo are valid."},
+        "serviceSettings": {"type": "array", "items": {"$ref": "#/definitions/CreateServiceSetting"}, "description": "Required initial settings; at least one service must remain enabled."},
+        "assignedGroups": {"type": "array", "items": {"$ref": "#/definitions/DirectoryGroupInput"}, "description": "Selected-groups policy only. Omit or [] for safe disabled creation; nonempty requires Assignment.ReadWrite.All. See guide: inline group serialization is underspecified; prefer AddAssignedGroup."}
+      }
+    },
+    "UpdateSpendingPolicy": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "displayName": {"type": "string", "minLength": 10, "maxLength": 64, "description": "Letters, digits and spaces only."},
+        "periodLimit": {"$ref": "#/definitions/Quantity"},
+        "perUserLimit": {"$ref": "#/definitions/Quantity"},
+        "billingMethods": {"type": "string", "description": "Flags string; supports combinations such as prepaidCredits,payAsYouGo."}
+      }
+    },
+    "SpendingPolicy": {
+      "type": "object",
+      "properties": {
+        "@odata.context": {"type": "string"},
+        "@odata.type": {"type": "string", "description": "Concrete allUsersSpendingPolicy or selectedGroupsSpendingPolicy."},
+        "@odata.etag": {"type": "string", "description": "Optional OData annotation, if supplied; not a substitute for confirming the parent ETag."},
+        "id": {"type": "string"},
+        "displayName": {"type": "string"},
+        "periodLimit": {"$ref": "#/definitions/Quantity"},
+        "perUserLimit": {"$ref": "#/definitions/Quantity"},
+        "billingMethods": {"type": "string", "description": "Flags, including comma-separated combinations."},
+        "status": {"type": "string", "description": "Read-only lifecycle: enabled, disabled, provisioning, provisioningFailed, unknownFutureValue."},
+        "createdDateTime": {"type": "string", "format": "date-time"},
+        "createdBy": {"$ref": "#/definitions/IdentitySet"},
+        "lastModifiedDateTime": {"type": "string", "format": "date-time"},
+        "lastModifiedBy": {"$ref": "#/definitions/IdentitySet"}
+      }
+    },
+    "IdentitySet": {
+      "type": "object", "description": "Graph identitySet. Unavailable identity details can be null; other Graph identity members are retained.",
+      "properties": {
+        "user": {"$ref": "#/definitions/Identity"},
+        "application": {"$ref": "#/definitions/Identity"},
+        "device": {"$ref": "#/definitions/Identity"}
+      }
+    },
+    "Identity": {"type": "object", "properties": {"id": {"type": "string"}, "displayName": {"type": "string"}}},
+    "DirectoryGroupInput": {
+      "type": "object", "description": "Directory group object for the optional inline audience. The operation page does not specify a required serialization; prefer the documented separate $ref action.",
+      "properties": {"id": {"type": "string"}}
+    },
+    "GroupReference": {
+      "type": "object", "additionalProperties": false, "required": ["@odata.id"],
+      "properties": {"@odata.id": {"type": "string", "description": "Full reference URL: https://graph.microsoft.com/beta/groups/{directory-group-id}."}}
+    },
+    "UserReference": {
+      "type": "object", "additionalProperties": false, "required": ["@odata.id"],
+      "properties": {"@odata.id": {"type": "string", "description": "Full reference URL: https://graph.microsoft.com/beta/users/{directory-user-id}."}}
+    },
+    "ReferenceLink": {"type": "object", "properties": {"@odata.id": {"type": "string"}}},
+    "DirectoryGroup": {"type": "object", "description": "Graph group; extra properties are retained.", "properties": {"id": {"type": "string"}, "displayName": {"type": "string"}}},
+    "DirectoryUser": {"type": "object", "description": "Graph user; extra properties are retained.", "properties": {"id": {"type": "string"}, "displayName": {"type": "string"}, "userPrincipalName": {"type": "string"}}},
+    "CreateServiceSetting": {
+      "type": "object", "additionalProperties": false, "required": ["serviceId", "state"],
+      "properties": {
+        "serviceId": {"type": "string", "description": "Service category such as cowork or workIQ. No exhaustive service catalog is documented."},
+        "state": {"type": "string", "enum": ["enabled", "disabled", "unknownFutureValue"], "description": "enabled governs the service; disabled excludes it. unknownFutureValue is a sentinel, not a recommended write value."}
+      }
+    },
+    "UpdateServiceSetting": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "state": {"type": "string", "enum": ["enabled", "disabled", "unknownFutureValue"], "description": "Set disabled to exclude, not delete. unknownFutureValue is a sentinel."}
+      }
+    },
+    "ServiceSetting": {
+      "type": "object",
+      "properties": {
+        "@odata.context": {"type": "string"},
+        "serviceId": {"type": "string"},
+        "state": {"type": "string", "description": "enabled, disabled, unknownFutureValue."},
+        "parentEtag": {"type": "string", "description": "Parent policy ETag for concurrency; read-only."},
+        "parentStatus": {"type": "string", "description": "Parent lifecycle status; read-only."}
+      }
+    },
+    "UpdateAlertSetting": {
+      "type": "object", "additionalProperties": false,
+      "description": "Merge PATCH. All properties optional; explicit null is rejected. Recipients cannot be inline.",
+      "properties": {
+        "isEnabled": {"type": "boolean", "description": "Enable only after linking at least one recipient."},
+        "thresholds": {"type": "array", "items": {"$ref": "#/definitions/AlertThreshold"}, "description": "Omit to preserve; [] to clear. Null entries are invalid."}
+      }
+    },
+    "AlertThreshold": {
+      "type": "object", "required": ["@odata.type", "value"],
+      "description": "Flattened Swagger 2.0 union. Percentage: integer value 1-100, omit unit. Absolute: positive value and unit matching the policy limit. Conditional bounds and required/forbidden unit rules require caller/server validation.",
+      "properties": {
+        "@odata.type": {"type": "string", "enum": ["#microsoft.graph.percentageCostManagementAlertThreshold", "#microsoft.graph.absoluteCostManagementAlertThreshold"]},
+        "value": {"type": "number", "format": "double"},
+        "unit": {"type": "string", "description": "Required for absolute only; matches policy limit unit (currently copilotCredit). Omit for percentage."}
+      }
+    },
+    "AlertSetting": {
+      "type": "object",
+      "properties": {
+        "@odata.context": {"type": "string"},
+        "id": {"type": "string"},
+        "isEnabled": {"type": "boolean"},
+        "thresholds": {"type": "array", "items": {"$ref": "#/definitions/AlertThreshold"}}
+      }
+    },
+    "DataStatus": {"type": "object", "properties": {"lastModifiedDateTime": {"type": "string", "format": "date-time", "description": "Source modification time, not request time."}}},
+    "SelectionDataStatus": {
+      "type": "object",
+      "properties": {
+        "evaluatedDateTime": {"type": "string", "format": "date-time"},
+        "groupMembershipAsOfDateTime": {"type": "string", "format": "date-time", "x-nullable": true},
+        "policyConfigurationAsOfDateTime": {"type": "string", "format": "date-time", "x-nullable": true},
+        "usageAsOfDateTime": {"type": "string", "format": "date-time", "description": "Omitted when no usage read was performed."}
+      }
+    },
+    "BillingMethodBalance": {
+      "type": "object",
+      "properties": {
+        "billingMethod": {"type": "string", "description": "prepaidCredits, payAsYouGo, notSpecified, unknownFutureValue."},
+        "consumedQuantity": {"type": "number", "format": "double"},
+        "purchasedQuantity": {"type": "number", "format": "double", "description": "Omitted when no purchased pool exists."},
+        "remainingQuantity": {"type": "number", "format": "double", "description": "Service-calculated value, not purchased minus consumed; omitted without a finite pool."},
+        "unit": {"type": "string", "description": "copilotCredit or unknownFutureValue."},
+        "dataStatus": {"$ref": "#/definitions/DataStatus"}
+      }
+    },
+    "TenantCreditBalance": {
+      "type": "object",
+      "properties": {
+        "@odata.context": {"type": "string"},
+        "billingMethodBalances": {"type": "array", "items": {"$ref": "#/definitions/BillingMethodBalance"}}
+      }
+    },
+    "UnevaluatedService": {
+      "type": "object",
+      "properties": {
+        "serviceId": {"type": "string"},
+        "reason": {"type": "string", "description": "upstreamFailure, noApplicablePolicy, unknownFutureValue. Not a zero consumption row."}
+      }
+    },
+    "UserServiceBalance": {
+      "type": "object",
+      "properties": {
+        "@odata.context": {"type": "string"},
+        "serviceId": {"type": "string"},
+        "spendingPolicyId": {"type": "string", "description": "Selected policy; always present for an evaluated balance row."},
+        "configuredPerUserLimit": {"$ref": "#/definitions/Quantity"},
+        "configuredPeriodLimit": {"$ref": "#/definitions/Quantity"},
+        "effectiveCapacityQuantity": {"$ref": "#/definitions/Quantity"},
+        "consumedQuantity": {"type": "number", "format": "double", "description": "Month-to-date UTC consumption."},
+        "remainingQuantity": {"$ref": "#/definitions/Quantity"},
+        "unit": {"type": "string"},
+        "isConsumptionAllowed": {"type": "boolean"},
+        "accessDecisionReason": {"type": "string", "description": "allowed, notEntitled, limitExhausted, unknownFutureValue."},
+        "dataStatus": {"$ref": "#/definitions/DataStatus"}
+      }
+    },
+    "UserBalance": {
+      "type": "object",
+      "properties": {
+        "@odata.context": {"type": "string"},
+        "id": {"type": "string"},
+        "selectionDataStatus": {"$ref": "#/definitions/SelectionDataStatus"},
+        "unevaluatedServices": {"type": "array", "items": {"$ref": "#/definitions/UnevaluatedService"}},
+        "serviceBalances": {"type": "array", "items": {"$ref": "#/definitions/UserServiceBalance"}, "description": "Inline when expanded; can be empty for a user with no consumption."},
+        "serviceBalances@odata.nextLink": {"type": "string", "description": "Nested continuation annotation, if supplied by Graph; preserve unchanged."}
+      }
+    },
+    "SpendingPolicyCollection": {
+      "type": "object",
+      "properties": {
+        "@odata.context": {"type": "string"}, "@odata.nextLink": {"type": "string"}, "@odata.count": {"type": "integer", "format": "int64"},
+        "value": {"type": "array", "items": {"$ref": "#/definitions/SpendingPolicy"}}
+      }
+    },
+    "GroupCollection": {
+      "type": "object",
+      "properties": {
+        "@odata.context": {"type": "string"}, "@odata.nextLink": {"type": "string"},
+        "value": {"type": "array", "items": {"$ref": "#/definitions/DirectoryGroup"}}
+      }
+    },
+    "ReferenceCollection": {
+      "type": "object",
+      "properties": {
+        "@odata.context": {"type": "string"}, "@odata.nextLink": {"type": "string"},
+        "value": {"type": "array", "items": {"$ref": "#/definitions/ReferenceLink"}}
+      }
+    },
+    "ServiceSettingCollection": {
+      "type": "object",
+      "properties": {
+        "@odata.context": {"type": "string"}, "@odata.nextLink": {"type": "string"},
+        "value": {"type": "array", "items": {"$ref": "#/definitions/ServiceSetting"}}
+      }
+    },
+    "UserCollection": {
+      "type": "object",
+      "properties": {
+        "@odata.context": {"type": "string"}, "@odata.nextLink": {"type": "string"},
+        "value": {"type": "array", "items": {"$ref": "#/definitions/DirectoryUser"}}
+      }
+    },
+    "UserServiceBalanceCollection": {
+      "type": "object",
+      "properties": {
+        "@odata.context": {"type": "string"}, "@odata.nextLink": {"type": "string"}, "@odata.count": {"type": "integer", "format": "int64"},
+        "value": {"type": "array", "items": {"$ref": "#/definitions/UserServiceBalance"}}
+      }
+    },
+    "GraphErrorEnvelope": {
+      "type": "object",
+      "properties": {
+        "error": {
+          "type": "object",
+          "properties": {
+            "code": {"type": "string"},
+            "message": {"type": "string"},
+            "target": {"type": "string"},
+            "innerError": {"$ref": "#/definitions/GraphInnerError"},
+            "details": {"type": "array", "items": {"$ref": "#/definitions/GraphErrorDetail"}}
+          }
+        }
+      }
+    },
+    "GraphInnerError": {
+      "type": "object", "description": "Additional and nested OData error details are retained without recursive schema references.",
+      "properties": {
+        "code": {"type": "string"},
+        "date": {"type": "string"},
+        "request-id": {"type": "string"},
+        "client-request-id": {"type": "string"}
+      }
+    },
+    "GraphErrorDetail": {
+      "type": "object",
+      "properties": {"code": {"type": "string"}, "message": {"type": "string"}, "target": {"type": "string"}}
+    }
+  }
+}

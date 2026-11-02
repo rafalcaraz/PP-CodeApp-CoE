@@ -101,16 +101,35 @@ if the postinstall is bypassed.
    `scripts/fixup-generated-connectors.mjs` with another transform and
    update this doc.
 
+## OData model alias repair
+
+The Cost Controls connector exposed another generator bug: enum type aliases
+derived from `@odata.type` are emitted as invalid identifiers such as
+`Quantity@odata_type`, `CreateSpendingPolicy@odata_type` and
+`AlertThreshold@odata_type`. The shared postinstall entry point now also runs
+`scripts/fixup-generated-models.mjs`, which renames only those generated alias
+declarations/references to valid `QuantityOdataType`-style identifiers.
+Wire keys (`"@odata.type"`) and enum string values remain unchanged. The repair
+is idempotent and rejects a conflicting pre-existing replacement type name.
+No generated service signatures, operation routing or connection metadata are
+changed by this model repair.
+
+Run its focused regression checks from the repository root:
+
+```powershell
+node --test scripts\fixup-generated-models.test.mjs
+```
+
 ## Files this script will touch
 
-Only files matching `PP-CoE-CodeApp/src/generated/services/*.ts`. It
-never touches:
+The entry point scans `PP-CoE-CodeApp/src/generated/services/*.ts` for the
+service transforms above, and `PP-CoE-CodeApp/src/generated/models/*.ts` for
+the OData alias repair. It never touches:
 
-- `src/generated/models/*` (model types are emitted correctly)
 - `.power/schemas/*` (raw connector schema JSON)
 - `src/data/*` (your hand-written code — including
   `src/data/dlpPolicies.ts`, the narrow DLP wrapper)
-- Anything outside `src/generated/services/`
+- Anything outside `src/generated/services/` and `src/generated/models/`
 
 If you need a non-mechanical fix (a bug pattern the regex transforms
 can't safely handle), do it in your hand-written wrapper in

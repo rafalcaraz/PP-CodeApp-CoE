@@ -1,0 +1,10 @@
+<environmentvariabledefinition schemaname="msftcsa_MACCostControlsClientSecret">
+  <displayname default="MAC CostControls ClientSecret">
+    <label description="MAC CostControls ClientSecret" languagecode="1033" />
+  </displayname>
+  <introducedversion>1.1.0.2</introducedversion>
+  <iscustomizable>1</iscustomizable>
+  <isrequired>0</isrequired>
+  <secretstore>0</secretstore>
+  <type>100000000</type>
+</environmentvariabledefinition>
