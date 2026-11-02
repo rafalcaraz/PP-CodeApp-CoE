@@ -6,7 +6,7 @@
       <LocalizedName description="PP-CoE-CodeApp" languagecode="1033" />
     </LocalizedNames>
     <Descriptions />
-    <Version>1.1.0.4</Version>
+    <Version>1.1.0.5</Version>
     <Managed>0</Managed>
     <Publisher>
       <UniqueName>MicrosoftCSA</UniqueName>
