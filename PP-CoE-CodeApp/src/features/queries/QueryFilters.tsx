@@ -14,8 +14,9 @@ const useStyles = makeStyles({
   values: { display: "flex", flexDirection: "column", gap: tokens.spacingVerticalXS, minWidth: 0 },
   hint: { fontSize: tokens.fontSizeBase200, color: tokens.colorNeutralForeground2 },
 });
-export function QueryFilterRow({ filter: f, index, fields, resourceTypes, onChange, onRemove }: {
+export function QueryFilterRow({ filter: f, index, conditionLabel, fields, resourceTypes, onChange, onRemove }: {
   filter: QueryFilter; index: number; fields: InventoryField[]; resourceTypes: ResourceTypeValue[];
+  conditionLabel?: string;
   onChange: (patch: Partial<QueryFilter>) => void; onRemove: () => void;
 }) {
   const styles = useStyles();
@@ -26,7 +27,7 @@ export function QueryFilterRow({ filter: f, index, fields, resourceTypes, onChan
   const noValue = ["isempty", "!isempty", "today", "yesterday"].includes(f.op);
   const dateInput = f.op === "onDate" || f.op === "dateRange";
   const applicable = resourceTypes.filter((t) => getFieldSuggestions([t], "filter").some((m) => m.path === f.field));
-  const fieldLabel = `Filter ${index + 1}`;
+  const fieldLabel = conditionLabel ?? `Filter ${index + 1}`;
   return <div className={styles.row}>
     <Field label={`${fieldLabel} field`}>
       <Combobox className={styles.control} freeform value={friendlyFilterField(f.field)} placeholder="Choose or type a field path"
@@ -69,7 +70,7 @@ export function QueryFilterRow({ filter: f, index, fields, resourceTypes, onChan
       {["properties.ownerId", "properties.createdBy", "properties.lastModifiedBy"].includes(f.field) &&
         <Button size="small" appearance="subtle" onClick={() => openLookup(f.value || undefined)}>Look up an identity; paste its GUID above</Button>}
       {f.field === OPERATION_FIELD && <>
-        <Field label="Within connector (optional)">
+        <Field label={conditionLabel ? `${fieldLabel} within connector (optional)` : "Within connector (optional)"}>
           <Input value={f.connectorId ?? ""} placeholder="e.g. shared_sharepointonline" onChange={(_e, d) => onChange({ connectorId: d.value || undefined })} />
         </Field>
         <span className={styles.hint}>{f.connectorId ? "Paired evidence from this connector only." : "Independent match across all connectors; another connector may report this operation."} Reported actions/triggers are not runtime execution.</span>
@@ -77,6 +78,6 @@ export function QueryFilterRow({ filter: f, index, fields, resourceTypes, onChan
       {["today", "yesterday", "onDate", "dateRange"].includes(f.op) && <span className={styles.hint}>UTC calendar days: midnight inclusive to next midnight exclusive. Range end date is included.</span>}
       {f.op === "lastNdays" && <span className={styles.hint}>After X x 24 hours ago, evaluated again on every run. Lower bound only; future timestamps also match.</span>}
     </div>
-    <Button icon={<DeleteRegular />} appearance="subtle" aria-label={`Remove filter ${index + 1}`} onClick={onRemove} />
+    <Button icon={<DeleteRegular />} appearance="subtle" aria-label={conditionLabel ? `Remove ${fieldLabel.toLowerCase()}` : `Remove filter ${index + 1}`} onClick={onRemove} />
   </div>;
 }

@@ -42,6 +42,7 @@ import {
   ResourceType,
   buildClausesFromSpec,
   hasPairedOperationFilters,
+  formatQueryConditionSummary,
   resourceTypeShort,
   type QueryFilter,
   type QueryFilterOp,
@@ -1253,6 +1254,18 @@ export function TileEditorDialog({ open, initialTile, onClose, onSave }: TileEdi
               </div>
 
               <div className={styles.section}>
+                {tile.spec.conditions ? (
+                  <>
+                    <Text className={styles.label}>Grouped conditions (read-only)</Text>
+                    <Text>{formatQueryConditionSummary(tile.spec)}</Text>
+                    <Text className={styles.helper}>
+                      Grouping is preserved when you save or change visualization.
+                      Edit these conditions in Queries and reload the saved query here,
+                      or use Advanced for equivalent server clauses.
+                    </Text>
+                  </>
+                ) : (
+                <>
                 <div className={styles.row}>
                   <Text className={styles.label}>Filters</Text>
                   <Button
@@ -1407,6 +1420,8 @@ export function TileEditorDialog({ open, initialTile, onClose, onSave }: TileEdi
                     Tip: date filters accept ISO dates like <code>2024-01-01</code>. For relative
                     windows, use the <strong>in last (days)</strong> operator.
                   </Text>
+                )}
+                </>
                 )}
               </div>
 

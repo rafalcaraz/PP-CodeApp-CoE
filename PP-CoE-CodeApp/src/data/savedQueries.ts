@@ -13,7 +13,7 @@
  * eventual migration plan).
  */
 
-import type { QuerySpec } from "./inventory";
+import { isQueryConditionGroup, type QuerySpec } from "./inventory";
 import type { Clause } from "../generated/models/PowerPlatformforAdminsV2Model";
 
 export type SavedQuerySource = "builder" | "raw";
@@ -66,6 +66,8 @@ export function isQuerySpec(value: unknown): value is QuerySpec {
       f && typeof f === "object" && typeof f.field === "string" &&
       typeof f.op === "string" && typeof f.value === "string" &&
       (f.connectorId === undefined || typeof f.connectorId === "string")) &&
+    (s.conditions === undefined ||
+      (s.filters.length === 0 && isQueryConditionGroup(s.conditions))) &&
     typeof s.orderField === "string" && (s.orderDirection === "asc" || s.orderDirection === "desc") &&
     typeof s.limit === "number" && Number.isFinite(s.limit) && s.limit >= 1 && s.limit <= 500;
 }

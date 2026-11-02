@@ -4,9 +4,9 @@ import {
   DialogTitle, Dropdown, Field, Input, Option, Spinner, Tab, TabList, Text, Textarea,
   makeStyles, tokens,
 } from "@fluentui/react-components";
-import { AddRegular, ArrowDownloadRegular, CopyRegular, PlayRegular, SaveRegular } from "@fluentui/react-icons";
+import { ArrowDownloadRegular, CopyRegular, PlayRegular, SaveRegular } from "@fluentui/react-icons";
 import {
-  ALL_RESOURCE_TYPES, QUERY_TEMPLATES, buildClausesFromSpec, buildQueryExecutionPlan, resourceTypeShort, validateQuerySpec,
+  ALL_RESOURCE_TYPES, QUERY_TEMPLATES, buildClausesFromSpec, buildQueryExecutionPlan, hasPairedOperationFilters, queryFilters, resourceTypeShort, validateQuerySpec,
   type QuerySpec, type ResourceTypeValue,
 } from "../../data/inventory";
 import { getFieldSuggestions } from "../../data/inventory.fields";
@@ -18,7 +18,7 @@ import { downloadCsv, rowsToCsv } from "../../utils/csv";
 import { useConnectorCatalog } from "../../shared/connector-catalog";
 import { buildDynamicQueryTemplates } from "./dynamicTemplates";
 import type { ResourceItem } from "../../generated/models/PowerPlatformforAdminsV2Model";
-import { QueryFilterRow } from "./QueryFilters";
+import { ConditionBuilder } from "./ConditionBuilder";
 import { typedFilterErrors } from "./filterModel";
 import { ErrorPane } from "../../components/Status";
 import { QueryResults } from "./QueryResults";
@@ -91,11 +91,11 @@ export function QueriesView() {
   const fields = useMemo(() => getFieldSuggestions(draft.spec.resourceTypes, "filter"), [draft.spec.resourceTypes]);
   const columnFields = useMemo(() => getFieldSuggestions(draft.spec.resourceTypes, "column").filter((f) => !f.path.startsWith("__")), [draft.spec.resourceTypes]);
   const builderClauses = useMemo(() => buildClausesFromSpec(draft.spec), [draft.spec]);
-  const paired = draft.mode === "basic" && draft.spec.filters.some((f) => f.field === "__operation" && f.connectorId?.trim());
+  const paired = draft.mode === "basic" && hasPairedOperationFilters(draft.spec);
   const parsed = useMemo(() => parseClausesPayload(draft.advancedText), [draft.advancedText]);
   const clauses = draft.mode === "basic" ? builderClauses : parsed.ok ? parsed.clauses : [];
   const validation = [
-    ...(draft.mode === "basic" ? [...validateQuerySpec(draft.spec), ...typedFilterErrors(draft.spec.filters, fields)] : parsed.ok ? [] : [parsed.error]),
+    ...(draft.mode === "basic" ? [...validateQuerySpec(draft.spec), ...typedFilterErrors(queryFilters(draft.spec), fields)] : parsed.ok ? [] : [parsed.error]),
     ...(!Number.isInteger(draft.spec.limit) || draft.spec.limit < 1 || draft.spec.limit > 500 ? ["Page size must be an integer from 1 to 500."] : []),
   ];
   const key = draftKey(draft.spec, draft.mode, draft.advancedText);
@@ -155,7 +155,8 @@ export function QueriesView() {
           setError(`Paired evidence scan is incomplete: ${drained.error ?? "The connector could not prove completion."} No candidate rows are presented as matches. Previous results are retained.`);
           return;
         }
-        const matches = drained.execution.rows.filter((item) => plan.matches(item as ResourceItem));
+        const matches = drained.execution.rows.filter((item) => plan.matches(item as ResourceItem))
+          .map((item) => plan.projectResult ? plan.projectResult(item as ResourceItem) : item);
         commitExecution({ ...drained.execution, rows: matches, total: matches.length });
       } else commitExecution(result.execution);
     } catch (e) { if (id === generation.current) setError(`Query failed: ${message(e)}`); }
@@ -280,14 +281,7 @@ export function QueriesView() {
             {ALL_RESOURCE_TYPES.map((t) => <Option key={t} value={t} text={resourceTypeShort(t)}>{resourceTypeShort(t)}</Option>)}
           </Dropdown>
         </Field>
-        <div className={styles.row}><Text weight="semibold">Filters (all must match)</Text><Button size="small" icon={<AddRegular />}
-          onClick={() => updateSpec({ filters: [...draft.spec.filters, { field: "", op: "==", value: "" }] })}>Add filter</Button></div>
-        {!draft.spec.filters.length && <Text className={styles.muted}>No filters. All resources in the selected scope can match.</Text>}
-        <div className={styles.filters}>
-          {draft.spec.filters.map((f, index) => <QueryFilterRow key={index} index={index} filter={f} fields={fields} resourceTypes={draft.spec.resourceTypes}
-            onChange={(patch) => updateSpec({ filters: draft.spec.filters.map((old, i) => i === index ? { ...old, ...patch } : old) })}
-            onRemove={() => updateSpec({ filters: draft.spec.filters.filter((_old, i) => i !== index) })} />)}
-        </div>
+        <ConditionBuilder spec={draft.spec} fields={fields} onChange={(conditions) => updateSpec({ conditions, filters: [] })} />
         <div className={styles.row}>
           <Field label="Sort field (or type a path)" className={styles.field}>
             <Input list="query-sort-fields" value={draft.spec.orderField} onChange={(_e, d) => updateSpec({ orderField: d.value })} />

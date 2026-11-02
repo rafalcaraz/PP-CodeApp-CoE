@@ -33,6 +33,69 @@
   populated. Agent `isManaged` can be null (including Agent Builder agents);
   preserve null as unavailable / not applicable, not explicitly unmanaged.
 
+## Grouped visual query clauses
+
+Visual `QuerySpec` documents may contain an authoritative `conditions` tree:
+an `all` (AND) or `any` (OR) root, individual condition leaves, and at most
+one level of subgroups. When `conditions` exists, legacy `filters` must be
+`[]`; imports reject competing filters, malformed trees and deeper nesting.
+Only the ALL root may be empty (meaning no additional filter).
+Old specs without `conditions`, raw clauses and existing tile snapshots
+retain their original meaning and legacy clause shape.
+
+The resource-type selection is always a separate outer AND constraint.
+For example, canvas-app scope AND `(location == 'west' OR location == 'east')`
+produces executable `Clause[]`, not a serialized builder document:
+
+```json
+[
+  {
+    "$type": "where",
+    "FieldName": "type",
+    "Operator": "==",
+    "Values": ["'microsoft.powerapps/canvasapps'"]
+  },
+  {
+    "$type": "where",
+    "FieldName": "(((location == 'west')) or ((location == 'east')))",
+    "Operator": "==",
+    "Values": ["true"]
+  }
+]
+```
+
+The second `FieldName` is a parenthesized KQL boolean expression, just as
+existing date clauses use expression-valued fields such as
+`todatetime(properties.createdAt)`. Copying these clauses into Advanced
+preserves grouping. Multi-bound calendar dates remain one atomic AND
+expression even when their parent is OR. Sentinels and array-emptiness
+helpers inline their existing KQL expressions, preventing auxiliary-column
+name collisions across leaves. Grouped operators are explicitly limited
+to the supported comparisons, string/list tests, UTC date operators and
+array-emptiness tests; unknown/freeform operators remain available only in
+legacy flat specs or raw clauses.
+
+All server aggregate paths (count, time series and cumulative baseline)
+reuse this same lowering; they must never flatten groups. Dashboard
+grouped conditions are read-only in the tile editor and are preserved on
+visualization edits; edit them in Queries or convert server-expressible
+conditions to Advanced clauses.
+
+Connector-specific operation conditions are different: their connector and
+operation IDs are one exact atomic predicate, evaluated using shared
+connector-operation evidence after a **complete candidate drain**. The
+server candidate predicate replaces each paired atom with `true` (a
+monotone superset), while regular leaves also return server-computed
+boolean evidence in per-plan `__queryEvidence_<random>_<index>` columns.
+`matches` evaluates the tree using exact pairing and those booleans only;
+`false` and `null` do not match, while omitted or nonboolean evidence
+explicitly fails the scan. `projectResult` removes only those generated
+top-level aliases before results are displayed or exported. No approximate
+JavaScript reimplementation of KQL is used. Pair-containing queries cannot
+be represented as equivalent raw clauses or server-only dashboard
+aggregates; these paths fail closed and the UI explains the restriction.
+Never publish candidate totals/rows as final results.
+
 ## Owner / creator GUID resolution
 
 > **Read this before adding any "owner name lookup" UI, dashboard tile,

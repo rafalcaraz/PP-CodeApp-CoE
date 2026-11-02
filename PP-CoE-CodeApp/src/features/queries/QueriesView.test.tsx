@@ -14,10 +14,43 @@ vi.mock("../../components/EnvironmentPicker", () => ({ EnvironmentPicker: () => 
 import { QueriesView } from "./QueriesView";
 import { rememberExecution } from "./execution";
 import { createSavedQuery } from "../../data/savedQueries";
-import { buildClausesFromSpec, ResourceType } from "../../data/inventory";
+import { buildClausesFromSpec, ResourceType, type QuerySpec } from "../../data/inventory";
 import { DEFAULT_SPEC, readWorkspace } from "./workspace";
+import type { Clause } from "../../generated/models/PowerPlatformforAdminsV2Model";
 const item = (name: string) => ({ name, type: ResourceType.CanvasApp, properties: { displayName: `App ${name}`, environmentId: "env", ownerId: "owner" } });
 const success = (items: unknown[], token?: string) => ({ ok: true, data: { items, skipToken: token, totalRecords: 1 } });
+const groupedSpec = (): QuerySpec => ({
+  ...DEFAULT_SPEC, filters: [],
+  conditions: { kind: "group", operator: "all", children: [
+    { kind: "condition", filter: { field: "properties.environmentId", op: "==", value: "env" } },
+    { kind: "group", operator: "any", children: [
+      { kind: "condition", filter: { field: "properties.isQuarantined", op: "==", value: "true" } },
+      { kind: "condition", filter: { field: "properties.isManaged", op: "==", value: "false" } },
+    ] },
+  ] },
+});
+function saveGrouped(spec = groupedSpec()) {
+  return createSavedQuery({ name: "Production risk", description: "", source: "builder", spec, clauses: buildClausesFromSpec(spec) });
+}
+function loadGrouped() {
+  fireEvent.click(screen.getByRole("button", { name: /Show saved queries/ }));
+  fireEvent.click(screen.getByRole("button", { name: "Production risk" }));
+}
+function pairedOrSpec(): QuerySpec {
+  return {
+    ...DEFAULT_SPEC, filters: [],
+    conditions: { kind: "group", operator: "any", children: [
+      { kind: "condition", filter: { field: "location", op: "==", value: "europe" } },
+      { kind: "condition", filter: { field: "__operation", op: "==", value: "GetItems", connectorId: "shared_sharepointonline" } },
+    ] },
+  };
+}
+function withEvidence(clauses: Clause[], row: ReturnType<typeof item>, value: boolean | null) {
+  const keys = clauses.flatMap((clause) => clause.$type === "extend" && "FieldName" in clause && typeof clause.FieldName === "string" &&
+    clause.FieldName.startsWith("__queryEvidence_") ? [clause.FieldName] : []);
+  expect(keys).toHaveLength(1);
+  return { ...row, ...Object.fromEntries(keys.map((key) => [key, value])) };
+}
 function mount() {
   return render(<FluentProvider theme={webLightTheme}><MemoryRouter><QueriesView /></MemoryRouter></FluentProvider>);
 }
@@ -145,7 +178,7 @@ describe("Queries investigation workspace", () => {
   });
   it("does not silently omit incomplete typed filters", () => {
     mount();
-    fireEvent.click(screen.getByRole("button", { name: "Add filter" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add condition to root group" }));
     expect(screen.getByRole("button", { name: "Run query" })).toBeDisabled();
     expect(screen.getByRole("alert")).toBeInTheDocument();
   });
@@ -213,5 +246,166 @@ describe("Queries investigation workspace", () => {
     mount();
     fireEvent.click(screen.getByRole("button", { name: "Copy clauses JSON" }));
     await waitFor(() => expect(screen.getByText(/Clipboard failed: Permission denied/)).toBeInTheDocument());
+  });
+  it("copies grouped runnable clauses, pastes them into Advanced, and sends the identical scoped payload", async () => {
+    const clipboard = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: clipboard } });
+    const spec = groupedSpec();
+    saveGrouped(spec); mount(); loadGrouped();
+    fireEvent.click(screen.getByRole("button", { name: "Copy clauses JSON" }));
+    await waitFor(() => expect(clipboard).toHaveBeenCalledTimes(1));
+    const json = clipboard.mock.calls[0][0] as string;
+    expect(JSON.parse(json)).toEqual(buildClausesFromSpec(spec));
+    expect(json).toContain(" or ");
+    expect(json).toContain(" and ");
+    expect(json).toContain(ResourceType.CanvasApp);
+    expect(json).not.toContain('"source"');
+    fireEvent.click(screen.getByRole("tab", { name: "Advanced" }));
+    fireEvent.change(screen.getByLabelText("Advanced clauses JSON"), { target: { value: json } });
+    runRawQuery.mockResolvedValueOnce(success([item("scoped-risk")]));
+    fireEvent.click(screen.getByRole("button", { name: "Run query" }));
+    await waitFor(() => expect(runRawQuery).toHaveBeenCalledTimes(1));
+    expect(runRawQuery.mock.calls[0][0]).toEqual(JSON.parse(json));
+    expect(screen.getByRole("link", { name: "App scoped-risk" })).toBeInTheDocument();
+  });
+  it("roundtrips grouped saved queries through updates, reusable sharing, import and tab restoration", async () => {
+    const clipboard = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: clipboard } });
+    const q = saveGrouped();
+    const first = mount(); loadGrouped();
+    fireEvent.change(screen.getByLabelText("Condition 1 value"), { target: { value: "env-updated" } });
+    fireEvent.click(screen.getByRole("button", { name: "Update existing" }));
+    const persisted = JSON.parse(localStorage.getItem("ppcoe.savedQueries.v1")!)[0];
+    expect(persisted.id).toBe(q.id);
+    expect(persisted.spec.filters).toEqual([]);
+    expect(persisted.spec.conditions.children[0].filter.value).toBe("env-updated");
+    fireEvent.click(screen.getByRole("button", { name: "Copy reusable query JSON" }));
+    await waitFor(() => expect(clipboard).toHaveBeenCalledTimes(1));
+    const envelope = JSON.parse(clipboard.mock.calls[0][0]);
+    expect(envelope.spec.conditions).toEqual(persisted.spec.conditions);
+    fireEvent.click(screen.getByRole("button", { name: "Import query JSON" }));
+    const dialog = screen.getByRole("dialog");
+    fireEvent.change(within(dialog).getByLabelText("Reusable query or raw clauses JSON"), { target: { value: JSON.stringify(envelope) } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Import draft" }));
+    expect(screen.queryByRole("button", { name: "Update existing" })).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Condition 1 value")).toHaveValue("env-updated");
+    expect(screen.getByLabelText("Group 1 match")).toHaveTextContent("Match any (OR)");
+    expect(readWorkspace().draft.spec.conditions).toEqual(persisted.spec.conditions);
+    first.unmount(); mount();
+    expect(screen.getByLabelText("Condition 1 value")).toHaveValue("env-updated");
+    expect(screen.getByLabelText("Group 1 match")).toHaveTextContent("Match any (OR)");
+    fireEvent.click(screen.getByRole("button", { name: "Save query" }));
+    const newDialog = screen.getByRole("dialog");
+    fireEvent.change(within(newDialog).getByLabelText("Name"), { target: { value: "Risk copy" } });
+    fireEvent.click(within(newDialog).getByRole("button", { name: "Save" }));
+    const copies = JSON.parse(localStorage.getItem("ppcoe.savedQueries.v1")!);
+    expect(copies).toHaveLength(2);
+    expect(copies.find((entry: { name: string }) => entry.name === "Risk copy").spec.conditions).toEqual(persisted.spec.conditions);
+  });
+  it("rejects deeper imported groups without flattening or replacing the existing draft", () => {
+    saveGrouped(); mount(); loadGrouped();
+    const invalid = groupedSpec();
+    invalid.conditions!.children.push({ kind: "group", operator: "all", children: [
+      { kind: "group", operator: "any", children: [
+        { kind: "condition", filter: { field: "location", op: "==", value: "unknown" } },
+      ] },
+    ] });
+    fireEvent.click(screen.getByRole("button", { name: "Import query JSON" }));
+    const dialog = screen.getByRole("dialog");
+    fireEvent.change(within(dialog).getByLabelText("Reusable query or raw clauses JSON"), { target: { value: JSON.stringify({
+      source: "builder", spec: invalid, clauses: [{ $type: "count" }],
+    }) } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Import draft" }));
+    expect(within(dialog).getByText(/Imported builder spec is invalid or unsupported/)).toBeInTheDocument();
+    expect(screen.getByLabelText("Condition 1 value")).toHaveValue("env");
+    expect(readWorkspace().draft.spec.conditions).toEqual(groupedSpec().conditions);
+  });
+  it("disables run for an empty subgroup or incomplete nested condition until repaired", () => {
+    mount();
+    fireEvent.click(screen.getByRole("button", { name: "Add group" }));
+    expect(screen.getByRole("button", { name: "Run query" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Remove condition 1" }));
+    expect(screen.getByText(/This group is empty/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Run query" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Remove group 1" }));
+    expect(screen.getByRole("button", { name: "Run query" })).toBeEnabled();
+    fireEvent.click(screen.getByLabelText("Root group match"));
+    fireEvent.click(screen.getByRole("option", { name: "Match any (OR)" }));
+    expect(screen.getByRole("button", { name: "Run query" })).toBeDisabled();
+  });
+  it("keeps grouped execution immutable across pagination/export and makes operator changes stale", async () => {
+    saveGrouped(); mount(); loadGrouped();
+    await runFirst("next");
+    const executed = structuredClone(runRawQuery.mock.calls[0][0]);
+    runRawQuery.mockResolvedValueOnce(success([item("two")], "more"));
+    fireEvent.click(screen.getByRole("button", { name: "Load more" }));
+    await waitFor(() => expect(screen.getByRole("link", { name: "App two" })).toBeInTheDocument());
+    expect(runRawQuery.mock.calls[1][0]).toEqual(executed);
+    expect(runRawQuery.mock.calls[1][1]).toMatchObject({ Skip: 1, SkipToken: "next" });
+    runRawQuery.mockResolvedValueOnce(success([item("three")]));
+    fireEvent.click(screen.getByRole("button", { name: "Export complete result" }));
+    await waitFor(() => expect(downloadCsv).toHaveBeenCalledTimes(1));
+    expect(runRawQuery.mock.calls[2][0]).toEqual(executed);
+    expect(runRawQuery.mock.calls[2][1]).toMatchObject({ Skip: 2, SkipToken: "more" });
+    fireEvent.click(screen.getByLabelText("Group 1 match"));
+    fireEvent.click(screen.getByRole("option", { name: "Match all (AND)" }));
+    expect(screen.getByText(/Query changed - run again/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Export complete result" })).toBeDisabled();
+  });
+  it("ignores an old grouped response after changing the root operator", async () => {
+    saveGrouped(); mount(); loadGrouped();
+    let resolve!: (value: ReturnType<typeof success>) => void;
+    runRawQuery.mockReturnValueOnce(new Promise((done) => { resolve = done; }));
+    fireEvent.click(screen.getByRole("button", { name: "Run query" }));
+    fireEvent.click(screen.getByLabelText("Root group match"));
+    fireEvent.click(screen.getByRole("option", { name: "Match any (OR)" }));
+    await act(async () => { resolve(success([item("late-grouped")])); });
+    expect(screen.queryByRole("link", { name: "App late-grouped" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Run query" })).toBeEnabled();
+  });
+  it("drains ordinary OR paired evidence branches and strips internal booleans from raw exports", async () => {
+    saveGrouped(pairedOrSpec()); mount(); loadGrouped();
+    const wrong = { ...item("wrong-pair"), properties: { ...item("wrong-pair").properties, powerPlatformConnectors: [
+      { connectorId: "shared_sharepointonline", operations: [] },
+      { connectorId: "shared_other", operations: [{ operationId: "GetItems" }] },
+    ] } };
+    const right = { ...item("right-pair"), properties: { ...item("right-pair").properties, powerPlatformConnectors: [
+      { connectorId: "shared_sharepointonline", operations: [{ operationId: "GetItems" }] },
+    ] } };
+    runRawQuery.mockImplementationOnce((clauses: Clause[]) => Promise.resolve(success([
+      withEvidence(clauses, item("ordinary-branch"), true), withEvidence(clauses, wrong, false),
+      withEvidence(clauses, item("unknown-branch"), null),
+    ], "next")));
+    let finish!: () => void;
+    runRawQuery.mockImplementationOnce((clauses: Clause[]) => new Promise((resolve) => {
+      finish = () => resolve(success([withEvidence(clauses, right, false)]));
+    }));
+    fireEvent.click(screen.getByRole("button", { name: "Run query" }));
+    await waitFor(() => expect(runRawQuery).toHaveBeenCalledTimes(2));
+    expect(screen.queryByRole("link", { name: "App ordinary-branch" })).not.toBeInTheDocument();
+    await act(async () => finish());
+    await waitFor(() => expect(screen.getByRole("link", { name: "App ordinary-branch" })).toBeInTheDocument());
+    expect(screen.getByRole("link", { name: "App right-pair" })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "App wrong-pair" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "App unknown-branch" })).not.toBeInTheDocument();
+    expect(runRawQuery.mock.calls[1][1]).toMatchObject({ Skip: 3, SkipToken: "next" });
+    expect(screen.getByRole("button", { name: "Copy clauses JSON" })).toBeDisabled();
+    fireEvent.click(screen.getByLabelText("CSV fields"));
+    fireEvent.click(screen.getByRole("option", { name: "All raw fields (flattened)" }));
+    fireEvent.click(screen.getByRole("button", { name: "Export complete result" }));
+    await waitFor(() => expect(downloadCsv).toHaveBeenCalledTimes(1));
+    expect(downloadCsv.mock.calls[0][1]).toContain("ordinary-branch");
+    expect(downloadCsv.mock.calls[0][1]).toContain("right-pair");
+    expect(downloadCsv.mock.calls[0][1]).not.toContain("__queryEvidence_");
+    expect(downloadCsv.mock.calls[0][1]).not.toContain("wrong-pair");
+  });
+  it("reports missing grouped branch evidence without replacing previously useful results", async () => {
+    saveGrouped(pairedOrSpec()); mount(); await runFirst();
+    loadGrouped();
+    runRawQuery.mockResolvedValueOnce(success([item("missing-evidence")]));
+    fireEvent.click(screen.getByRole("button", { name: "Run query" }));
+    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent(/Query failed:.*evidence/i));
+    expect(screen.getByRole("link", { name: "App one" })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "App missing-evidence" })).not.toBeInTheDocument();
   });
 });

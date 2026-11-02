@@ -27,6 +27,38 @@ warning and does not change saved queries.
 
 ## Filters and dates
 
+The Basic condition builder has a **Root group** and one level of subgroups.
+Choose **Match all (AND)** or **Match any (OR)** for each group. Conditions in
+a subgroup stay together; the readable condition summary includes explicit
+parentheses. Resource types always constrain the entire condition tree,
+regardless of the root operator.
+
+For example:
+
+```text
+Canvas apps AND (
+  Environment ID equals Production-ID
+  AND (Is quarantined equals true OR Is managed equals false)
+)
+```
+
+This includes only Production resources that are quarantined or explicitly
+unmanaged. Missing/null `isManaged` is not false and does not satisfy the
+second branch on its own. Use two Match all subgroups beneath a Match any
+root to express `(A AND B) OR (C AND D)`.
+
+**Add condition** adds to the chosen group. **Add group** is available at the
+root only. Empty subgroups and an empty Match any root are invalid; Run,
+Save, and clause copying stay disabled until they are repaired or removed.
+An empty Match all root means no conditions beyond the resource-type scope.
+Single-condition groups are valid. Imported structures deeper than one
+subgroup level are rejected explicitly, never flattened.
+
+Old saved `filters` arrays are displayed as a Match all root without changing
+their stored form. Editing the tree stores a typed `conditions` expression
+and clears the legacy array. A spec cannot contain competing nonempty flat
+filters and grouped conditions.
+
 Field suggestions use the inventory field catalog and selected resource types.
 Operators and inputs follow field kinds; unknown field paths remain available
 as an escape hatch. Incomplete filters are errors, never silently omitted.
@@ -34,6 +66,16 @@ Boolean values are explicit true/false; missing data is not displayed as false.
 Catalog suggestions are a union for mixed scopes: a field may not be reported
 on all selected types. Legacy array-emptiness semantics treat a missing array
 as empty. Empty-array filters do not require a value.
+
+Known operators lower to genuine parenthesized KQL expressions inside the
+connector's `Clause[]` contract. Grouping is not implemented by chaining
+unrelated `where` clauses. **Copy clauses JSON** is the runnable connector
+payload: paste it into Advanced or another compatible clause editor to
+preserve the same grouping. **Copy reusable query JSON** is a separate
+builder envelope that also retains editable groups and relative presets.
+Unsupported legacy operators inside a grouped tree produce a visible
+validation error rather than approximate grouping; raw Advanced clauses
+remain the escape hatch.
 
 | Date choice | Meaning |
 |---|---|
@@ -66,6 +108,12 @@ Connectors feature. Reported actions and trigger operations are distinguished
 from reference-only connector declarations. None of these are runtime execution
 or audit-log evidence.
 
+A connector and its paired operation remain one atomic condition, including
+inside OR groups. An OR sibling cannot cause an operation reported on another
+connector to become a matching pair. Candidate filtering must remain a
+superset of the complete expression: it must not incorrectly require every
+ordinary branch when the group says Match any.
+
 The clause API cannot expand nested connector/operation pairs. Paired Queries
 therefore drain the complete candidate query before exact client-side matching.
 Failed or safety-limited scans never display candidate rows as confirmed
@@ -75,6 +123,12 @@ Advanced/raw-clause conversion and raw dashboard conversion cannot express the
 pairing and are blocked rather than returning misleading cross-connector
 matches or a false zero. Dashboard support for such specs explicitly reports
 the unsupported paired execution path.
+
+Ordinary non-paired groups retain their expression in dashboard snapshots and
+server-side aggregates. The dashboard tile editor preserves grouped saved
+queries rather than flattening them into its legacy flat-filter editor.
+Exact paired groups still require the complete Queries client-filtered scan
+and are explicitly unsupported in dashboard execution.
 
 ## Results and CSV
 
