@@ -12,6 +12,15 @@ import {
 // across types, and we want to be loud if we ever regress.
 
 describe("FIELDS_BY_RESOURCE_TYPE", () => {
+  it("labels legacy connector/operation searches as independent configuration evidence", () => {
+    const suggestions = getFieldSuggestions([ResourceType.CloudFlow], "filter");
+    const connector = suggestions.find((field) => field.path === "__connector");
+    const operation = suggestions.find((field) => field.path === "__operation");
+    expect(connector?.label).toContain("independent");
+    expect(connector?.help).toContain("does not pair");
+    expect(operation?.label).toContain("independent");
+    expect(operation?.help).toContain("not execution telemetry");
+  });
   it("covers every ResourceType", () => {
     const expected = Object.values(ResourceType).sort();
     const actual = Object.keys(FIELDS_BY_RESOURCE_TYPE).sort();

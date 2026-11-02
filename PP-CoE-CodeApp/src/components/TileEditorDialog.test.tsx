@@ -14,10 +14,13 @@
  * We stub out the TileView preview to avoid pulling the inventory
  * fetch path into these tests — that's covered by its own test suite.
  */
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { FluentProvider, webLightTheme } from "@fluentui/react-components";
 import type { DashboardTile } from "../data/dashboards";
+import type { SavedQuery } from "../data/savedQueries";
+
+const { savedQueries } = vi.hoisted(() => ({ savedQueries: vi.fn<() => SavedQuery[]>(() => []) }));
 
 // Stub the live-preview tile so we don't hit the inventory layer here.
 vi.mock("./TileView", () => ({
@@ -30,10 +33,11 @@ vi.mock("../data/savedQueries", async () => {
   const actual = await vi.importActual<typeof import("../data/savedQueries")>(
     "../data/savedQueries",
   );
-  return { ...actual, listSavedQueries: () => [] };
+  return { ...actual, listSavedQueries: savedQueries };
 });
 
 import { TileEditorDialog } from "./TileEditorDialog";
+import { buildClausesFromSpec, formatQueryConditionSummary } from "../data/inventory";
 
 function visualTile(overrides: Partial<DashboardTile> = {}): DashboardTile {
   return {
@@ -96,6 +100,105 @@ function renderEditor(initialTile: DashboardTile, onSave = vi.fn(), onClose = vi
 }
 
 describe("TileEditorDialog — Phase 3 Advanced mode", () => {
+  beforeEach(() => { savedQueries.mockReturnValue([]); });
+
+  const groupedTile = () => {
+    const tile = visualTile();
+    tile.spec.conditions = {
+      kind: "group", operator: "all", children: [
+        { kind: "condition", filter: { field: "properties.isManaged", op: "==", value: "false" } },
+        { kind: "group", operator: "any", children: [
+          { kind: "condition", filter: { field: "location", op: "==", value: "west" } },
+          { kind: "condition", filter: { field: "location", op: "==", value: "east" } },
+        ] },
+      ],
+    };
+    return tile;
+  };
+
+  it("preserves grouped saved specs on visualization edits and makes filters accurately read-only", () => {
+    const tile = groupedTile();
+    const onSave = vi.fn();
+    renderEditor(tile, onSave);
+    expect(screen.getByText(formatQueryConditionSummary(tile.spec))).toBeInTheDocument();
+    expect(screen.getByText(/Grouped conditions \(read-only\)/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Add filter" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getAllByRole("combobox").find((element) => element.getAttribute("value") === "KPI")!);
+    fireEvent.click(screen.getByRole("option", { name: "Table" }));
+    fireEvent.click(screen.getByRole("button", { name: /Save tile/ }));
+    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({
+      source: "builder", spec: tile.spec, viz: expect.objectContaining({ type: "table" }),
+    }));
+  });
+
+  it("converts grouped specs to exactly equivalent runnable Advanced clauses", async () => {
+    const tile = groupedTile();
+    const onSave = vi.fn();
+    renderEditor(tile, onSave);
+    fireEvent.click(screen.getByRole("button", { name: /Advanced \(clauses\)/ }));
+    const textarea = Array.from(document.querySelectorAll("textarea"))
+      .find((element) => element.value.includes("\"$type\""))!;
+    expect(JSON.parse(textarea.value)).toEqual(buildClausesFromSpec(tile.spec));
+    await waitFor(() => expect(screen.getByRole("button", { name: /Save tile/ })).toBeEnabled());
+    fireEvent.click(screen.getByRole("button", { name: /Save tile/ }));
+    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({
+      source: "raw", clauses: buildClausesFromSpec(tile.spec),
+    }));
+  });
+
+  it("loads a grouped saved query in Advanced mode without falling back to legacy empty filters", () => {
+    const querySpec = groupedTile().spec;
+    savedQueries.mockReturnValue([{
+      id: "grouped", name: "Grouped query", description: "", source: "builder",
+      spec: querySpec, clauses: [], createdAt: "2026-01-01", updatedAt: "2026-01-01",
+    }]);
+    renderEditor(rawTile());
+    fireEvent.click(screen.getAllByRole("combobox")[0]);
+    fireEvent.click(screen.getByRole("option", { name: /Grouped query/ }));
+    const textarea = Array.from(document.querySelectorAll("textarea"))
+      .find((element) => element.value.includes("\"$type\""))!;
+    expect(JSON.parse(textarea.value)).toEqual(buildClausesFromSpec(querySpec));
+  });
+
+  it.each(["flat", "grouped"])("disables %s paired saved-query choices in Advanced mode with explanatory helper copy", (shape) => {
+    const pairedSpec = visualTile().spec;
+    pairedSpec.filters = [{ field: "__operation", op: "==", value: "DeleteItem", connectorId: "sharepointonline" }];
+    if (shape === "grouped") {
+      pairedSpec.conditions = { kind: "group", operator: "any", children: [
+        { kind: "condition", filter: pairedSpec.filters[0] },
+      ] };
+      pairedSpec.filters = [];
+    }
+    savedQueries.mockReturnValue([{
+      id: "paired-query",
+      name: "Paired delete operation",
+      description: "",
+      source: "builder",
+      spec: pairedSpec,
+      clauses: [],
+      createdAt: "2026-01-01T00:00:00Z",
+      updatedAt: "2026-01-01T00:00:00Z",
+    }]);
+    renderEditor(rawTile());
+    fireEvent.click(screen.getAllByRole("combobox")[0]);
+    expect(screen.getByRole("option", { name: /Paired delete operation/ })).toHaveAttribute("aria-disabled", "true");
+    expect(screen.getByText(/cannot be loaded as raw clauses/)).toBeInTheDocument();
+  });
+
+  it.each(["flat", "grouped"])("prevents %s paired operation specs from being silently converted into raw clauses", (shape) => {
+    const tile = visualTile();
+    tile.spec.filters = [{ field: "__operation", op: "==", value: "DeleteItem", connectorId: "sharepointonline" }];
+    if (shape === "grouped") {
+      tile.spec.conditions = { kind: "group", operator: "any", children: [
+        { kind: "condition", filter: tile.spec.filters[0] },
+      ] };
+      tile.spec.filters = [];
+    }
+    renderEditor(tile);
+    expect(screen.getByRole("button", { name: /Advanced \(clauses\)/i })).toBeDisabled();
+    expect(screen.getByText(/cannot be converted to raw clauses/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Insert clause/i })).not.toBeInTheDocument();
+  });
   it("new tile defaults to Visual mode and shows the mode toggle", async () => {
     renderEditor(visualTile());
     expect(await screen.findByRole("button", { name: /Visual builder/i })).toBeInTheDocument();

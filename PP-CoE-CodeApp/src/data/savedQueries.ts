@@ -13,7 +13,7 @@
  * eventual migration plan).
  */
 
-import type { QuerySpec } from "./inventory";
+import { isQueryConditionGroup, type QuerySpec } from "./inventory";
 import type { Clause } from "../generated/models/PowerPlatformforAdminsV2Model";
 
 export type SavedQuerySource = "builder" | "raw";
@@ -32,6 +32,7 @@ export interface SavedQuery {
   clauses: Clause[];
   /** Default page size (`Top`) to use when running. */
   pageSize?: number;
+  favorite?: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -46,24 +47,55 @@ function nowIso(): string {
   return new Date().toISOString();
 }
 
-function readStore(): SavedQuery[] {
+export function isSavedQuery(value: unknown): value is SavedQuery {
+  if (!value || typeof value !== "object") return false;
+  const q = value as Record<string, unknown>;
+  return typeof q.id === "string" && typeof q.name === "string" &&
+    typeof q.description === "string" && (q.source === "raw" || q.source === "builder") &&
+    Array.isArray(q.clauses) && q.clauses.every((c) =>
+      c && typeof c === "object" && typeof c.$type === "string") &&
+    typeof q.createdAt === "string" && typeof q.updatedAt === "string" &&
+    (q.spec === undefined || isQuerySpec(q.spec));
+}
+
+export function isQuerySpec(value: unknown): value is QuerySpec {
+  if (!value || typeof value !== "object") return false;
+  const s = value as Record<string, unknown>;
+  return Array.isArray(s.resourceTypes) && s.resourceTypes.every((t) => typeof t === "string") &&
+    Array.isArray(s.filters) && s.filters.every((f) =>
+      f && typeof f === "object" && typeof f.field === "string" &&
+      typeof f.op === "string" && typeof f.value === "string" &&
+      (f.connectorId === undefined || typeof f.connectorId === "string")) &&
+    (s.conditions === undefined ||
+      (s.filters.length === 0 && isQueryConditionGroup(s.conditions))) &&
+    typeof s.orderField === "string" && (s.orderDirection === "asc" || s.orderDirection === "desc") &&
+    typeof s.limit === "number" && Number.isFinite(s.limit) && s.limit >= 1 && s.limit <= 500;
+}
+
+let storageError = "";
+export function getSavedQueriesStorageError(): string {
+  return storageError;
+}
+
+function readStore(strict = false): SavedQuery[] {
+  storageError = "";
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    return parsed as SavedQuery[];
-  } catch {
+    if (!Array.isArray(parsed) || !parsed.every(isSavedQuery)) {
+      throw new Error("Saved queries contain an invalid or unsupported record. Existing storage has not been changed.");
+    }
+    return parsed;
+  } catch (error) {
+    storageError = error instanceof Error ? error.message : "Could not read saved queries.";
+    if (strict) throw new Error(storageError);
     return [];
   }
 }
 
 function writeStore(items: SavedQuery[]): void {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
-  } catch {
-    /* quota or privacy mode — silent */
-  }
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
 }
 
 /** Read all saved queries, newest first. */
@@ -84,11 +116,12 @@ export interface SavedQueryInput {
   spec?: QuerySpec;
   clauses: Clause[];
   pageSize?: number;
+  favorite?: boolean;
 }
 
 /** Create a new saved query. Returns the persisted row. */
 export function createSavedQuery(input: SavedQueryInput): SavedQuery {
-  const items = readStore();
+  const items = readStore(true);
   const q: SavedQuery = {
     id: genId("q"),
     name: input.name.trim() || "Untitled query",
@@ -97,6 +130,7 @@ export function createSavedQuery(input: SavedQueryInput): SavedQuery {
     spec: input.source === "builder" ? input.spec : undefined,
     clauses: input.clauses,
     pageSize: input.pageSize,
+    favorite: input.favorite,
     createdAt: nowIso(),
     updatedAt: nowIso(),
   };
@@ -108,22 +142,24 @@ export function createSavedQuery(input: SavedQueryInput): SavedQuery {
  *  if not found. */
 export function updateSavedQuery(
   id: string,
-  patch: Partial<Pick<SavedQuery, "name" | "description">>
+  patch: Partial<SavedQueryInput>
 ): SavedQuery | null {
-  const items = readStore();
+  const items = readStore(true);
   const idx = items.findIndex((q) => q.id === id);
   if (idx < 0) return null;
   const next: SavedQuery = {
     ...items[idx],
+    ...patch,
     ...(patch.name !== undefined ? { name: patch.name.trim() || items[idx].name } : {}),
     ...(patch.description !== undefined ? { description: patch.description.trim() } : {}),
     updatedAt: nowIso(),
   };
+  if (next.source === "raw") delete next.spec;
   items[idx] = next;
   writeStore(items);
   return next;
 }
 
 export function deleteSavedQuery(id: string): void {
-  writeStore(readStore().filter((q) => q.id !== id));
+  writeStore(readStore(true).filter((q) => q.id !== id));
 }

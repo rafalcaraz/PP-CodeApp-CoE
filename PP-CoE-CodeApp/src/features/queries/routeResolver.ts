@@ -1,4 +1,4 @@
-import { ResourceType } from "../../data/inventory";
+import { ResourceType, normalizeConnectorId } from "../../data/inventory";
 
 interface QueryResultRouteInput {
   id: string;
@@ -23,6 +23,9 @@ function buildDetailPath(input: QueryResultRouteInput): string | null {
   const id = input.id.trim();
   if (!id) return null;
   const encodedId = encodeURIComponent(id);
+  if (input.type === ResourceType.Connector) {
+    return `/connectors/${encodeURIComponent(normalizeConnectorId(id))}`;
+  }
   if (input.type === ResourceType.CopilotStudioAgent) {
     return `/agents/${encodedId}`;
   }
@@ -53,4 +56,3 @@ export function getQueryResultHref(input: QueryResultRouteInput): string | null 
   const params = new URLSearchParams({ envId });
   return `${path}?${params.toString()}`;
 }
-

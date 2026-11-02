@@ -247,6 +247,9 @@ behind the app. Read the relevant one before changing the matching area:
 - **[Portal actions engine](PP-CoE-CodeApp/docs/portal-actions.md)** — the
   registry-driven command bar on each detail page. Read before adding a new
   portal button.
+- **[Queries workspace](PP-CoE-CodeApp/docs/queries.md)** — draft/execution
+  ownership, UTC and rolling date semantics, paired connector evidence,
+  saved queries, selectable columns, and explicit complete/partial CSV exports.
 - **[Admin connector inventory](PP-CoE-CodeApp/docs/admin-connector-inventory.md)** &
   **[Admin payload samples](PP-CoE-CodeApp/docs/admin-payload-samples.md)** — the
   on-demand, per-record admin-connector enrichments (and the two governance

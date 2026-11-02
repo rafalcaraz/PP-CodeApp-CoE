@@ -85,5 +85,9 @@ describe("getQueryResultHref", () => {
       })
     ).toBeNull();
   });
-});
 
+  it("maps connector catalog identities without appending an environment", () => {
+    expect(getQueryResultHref({ id: "/providers/Microsoft.PowerApps/apis/shared_sql", type: ResourceType.Connector, environmentId: "env" }))
+      .toBe("/connectors/shared_sql");
+  });
+});

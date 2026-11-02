@@ -8,11 +8,17 @@
  */
 
 import { PowerPlatformforAdminsV2Service } from "../generated";
+import {
+  extractConnectorOperationEvidence,
+  readConnectorEvidenceSource,
+} from "../shared/connector-usage";
 import type {
   Clause,
   ResourceItem,
   ResourceQueryRequest,
   ResourceQueryRequestOptions,
+  ExtendClause,
+  WhereClause,
 } from "../generated/models/PowerPlatformforAdminsV2Model";
 
 const API_VERSION = "2024-10-01";
@@ -2313,18 +2319,36 @@ export type QueryFilterOp =
   | "has"
   | "has_any"
   | "lastNdays"
+  | "today"
+  | "yesterday"
+  | "onDate"
+  | "dateRange"
   | "isempty"
-  | "!isempty";
+  | "!isempty"
+  | (string & {});
 
 export interface QueryFilter {
   field: string;
   op: QueryFilterOp;
   value: string;
+  /** Exact connector/operation pairing. Requires a complete client-filtered
+   * execution plan; legacy __operation without this stays independent. */
+  connectorId?: string;
+}
+
+export type QueryCondition = { kind: "condition"; filter: QueryFilter } | QueryConditionGroup;
+
+export interface QueryConditionGroup {
+  kind: "group";
+  operator: "all" | "any";
+  children: QueryCondition[];
 }
 
 export interface QuerySpec {
   resourceTypes: ResourceTypeValue[];
   filters: QueryFilter[];
+  /** Authoritative when present. Legacy filters must then be empty. */
+  conditions?: QueryConditionGroup;
   orderField: string;
   orderDirection: "asc" | "desc";
   limit: number;
@@ -2335,6 +2359,143 @@ export interface QueryTemplate {
   name: string;
   description: string;
   spec: QuerySpec;
+}
+
+export const QUERY_DATE_OPERATORS = ["lastNdays", "today", "yesterday", "onDate", "dateRange"] as const;
+
+const GROUPED_QUERY_OPERATORS = new Set([
+  "==", "!=", ">", "<", ">=", "<=", "contains", "!contains", "startswith",
+  "!startswith", "endswith", "!endswith", "in~", "has", "!has", "has_any",
+  "lastNdays", "today", "yesterday", "onDate", "dateRange", "isempty", "!isempty",
+]);
+
+/** Structural import boundary: root plus one subgroup level, never silently
+ * discard unsupported nested groups or malformed leaves. */
+export function isQueryConditionGroup(value: unknown): value is QueryConditionGroup {
+  const check = (node: unknown, depth: number): boolean => {
+    if (!node || typeof node !== "object") return false;
+    const n = node as Record<string, unknown>;
+    if (n.kind === "condition") {
+      if (depth === 0 || !n.filter || typeof n.filter !== "object") return false;
+      const f = n.filter as Record<string, unknown>;
+      return typeof f.field === "string" && typeof f.op === "string" &&
+        typeof f.value === "string" &&
+        (f.connectorId === undefined || typeof f.connectorId === "string");
+    }
+    return n.kind === "group" && depth <= 1 &&
+      (n.operator === "all" || n.operator === "any") && Array.isArray(n.children) &&
+      (n.children.length > 0 || (depth === 0 && n.operator === "all")) &&
+      n.children.every((child) => check(child, depth + 1));
+  };
+  return check(value, 0);
+}
+
+export function queryConditionRoot(spec: QuerySpec): QueryConditionGroup {
+  return spec.conditions ?? {
+    kind: "group", operator: "all",
+    children: spec.filters.map((filter) => ({ kind: "condition", filter })),
+  };
+}
+
+/** Flatten only for leaf validation/catalog hints, never for execution. */
+export function queryFilters(spec: QuerySpec): QueryFilter[] {
+  const leaves = (node: QueryCondition): QueryFilter[] =>
+    node.kind === "condition" ? [node.filter] : node.children.flatMap(leaves);
+  return leaves(queryConditionRoot(spec));
+}
+
+export function formatQueryConditionSummary(
+  spec: QuerySpec,
+  fieldLabel: (path: string) => string = friendlyFilterField,
+): string {
+  const format = (node: QueryCondition): string => {
+    if (node.kind === "group") {
+      return `(${node.children.map(format).join(node.operator === "all" ? " AND " : " OR ") || "true"})`;
+    }
+    const { field, op, value, connectorId } = node.filter;
+    return `${fieldLabel(field)} ${op}${queryFilterNeedsValue(op) ? ` ${JSON.stringify(value)}` : ""}${connectorId === undefined ? "" : ` within connector ${JSON.stringify(connectorId)}`}`;
+  };
+  return format(queryConditionRoot(spec));
+}
+
+export function queryFilterNeedsValue(op: QueryFilterOp): boolean {
+  return !["today", "yesterday", "isempty", "!isempty"].includes(op);
+}
+
+function parseCalendarDate(value: string): Date | undefined {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return undefined;
+  const parsed = new Date(`${value}T00:00:00.000Z`);
+  return Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value
+    ? parsed : undefined;
+}
+
+/** Validate builder-owned semantics without rejecting unknown field paths or
+ * legacy/freeform operators. Never silently omit an incomplete filter. */
+export function validateQuerySpec(spec: QuerySpec): string[] {
+  const errors: string[] = [];
+  if (spec.conditions !== undefined) {
+    if (!isQueryConditionGroup(spec.conditions)) {
+      return ["Conditions must be a valid ALL/ANY root with at most one subgroup level; only the ALL root may be empty."];
+    }
+    if (spec.filters.length) errors.push("Grouped conditions cannot compete with nonempty legacy filters.");
+  }
+  queryFilters(spec).forEach((filter, index) => {
+    const prefix = `Filter ${index + 1}: `;
+    if (!filter.field.trim()) errors.push(`${prefix}choose a field.`);
+    if (!filter.op.trim()) errors.push(`${prefix}choose an operator.`);
+    if (spec.conditions && !GROUPED_QUERY_OPERATORS.has(filter.op)) {
+      errors.push(`${prefix}operator ${filter.op} is not supported in grouped conditions.`);
+    }
+    if (queryFilterNeedsValue(filter.op) && !filter.value.trim()) {
+      errors.push(`${prefix}enter a value.`);
+    }
+    if (filter.op === "lastNdays" &&
+        (!/^\d+$/.test(filter.value.trim()) || !Number.isSafeInteger(Number(filter.value)) ||
+         Number(filter.value) < 1)) {
+      errors.push(`${prefix}last N days must be a positive whole number.`);
+    }
+    if (filter.op === "onDate" && !parseCalendarDate(filter.value.trim())) {
+      errors.push(`${prefix}enter a valid UTC calendar date (YYYY-MM-DD).`);
+    }
+    if (filter.op === "dateRange") {
+      const parts = filter.value.split(",").map((part) => part.trim());
+      const start = parseCalendarDate(parts[0] ?? "");
+      const end = parseCalendarDate(parts[1] ?? "");
+      if (parts.length !== 2 || !start || !end || start > end) {
+        errors.push(`${prefix}enter an ordered UTC date range (YYYY-MM-DD,YYYY-MM-DD).`);
+      }
+    }
+    if (["in~", "has_any"].includes(filter.op) &&
+        !filter.value.split(",").some((part) => part.trim())) {
+      errors.push(`${prefix}enter at least one list value.`);
+    }
+    if (filter.connectorId !== undefined &&
+        (filter.field.trim() !== OPERATION_FIELD || !filter.connectorId.trim())) {
+      errors.push(`${prefix}a connector ID is only valid on an operation filter and cannot be empty.`);
+    }
+    if (filter.connectorId !== undefined && !["==", "!=", "in~", "has", "has_any"].includes(filter.op)) {
+      errors.push(`${prefix}paired operations support ==, !=, in~, has, or has_any.`);
+    }
+  });
+  return errors;
+}
+
+function assertValidQuerySpec(spec: QuerySpec): void {
+  const errors = validateQuerySpec(spec);
+  if (errors.length) throw new Error(errors.join("\n"));
+}
+
+export function hasPairedOperationFilters(spec: QuerySpec): boolean {
+  if (spec.conditions !== undefined && !isQueryConditionGroup(spec.conditions)) return false;
+  return queryFilters(spec).some((filter) => filter.connectorId !== undefined);
+}
+
+function serverQueryErrors(spec: QuerySpec): string[] {
+  const errors = validateQuerySpec(spec);
+  if (hasPairedOperationFilters(spec)) {
+    errors.push("Connector-specific operations require a complete client-filtered drain via buildQueryExecutionPlan; raw clauses and server aggregates cannot preserve pairing.");
+  }
+  return errors;
 }
 
 /** Resolve a visual-query type selection to a stable, explicit scope.
@@ -2397,9 +2558,9 @@ export function isSentinelField(field: string): boolean {
 /** Friendly label for sentinel field paths; passes other values through. */
 export function friendlyFilterField(field: string): string {
   if (field === CONNECTOR_FIELD)
-    return "Connector (any location)";
+    return "Connector reference (any location, independent)";
   if (field === OPERATION_FIELD)
-    return "Operation (any location)";
+    return "Operation (any location, independent)";
   return field;
 }
 
@@ -2440,15 +2601,53 @@ function formatFilterValues(value: string, op: QueryFilterOp): string[] {
  */
 function translateFilter(
   f: QueryFilter,
-  emittedExtends: Set<string>
+  emittedExtends: Set<string>,
+  referenceTime?: Date,
 ): Clause[] {
   const field = f.field.trim();
   if (!field) return [];
+  if (f.connectorId !== undefined) {
+    throw new Error("Connector-specific operations require buildQueryExecutionPlan and a complete client-filtered drain; raw clauses and server aggregates cannot preserve pairing.");
+  }
+
+  if (["today", "yesterday", "onDate", "dateRange"].includes(f.op)) {
+    if (!referenceTime && (f.op === "today" || f.op === "yesterday")) {
+      return [
+        where(`todatetime(${field})`, ">=", [
+          f.op === "today" ? "startofday(now())" : "startofday(now(), -1)",
+        ]),
+        where(`todatetime(${field})`, "<", [
+          f.op === "today" ? "startofday(now(), 1)" : "startofday(now())",
+        ]),
+      ];
+    }
+    let start: Date;
+    let end: Date;
+    if (f.op === "today" || f.op === "yesterday") {
+      const now = referenceTime!;
+      start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+      if (f.op === "yesterday") start.setUTCDate(start.getUTCDate() - 1);
+      end = new Date(start);
+    } else {
+      const values = f.value.split(",").map((value) => value.trim());
+      start = parseCalendarDate(values[0])!;
+      end = f.op === "dateRange" ? parseCalendarDate(values[1])! : new Date(start);
+    }
+    end.setUTCDate(end.getUTCDate() + 1);
+    return [
+      where(`todatetime(${field})`, ">=", [`datetime(${start.toISOString()})`]),
+      where(`todatetime(${field})`, "<", [`datetime(${end.toISOString()})`]),
+    ];
+  }
 
   // "in last N days" is special: emit a raw KQL `ago(Nd)` on the right side.
   if (f.op === "lastNdays") {
-    const n = Math.max(1, Math.floor(Number(f.value) || 0));
-    if (!n) return [];
+    const n = Number(f.value);
+    if (referenceTime) {
+      const cutoff = new Date(referenceTime.getTime() - n * 86_400_000);
+      if (!Number.isFinite(cutoff.getTime())) throw new Error("Last N days exceeds the supported date range.");
+      return [where(field, ">", [`datetime(${cutoff.toISOString()})`])];
+    }
     return [where(field, ">", [`ago(${n}d)`])];
   }
 
@@ -2505,17 +2704,62 @@ function translateFilter(
   return [where(field, f.op, vals)];
 }
 
-/** Translate a user-facing QuerySpec into the connector's `Clauses[]` shape. */
+/** Reuse the legacy translator, but keep every multi-clause leaf atomic.
+ * Inline its auxiliary extends so two array paths whose sanitized names
+ * collide cannot overwrite each other's evidence inside an OR expression. */
+function filterExpression(filter: QueryFilter, referenceTime?: Date): string {
+  const aliases = new Map<string, string>();
+  const predicates: string[] = [];
+  for (const clause of translateFilter(filter, new Set(), referenceTime)) {
+    if (clause.$type === "extend") {
+      const { FieldName, Expression } = clause as unknown as ExtendClause;
+      aliases.set(FieldName, Expression);
+    } else {
+      const { FieldName, Operator, Values = [] } = clause as unknown as WhereClause;
+      const field = aliases.has(FieldName) ? `(${aliases.get(FieldName)})` : FieldName;
+      const values = ["in~", "has_any"].includes(Operator)
+        ? `(${Values.join(", ")})` : Values[0];
+      predicates.push(`(${field} ${Operator} ${values})`);
+    }
+  }
+  return `(${predicates.join(" and ") || "true"})`;
+}
+
+function conditionExpression(
+  node: QueryCondition,
+  leaf: (filter: QueryFilter) => string,
+): string {
+  return node.kind === "condition" ? leaf(node.filter) :
+    `(${node.children.map((child) => conditionExpression(child, leaf))
+      .join(node.operator === "all" ? " and " : " or ") || "true"})`;
+}
+
+function appendQueryFilters(clauses: Clause[], spec: QuerySpec, referenceTime?: Date): void {
+  if (spec.conditions) {
+    const expression = conditionExpression(spec.conditions, (filter) => filterExpression(filter, referenceTime));
+    clauses.push(where(expression, "==", ["true"]));
+  } else {
+    const emittedExtends = new Set<string>();
+    for (const filter of spec.filters) {
+      clauses.push(...translateFilter(filter, emittedExtends, referenceTime));
+    }
+  }
+}
+
+/** Translate a user-facing QuerySpec into connector clauses. Incomplete draft
+ * filters and client-only pairs fail closed, never throw during view render.
+ * Call validateQuerySpec before execution and use buildQueryExecutionPlan for
+ * paired operations; this sentinel clause is not an executable paired plan. */
 export function buildClausesFromSpec(spec: QuerySpec): Clause[] {
+  return buildServerClausesFromSpec(spec);
+}
+
+function buildServerClausesFromSpec(spec: QuerySpec, referenceTime?: Date): Clause[] {
+  if (serverQueryErrors(spec).length) return [where("1", "==", ["0"])];
   const clauses: Clause[] = [];
   appendResourceTypeScope(clauses, spec.resourceTypes);
 
-  const emittedExtends = new Set<string>();
-  for (const f of spec.filters) {
-    for (const c of translateFilter(f, emittedExtends)) {
-      clauses.push(c);
-    }
-  }
+  appendQueryFilters(clauses, spec, referenceTime);
 
   if (spec.orderField.trim()) {
     const field = spec.orderField.trim();
@@ -2533,6 +2777,116 @@ export function buildClausesFromSpec(spec: QuerySpec): Clause[] {
   // full count and the user can `Load more` past the first page.
 
   return clauses;
+}
+
+export interface QueryExecutionPlan {
+  /** Candidate clauses only when requiresClientFiltering is true. Do not
+   * expose candidate totals, export or paginate before a complete drain. */
+  clauses: Clause[];
+  requiresClientFiltering: boolean;
+  matches: (item: ResourceItem) => boolean;
+  /** Remove execution-only evidence after matching, before display/export. */
+  projectResult?: (item: ResourceItem) => ResourceItem;
+}
+
+/** No serialized-JSON regex can safely correlate arbitrary nested entries.
+ * Drain all candidates with token + cumulative Skip, reject partial/capped
+ * scans, then apply matches before counts, pagination, or export. */
+export function buildQueryExecutionPlan(spec: QuerySpec, referenceTime?: Date): QueryExecutionPlan {
+  assertValidQuerySpec(spec);
+  if (referenceTime && !Number.isFinite(referenceTime.getTime())) {
+    throw new Error("Query reference time must be a valid Date.");
+  }
+  const paired = queryFilters(spec)
+    .filter((filter) => filter.connectorId !== undefined)
+    .map((filter) => ({
+      connectorId: filter.connectorId!,
+      negate: filter.op === "!=",
+      selected: new Set(
+        (["in~", "has_any"].includes(filter.op) ? filter.value.split(",") : [filter.value])
+          .map((value) => value.trim().toLowerCase()).filter(Boolean),
+      ),
+    }));
+  // Deliberately omit paired filters from the server candidate query. The
+  // tokenized legacy connector bag is not an exact prefix/ARM equivalence
+  // prefilter and could exclude legitimate candidates.
+  const pairMatches = (item: ResourceItem, filter: (typeof paired)[number]): boolean => {
+    const source = readConnectorEvidenceSource(
+      (item.properties ?? {}) as Record<string, unknown>,
+      ALL_FLOW_TYPES.includes(item.type as ResourceTypeValue),
+    );
+    const evidence = extractConnectorOperationEvidence(source, filter.connectorId);
+    const matched = evidence.some((operation) => filter.selected.has(operation.operationId.toLowerCase()));
+    return filter.negate ? !matched : matched;
+  };
+  if (spec.conditions && paired.length) {
+    const clauses: Clause[] = [];
+    appendResourceTypeScope(clauses, spec.resourceTypes);
+    // Per-plan unpredictable aliases cannot collide with user field paths or
+    // aliases in an imported spec. Evidence must be a server boolean, not
+    // inferred from raw property values, strings, or client KQL approximations.
+    const prefix = `__queryEvidence_${crypto.randomUUID().replace(/-/g, "")}_`;
+    const referencedIdentifiers = new Set(
+      [...queryFilters(spec).map((filter) => filter.field), spec.orderField]
+        .flatMap((field) => field.match(/[A-Za-z_]\w*/g) ?? []),
+    );
+    const aliases: string[] = [];
+    let pairIndex = 0;
+    const compile = (node: QueryCondition): ((item: ResourceItem) => boolean) => {
+      if (node.kind === "group") {
+        const children = node.children.map(compile);
+        return node.operator === "all"
+          ? (item) => children.every((child) => child(item))
+          : (item) => children.some((child) => child(item));
+      }
+      if (node.filter.connectorId !== undefined) {
+        const pair = paired[pairIndex++];
+        return (item) => pairMatches(item, pair);
+      }
+      let alias = `${prefix}${aliases.length}`;
+      while (referencedIdentifiers.has(alias)) alias += "_";
+      aliases.push(alias);
+      clauses.push(extend(alias, filterExpression(node.filter, referenceTime)));
+      return (item) => (item as unknown as Record<string, unknown>)[alias] === true;
+    };
+    const evaluate = compile(spec.conditions);
+    const matches = (item: ResourceItem): boolean => {
+      const evidence = item as unknown as Record<string, unknown>;
+      for (const alias of aliases) {
+        if (!Object.hasOwn(evidence, alias) ||
+            (evidence[alias] !== null && typeof evidence[alias] !== "boolean")) {
+          throw new Error("Grouped query boolean evidence is missing or unsupported. The candidate scan cannot be treated as exact results.");
+        }
+      }
+      return evaluate(item);
+    };
+    const candidate = conditionExpression(spec.conditions, (filter) =>
+      filter.connectorId === undefined ? filterExpression(filter, referenceTime) : "true");
+    clauses.push(where(candidate, "==", ["true"]));
+    if (spec.orderField.trim()) {
+      const field = spec.orderField.trim();
+      clauses.push(orderBy({
+        [field.startsWith("properties.") ? `tostring(${field})` : field]: spec.orderDirection,
+      }));
+    }
+    return {
+      clauses, requiresClientFiltering: true, matches,
+      projectResult: (item) => {
+        const clean = { ...item } as unknown as Record<string, unknown>;
+        for (const alias of aliases) delete clean[alias];
+        return clean as unknown as ResourceItem;
+      },
+    };
+  }
+  const clauses = buildServerClausesFromSpec({
+    ...spec,
+    filters: spec.filters.filter((filter) => filter.connectorId === undefined),
+  }, referenceTime);
+  return {
+    clauses,
+    requiresClientFiltering: paired.length > 0,
+    matches: (item) => paired.every((filter) => pairMatches(item, filter)),
+  };
 }
 
 /** Run an arbitrary `Clauses[]` payload. Thin public wrapper around the
@@ -2722,18 +3076,15 @@ export async function runAggregateCount(
   opts: { topN?: number } = {},
   cacheOpts?: RunQueryOpts
 ): Promise<DataResult<{ name: string; value: number }[]>> {
+  const errors = serverQueryErrors(spec);
+  if (errors.length) return { ok: false, error: errors.join("\n") };
   if (!groupBy.trim()) {
     return { ok: true, data: [] };
   }
   const clauses: Clause[] = [];
   appendResourceTypeScope(clauses, spec.resourceTypes);
 
-  const emittedAggExtends = new Set<string>();
-  for (const f of spec.filters) {
-    for (const c of translateFilter(f, emittedAggExtends)) {
-      clauses.push(c);
-    }
-  }
+  appendQueryFilters(clauses, spec);
 
   // For dynamic `properties.*` group keys, extend to a flat alias.
   // Flow trigger fields changed from a nested object to scalar properties.
@@ -2813,6 +3164,8 @@ export async function runTimeSeriesAggregate(
   lookbackDays: number,
   cacheOpts?: RunQueryOpts
 ): Promise<DataResult<{ date: string; value: number }[]>> {
+  const errors = serverQueryErrors(spec);
+  if (errors.length) return { ok: false, error: errors.join("\n") };
   const field = dateField.trim();
   if (!field) {
     return { ok: true, data: [] };
@@ -2822,12 +3175,7 @@ export async function runTimeSeriesAggregate(
   const clauses: Clause[] = [];
   appendResourceTypeScope(clauses, spec.resourceTypes);
 
-  const emittedTrendExtends = new Set<string>();
-  for (const f of spec.filters) {
-    for (const c of translateFilter(f, emittedTrendExtends)) {
-      clauses.push(c);
-    }
-  }
+  appendQueryFilters(clauses, spec);
 
   // Lookback filter on the date field (raw KQL expression, not quoted).
   clauses.push(where(field, ">", [`ago(${lookback}d)`]));
@@ -2910,6 +3258,8 @@ export async function runCumulativeSeries(
 ): Promise<
   DataResult<Array<{ date: string; delta: number; total: number }>>
 > {
+  const errors = serverQueryErrors(spec);
+  if (errors.length) return { ok: false, error: errors.join("\n") };
   const field = dateField.trim();
   if (!field) {
     return { ok: true, data: [] };
@@ -2934,12 +3284,7 @@ export async function runCumulativeSeries(
   const baselineClauses: Clause[] = [];
   appendResourceTypeScope(baselineClauses, spec.resourceTypes);
 
-  const baselineEmittedExtends = new Set<string>();
-  for (const f of spec.filters) {
-    for (const c of translateFilter(f, baselineEmittedExtends)) {
-      baselineClauses.push(c);
-    }
-  }
+  appendQueryFilters(baselineClauses, spec);
   baselineClauses.push(where(field, "<=", [`ago(${lookback}d)`]));
 
   // Single-row aggregate via runRawQuery — totalRecords carries the count.

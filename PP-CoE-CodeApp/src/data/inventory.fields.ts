@@ -272,17 +272,17 @@ export const FIELDS_BY_RESOURCE_TYPE: Record<ResourceTypeValue, InventoryField[]
 const CONNECTOR_SENTINELS: InventoryField[] = [
   {
     path: "__connector",
-    label: "Connector (any location)",
+    label: "Connector reference (any location, independent)",
     kind: "string",
     group: "Connectors",
-    help: "Tokenised match across powerPlatformConnectors / connectors / trigger.",
+    help: "Legacy independent token match across connector declarations; does not pair with an operation filter or prove execution.",
   },
   {
     path: "__operation",
-    label: "Operation (any location)",
+    label: "Operation (any location, independent)",
     kind: "string",
     group: "Connectors",
-    help: "Tokenised match across all connector operations.",
+    help: "Legacy independent token match. Add a connector ID to require exact action/trigger pairing; reported configuration is not execution telemetry.",
   },
 ];
 
