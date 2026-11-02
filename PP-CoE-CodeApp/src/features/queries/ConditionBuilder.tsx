@@ -1,5 +1,5 @@
 import { useId, type ReactNode } from "react";
-import { Button, Dropdown, Field, Option, Text, makeStyles, tokens } from "@fluentui/react-components";
+import { Button, Dropdown, Field, Option, Text, makeStyles, mergeClasses, shorthands, tokens } from "@fluentui/react-components";
 import { AddRegular, DeleteRegular } from "@fluentui/react-icons";
 import {
   formatQueryConditionSummary, queryConditionRoot, resourceTypeShort,
@@ -11,20 +11,38 @@ import { QueryFilterRow } from "./QueryFilters";
 const useStyles = makeStyles({
   group: {
     margin: 0, minWidth: 0, padding: tokens.spacingHorizontalM,
-    border: `1px solid ${tokens.colorNeutralStroke2}`, borderRadius: tokens.borderRadiusMedium,
+    ...shorthands.border("1px", "solid", tokens.colorNeutralStroke1),
+    borderRadius: tokens.borderRadiusMedium,
     display: "flex", flexDirection: "column", gap: tokens.spacingVerticalM,
+    "@media (forced-colors: active)": { ...shorthands.borderColor("CanvasText"), color: "CanvasText" },
   },
-  legend: { fontWeight: tokens.fontWeightSemibold, paddingInline: tokens.spacingHorizontalXS },
+  rootGroup: {
+    backgroundColor: tokens.colorNeutralBackground2,
+    "@media (forced-colors: active)": { backgroundColor: "Canvas" },
+  },
+  subgroup: {
+    backgroundColor: `color-mix(in srgb, ${tokens.colorPalettePurpleBackground2} 45%, ${tokens.colorNeutralBackground1})`,
+    ...shorthands.borderColor(tokens.colorPalettePurpleBorderActive),
+    "@media (forced-colors: active)": { backgroundColor: "Canvas", ...shorthands.borderColor("CanvasText") },
+  },
+  legend: { fontWeight: tokens.fontWeightSemibold, paddingInline: tokens.spacingHorizontalS },
+  subgroupLegend: {
+    color: tokens.colorPalettePurpleForeground2,
+    "@media (forced-colors: active)": { color: "CanvasText" },
+  },
   toolbar: { display: "flex", alignItems: "end", gap: tokens.spacingHorizontalS, flexWrap: "wrap" },
   control: { minWidth: 0, maxWidth: "100%" },
-  children: { display: "flex", flexDirection: "column", gap: tokens.spacingVerticalM },
+  children: { display: "flex", flexDirection: "column", gap: tokens.spacingVerticalL },
   summary: {
     display: "flex", flexDirection: "column", gap: tokens.spacingVerticalXS,
     backgroundColor: tokens.colorNeutralBackground2, padding: tokens.spacingHorizontalM,
     overflowWrap: "anywhere", borderRadius: tokens.borderRadiusMedium,
   },
   hint: { color: tokens.colorNeutralForeground2, fontSize: tokens.fontSizeBase200 },
-  join: { display: "block", fontSize: tokens.fontSizeBase200, fontWeight: tokens.fontWeightSemibold, color: tokens.colorNeutralForeground2 },
+  join: {
+    display: "block", marginBlock: tokens.spacingVerticalS,
+    fontSize: tokens.fontSizeBase200, fontWeight: tokens.fontWeightSemibold, color: tokens.colorNeutralForeground2,
+  },
 });
 
 export function ConditionBuilder({ spec, fields, onChange }: {
@@ -93,7 +111,7 @@ export function ConditionBuilder({ spec, fields, onChange }: {
   };
   let subgroupNumber = 0;
   return <div id={containerId}>
-    <fieldset className={styles.group}>
+    <fieldset className={mergeClasses(styles.group, styles.rootGroup)}>
       <legend className={styles.legend}>Root group</legend>
       {toolbar(root, "Root group")}
       <Text className={styles.hint}>Resource types always apply to the whole query. Within each group, all means AND; any means OR. One level of subgroups is supported.</Text>
@@ -107,8 +125,8 @@ export function ConditionBuilder({ spec, fields, onChange }: {
               onChange({ ...root, children: root.children.filter((_old, i) => i !== index) }); focusGroup();
             })}</div>;
           const label = `Group ${++subgroupNumber}`;
-          return <div key={index}>{before}<fieldset className={styles.group} data-subgroup-index={index}>
-            <legend className={styles.legend}>{label}</legend>
+          return <div key={index}>{before}<fieldset className={mergeClasses(styles.group, styles.subgroup)} data-subgroup-index={index}>
+            <legend className={mergeClasses(styles.legend, styles.subgroupLegend)}>{label}</legend>
             {toolbar(node, label, index)}
             {!node.children.length && <Text className={styles.hint}>This group is empty. Add a condition or remove the group before running.</Text>}
             <div className={styles.children}>

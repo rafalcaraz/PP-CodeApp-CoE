@@ -1,21 +1,21 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
-import { FluentProvider, webLightTheme } from "@fluentui/react-components";
+import { FluentProvider, webLightTheme, webDarkTheme } from "@fluentui/react-components";
 import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { ConditionBuilder } from "./ConditionBuilder";
 import { getFieldSuggestions } from "../../data/inventory.fields";
-import { ResourceType, formatQueryConditionSummary, type QuerySpec } from "../../data/inventory";
+import { ResourceType, buildClausesFromSpec, formatQueryConditionSummary, type QuerySpec } from "../../data/inventory";
 import { DEFAULT_SPEC } from "./workspace";
 vi.mock("../../components/EnvironmentPicker", () => ({ EnvironmentPicker: () => <span>Environment selector</span> }));
 
-function mount(spec = DEFAULT_SPEC) {
+function mount(spec = DEFAULT_SPEC, theme = webLightTheme) {
   function Wrapper() {
     const [value, setValue] = useState<QuerySpec>(spec);
     return <><ConditionBuilder spec={value} fields={getFieldSuggestions(value.resourceTypes, "filter")}
       onChange={(conditions) => setValue({ ...value, conditions, filters: [] })} />
       <output aria-label="Spec">{JSON.stringify(value)}</output></>;
   }
-  return render(<FluentProvider theme={webLightTheme}><Wrapper /></FluentProvider>);
+  return render(<FluentProvider theme={theme}><Wrapper /></FluentProvider>);
 }
 describe("one-level condition builder", () => {
   it("displays old flat filters as Match all without changing their serialized form", () => {
@@ -88,5 +88,33 @@ describe("one-level condition builder", () => {
     expect(screen.getByLabelText("Condition 3 within connector (optional)")).toHaveValue("shared_sql");
     expect(screen.getByLabelText("Condition 2 value")).toHaveTextContent("false");
     expect(spec.resourceTypes).toEqual([ResourceType.CanvasApp]);
+  });
+  it.each([["light", webLightTheme], ["dark", webDarkTheme]] as const)("keeps %s containment styling independent of match operators and sibling positions", (_name, theme) => {
+    const spec: QuerySpec = { ...DEFAULT_SPEC, filters: [], conditions: { kind: "group", operator: "all", children: [
+      { kind: "group", operator: "any", children: [
+        { kind: "condition", filter: { field: "location", op: "==", value: "europe" } },
+      ] },
+      { kind: "group", operator: "all", children: [
+        { kind: "condition", filter: { field: "properties.isManaged", op: "==", value: "false" } },
+      ] },
+    ] } };
+    const clauses = buildClausesFromSpec(spec);
+    mount(spec, theme);
+    const rootClass = screen.getByRole("group", { name: "Root group" }).className;
+    const subgroupClass = screen.getByRole("group", { name: "Group 1" }).className;
+    expect(subgroupClass).not.toBe(rootClass);
+    expect(screen.getByRole("group", { name: "Group 2" }).className).toBe(subgroupClass);
+    expect(buildClausesFromSpec(JSON.parse(screen.getByLabelText("Spec").textContent!))).toEqual(clauses);
+    fireEvent.click(screen.getByLabelText("Group 1 match"));
+    fireEvent.click(screen.getByRole("option", { name: "Match all (AND)" }));
+    expect(screen.getByRole("group", { name: "Group 1" }).className).toBe(subgroupClass);
+    fireEvent.click(screen.getByRole("button", { name: "Add group" }));
+    expect(screen.getByRole("group", { name: "Group 3" }).className).toBe(subgroupClass);
+    fireEvent.click(screen.getByRole("button", { name: "Remove group 1" }));
+    expect(screen.getByRole("group", { name: "Group 1" }).className).toBe(subgroupClass);
+    expect(screen.getByLabelText("Condition 1 field")).toHaveValue("properties.isManaged");
+    expect(screen.getByLabelText("Condition 1 value")).toHaveTextContent("false");
+    const remaining = JSON.parse(screen.getByLabelText("Spec").textContent!) as QuerySpec;
+    expect(remaining.conditions?.children[0]).toEqual(spec.conditions?.children[1]);
   });
 });
