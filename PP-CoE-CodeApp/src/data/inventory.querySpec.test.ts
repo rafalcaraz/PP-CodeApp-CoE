@@ -1,13 +1,21 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 import {
   buildClausesFromSpec,
+  buildQueryExecutionPlan,
+  validateQuerySpec,
+  queryFilterNeedsValue,
+  runAggregateCount,
+  runTimeSeriesAggregate,
+  runCumulativeSeries,
   CONNECTOR_USAGE_RESOURCE_TYPES,
   CONNECTOR_FIELD,
   DEFAULT_QUERY_RESOURCE_TYPES,
   OPERATION_FIELD,
   ResourceType,
   type QuerySpec,
+  type ResourceTypeValue,
 } from "./inventory";
+import type { ResourceItem } from "../generated/models/PowerPlatformforAdminsV2Model";
 
 // buildClausesFromSpec is the user-facing query-builder translator
 // (see views/QueriesView.tsx). Its job: take a QuerySpec → emit a list
@@ -25,6 +33,180 @@ function spec(overrides: Partial<QuerySpec> = {}): QuerySpec {
     ...overrides,
   };
 }
+
+afterEach(() => {
+  vi.useRealTimers();
+  vi.restoreAllMocks();
+});
+
+describe("UTC calendar filters and validation", () => {
+  const dateSpec = (op: string, value = "") => spec({
+    filters: [{ field: "properties.createdAt", op, value }],
+  });
+  const windows = (op: string, value = "") => buildQueryExecutionPlan(dateSpec(op, value), new Date()).clauses.slice(1);
+  const window = (start: string, end: string) => [
+    { $type: "where", FieldName: "todatetime(properties.createdAt)", Operator: ">=", Values: [`datetime(${start}T00:00:00.000Z)`] },
+    { $type: "where", FieldName: "todatetime(properties.createdAt)", Operator: "<", Values: [`datetime(${end}T00:00:00.000Z)`] },
+  ];
+
+  it.each([
+    ["2026-01-01T00:00:00.000Z", "2026-01-01", "2026-01-02", "2025-12-31"],
+    ["2026-03-01T23:59:59.999Z", "2026-03-01", "2026-03-02", "2026-02-28"],
+    ["2024-03-01T00:00:00.000Z", "2024-03-01", "2024-03-02", "2024-02-29"],
+    ["2026-03-08T01:59:00-08:00", "2026-03-08", "2026-03-09", "2026-03-07"],
+    ["2026-11-01T01:59:00-07:00", "2026-11-01", "2026-11-02", "2026-10-31"],
+    ["2026-12-31T23:59:59.999Z", "2026-12-31", "2027-01-01", "2026-12-30"],
+  ])("uses UTC midnight/month/year/DST boundaries at %s", (now, today, tomorrow, yesterday) => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(now));
+    expect(windows("today")).toEqual(window(today, tomorrow));
+    expect(windows("yesterday")).toEqual(window(yesterday, today));
+  });
+
+  it("rebuilds relative calendar windows after UTC midnight and keeps rolling ago durations", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-06-30T23:59:59.999Z"));
+    expect(windows("today")).toEqual(window("2026-06-30", "2026-07-01"));
+    vi.setSystemTime(new Date("2026-07-01T00:00:00.000Z"));
+    expect(windows("today")).toEqual(window("2026-07-01", "2026-07-02"));
+    expect(buildClausesFromSpec(dateSpec("lastNdays", "7")).slice(1)).toEqual([
+      { $type: "where", FieldName: "properties.createdAt", Operator: ">", Values: ["ago(7d)"] },
+    ]);
+  });
+
+  it("keeps relative tile clauses dynamic but freezes all Run boundaries to the supplied instant", () => {
+    const query = spec({ filters: [
+      { field: "properties.createdAt", op: "lastNdays", value: "7" },
+      { field: "properties.lastModifiedAt", op: "today", value: "" },
+    ] });
+    const reference = new Date("2026-03-08T23:59:59.999Z");
+    const plan = buildQueryExecutionPlan(query, reference);
+    // Rolling filters retain their legacy lower-bound-only semantics.
+    expect(plan.clauses).toHaveLength(4);
+    expect(plan.clauses[1]).toMatchObject({ Values: ["datetime(2026-03-01T23:59:59.999Z)"] });
+    expect(plan.clauses[2]).toMatchObject({ Values: ["datetime(2026-03-08T00:00:00.000Z)"] });
+    expect(plan.clauses[3]).toMatchObject({ Values: ["datetime(2026-03-09T00:00:00.000Z)"] });
+    reference.setUTCDate(9);
+    expect(plan.clauses[2]).toMatchObject({ Values: ["datetime(2026-03-08T00:00:00.000Z)"] });
+    expect(buildQueryExecutionPlan(query, reference).clauses[2]).toMatchObject({ Values: ["datetime(2026-03-09T00:00:00.000Z)"] });
+    expect(buildClausesFromSpec(query)[1]).toMatchObject({ Values: ["ago(7d)"] });
+    expect(buildClausesFromSpec(query)[2]).toMatchObject({ Values: ["startofday(now())"] });
+    expect(buildClausesFromSpec(query)[3]).toMatchObject({ Values: ["startofday(now(), 1)"] });
+    expect(buildClausesFromSpec(dateSpec("yesterday"))[1]).toMatchObject({ Values: ["startofday(now(), -1)"] });
+    expect(() => buildQueryExecutionPlan(query, new Date("invalid"))).toThrow("valid Date");
+  });
+
+  it("never consults local-calendar getters, independent of host timezone or DST rules", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-03-09T00:30:00+14:00"));
+    for (const getter of ["getFullYear", "getMonth", "getDate"] as const) {
+      vi.spyOn(Date.prototype, getter).mockImplementation(() => { throw new Error("Local calendar access"); });
+    }
+    expect(windows("today")).toEqual(window("2026-03-08", "2026-03-09"));
+    expect(windows("yesterday")).toEqual(window("2026-03-07", "2026-03-08"));
+  });
+
+  it("supports absolute days and inclusive visible date ranges as half-open windows", () => {
+    expect(windows("onDate", "2024-02-29")).toEqual(window("2024-02-29", "2024-03-01"));
+    expect(windows("dateRange", "2025-12-31, 2026-01-02")).toEqual(window("2025-12-31", "2026-01-03"));
+    expect(windows("dateRange", "2026-03-08,2026-03-08")).toEqual(window("2026-03-08", "2026-03-09"));
+  });
+
+  it.each([
+    ["lastNdays", ""], ["lastNdays", "0"], ["lastNdays", "-2"], ["lastNdays", "1.5"],
+    ["lastNdays", "NaN"], ["lastNdays", "Infinity"], ["lastNdays", "9007199254740992"],
+    ["onDate", "2026-02-29"], ["onDate", "2026-04-31"], ["onDate", "2026-2-01"],
+    ["onDate", "2026-01-01T12:00:00Z"], ["dateRange", "2026-01-02,2026-01-01"],
+    ["dateRange", "2026-01-01,"], ["dateRange", "2026-01-01,2026-01-02,2026-01-03"],
+    ["==", ""], ["in~", ", ,"], ["has_any", ",,"],
+  ])("reports invalid %s value %j and fails closed", (op, value) => {
+    expect(validateQuerySpec(dateSpec(op, value)).length).toBeGreaterThan(0);
+    expect(buildClausesFromSpec(dateSpec(op, value))).toEqual([
+      { $type: "where", FieldName: "1", Operator: "==", Values: ["0"] },
+    ]);
+  });
+
+  it("allows value-free operators and preserves freeform fields/operators", () => {
+    for (const op of ["today", "yesterday", "isempty", "!isempty"]) {
+      expect(queryFilterNeedsValue(op)).toBe(false);
+      expect(validateQuerySpec(dateSpec(op))).toEqual([]);
+    }
+    const freeform = spec({ filters: [{ field: "properties.futureField", op: "matches regex", value: "^legacy" }] });
+    expect(validateQuerySpec(freeform)).toEqual([]);
+    expect(buildClausesFromSpec(freeform)[1]).toMatchObject({ Operator: "matches regex", Values: ["'^legacy'"] });
+  });
+});
+
+describe("connector-paired query execution", () => {
+  const paired = (overrides = {}) => spec({ filters: [{
+    field: OPERATION_FIELD, op: "==", value: "DeleteItem", connectorId: "sharepointonline", ...overrides,
+  }] });
+  const item = (properties: Record<string, unknown>, type: ResourceTypeValue = ResourceType.CloudFlow) =>
+    ({ properties, type }) as ResourceItem;
+
+  it("never exposes paired filters as independent raw clauses and requires a complete drain", () => {
+    const plan = buildQueryExecutionPlan(paired());
+    expect(plan.requiresClientFiltering).toBe(true);
+    expect(plan.clauses).toEqual(buildClausesFromSpec(spec()));
+    expect(buildClausesFromSpec(paired())).toEqual([{ $type: "where", FieldName: "1", Operator: "==", Values: ["0"] }]);
+  });
+
+  it("rejects cross-connector IDs, references, partial operation names, and serialized text decoys", () => {
+    const { matches } = buildQueryExecutionPlan(paired());
+    for (const properties of [
+      { powerPlatformConnectors: [{ connectorId: "shared_sharepointonline" }, { connectorId: "shared_sql", operations: [{ operationId: "DeleteItem" }] }] },
+      { connectors: [{ connectorId: "shared_sharepointonline", description: '{"operationId":"DeleteItem"}' }] },
+      { connectors: [{ connectorId: "shared_sharepointonline", operations: ["DeleteItems"] }] },
+    ]) expect(matches(item(properties))).toBe(false);
+  });
+
+  it("normalizes ARM/shared-prefix/case and accepts both arrays and operation schema forms", () => {
+    const plan = buildQueryExecutionPlan(paired());
+    expect(plan.matches(item({ connectors: [{ connectorId: "/providers/Microsoft.PowerApps/apis/SHARED_SHAREPOINTONLINE", operations: [{ operationId: "deleteITEM", isEnabled: false }] }] }))).toBe(true);
+    expect(plan.matches(item({ powerPlatformConnectors: [], connectors: [{ id: "sharepointonline", operations: ["DELETEITEM"] }] }))).toBe(true);
+  });
+
+  it.each([
+    { trigger: "SHARED_SHAREPOINTONLINE", triggerOperation: "deleteitem" },
+    { trigger: { connectorId: "/providers/Microsoft.PowerApps/apis/sharepointonline", operationId: "DeleteItem" } },
+  ])("pairs modern/legacy flow triggers only with their connector", (properties) => {
+    expect(buildQueryExecutionPlan(paired()).matches(item(properties))).toBe(true);
+    expect(buildQueryExecutionPlan(paired({ connectorId: "sql" })).matches(item(properties))).toBe(false);
+    expect(buildQueryExecutionPlan(paired()).matches(item(properties, ResourceType.CopilotStudioAgent))).toBe(false);
+  });
+
+  it("supports exact any-list, negative pairing, multiple pairs AND, and legacy independent filters", () => {
+    const resource = item({ connectors: [{ connectorId: "sharepointonline", operations: ["GetItems"] }] });
+    expect(buildQueryExecutionPlan(paired({ op: "in~", value: "DeleteItem,GETITEMS" })).matches(resource)).toBe(true);
+    expect(buildQueryExecutionPlan(paired({ op: "!=", value: "DeleteItem" })).matches(resource)).toBe(true);
+    const both = paired({ value: "GetItems" });
+    both.filters.push({ field: OPERATION_FIELD, op: "==", value: "SendEmail", connectorId: "office365" });
+    expect(buildQueryExecutionPlan(both).matches(resource)).toBe(false);
+    const legacy = paired();
+    delete legacy.filters[0].connectorId;
+    expect(buildQueryExecutionPlan(legacy).requiresClientFiltering).toBe(false);
+    expect(buildClausesFromSpec(legacy)).toHaveLength(3);
+  });
+
+  it("snapshots paired filters so subsequent builder edits cannot alter an in-flight drain", () => {
+    const query = paired();
+    const plan = buildQueryExecutionPlan(query);
+    query.filters[0].connectorId = "sql";
+    query.filters[0].value = "GetRows";
+    expect(plan.matches(item({ connectors: [{ connectorId: "sharepointonline", operations: ["DeleteItem"] }] }))).toBe(true);
+  });
+
+  it("validates malformed pairs and rejects paired server aggregates without calling the connector", async () => {
+    expect(validateQuerySpec(paired({ connectorId: "" })).length).toBeGreaterThan(0);
+    expect(validateQuerySpec(paired({ field: "properties.foo" })).length).toBeGreaterThan(0);
+    expect(validateQuerySpec(paired({ op: "contains" })).length).toBeGreaterThan(0);
+    for (const result of await Promise.all([
+      runAggregateCount(paired(), "type"),
+      runTimeSeriesAggregate(paired(), "properties.createdAt", "day", 90),
+      runCumulativeSeries(paired(), "properties.createdAt", "day", 90),
+    ])) expect(result).toMatchObject({ ok: false, error: expect.stringContaining("complete client-filtered drain") });
+  });
+});
 
 describe("buildClausesFromSpec — resource-type clause", () => {
   it("emits the stable reportable scope when no resourceTypes are selected", () => {
@@ -172,17 +354,14 @@ describe("buildClausesFromSpec — filter value formatting", () => {
     expect(whereClause.Values).toEqual(["'env-a'", "'env-b'", "'env-c'"]);
   });
 
-  it("drops filters whose field is empty", () => {
+  it("fails closed for filters whose field is empty without throwing during render", () => {
     const clauses = buildClausesFromSpec(
       spec({
         filters: [{ field: "   ", op: "==", value: "anything" }],
       }),
     ) as unknown as Array<Record<string, unknown>>;
     expect(clauses).toHaveLength(1);
-    expect(clauses[0]).toMatchObject({
-      $type: "where",
-      FieldName: "type",
-    });
+    expect(clauses[0]).toMatchObject({ $type: "where", FieldName: "1", Operator: "==", Values: ["0"] });
   });
 });
 
@@ -208,10 +387,7 @@ describe("buildClausesFromSpec — lastNdays", () => {
     expect(whereClause.Values).toEqual(["ago(30d)"]);
   });
 
-  it("clamps lastNdays to a minimum of 1 day (Math.max guard)", () => {
-    // Reading buildClausesFromSpec: `Math.max(1, Math.floor(Number(value)||0))`
-    // means value "0" / "" / non-numeric all become 1 day. This pins that
-    // behavior — if someone removes the Math.max() guard, this test fails.
+  it("rejects zero days rather than silently clamping", () => {
     const clauses = buildClausesFromSpec(
       spec({
         filters: [
@@ -219,12 +395,7 @@ describe("buildClausesFromSpec — lastNdays", () => {
         ],
       }),
     ) as unknown as Array<Record<string, unknown>>;
-    const whereClause = clauses.find(
-      (c) =>
-        c.$type === "where" &&
-        (c as { FieldName?: string }).FieldName === "properties.lastModifiedAt",
-    ) as { Values: string[] };
-    expect(whereClause.Values).toEqual(["ago(1d)"]);
+    expect(clauses).toEqual([{ $type: "where", FieldName: "1", Operator: "==", Values: ["0"] }]);
   });
 });
 

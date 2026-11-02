@@ -14,10 +14,13 @@
  * We stub out the TileView preview to avoid pulling the inventory
  * fetch path into these tests — that's covered by its own test suite.
  */
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { FluentProvider, webLightTheme } from "@fluentui/react-components";
 import type { DashboardTile } from "../data/dashboards";
+import type { SavedQuery } from "../data/savedQueries";
+
+const { savedQueries } = vi.hoisted(() => ({ savedQueries: vi.fn<() => SavedQuery[]>(() => []) }));
 
 // Stub the live-preview tile so we don't hit the inventory layer here.
 vi.mock("./TileView", () => ({
@@ -30,7 +33,7 @@ vi.mock("../data/savedQueries", async () => {
   const actual = await vi.importActual<typeof import("../data/savedQueries")>(
     "../data/savedQueries",
   );
-  return { ...actual, listSavedQueries: () => [] };
+  return { ...actual, listSavedQueries: savedQueries };
 });
 
 import { TileEditorDialog } from "./TileEditorDialog";
@@ -96,6 +99,35 @@ function renderEditor(initialTile: DashboardTile, onSave = vi.fn(), onClose = vi
 }
 
 describe("TileEditorDialog — Phase 3 Advanced mode", () => {
+  beforeEach(() => { savedQueries.mockReturnValue([]); });
+
+  it("disables paired saved-query choices in Advanced mode with explanatory helper copy", () => {
+    const pairedSpec = visualTile().spec;
+    pairedSpec.filters = [{ field: "__operation", op: "==", value: "DeleteItem", connectorId: "sharepointonline" }];
+    savedQueries.mockReturnValue([{
+      id: "paired-query",
+      name: "Paired delete operation",
+      description: "",
+      source: "builder",
+      spec: pairedSpec,
+      clauses: [],
+      createdAt: "2026-01-01T00:00:00Z",
+      updatedAt: "2026-01-01T00:00:00Z",
+    }]);
+    renderEditor(rawTile());
+    fireEvent.click(screen.getAllByRole("combobox")[0]);
+    expect(screen.getByRole("option", { name: /Paired delete operation/ })).toHaveAttribute("aria-disabled", "true");
+    expect(screen.getByText(/cannot be loaded as raw clauses/)).toBeInTheDocument();
+  });
+
+  it("prevents paired operation specs from being silently converted into raw clauses", () => {
+    const tile = visualTile();
+    tile.spec.filters = [{ field: "__operation", op: "==", value: "DeleteItem", connectorId: "sharepointonline" }];
+    renderEditor(tile);
+    expect(screen.getByRole("button", { name: /Advanced \(clauses\)/i })).toBeDisabled();
+    expect(screen.getByText(/cannot be converted to raw clauses/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Insert clause/i })).not.toBeInTheDocument();
+  });
   it("new tile defaults to Visual mode and shows the mode toggle", async () => {
     renderEditor(visualTile());
     expect(await screen.findByRole("button", { name: /Visual builder/i })).toBeInTheDocument();

@@ -41,6 +41,7 @@ import {
   ALL_RESOURCE_TYPES,
   ResourceType,
   buildClausesFromSpec,
+  hasPairedOperationFilters,
   resourceTypeShort,
   type QueryFilter,
   type QueryFilterOp,
@@ -579,6 +580,7 @@ export function TileEditorDialog({ open, initialTile, onClose, onSave }: TileEdi
   /** Convert the current Visual builder spec into the equivalent clause
    *  array and switch to Advanced mode. Lossless. */
   const switchToAdvanced = () => {
+    if (hasPairedOperationFilters(tile.spec)) return;
     const clauses = buildClausesFromSpec(tile.spec);
     const text = JSON.stringify(clauses, null, 2);
     setClausesEditorSeed(text);
@@ -625,6 +627,7 @@ export function TileEditorDialog({ open, initialTile, onClose, onSave }: TileEdi
       // Basic saved query. If we're in Advanced mode, convert via
       // buildClausesFromSpec rather than switching modes back to Visual.
       if (isRaw) {
+        if (hasPairedOperationFilters(q.spec)) return;
         const clauses = buildClausesFromSpec(q.spec);
         const text = JSON.stringify(clauses, null, 2);
         setClausesEditorSeed(text);
@@ -786,7 +789,12 @@ export function TileEditorDialog({ open, initialTile, onClose, onSave }: TileEdi
                     }}
                   >
                     {savedQueries.map((q) => (
-                      <Option key={q.id} value={q.id} text={q.name}>
+                      <Option
+                        key={q.id}
+                        value={q.id}
+                        text={q.name}
+                        disabled={isRaw && q.source === "builder" && !!q.spec && hasPairedOperationFilters(q.spec)}
+                      >
                         {q.name}
                         <span className={styles.helper}>
                           {" · "}
@@ -844,15 +852,23 @@ export function TileEditorDialog({ open, initialTile, onClose, onSave }: TileEdi
                       size="small"
                       appearance={isRaw ? "primary" : "subtle"}
                       className={styles.modeButton}
+                      disabled={!isRaw && hasPairedOperationFilters(tile.spec)}
                       onClick={() => {
                         if (!isRaw) switchToAdvanced();
                       }}
                     >
                       Advanced (clauses)
                     </Button>
+                    {!isRaw && hasPairedOperationFilters(tile.spec) && (
+                      <Text className={styles.helper}>
+                        Connector-specific operation filters cannot be converted to raw clauses.
+                        Run this saved query in Queries for exact paired results.
+                      </Text>
+                    )}
                     {isRaw && (
                       <Text className={styles.helper}>
                         Hand-written clauses. KPI / Table viz only.
+                        {" "}Connector-specific operation queries cannot be loaded as raw clauses.
                         {linkedSaved && (
                           <>
                             {" "}

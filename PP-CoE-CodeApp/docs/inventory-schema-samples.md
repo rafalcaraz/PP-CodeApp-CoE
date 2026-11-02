@@ -211,6 +211,64 @@ inventory records, **not complete dependency coverage**: missing operation IDs
 do not prove an action is unused, and reported configuration is not runtime
 execution telemetry.
 
+### Visual-query calendar dates and connector pairing
+
+`QueryFilterOp` includes `today`, `yesterday`, `onDate`, and `dateRange`.
+Calendar dates are explicitly **UTC**, never browser-local time. `onDate`
+accepts `YYYY-MM-DD`; `dateRange` accepts `YYYY-MM-DD,YYYY-MM-DD` with both
+visible dates inclusive. The translator casts the field with `todatetime`
+and emits `>=` UTC midnight at the start and `<` UTC midnight after the end.
+Default clauses use server-relative `startofday(now(), offset)` for
+today/yesterday, including tile refreshes. `lastNdays` remains a positive
+whole-number rolling `ago(Nd)`
+duration, not a calendar window. Array `isempty`/`!isempty` and
+today/yesterday require no value.
+
+For compatibility, `lastNdays` is strictly **lower-bound-only**:
+`field > ago(Nd)`, or `field > datetime(referenceTime - N × 24 hours)` in a
+frozen Run plan. It does not impose `field <= referenceTime`, so
+future-dated inventory timestamps are not excluded. Do not describe this
+as a bounded historical interval. UTC `today` deliberately covers the
+entire calendar day through (but excluding) the next midnight, including
+timestamps later today than the Run instant.
+
+`validateQuerySpec(spec)` reports incomplete/invalid filters; unknown field
+paths and legacy/freeform operators remain allowed. For safe render-time
+previews, `buildClausesFromSpec` returns a fail-closed `where 1 == 0` clause
+instead of dropping invalid filters or throwing. Validate before executing.
+
+Legacy `__connector` and `__operation` remain **independent any-location
+token searches**, not correlated evidence. An operation filter can optionally
+carry `connectorId` to require exact operation evidence inside that connector.
+`buildQueryExecutionPlan(spec, referenceTime?: Date)` exposes
+`{ clauses, requiresClientFiltering, matches(item) }`. Queries Run supplies its
+reference instant to freeze both rolling durations and calendar boundaries
+to absolute datetimes for all continuation pages; a rerun supplies a fresh
+instant. Omitting it retains server-relative date expressions.
+When client filtering is required, clauses select only
+candidates; the caller must drain the entire scoped candidate set with
+continuation token **and cumulative Skip**, reject errors/repeated tokens/
+empty continuation pages/safety-cap truncation, and apply `matches` before
+counting, paginating or exporting. Do not display candidate totals as exact
+matches. Paired filters deliberately do not use the legacy token bag as a
+prefilter: prefix normalization could otherwise exclude valid records.
+
+No nested-array correlation is available in the clause whitelist. A regex
+over serialized JSON cannot safely establish pairs across arbitrary nested
+objects. Therefore raw clause builders fail closed for paired specs, and
+server aggregate helpers return an explicit unsupported-pairing error.
+Dashboards/raw queries using legacy unpaired filters remain unchanged;
+paired specs need client-drain integration, not unpaired/raw conversion.
+Dashboard tiles show a visible unsupported error for paired builder specs
+rather than a misleading zero. Tile editing prevents paired builder-to-raw
+conversion and disables paired saved-query choices in Advanced mode.
+The shared `shared/connector-usage` abstraction is reused by the connector
+finder and Queries execution predicate. Evidence distinguishes reported
+actions and flow triggers, preserves disabled metadata, and never infers
+actions from catalog capabilities or reference-only declarations. It remains
+configuration evidence, **not runtime telemetry or complete dependency
+coverage**.
+
 ## Environment groups
 
 `type: "microsoft.powerplatform/environmentgroups"`

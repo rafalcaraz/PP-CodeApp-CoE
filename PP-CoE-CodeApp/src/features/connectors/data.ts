@@ -29,7 +29,6 @@ import {
   ResourceType,
   backfillEnvironmentNames,
   buildClausesFromSpec,
-  normalizeConnectorId,
   runAggregateCount,
   runRawQuery,
   shortResourceType,
@@ -48,6 +47,15 @@ import {
   type CatalogSource,
   type ConnectorEntry,
 } from "../../shared/connector-catalog";
+import {
+  connectorIdVariants,
+  connectorIdsMatch,
+  extractConnectorOperationEvidence,
+  type ConnectorOperationEvidence,
+} from "../../shared/connector-usage";
+
+export { connectorIdVariants };
+export type { ConnectorOperationEvidence };
 
 export { shortResourceType };
 export type { AgentRow, AppRow, FlowRow };
@@ -74,12 +82,6 @@ export interface ConnectorUsageSummary {
   environments: number;
 }
 
-export interface ConnectorOperationEvidence {
-  operationId: string;
-  role: "action" | "trigger";
-  isEnabled?: boolean;
-}
-
 export interface ConnectorOperationRecord {
   resource: ConnectorUsageRecord;
   operations: ConnectorOperationEvidence[];
@@ -101,19 +103,6 @@ const ALL_USAGE_TYPES: ResourceTypeValue[] = [
 ];
 const EXPORT_PAGE_SIZE = 500;
 const EXPORT_PAGE_CAP = 25;
-
-function normalizedSlug(connectorId: string): string {
-  return normalizeConnectorId(connectorId).trim().toLowerCase();
-}
-
-export function connectorIdVariants(connectorId: string): string[] {
-  const slug = normalizedSlug(connectorId);
-  if (!slug) return [];
-  const alternate = slug.startsWith("shared_")
-    ? slug.slice("shared_".length)
-    : `shared_${slug}`;
-  return alternate && alternate !== slug ? [slug, alternate] : [slug];
-}
 
 function findCatalogEntry(
   entries: Map<string, ConnectorEntry>,
@@ -341,7 +330,7 @@ export async function exportConnectorUsage(
 }
 
 function isConnectorMatch(connectorId: string, variants: string[]): boolean {
-  return variants.includes(normalizedSlug(connectorId));
+  return variants.length > 0 && connectorIdsMatch(connectorId, variants[0]);
 }
 
 /** Match operations within the selected connector, never across a resource's
@@ -350,33 +339,10 @@ export function getConnectorOperationEvidence(
   resource: ConnectorUsageRecord,
   connectorId: string,
 ): ConnectorOperationEvidence[] {
-  const variants = connectorIdVariants(connectorId);
-  const operations: ConnectorOperationEvidence[] = [];
-  for (const connector of resource.row.connectors) {
-    if (!isConnectorMatch(connector.connectorId, variants)) continue;
-    for (const operation of connector.operations) {
-      const operationId = operation.operationId.trim();
-      if (!operationId) continue;
-      operations.push({
-        operationId,
-        role: "action",
-        isEnabled: operation.isEnabled,
-      });
-    }
-  }
-  if (resource.kind === "flows") {
-    const trigger = resource.row.trigger;
-    if (trigger && isConnectorMatch(trigger.connectorId, variants) && trigger.operationId.trim()) {
-      operations.push({ operationId: trigger.operationId.trim(), role: "trigger" });
-    }
-  }
-  const seen = new Set<string>();
-  return operations.filter((operation) => {
-    const key = `${operation.role}|${operation.operationId.toLowerCase()}|${operation.isEnabled}`;
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
+  return extractConnectorOperationEvidence({
+    connectors: resource.row.connectors,
+    trigger: resource.kind === "flows" ? resource.row.trigger : undefined,
+  }, connectorId);
 }
 
 export function filterConnectorOperationUsage(

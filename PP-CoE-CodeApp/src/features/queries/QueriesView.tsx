@@ -1,1455 +1,415 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  makeStyles,
-  tokens,
-  Text,
-  Card,
-  CardHeader,
-  Divider,
-  Badge,
-  Button,
-  Dropdown,
-  Option,
-  OptionGroup,
-  Input,
-  Combobox,
-  Spinner,
-  Accordion,
-  AccordionHeader,
-  AccordionItem,
-  AccordionPanel,
-  Dialog,
-  DialogTrigger,
-  DialogSurface,
-  DialogTitle,
-  DialogBody,
-  DialogContent,
-  DialogActions,
-  Textarea,
-  TabList,
-  Tab,
-  Link,
-  type InputOnChangeData,
-  type TextareaOnChangeData,
+  Badge, Button, Card, Dialog, DialogActions, DialogBody, DialogContent, DialogSurface,
+  DialogTitle, Dropdown, Field, Input, Option, Spinner, Tab, TabList, Text, Textarea,
+  makeStyles, tokens,
 } from "@fluentui/react-components";
+import { AddRegular, ArrowDownloadRegular, CopyRegular, PlayRegular, SaveRegular } from "@fluentui/react-icons";
 import {
-  AddRegular,
-  DeleteRegular,
-  PlayRegular,
-  CopyRegular,
-  ArrowDownloadRegular,
-  SaveRegular,
-  EditRegular,
-} from "@fluentui/react-icons";
-import {
-  ALL_RESOURCE_TYPES,
-  CONNECTOR_FIELD,
-  KNOWN_CONNECTORS,
-  OPERATION_FIELD,
-  QUERY_TEMPLATES,
-  ResourceType,
-  buildClausesFromSpec,
-  friendlyConnectorName,
-  friendlyFilterField,
-  isSentinelField,
-  resourceTypeShort,
-  runRawQuery,
-  type QueryFilter,
-  type QueryFilterOp,
-  type QuerySpec,
-  type ResourceTypeValue,
+  ALL_RESOURCE_TYPES, QUERY_TEMPLATES, buildClausesFromSpec, buildQueryExecutionPlan, resourceTypeShort, validateQuerySpec,
+  type QuerySpec, type ResourceTypeValue,
 } from "../../data/inventory";
+import { getFieldSuggestions } from "../../data/inventory.fields";
 import {
-  getFieldSuggestions,
-  groupFields,
-  type FieldPickerIntent,
-  type InventoryField,
-} from "../../data/inventory.fields";
-import type { Clause } from "../../generated/models/PowerPlatformforAdminsV2Model";
-import {
-  createSavedQuery,
-  deleteSavedQuery,
-  listSavedQueries,
-  updateSavedQuery,
-  type SavedQuery,
+  createSavedQuery, deleteSavedQuery, getSavedQueriesStorageError, isQuerySpec,
+  listSavedQueries, updateSavedQuery, type SavedQuery, type SavedQueryInput,
 } from "../../data/savedQueries";
-import { LoadingPane } from "../../components/Status";
 import { downloadCsv, rowsToCsv } from "../../utils/csv";
 import { useConnectorCatalog } from "../../shared/connector-catalog";
 import { buildDynamicQueryTemplates } from "./dynamicTemplates";
-import { useNavigate } from "react-router-dom";
-import { getQueryResultHref } from "./routeResolver";
+import type { ResourceItem } from "../../generated/models/PowerPlatformforAdminsV2Model";
+import { QueryFilterRow } from "./QueryFilters";
+import { typedFilterErrors } from "./filterModel";
+import { ErrorPane } from "../../components/Status";
+import { QueryResults } from "./QueryResults";
+import { createExecution, drainExecution, nextPage, recallExecution, rememberExecution, type Execution } from "./execution";
+import {
+  cellText, draftKey, genericResultShape, getPath, parseClausesPayload, readWorkspace, resultColumns,
+  writeWorkspace, type BuilderMode, type WorkspaceDraft,
+} from "./workspace";
 
 const useStyles = makeStyles({
-  root: {
-    display: "flex",
-    flexDirection: "column",
-    gap: tokens.spacingVerticalL,
-  },
-  header: {
-    display: "flex",
-    flexDirection: "column",
-    gap: tokens.spacingVerticalXXS,
-  },
-  subtitle: {
-    color: tokens.colorNeutralForeground3,
-  },
-  cardBody: {
-    padding: tokens.spacingHorizontalL,
-    display: "flex",
-    flexDirection: "column",
-    gap: tokens.spacingVerticalM,
-  },
-  templates: {
-    display: "flex",
-    flexWrap: "wrap",
-    gap: tokens.spacingHorizontalM,
-  },
-  templateCard: {
-    minWidth: "260px",
-    maxWidth: "320px",
-    cursor: "pointer",
-    transition: "background-color 120ms ease",
-    "&:hover": {
-      backgroundColor: tokens.colorNeutralBackground1Hover,
-    },
-  },
-  templateBody: {
-    padding: tokens.spacingHorizontalM,
-    display: "flex",
-    flexDirection: "column",
-    gap: tokens.spacingVerticalXS,
-  },
-  templateName: {
-    fontWeight: tokens.fontWeightSemibold,
-  },
-  templateDesc: {
-    color: tokens.colorNeutralForeground3,
-    fontSize: tokens.fontSizeBase200,
-  },
-  fieldRow: {
-    display: "grid",
-    gridTemplateColumns: "minmax(220px, 2fr) 150px minmax(220px, 2fr) auto",
-    gap: tokens.spacingHorizontalS,
-    alignItems: "center",
-  },
-  andDivider: {
-    display: "flex",
-    alignItems: "center",
-    gap: tokens.spacingHorizontalS,
-    paddingLeft: tokens.spacingHorizontalXS,
-  },
-  andDividerLine: {
-    flex: "1 1 auto",
-    height: "1px",
-    backgroundColor: tokens.colorNeutralStroke2,
-  },
-  inlineRow: {
-    display: "flex",
-    flexWrap: "wrap",
-    gap: tokens.spacingHorizontalM,
-    alignItems: "center",
-  },
-  label: {
-    color: tokens.colorNeutralForeground2,
-    fontSize: tokens.fontSizeBase200,
-    fontWeight: tokens.fontWeightSemibold,
-  },
-  runRow: {
-    display: "flex",
-    alignItems: "center",
-    gap: tokens.spacingHorizontalM,
-    flexWrap: "wrap",
-  },
-  count: {
-    color: tokens.colorNeutralForeground3,
-    fontSize: tokens.fontSizeBase200,
-  },
-  resultRow: {
-    display: "grid",
-    gridTemplateColumns: "minmax(0, 2fr) minmax(0, 1fr) minmax(0, 2fr) auto",
-    gap: tokens.spacingHorizontalM,
-    alignItems: "center",
-    padding: `${tokens.spacingVerticalS} ${tokens.spacingHorizontalM}`,
-    borderTop: `1px solid ${tokens.colorNeutralStroke2}`,
-  },
-  resultHeader: {
-    display: "grid",
-    gridTemplateColumns: "minmax(0, 2fr) minmax(0, 1fr) minmax(0, 2fr) auto",
-    gap: tokens.spacingHorizontalM,
-    padding: `${tokens.spacingVerticalS} ${tokens.spacingHorizontalM}`,
-    fontWeight: tokens.fontWeightSemibold,
-    backgroundColor: tokens.colorNeutralBackground2,
-  },
-  ellipsis: {
-    overflow: "hidden",
-    textOverflow: "ellipsis",
-    whiteSpace: "nowrap",
-  },
-  json: {
-    fontFamily: "Consolas, 'Courier New', monospace",
-    fontSize: tokens.fontSizeBase200,
-    backgroundColor: tokens.colorNeutralBackground2,
-    padding: tokens.spacingHorizontalM,
-    borderRadius: tokens.borderRadiusMedium,
-    overflow: "auto",
-    maxHeight: "480px",
-    whiteSpace: "pre",
-  },
-  err: {
-    color: tokens.colorPaletteRedForeground1,
-    fontSize: tokens.fontSizeBase200,
-  },
-  helper: {
-    color: tokens.colorNeutralForeground3,
-    fontSize: tokens.fontSizeBase200,
-  },
-  footer: {
-    display: "flex",
-    alignItems: "center",
-    gap: tokens.spacingHorizontalM,
-    justifyContent: "center",
-    paddingBlock: tokens.spacingVerticalM,
-  },
-  savedGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
-    gap: tokens.spacingHorizontalM,
-  },
-  savedCard: {
-    cursor: "pointer",
-    transition: "background-color 120ms ease",
-    "&:hover": {
-      backgroundColor: tokens.colorNeutralBackground1Hover,
-    },
-  },
-  savedCardBody: {
-    padding: tokens.spacingHorizontalM,
-    display: "flex",
-    flexDirection: "column",
-    gap: tokens.spacingVerticalXS,
-  },
-  savedCardHead: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: tokens.spacingHorizontalS,
-  },
-  savedActions: {
-    display: "flex",
-    gap: tokens.spacingHorizontalXXS,
-  },
-  rawBanner: {
-    display: "flex",
-    alignItems: "center",
-    gap: tokens.spacingHorizontalS,
-    padding: `${tokens.spacingVerticalS} ${tokens.spacingHorizontalM}`,
-    backgroundColor: tokens.colorNeutralBackground2,
-    borderRadius: tokens.borderRadiusMedium,
-    flexWrap: "wrap",
-  },
-  rawBannerText: {
-    flex: "1 1 auto",
-    color: tokens.colorNeutralForeground2,
-    fontSize: tokens.fontSizeBase200,
-  },
-  pasteTextarea: {
-    width: "100%",
-    fontFamily: "Consolas, 'Courier New', monospace",
-    fontSize: tokens.fontSizeBase200,
-  },
-  pasteHelper: {
-    color: tokens.colorNeutralForeground3,
-    fontSize: tokens.fontSizeBase200,
-  },
-  pasteError: {
-    color: tokens.colorPaletteRedForeground1,
-    fontSize: tokens.fontSizeBase200,
-  },
-  dialogField: {
-    display: "flex",
-    flexDirection: "column",
-    gap: tokens.spacingVerticalXS,
-  },
+  root: { display: "flex", flexDirection: "column", gap: tokens.spacingVerticalL, minWidth: 0 },
+  section: { display: "flex", flexDirection: "column", gap: tokens.spacingVerticalM, minWidth: 0 },
+  row: { display: "flex", alignItems: "center", flexWrap: "wrap", gap: tokens.spacingHorizontalM },
+  library: { maxHeight: "360px", overflowY: "auto", display: "flex", flexDirection: "column", gap: tokens.spacingVerticalS },
+  libraryRow: { display: "flex", flexWrap: "wrap", gap: tokens.spacingHorizontalS, alignItems: "center", paddingBlock: tokens.spacingVerticalXS, borderBottom: `1px solid ${tokens.colorNeutralStroke2}` },
+  libraryLabel: { flex: "1 1 240px", minWidth: 0, overflowWrap: "anywhere" },
+  muted: { color: tokens.colorNeutralForeground2, fontSize: tokens.fontSizeBase200 },
+  error: { color: tokens.colorPaletteRedForeground1, overflowWrap: "anywhere" },
+  notice: { padding: tokens.spacingHorizontalM, backgroundColor: tokens.colorNeutralBackground2, borderRadius: tokens.borderRadiusMedium },
+  filters: { display: "flex", flexDirection: "column", gap: tokens.spacingVerticalM },
+  field: { minWidth: "180px", flex: "1 1 220px" },
+  json: { fontFamily: tokens.fontFamilyMonospace, whiteSpace: "pre-wrap", overflowWrap: "anywhere", overflow: "auto", maxHeight: "320px" },
+  textarea: { width: "100%", fontFamily: tokens.fontFamilyMonospace },
+  control: { minWidth: 0, maxWidth: "100%" },
 });
-
-const OPERATORS: { value: QueryFilterOp; label: string }[] = [
-  { value: "==", label: "equals" },
-  { value: "!=", label: "not equals" },
-  { value: "contains", label: "contains" },
-  { value: "!contains", label: "does not contain" },
-  { value: "startswith", label: "starts with" },
-  { value: "!startswith", label: "does not start with" },
-  { value: "endswith", label: "ends with" },
-  { value: "!endswith", label: "does not end with" },
-  { value: "in~", label: "in (comma-sep)" },
-  { value: "has", label: "has token" },
-  { value: "has_any", label: "has any token (comma-sep)" },
-  { value: ">", label: ">" },
-  { value: ">=", label: ">=" },
-  { value: "<", label: "<" },
-  { value: "<=", label: "<=" },
-  { value: "isempty", label: "is empty (array)" },
-  { value: "!isempty", label: "is non-empty (array)" },
-];
-
-/** Connector ID suggestions used by the value Combobox when the user has
- *  selected the CONNECTOR_FIELD sentinel as the filter field. */
-const KNOWN_CONNECTOR_IDS = Object.keys(KNOWN_CONNECTORS).sort();
-
-interface ResultRow {
-  name: string;
-  type: string;
-  displayName: string;
-  environmentId: string;
-  raw: unknown;
-}
-
-/** Renders an `InventoryField[]` as Fluent `<OptionGroup>` sections.
- *  Mirrors the helper in `TileEditorDialog.tsx` so both views surface
- *  the same grouped, type-scoped field options. */
-function FieldOptions({ fields }: { fields: InventoryField[] }) {
-  const groups = useMemo(() => groupFields(fields), [fields]);
-  return (
-    <>
-      {groups.map((g) => (
-        <OptionGroup key={g.label} label={g.label}>
-          {g.fields.map((f) => (
-            <Option key={f.path} value={f.path} text={f.path}>
-              {f.label}
-              <span style={{ marginLeft: 8, opacity: 0.6, fontSize: "0.85em" }}>
-                {f.path}
-              </span>
-            </Option>
-          ))}
-        </OptionGroup>
-      ))}
-    </>
-  );
-}
-
-function toResultRow(item: Record<string, unknown>): ResultRow {
-  const props = (item.properties ?? {}) as Record<string, unknown>;
-  return {
-    name: (item.name as string) ?? "",
-    type: (item.type as string) ?? "",
-    displayName: (props.displayName as string) ?? "",
-    environmentId: (props.environmentId as string) ?? "",
-    raw: item,
-  };
-}
-
-const DEFAULT_SPEC: QuerySpec = {
-  resourceTypes: [ResourceType.CanvasApp],
-  filters: [],
-  orderField: "properties.lastModifiedAt",
-  orderDirection: "desc",
-  limit: 50,
-};
-
-/** Known clause discriminators, mirroring the connector's `Clause$type` enum.
- *  Used by the paste-clauses dialog to give an early, friendly error before
- *  the connector itself would reject the payload. Kept loose on purpose —
- *  we don't validate the inner shape; the connector remains the final arbiter. */
-const KNOWN_CLAUSE_TYPES = new Set([
-  "where",
-  "project",
-  "take",
-  "orderby",
-  "distinct",
-  "count",
-  "summarize",
-  "extend",
-  "join",
-]);
-
-type ParseResult =
-  | { ok: true; clauses: Clause[] }
-  | { ok: false; error: string };
-
-/** Parse + sanity-check a pasted clauses payload. Accepts either a bare
- *  `Clause[]` array or an object envelope `{ clauses: Clause[] }` (which is
- *  what the JSON.stringify of our internal shape happens to produce when a
- *  user copies a wrapper). */
-function parseClausesPayload(text: string): ParseResult {
-  const trimmed = text.trim();
-  if (!trimmed) return { ok: false, error: "Paste a JSON array of clauses." };
-
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(trimmed);
-  } catch (e) {
-    return {
-      ok: false,
-      error: e instanceof Error ? `Invalid JSON: ${e.message}` : "Invalid JSON.",
-    };
-  }
-
-  let arr: unknown;
-  if (Array.isArray(parsed)) {
-    arr = parsed;
-  } else if (
-    parsed &&
-    typeof parsed === "object" &&
-    Array.isArray((parsed as Record<string, unknown>).clauses)
-  ) {
-    arr = (parsed as Record<string, unknown>).clauses;
-  } else {
-    return {
-      ok: false,
-      error:
-        "Expected an array of clauses, or an object with a `clauses` array property.",
-    };
-  }
-
-  const items = arr as unknown[];
-  if (items.length === 0) {
-    return { ok: false, error: "Clauses array is empty." };
-  }
-
-  for (let i = 0; i < items.length; i++) {
-    const c = items[i];
-    if (!c || typeof c !== "object") {
-      return { ok: false, error: `Clause #${i + 1} is not an object.` };
-    }
-    const t = (c as Record<string, unknown>).$type;
-    if (typeof t !== "string") {
-      return { ok: false, error: `Clause #${i + 1} is missing $type.` };
-    }
-    if (!KNOWN_CLAUSE_TYPES.has(t)) {
-      return {
-        ok: false,
-        error: `Clause #${i + 1} has unknown $type '${t}'. Known: ${[...KNOWN_CLAUSE_TYPES].join(", ")}.`,
-      };
-    }
-  }
-
-  return { ok: true, clauses: items as Clause[] };
-}
-
-type BuilderMode = "basic" | "advanced";
+function message(error: unknown): string { return error instanceof Error ? error.message : String(error); }
 
 export function QueriesView() {
   const styles = useStyles();
-  const navigate = useNavigate();
-  const { catalog: connectorCatalog } = useConnectorCatalog();
-  const [spec, setSpec] = useState<QuerySpec>(DEFAULT_SPEC);
-  const [mode, setMode] = useState<BuilderMode>("basic");
-  const [advancedText, setAdvancedText] = useState("");
-  const [advancedError, setAdvancedError] = useState("");
-  const [rawClauses, setRawClauses] = useState<Clause[]>([]);
-  const [rows, setRows] = useState<ResultRow[]>([]);
-  const [totalRecords, setTotalRecords] = useState<number>(0);
-  const [skipToken, setSkipToken] = useState<string | undefined>();
-  const [phase, setPhase] = useState<"idle" | "running" | "ready" | "error">("idle");
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [errorMsg, setErrorMsg] = useState("");
-
-  // Saved-queries state.
-  const [savedQueries, setSavedQueries] = useState<SavedQuery[]>(() =>
-    listSavedQueries()
-  );
-  const [lastSavedId, setLastSavedId] = useState<string | undefined>();
-
-  // Save-query dialog.
+  const { catalog } = useConnectorCatalog();
+  const [restored] = useState(readWorkspace);
+  const [draft, setDraft] = useState<WorkspaceDraft>(restored.draft);
+  const draftRef = useRef(draft);
+  const [saved, setSaved] = useState(listSavedQueries);
+  const [error, setError] = useState(() => restored.warning || getSavedQueriesStorageError());
+  const [notice, setNotice] = useState("");
+  const [execution, setExecution] = useState<Execution | undefined>(recallExecution);
+  const executionRef = useRef(execution);
+  const [busy, setBusy] = useState<"run" | "more" | "export" | undefined>();
+  const [scanCount, setScanCount] = useState(0);
+  const generation = useRef(0);
+  const busyRef = useRef(false);
+  const [partial, setPartial] = useState<Execution>();
+  const exportShape = draft.exportShape ?? "columns";
   const [saveOpen, setSaveOpen] = useState(false);
   const [saveName, setSaveName] = useState("");
   const [saveDescription, setSaveDescription] = useState("");
+  const [renameTarget, setRenameTarget] = useState<SavedQuery>();
+  const [deleteTarget, setDeleteTarget] = useState<SavedQuery>();
+  const [importOpen, setImportOpen] = useState(false);
+  const [importText, setImportText] = useState("");
+  useEffect(() => () => { generation.current++; }, []);
+  const reportError = useCallback((value: string) => setError(value), [setError]);
+  const commitExecution = (value: Execution) => { executionRef.current = value; setExecution(value); rememberExecution(value); };
 
-  // Rename-saved-query dialog.
-  const [renameOpen, setRenameOpen] = useState(false);
-  const [renameTargetId, setRenameTargetId] = useState<string | undefined>();
-  const [renameName, setRenameName] = useState("");
-  const [renameDescription, setRenameDescription] = useState("");
-
-  // Delete-saved-query confirm dialog.
-  const [deleteTargetId, setDeleteTargetId] = useState<string | undefined>();
-
-  const builderClauses = useMemo(() => buildClausesFromSpec(spec), [spec]);
-  const activeClauses = mode === "advanced" ? rawClauses : builderClauses;
-  const clausesJson = useMemo(
-    () => JSON.stringify(activeClauses, null, 2),
-    [activeClauses]
-  );
-
-  /** Clear ephemeral results — used by every "I just changed the active query"
-   *  code path so stale rows don't linger. */
-  const resetResults = useCallback(() => {
-    setPhase("idle");
-    setRows([]);
-    setSkipToken(undefined);
-    setTotalRecords(0);
-    setErrorMsg("");
-  }, []);
-
-  const refreshSaved = useCallback(() => {
-    setSavedQueries(listSavedQueries());
-  }, []);
-
-  /** Parse + apply the textarea contents in Advanced mode. */
-  const setAdvancedFromText = (value: string) => {
-    setAdvancedText(value);
-    setLastSavedId(undefined);
-    if (!value.trim()) {
-      setAdvancedError("");
-      setRawClauses([]);
-      return;
+  const changeDraft = (patch: Partial<WorkspaceDraft>, queryChanged = true) => {
+    const next = { ...draftRef.current, ...patch };
+    draftRef.current = next;
+    if (queryChanged) {
+      generation.current++;
+      busyRef.current = false;
+      setBusy(undefined);
+      setPartial(undefined);
     }
-    const parsed = parseClausesPayload(value);
-    if (parsed.ok) {
-      setRawClauses(parsed.clauses);
-      setAdvancedError("");
-    } else {
-      // Keep rawClauses cleared while the JSON is invalid so the user can't
-      // accidentally Run a stale-but-valid prior payload.
-      setRawClauses([]);
-      setAdvancedError(parsed.error);
-    }
+    setDraft(next);
+    try { writeWorkspace(next); }
+    catch (e) { setError(`Workspace could not be stored for navigation: ${message(e)}. Your current draft is still open.`); }
   };
-
-  const switchMode = (next: BuilderMode) => {
-    if (next === mode) return;
-    if (next === "advanced") {
-      // First time entering Advanced for this session: seed the textarea with
-      // whatever the Basic builder currently produces. That way users see the
-      // shape they need to match and can extend it (joins, summarize, etc.).
-      // Subsequent toggles preserve the user's edits.
-      if (!advancedText.trim()) {
-        const seed = JSON.stringify(builderClauses, null, 2);
-        setAdvancedText(seed);
-        setRawClauses(builderClauses);
-        setAdvancedError("");
-      }
-    }
-    setMode(next);
-    setLastSavedId(undefined);
-    resetResults();
+  const updateSpec = (patch: Partial<QuerySpec>) => changeDraft({ spec: { ...draft.spec, ...patch } });
+  const fields = useMemo(() => getFieldSuggestions(draft.spec.resourceTypes, "filter"), [draft.spec.resourceTypes]);
+  const columnFields = useMemo(() => getFieldSuggestions(draft.spec.resourceTypes, "column").filter((f) => !f.path.startsWith("__")), [draft.spec.resourceTypes]);
+  const builderClauses = useMemo(() => buildClausesFromSpec(draft.spec), [draft.spec]);
+  const paired = draft.mode === "basic" && draft.spec.filters.some((f) => f.field === "__operation" && f.connectorId?.trim());
+  const parsed = useMemo(() => parseClausesPayload(draft.advancedText), [draft.advancedText]);
+  const clauses = draft.mode === "basic" ? builderClauses : parsed.ok ? parsed.clauses : [];
+  const validation = [
+    ...(draft.mode === "basic" ? [...validateQuerySpec(draft.spec), ...typedFilterErrors(draft.spec.filters, fields)] : parsed.ok ? [] : [parsed.error]),
+    ...(!Number.isInteger(draft.spec.limit) || draft.spec.limit < 1 || draft.spec.limit > 500 ? ["Page size must be an integer from 1 to 500."] : []),
+  ];
+  const key = draftKey(draft.spec, draft.mode, draft.advancedText);
+  const stale = execution !== undefined && execution.key !== key;
+  const loaded = saved.find((q) => q.id === draft.loadedId);
+  const dirty = loaded && (loaded.source !== (draft.mode === "basic" ? "builder" : "raw") ||
+    (draft.mode === "basic" ? JSON.stringify(loaded.spec) !== JSON.stringify(draft.spec) :
+      JSON.stringify(loaded.clauses) !== JSON.stringify(clauses) || (loaded.pageSize ?? 100) !== draft.spec.limit));
+  const defaults = useMemo(() => {
+    const preferred = ["properties.displayName", "type", "properties.environmentId", "properties.ownerId", "properties.lastModifiedAt", "properties.lastPublishedAt", "properties.status", "properties.powerPlatformConnectors", "properties.connectors"];
+    return preferred.filter((path) => columnFields.some((f) => f.path === path));
+  }, [columnFields]);
+  const columns = execution ? resultColumns(execution.rows, execution.clauses, draft.columns, execution.defaultColumns ?? defaults) : defaults;
+  const templates = [...buildDynamicQueryTemplates(catalog), ...QUERY_TEMPLATES];
+  const search = draft.search.toLowerCase();
+  const filteredSaved = saved.filter((q) => (!draft.favoritesOnly || q.favorite) && `${q.name} ${q.description}`.toLowerCase().includes(search))
+    .sort((a, b) => Number(!!b.favorite) - Number(!!a.favorite));
+  const refreshSaved = () => setSaved(listSavedQueries());
+  const persist = (action: () => void) => {
+    try { action(); refreshSaved(); return true; }
+    catch (e) { setError(`Saved query was not changed: ${message(e)}`); return false; }
   };
-
-  const applyTemplate = (next: QuerySpec) => {
-    setSpec(next);
-    setMode("basic");
-    setLastSavedId(undefined);
-    resetResults();
-  };
-
+  const input = (): SavedQueryInput => ({
+    name: saveName, description: saveDescription, source: draft.mode === "basic" ? "builder" : "raw",
+    spec: draft.mode === "basic" ? draft.spec : undefined, clauses, pageSize: draft.spec.limit,
+  });
   const applySaved = (q: SavedQuery) => {
-    if (q.source === "builder" && q.spec) {
-      setSpec(q.spec);
-      setMode("basic");
-    } else {
-      const text = JSON.stringify(q.clauses, null, 2);
-      setAdvancedText(text);
-      setRawClauses(q.clauses);
-      setAdvancedError("");
-      setMode("advanced");
-      if (typeof q.pageSize === "number" && q.pageSize > 0) {
-        setSpec((prev) => ({ ...prev, limit: q.pageSize as number }));
-      }
-    }
-    setLastSavedId(q.id);
-    resetResults();
-  };
-
-  const openSaveDialog = () => {
-    // Pre-fill from the currently-loaded saved query, if any — makes
-    // "rename + re-save" a one-keystroke change.
-    const loaded =
-      lastSavedId !== undefined
-        ? savedQueries.find((q) => q.id === lastSavedId)
-        : undefined;
-    setSaveName(loaded?.name ?? "");
-    setSaveDescription(loaded?.description ?? "");
-    setSaveOpen(true);
-  };
-
-  const doSave = () => {
-    const name = saveName.trim();
-    if (!name) return;
-    const created = createSavedQuery({
-      name,
-      description: saveDescription,
-      source: mode === "advanced" ? "raw" : "builder",
-      spec: mode === "basic" ? spec : undefined,
-      clauses: activeClauses,
-      pageSize: spec.limit,
+    changeDraft({
+      spec: q.source === "builder" && q.spec ? q.spec : { ...draft.spec, limit: q.pageSize ?? 100 },
+      mode: q.source === "builder" && q.spec ? "basic" : "advanced", loadedId: q.id,
+      advancedText: q.source === "raw" ? JSON.stringify(q.clauses, null, 2) : "", advancedSeed: undefined, columns: undefined,
     });
-    refreshSaved();
-    setLastSavedId(created.id);
-    setSaveOpen(false);
+    setNotice(`Loaded ${q.name}. Run to refresh results.`);
   };
-
-  const openRenameDialog = (q: SavedQuery) => {
-    setRenameTargetId(q.id);
-    setRenameName(q.name);
-    setRenameDescription(q.description);
-    setRenameOpen(true);
+  const switchMode = (mode: BuilderMode) => {
+    const seed = JSON.stringify(builderClauses, null, 2);
+    changeDraft({ mode, ...(mode === "advanced" && !draft.advancedText ? { advancedText: seed, advancedSeed: seed } : {}) });
   };
-
-  const doRename = () => {
-    if (!renameTargetId) return;
-    updateSavedQuery(renameTargetId, {
-      name: renameName,
-      description: renameDescription,
-    });
-    refreshSaved();
-    setRenameOpen(false);
-    setRenameTargetId(undefined);
-  };
-
-  const doDelete = () => {
-    if (!deleteTargetId) return;
-    deleteSavedQuery(deleteTargetId);
-    refreshSaved();
-    if (lastSavedId === deleteTargetId) setLastSavedId(undefined);
-    setDeleteTargetId(undefined);
-  };
-
-  /** Spec mutator. Wraps setSpec and also clears the "last saved" pill so
-   *  the badge stops claiming the in-memory state matches the saved row. */
-  const mutateSpec = useCallback(
-    (updater: (prev: QuerySpec) => QuerySpec) => {
-      setSpec(updater);
-      setLastSavedId(undefined);
-    },
-    []
-  );
-
-  const updateSpec = useCallback(
-    (patch: Partial<QuerySpec>) =>
-      mutateSpec((prev) => ({ ...prev, ...patch })),
-    [mutateSpec]
-  );
-
-  const updateFilter = (idx: number, patch: Partial<QueryFilter>) => {
-    mutateSpec((prev) => {
-      const filters = prev.filters.map((f, i) => (i === idx ? { ...f, ...patch } : f));
-      return { ...prev, filters };
-    });
-  };
-
-  const addFilter = () =>
-    mutateSpec((prev) => ({
-      ...prev,
-      filters: [...prev.filters, { field: "", op: "==", value: "" }],
-    }));
-
-  const removeFilter = (idx: number) =>
-    mutateSpec((prev) => ({
-      ...prev,
-      filters: prev.filters.filter((_, i) => i !== idx),
-    }));
-
   const run = async () => {
-    setPhase("running");
-    setRows([]);
-    setSkipToken(undefined);
-    setTotalRecords(0);
-    setErrorMsg("");
-    const res = await runRawQuery(activeClauses, { Top: spec.limit || 100 });
-    if (!res.ok) {
-      setErrorMsg(res.error);
-      setPhase("error");
-      return;
-    }
-    setRows(res.data.items.map((it) => toResultRow(it as Record<string, unknown>)));
-    setSkipToken(res.data.skipToken);
-    setTotalRecords(res.data.totalRecords);
-    setPhase("ready");
-  };
-
-  const loadMore = async () => {
-    if (!skipToken || loadingMore) return;
-    setLoadingMore(true);
-    const res = await runRawQuery(activeClauses, {
-      Top: spec.limit || 100,
-      SkipToken: skipToken,
-    });
-    setLoadingMore(false);
-    if (!res.ok) {
-      setErrorMsg(res.error);
-      return;
-    }
-    setRows((prev) =>
-      prev.concat(res.data.items.map((it) => toResultRow(it as Record<string, unknown>)))
-    );
-    setSkipToken(res.data.skipToken);
-    if (res.data.totalRecords) setTotalRecords(res.data.totalRecords);
-  };
-
-  const copyClauses = async () => {
+    if (busyRef.current || validation.length) return;
+    const id = ++generation.current;
+    busyRef.current = true; setBusy("run"); setScanCount(0); setError(""); setNotice(""); setPartial(undefined);
     try {
-      await navigator.clipboard.writeText(clausesJson);
-    } catch {
-      /* clipboard may be blocked — silent */
-    }
+      const plan = draft.mode === "basic" ? buildQueryExecutionPlan(draft.spec, new Date()) : undefined;
+      const snapshot = createExecution(key, plan?.clauses ?? clauses, draft.spec.limit);
+      snapshot.defaultColumns = defaults;
+      const result = await nextPage(snapshot);
+      if (id !== generation.current) return;
+      if (!result.ok) { setError(`Query failed: ${result.error}. Previous results are retained.`); return; }
+      if (plan?.requiresClientFiltering) {
+        setScanCount(result.execution.offset);
+        const drained = await drainExecution(result.execution, (progress) => {
+          if (id === generation.current) setScanCount(progress.offset);
+        }, () => id !== generation.current);
+        if (id !== generation.current || drained.cancelled) return;
+        if (drained.error || !drained.execution.complete) {
+          setError(`Paired evidence scan is incomplete: ${drained.error ?? "The connector could not prove completion."} No candidate rows are presented as matches. Previous results are retained.`);
+          return;
+        }
+        const matches = drained.execution.rows.filter((item) => plan.matches(item as ResourceItem));
+        commitExecution({ ...drained.execution, rows: matches, total: matches.length });
+      } else commitExecution(result.execution);
+    } catch (e) { if (id === generation.current) setError(`Query failed: ${message(e)}`); }
+    finally { if (id === generation.current) { busyRef.current = false; setBusy(undefined); } }
   };
-
-  const exportLoaded = () => {
-    if (rows.length === 0) return;
-    const csv = rowsToCsv(rows.map((r) => r.raw));
-    downloadCsv("inventory-query", csv);
+  const loadMore = async () => {
+    if (!execution?.token || stale || busyRef.current) return;
+    const id = ++generation.current;
+    busyRef.current = true; setBusy("more"); setError("");
+    try {
+      const result = await nextPage(execution);
+      if (id !== generation.current) return;
+      if (!result.ok) { setError(`Load more failed: ${result.error}. Loaded rows are retained; retry when ready.`); return; }
+      commitExecution(result.execution);
+    } catch (e) { if (id === generation.current) setError(`Load more failed: ${message(e)}`); }
+    finally { if (id === generation.current) { busyRef.current = false; setBusy(undefined); } }
   };
-
-  const [exportingAll, setExportingAll] = useState(false);
+  const copy = async (value: string) => {
+    try { await navigator.clipboard.writeText(value); setNotice("Copied to clipboard."); }
+    catch (e) { setError(`Clipboard failed: ${message(e)}`); }
+  };
+  const download = (value: Execution, status: "loaded" | "all" | "partial") => {
+    try {
+      const paths = resultColumns(value.rows, value.clauses, draft.columns, value.defaultColumns ?? defaults);
+      const output = exportShape === "raw" ? value.rows :
+        value.rows.map((r) => Object.fromEntries(paths.map((path) => [path, path === "Value" && (r === null || typeof r !== "object") ? cellText(r) : cellText(getPath(r, path))])));
+      downloadCsv(`inventory-query-${status}-${exportShape}`, rowsToCsv(output));
+      setNotice(`Downloaded ${value.rows.length.toLocaleString()} rows (${status === "all" ? "complete connector result" : status === "partial" ? "explicitly partial export" : "loaded rows only"}; ${exportShape === "raw" ? "raw flattened fields" : "selected field paths with raw IDs/values"}).`);
+    } catch (e) { setError(`CSV download failed: ${message(e)}`); }
+  };
   const exportAll = async () => {
-    if (rows.length === 0) return;
-    setExportingAll(true);
-    // Start with what we already have; keep paginating until exhausted.
-    const all: unknown[] = rows.map((r) => r.raw);
-    let token: string | undefined = skipToken;
-    let safety = 200; // hard cap to avoid runaway loops
-    while (token && safety-- > 0) {
-      const res = await runRawQuery(activeClauses, {
-        Top: spec.limit || 100,
-        SkipToken: token,
-      });
-      if (!res.ok) {
-        setErrorMsg(res.error);
-        break;
+    if (!execution || stale || busyRef.current) return;
+    const id = ++generation.current;
+    busyRef.current = true; setBusy("export"); setError(""); setPartial(undefined);
+    try {
+      const result = await drainExecution(execution, (progress) => {
+        if (id === generation.current) commitExecution(progress);
+      }, () => id !== generation.current);
+      if (id !== generation.current || result.cancelled) return;
+      commitExecution(result.execution);
+      if (result.error || !result.execution.complete) {
+        setError(result.error ?? "Export is incomplete. No file was downloaded.");
+        setPartial(result.execution);
+      } else download(result.execution, "all");
+    } catch (e) { if (id === generation.current) {
+      setError(`Export failed: ${message(e)}. No file was downloaded.`);
+      setPartial(executionRef.current);
+    } }
+    finally { if (id === generation.current) { busyRef.current = false; setBusy(undefined); } }
+  };
+  const importQuery = () => {
+    try {
+      const raw: unknown = JSON.parse(importText);
+      const result = parseClausesPayload(importText);
+      if (!result.ok) throw new Error(result.error);
+      const envelope = raw && typeof raw === "object" && !Array.isArray(raw) ? raw as Record<string, unknown> : undefined;
+      if (envelope?.source === "builder") {
+        if (!isQuerySpec(envelope.spec)) throw new Error("Imported builder spec is invalid or unsupported.");
+        changeDraft({ spec: envelope.spec, mode: "basic", loadedId: undefined, advancedText: "", advancedSeed: undefined, columns: undefined });
+      } else {
+        changeDraft({ mode: "advanced", advancedText: JSON.stringify(result.clauses, null, 2), loadedId: undefined, advancedSeed: undefined,
+          spec: { ...draft.spec, limit: typeof envelope?.pageSize === "number" && envelope.pageSize >= 1 && envelope.pageSize <= 500 ? envelope.pageSize : draft.spec.limit } });
       }
-      for (const it of res.data.items) all.push(it);
-      token = res.data.skipToken;
-    }
-    setExportingAll(false);
-    const csv = rowsToCsv(all);
-    downloadCsv("inventory-query-all", csv);
+      setImportOpen(false); setNotice("Imported as an unsaved draft. Review it before running.");
+    } catch (e) { setError(`Import failed: ${message(e)}`); }
   };
 
-  const typeText =
-    spec.resourceTypes.length === 0
-      ? "All reportable resources"
-      : spec.resourceTypes.map(resourceTypeShort).join(", ");
-
-  const suggestionsFor = useMemo(() => {
-    const make = (intent: FieldPickerIntent) =>
-      getFieldSuggestions(spec.resourceTypes, intent);
-    return {
-      filter: make("filter"),
-      sort: make("sort"),
-    };
-  }, [spec.resourceTypes]);
-
-  return (
-    <div className={styles.root}>
-      <div className={styles.header}>
-        <Text size={600} weight="semibold">
-          Queries
-        </Text>
-        <Text className={styles.subtitle}>
-          Build a custom inventory query. Start from a template or assemble
-          your own filters — the connector clauses are generated for you.
-        </Text>
+  return <div className={styles.root}>
+    <header className={styles.section}>
+      <Text as="h1" size={600} weight="semibold">Queries</Text>
+      <Text>Investigate inventory with typed filters or connector clauses. Drafts are restored in this tab; results stay in memory only.</Text>
+    </header>
+    {error && <div role="alert"><ErrorPane title="Queries needs attention" message={error} /><Button size="small" appearance="subtle" onClick={() => setError("")}>Dismiss</Button></div>}
+    {notice && <Text role="status" className={styles.muted}>{notice}</Text>}
+    <div className={styles.section}>
+      <div className={styles.row}>
+        <Button aria-expanded={draft.libraryOpen} aria-controls="queries-library" onClick={() => changeDraft({ libraryOpen: !draft.libraryOpen }, false)}>
+          {draft.libraryOpen ? "Hide" : "Show"} saved queries &amp; templates ({saved.length})
+        </Button>
+        <Button onClick={() => setImportOpen(true)}>Import query JSON</Button>
       </div>
-
-      <Card>
-        <CardHeader
-          header={
-            <Text weight="semibold">
-              Saved queries{" "}
-              <span className={styles.helper}>
-                ({savedQueries.length})
-              </span>
-            </Text>
-          }
-          description={
-            <Text size={200}>
-              Stored locally in this browser. Click a card to load it into the
-              builder. To share, use <strong>Copy JSON</strong> under Basic, or
-              copy the textarea contents under Advanced — recipients paste them
-              into the same place.
-            </Text>
-          }
-        />
-        <Divider />
-        <div className={styles.cardBody}>
-          {savedQueries.length === 0 ? (
-            <Text className={styles.helper}>
-              No saved queries yet. Build (or paste) a query and click{" "}
-              <strong>Save query</strong>.
-            </Text>
-          ) : (
-            <div className={styles.savedGrid}>
-              {savedQueries.map((q) => (
-                <Card
-                  key={q.id}
-                  className={styles.savedCard}
-                  onClick={() => applySaved(q)}
-                >
-                  <div className={styles.savedCardBody}>
-                    <div className={styles.savedCardHead}>
-                      <Text className={styles.templateName}>{q.name}</Text>
-                      <div
-                        className={styles.savedActions}
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <Badge
-                          appearance="outline"
-                          color={q.source === "raw" ? "important" : "informative"}
-                          size="small"
-                        >
-                          {q.source === "raw" ? "Advanced" : "Basic"}
-                        </Badge>
-                        <Button
-                          size="small"
-                          appearance="subtle"
-                          icon={<EditRegular />}
-                          aria-label="Rename"
-                          onClick={() => openRenameDialog(q)}
-                        />
-                        <Button
-                          size="small"
-                          appearance="subtle"
-                          icon={<DeleteRegular />}
-                          aria-label="Delete"
-                          onClick={() => setDeleteTargetId(q.id)}
-                        />
-                      </div>
-                    </div>
-                    {q.description && (
-                      <Text className={styles.templateDesc}>{q.description}</Text>
-                    )}
-                    <Text className={styles.helper}>
-                      {q.clauses.length} clause{q.clauses.length === 1 ? "" : "s"}
-                      {q.pageSize ? ` · page ${q.pageSize}` : ""}
-                    </Text>
-                  </div>
-                </Card>
-              ))}
-            </div>
-          )}
+      {draft.libraryOpen && <Card id="queries-library" className={styles.section}>
+        <div className={styles.row}>
+          <Input aria-label="Search saved queries and templates" value={draft.search} placeholder="Search saved queries and templates"
+            onChange={(_e, d) => changeDraft({ search: d.value }, false)} />
+          <Button aria-pressed={draft.favoritesOnly} onClick={() => changeDraft({ favoritesOnly: !draft.favoritesOnly }, false)}>Favorites only</Button>
+          <Text className={styles.muted}>Saved locally in this browser. Relative dates are evaluated on each run.</Text>
         </div>
-      </Card>
-
-      <Card>
-        <CardHeader
-          header={<Text weight="semibold">Templates</Text>}
-          description={
-            <Text size={200}>Click any template to load it into the builder.</Text>
-          }
-        />
-        <Divider />
-        <div className={styles.cardBody}>
-          <div className={styles.templates}>
-            {[
-              // Dynamic, catalog-aware templates first — they reflect the
-              // tenant's actual premium-connector list, so they're the
-              // most useful "I just want the answer" starting point.
-              // Hidden until the catalog loads to avoid empty/disabled UI.
-              ...buildDynamicQueryTemplates(connectorCatalog),
-              ...QUERY_TEMPLATES,
-            ].map((tpl) => (
-              <Card
-                key={tpl.id}
-                className={styles.templateCard}
-                onClick={() => applyTemplate(tpl.spec)}
-              >
-                <div className={styles.templateBody}>
-                  <Text className={styles.templateName}>{tpl.name}</Text>
-                  <Text className={styles.templateDesc}>{tpl.description}</Text>
-                </div>
-              </Card>
-            ))}
-          </div>
+        <div className={styles.library}>
+          <Text as="h2" weight="semibold">Saved queries</Text>
+          {!filteredSaved.length && <Text className={styles.muted}>No saved queries match. Save your draft to reuse it.</Text>}
+          {filteredSaved.map((q) => <div key={q.id} className={styles.libraryRow}>
+            <div className={styles.libraryLabel}><Button appearance="subtle" onClick={() => applySaved(q)}>{q.name}</Button><Text className={styles.muted}>{q.description}</Text></div>
+            <Badge appearance="outline">{q.source === "builder" ? "Basic" : "Advanced"}</Badge>
+            <Button size="small" aria-label={`${q.favorite ? "Unfavorite" : "Favorite"} ${q.name}`} aria-pressed={!!q.favorite}
+              onClick={() => persist(() => { if (!updateSavedQuery(q.id, { favorite: !q.favorite })) throw new Error("Query no longer exists."); })}>{q.favorite ? "Unfavorite" : "Favorite"}</Button>
+            <Button size="small" onClick={() => setRenameTarget({ ...q })}>Edit name</Button>
+            <Button size="small" onClick={() => setDeleteTarget(q)}>Delete</Button>
+          </div>)}
+          {!draft.favoritesOnly && <>
+            <Text as="h2" weight="semibold">Templates</Text>
+            {templates.filter((t) => `${t.name} ${t.description}`.toLowerCase().includes(search)).map((t) => <div key={t.id} className={styles.libraryRow}>
+              <div className={styles.libraryLabel}><Button appearance="subtle" onClick={() => changeDraft({ spec: t.spec, mode: "basic", loadedId: undefined, advancedText: "", advancedSeed: undefined, columns: undefined })}>{t.name}</Button><Text className={styles.muted}>{t.description}</Text></div>
+            </div>)}
+          </>}
         </div>
-      </Card>
-
-      <Card>
-        <CardHeader
-          header={
-            <Text weight="semibold">
-              Builder{" "}
-              {lastSavedId &&
-                savedQueries.find((q) => q.id === lastSavedId) && (
-                  <Badge
-                    appearance="outline"
-                    color="success"
-                    size="small"
-                    style={{ marginLeft: 8 }}
-                  >
-                    Saved as "
-                    {savedQueries.find((q) => q.id === lastSavedId)?.name}"
-                  </Badge>
-                )}
-            </Text>
-          }
-        />
-        <Divider />
-        <div className={styles.cardBody}>
-          <TabList
-            selectedValue={mode}
-            onTabSelect={(_e, data) => switchMode(data.value as BuilderMode)}
-          >
-            <Tab value="basic">Basic</Tab>
-            <Tab value="advanced">Advanced</Tab>
-          </TabList>
-
-          {mode === "basic" && (
-            <>
-              <div className={styles.inlineRow}>
-                <Text className={styles.label} style={{ minWidth: 120 }}>
-                  Resource types
-                </Text>
-                <Dropdown
-                  style={{ minWidth: 360 }}
-                  multiselect
-                  placeholder="All reportable resources"
-                  value={typeText}
-                  selectedOptions={spec.resourceTypes}
-                  onOptionSelect={(_e, data) =>
-                    updateSpec({ resourceTypes: data.selectedOptions as ResourceTypeValue[] })
-                  }
-                >
-                  {ALL_RESOURCE_TYPES.map((t) => (
-                    <Option key={t} value={t} text={resourceTypeShort(t)}>
-                      {resourceTypeShort(t)}
-                      <span className={styles.helper}> · {t}</span>
-                    </Option>
-                  ))}
-                </Dropdown>
-              </div>
-
-              <div>
-                <div className={styles.inlineRow} style={{ marginBottom: 8 }}>
-                  <Text className={styles.label} style={{ minWidth: 120 }}>
-                    Filters
-                  </Text>
-                  <Button
-                    icon={<AddRegular />}
-                    appearance="subtle"
-                    onClick={addFilter}
-                    size="small"
-                  >
-                    Add filter
-                  </Button>
-                </div>
-                {spec.filters.length === 0 ? (
-                  <Text className={styles.helper}>No filters. Click "Add filter" to add one.</Text>
-                ) : (
-                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                    {spec.filters.map((f, idx) => (
-                      <div key={idx} style={{ display: "contents" }}>
-                        {idx > 0 && (
-                          <div
-                            className={styles.andDivider}
-                            aria-label="and"
-                            title="Filters are combined with AND"
-                          >
-                            <div className={styles.andDividerLine} />
-                            <Badge appearance="outline" size="small">
-                              AND
-                            </Badge>
-                            <div className={styles.andDividerLine} />
-                          </div>
-                        )}
-                        <div className={styles.fieldRow}>
-                        <Combobox
-                          placeholder="Pick or type any path (e.g. properties.anyNewField)"
-                          value={friendlyFilterField(f.field)}
-                          freeform
-                          onChange={(e) =>
-                            updateFilter(idx, { field: (e.target as HTMLInputElement).value })
-                          }
-                          onOptionSelect={(_e, data) =>
-                            updateFilter(idx, { field: data.optionValue ?? "" })
-                          }
-                        >
-                          <FieldOptions fields={suggestionsFor.filter} />
-                        </Combobox>
-                        <Dropdown
-                          value={OPERATORS.find((o) => o.value === f.op)?.label ?? f.op}
-                          selectedOptions={[f.op]}
-                          onOptionSelect={(_e, data) =>
-                            updateFilter(idx, { op: (data.optionValue as QueryFilterOp) ?? "==" })
-                          }
-                        >
-                          {OPERATORS.map((o) => (
-                            <Option key={o.value} value={o.value} text={o.label}>
-                              {o.label}
-                            </Option>
-                          ))}
-                        </Dropdown>
-                        {f.field === CONNECTOR_FIELD ? (
-                          <Combobox
-                            placeholder="e.g. shared_office365"
-                            value={f.value}
-                            freeform
-                            onChange={(e) =>
-                              updateFilter(idx, {
-                                value: (e.target as HTMLInputElement).value,
-                              })
-                            }
-                            onOptionSelect={(_e, data) =>
-                              updateFilter(idx, { value: data.optionValue ?? "" })
-                            }
-                          >
-                            {KNOWN_CONNECTOR_IDS.map((id) => (
-                              <Option
-                                key={id}
-                                value={id}
-                                text={`${id} — ${friendlyConnectorName(id)}`}
-                              >
-                                {`${id} — ${friendlyConnectorName(id)}`}
-                              </Option>
-                            ))}
-                          </Combobox>
-                        ) : (
-                          <Input
-                            placeholder={
-                              f.field === OPERATION_FIELD
-                                ? "e.g. SearchUserV2"
-                                : f.op === "in~" || f.op === "has_any"
-                                ? "value1, value2, value3"
-                                : "Value"
-                            }
-                            value={f.value}
-                            onChange={(_e, data: InputOnChangeData) =>
-                              updateFilter(idx, { value: data.value })
-                            }
-                          />
-                        )}
-                        <Button
-                          icon={<DeleteRegular />}
-                          appearance="subtle"
-                          aria-label="Remove filter"
-                          onClick={() => removeFilter(idx)}
-                        />
-                        </div>
-                      </div>
-                    ))}
-                    <Text className={styles.helper}>
-                      Tip: <code>true</code>/<code>false</code> and numbers are sent unquoted;
-                      everything else is quoted as a string.
-                    </Text>
-                    {spec.filters.length > 1 && (
-                      <Text className={styles.helper}>
-                        Rows are combined with <strong>AND</strong> — all must match.
-                        For <strong>OR</strong> within a single field use{" "}
-                        <code>in (comma-sep)</code> (or <code>has any token</code> for
-                        connector / operation). Cross-field <code>OR</code> isn't
-                        supported in Basic; use the Advanced tab.
-                      </Text>
-                    )}
-                    {spec.filters.some((f) => isSentinelField(f.field)) && (
-                      <Text className={styles.helper}>
-                        <strong>Connector / Operation</strong> fields scan across
-                        canvas, flow, agent, and app-builder schemas in one tokenised{" "}
-                        <code>has</code> — so <code>==</code> finds{" "}
-                        <code>shared_office365</code> without also matching{" "}
-                        <code>shared_office365users</code>.
-                      </Text>
-                    )}
-                  </div>
-                )}
-              </div>
-
-              <div className={styles.inlineRow}>
-                <Text className={styles.label} style={{ minWidth: 120 }}>
-                  Sort by
-                </Text>
-                <Combobox
-                  style={{ minWidth: 320 }}
-                  placeholder="Field"
-                  value={spec.orderField}
-                  freeform
-                  onChange={(e) =>
-                    updateSpec({ orderField: (e.target as HTMLInputElement).value })
-                  }
-                  onOptionSelect={(_e, data) =>
-                    updateSpec({ orderField: data.optionValue ?? "" })
-                  }
-                >
-                  <FieldOptions fields={suggestionsFor.sort} />
-                </Combobox>
-                <Dropdown
-                  style={{ minWidth: 120 }}
-                  value={spec.orderDirection === "asc" ? "Ascending" : "Descending"}
-                  selectedOptions={[spec.orderDirection]}
-                  onOptionSelect={(_e, data) =>
-                    updateSpec({
-                      orderDirection: (data.optionValue as "asc" | "desc") ?? "desc",
-                    })
-                  }
-                >
-                  <Option value="asc" text="Ascending">Ascending</Option>
-                  <Option value="desc" text="Descending">Descending</Option>
-                </Dropdown>
-              </div>
-            </>
-          )}
-
-          {mode === "advanced" && (
-            <div className={styles.dialogField}>
-              <Text className={styles.pasteHelper}>
-                Paste or write a JSON array of connector clauses. This is the
-                exact payload sent to <code>QueryResources</code> — supports
-                <code> where</code>, <code>extend</code>, <code>project</code>,
-                <code> summarize</code>, <code>orderby</code>, <code>join</code>,
-                etc.
-              </Text>
-              <Textarea
-                className={styles.pasteTextarea}
-                rows={16}
-                resize="vertical"
-                placeholder='[{"$type":"where","FieldName":"type","Operator":"==","Values":["\u0027microsoft.powerapps/canvasapps\u0027"]}]'
-                value={advancedText}
-                onChange={(_e, data: TextareaOnChangeData) =>
-                  setAdvancedFromText(data.value)
-                }
-              />
-              {advancedError ? (
-                <Text className={styles.pasteError}>{advancedError}</Text>
-              ) : (
-                <Text className={styles.helper}>
-                  {rawClauses.length > 0
-                    ? `Parsed ${rawClauses.length} clause${rawClauses.length === 1 ? "" : "s"}.`
-                    : "Empty — paste some clauses to enable Run."}
-                </Text>
-              )}
-            </div>
-          )}
-
-          <div className={styles.inlineRow}>
-            <Text className={styles.label} style={{ minWidth: 120 }}>
-              Page size
-            </Text>
-            <Input
-              type="number"
-              style={{ width: 120 }}
-              value={String(spec.limit)}
-              onChange={(_e, data) =>
-                updateSpec({ limit: Math.max(1, Math.min(500, Number(data.value) || 0)) })
-              }
-            />
-            <Text className={styles.helper}>
-              1–500 rows per request. The visual builder always emits an explicit
-              resource-type scope; the connector catalog is opt-in and excluded
-              from the default reporting total.
-            </Text>
-          </div>
-
-          <Divider />
-
-          <div className={styles.runRow}>
-            <Button
-              appearance="primary"
-              icon={<PlayRegular />}
-              onClick={run}
-              disabled={
-                phase === "running" ||
-                activeClauses.length === 0 ||
-                (mode === "advanced" && advancedError !== "")
-              }
-            >
-              {phase === "running" ? "Running…" : "Run query"}
-            </Button>
-            <Button
-              icon={<SaveRegular />}
-              onClick={openSaveDialog}
-              disabled={
-                activeClauses.length === 0 ||
-                (mode === "advanced" && advancedError !== "")
-              }
-            >
-              Save query
-            </Button>
-            {phase === "ready" && (
-              <Text className={styles.count}>
-                {rows.length.toLocaleString()} of {totalRecords.toLocaleString()} loaded
-              </Text>
-            )}
-          </div>
-
-          {mode === "basic" && (
-            <Accordion collapsible>
-              <AccordionItem value="adv">
-                <AccordionHeader>
-                  <Text weight="semibold">Generated clauses (read-only)</Text>
-                </AccordionHeader>
-                <AccordionPanel>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                    <div>
-                      <Button
-                        size="small"
-                        appearance="subtle"
-                        icon={<CopyRegular />}
-                        onClick={copyClauses}
-                      >
-                        Copy JSON
-                      </Button>
-                    </div>
-                    <pre className={styles.json}>{clausesJson}</pre>
-                  </div>
-                </AccordionPanel>
-              </AccordionItem>
-            </Accordion>
-          )}
-        </div>
-      </Card>
-
-      {phase === "running" && <LoadingPane label="Running query…" />}
-
-      {phase === "error" && (
-        <Card>
-          <CardHeader header={<Text weight="semibold">Query failed</Text>} />
-          <Divider />
-          <div className={styles.cardBody}>
-            <Text className={styles.err}>{errorMsg}</Text>
-          </div>
-        </Card>
-      )}
-
-      {phase === "ready" && (
-        <Card>
-          <CardHeader
-            header={<Text weight="semibold">Results</Text>}
-            description={
-              <Text size={200}>
-                {rows.length === 0
-                  ? "No matching items."
-                  : `${rows.length.toLocaleString()} loaded of ${totalRecords.toLocaleString()} total`}
-              </Text>
-            }
-            action={
-              rows.length > 0 ? (
-                <div style={{ display: "flex", gap: tokens.spacingHorizontalS }}>
-                  <Button
-                    size="small"
-                    appearance="subtle"
-                    icon={<ArrowDownloadRegular />}
-                    onClick={exportLoaded}
-                    disabled={exportingAll}
-                  >
-                    Export loaded ({rows.length.toLocaleString()})
-                  </Button>
-                  {skipToken && (
-                    <Button
-                      size="small"
-                      appearance="primary"
-                      icon={<ArrowDownloadRegular />}
-                      onClick={exportAll}
-                      disabled={exportingAll}
-                    >
-                      {exportingAll
-                        ? "Fetching all…"
-                        : `Export all (${totalRecords.toLocaleString()})`}
-                    </Button>
-                  )}
-                </div>
-              ) : undefined
-            }
-          />
-          <Divider />
-          {rows.length > 0 && (
-            <div>
-              <div className={styles.resultHeader}>
-                <span>Display name</span>
-                <span>Type</span>
-                <span>Environment ID</span>
-                <span></span>
-              </div>
-              {rows.map((row) => {
-                const href = getQueryResultHref({
-                  id: row.name,
-                  type: row.type,
-                  environmentId: row.environmentId || undefined,
-                });
-                const displayName = row.displayName || row.name || "—";
-                return (
-                  <div
-                    key={`${row.type}|${row.name}|${row.environmentId || ""}`}
-                    className={styles.resultRow}
-                  >
-                    <span className={styles.ellipsis}>
-                      {href ? (
-                        <Link onClick={() => navigate(href)}>{displayName}</Link>
-                      ) : (
-                        displayName
-                      )}
-                    </span>
-                    <span className={styles.ellipsis}>
-                      <Badge appearance="outline" color="informative" size="small">
-                        {row.type}
-                      </Badge>
-                    </span>
-                    <span className={styles.ellipsis}>{row.environmentId || "—"}</span>
-                    <Dialog>
-                      <DialogTrigger disableButtonEnhancement>
-                        <Button size="small" appearance="subtle">
-                          View raw
-                        </Button>
-                      </DialogTrigger>
-                      <DialogSurface>
-                        <DialogBody>
-                          <DialogTitle>{displayName}</DialogTitle>
-                          <DialogContent>
-                            <pre className={styles.json}>
-                              {JSON.stringify(row.raw, null, 2)}
-                            </pre>
-                          </DialogContent>
-                          <DialogActions>
-                            <DialogTrigger disableButtonEnhancement>
-                              <Button appearance="secondary">Close</Button>
-                            </DialogTrigger>
-                          </DialogActions>
-                        </DialogBody>
-                      </DialogSurface>
-                    </Dialog>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-          {skipToken && (
-            <div className={styles.footer}>
-              {loadingMore ? (
-                <>
-                  <Spinner size="tiny" />
-                  <Text className={styles.helper}>Loading more…</Text>
-                </>
-              ) : (
-                <Button appearance="primary" onClick={loadMore}>
-                  Load more
-                </Button>
-              )}
-            </div>
-          )}
-        </Card>
-      )}
-
-      <Dialog
-        open={saveOpen}
-        onOpenChange={(_e, data) => !data.open && setSaveOpen(false)}
-      >
-        <DialogSurface>
-          <DialogBody>
-            <DialogTitle>Save query</DialogTitle>
-            <DialogContent>
-              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                <div className={styles.dialogField}>
-                  <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
-                    Name
-                  </Text>
-                  <Input
-                    value={saveName}
-                    onChange={(_e, data: InputOnChangeData) => setSaveName(data.value)}
-                    placeholder="e.g. Risky tenant-wide agents"
-                  />
-                </div>
-                <div className={styles.dialogField}>
-                  <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
-                    Description (optional)
-                  </Text>
-                  <Textarea
-                    rows={3}
-                    resize="vertical"
-                    value={saveDescription}
-                    onChange={(_e, data: TextareaOnChangeData) =>
-                      setSaveDescription(data.value)
-                    }
-                    placeholder="What this query is for, who should run it, etc."
-                  />
-                </div>
-                <Text className={styles.helper}>
-                  Saves to this browser's local storage. To share, click{" "}
-                  <strong>Copy JSON</strong> under Advanced and send the result.
-                </Text>
-              </div>
-            </DialogContent>
-            <DialogActions>
-              <Button appearance="secondary" onClick={() => setSaveOpen(false)}>
-                Cancel
-              </Button>
-              <Button
-                appearance="primary"
-                onClick={doSave}
-                disabled={!saveName.trim() || activeClauses.length === 0}
-              >
-                Save
-              </Button>
-            </DialogActions>
-          </DialogBody>
-        </DialogSurface>
-      </Dialog>
-
-      <Dialog
-        open={renameOpen}
-        onOpenChange={(_e, data) => !data.open && setRenameOpen(false)}
-      >
-        <DialogSurface>
-          <DialogBody>
-            <DialogTitle>Edit saved query</DialogTitle>
-            <DialogContent>
-              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                <div className={styles.dialogField}>
-                  <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
-                    Name
-                  </Text>
-                  <Input
-                    value={renameName}
-                    onChange={(_e, data: InputOnChangeData) => setRenameName(data.value)}
-                  />
-                </div>
-                <div className={styles.dialogField}>
-                  <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
-                    Description
-                  </Text>
-                  <Textarea
-                    rows={3}
-                    resize="vertical"
-                    value={renameDescription}
-                    onChange={(_e, data: TextareaOnChangeData) =>
-                      setRenameDescription(data.value)
-                    }
-                  />
-                </div>
-              </div>
-            </DialogContent>
-            <DialogActions>
-              <Button appearance="secondary" onClick={() => setRenameOpen(false)}>
-                Cancel
-              </Button>
-              <Button
-                appearance="primary"
-                onClick={doRename}
-                disabled={!renameName.trim()}
-              >
-                Save
-              </Button>
-            </DialogActions>
-          </DialogBody>
-        </DialogSurface>
-      </Dialog>
-
-      <Dialog
-        open={deleteTargetId !== undefined}
-        onOpenChange={(_e, data) => !data.open && setDeleteTargetId(undefined)}
-      >
-        <DialogSurface>
-          <DialogBody>
-            <DialogTitle>Delete saved query?</DialogTitle>
-            <DialogContent>
-              <Text>
-                "
-                {savedQueries.find((q) => q.id === deleteTargetId)?.name ??
-                  "This query"}
-                " will be removed from this browser. This cannot be undone.
-              </Text>
-            </DialogContent>
-            <DialogActions>
-              <Button
-                appearance="secondary"
-                onClick={() => setDeleteTargetId(undefined)}
-              >
-                Cancel
-              </Button>
-              <Button appearance="primary" onClick={doDelete}>
-                Delete
-              </Button>
-            </DialogActions>
-          </DialogBody>
-        </DialogSurface>
-      </Dialog>
+      </Card>}
     </div>
-  );
+    <Card className={styles.section}>
+      <div className={styles.row}><Text as="h2" weight="semibold">Query draft</Text>
+        {loaded && <Badge appearance="outline" color={dirty ? "warning" : "success"}>{loaded.name}{dirty ? " - unsaved changes" : " - saved"}</Badge>}
+      </div>
+      <TabList selectedValue={draft.mode} onTabSelect={(_e, d) => switchMode(d.value as BuilderMode)}>
+        <Tab value="basic">Basic</Tab><Tab value="advanced" disabled={paired}>Advanced</Tab>
+      </TabList>
+      {draft.mode === "basic" ? <>
+        {paired && <Text className={styles.notice}>Connector-specific operation evidence requires a complete candidate scan, then exact local pairing. Raw clauses and Advanced conversion are unavailable for this draft. Reusable JSON preserves the builder spec; raw dashboard conversion is not supported.</Text>}
+        {draft.advancedText && <Text className={styles.notice}>Basic and Advanced are separate drafts. Returning to Basic does not translate Advanced edits.</Text>}
+        <Field label="Resource types">
+          <Dropdown className={styles.control} multiselect value={draft.spec.resourceTypes.length ? draft.spec.resourceTypes.map(resourceTypeShort).join(", ") : "All reportable resources"}
+            selectedOptions={draft.spec.resourceTypes} onOptionSelect={(_e, d) => changeDraft({ spec: { ...draft.spec, resourceTypes: d.selectedOptions as ResourceTypeValue[] }, columns: undefined })}>
+            {ALL_RESOURCE_TYPES.map((t) => <Option key={t} value={t} text={resourceTypeShort(t)}>{resourceTypeShort(t)}</Option>)}
+          </Dropdown>
+        </Field>
+        <div className={styles.row}><Text weight="semibold">Filters (all must match)</Text><Button size="small" icon={<AddRegular />}
+          onClick={() => updateSpec({ filters: [...draft.spec.filters, { field: "", op: "==", value: "" }] })}>Add filter</Button></div>
+        {!draft.spec.filters.length && <Text className={styles.muted}>No filters. All resources in the selected scope can match.</Text>}
+        <div className={styles.filters}>
+          {draft.spec.filters.map((f, index) => <QueryFilterRow key={index} index={index} filter={f} fields={fields} resourceTypes={draft.spec.resourceTypes}
+            onChange={(patch) => updateSpec({ filters: draft.spec.filters.map((old, i) => i === index ? { ...old, ...patch } : old) })}
+            onRemove={() => updateSpec({ filters: draft.spec.filters.filter((_old, i) => i !== index) })} />)}
+        </div>
+        <div className={styles.row}>
+          <Field label="Sort field (or type a path)" className={styles.field}>
+            <Input list="query-sort-fields" value={draft.spec.orderField} onChange={(_e, d) => updateSpec({ orderField: d.value })} />
+            <datalist id="query-sort-fields">{getFieldSuggestions(draft.spec.resourceTypes, "sort").map((f) => <option key={f.path} value={f.path}>{f.label}</option>)}</datalist>
+          </Field>
+          <Field label="Sort direction"><Dropdown className={styles.control} value={draft.spec.orderDirection === "asc" ? "Ascending" : "Descending"} selectedOptions={[draft.spec.orderDirection]}
+            onOptionSelect={(_e, d) => updateSpec({ orderDirection: d.optionValue as "asc" | "desc" })}><Option value="asc">Ascending</Option><Option value="desc">Descending</Option></Dropdown></Field>
+        </div>
+      </> : <>
+        <Text className={styles.notice}>Advanced is an independent clauses draft. Relative dates copied from Basic remain dynamic. Basic edits are not automatically merged.</Text>
+        <Button onClick={() => {
+          const seed = JSON.stringify(builderClauses, null, 2);
+          changeDraft({ advancedText: seed, advancedSeed: seed });
+        }}>Replace Advanced with current Basic clauses</Button>
+        <Field label="Advanced clauses JSON">
+          <Textarea rows={12} resize="vertical" className={styles.textarea} value={draft.advancedText}
+            onChange={(_e, d) => changeDraft({ advancedText: d.value })} />
+        </Field>
+      </>}
+      <Field label="Page size (1-500)" className={styles.field}>
+        <Input type="number" min={1} max={500} value={String(draft.spec.limit)} onChange={(_e, d) => updateSpec({ limit: Number(d.value) })} />
+      </Field>
+      {!!validation.length && <div role="alert" className={styles.error}>{validation.map((v, i) => <div key={i}>{v}</div>)}</div>}
+      <div className={styles.row}>
+        <Button appearance="primary" icon={<PlayRegular />} disabled={!!busy || !!validation.length || !clauses.length} onClick={() => void run()}>{busy === "run" ? "Running..." : "Run query"}</Button>
+        {loaded && <Button icon={<SaveRegular />} disabled={!!validation.length || !dirty} onClick={() => {
+          if (persist(() => {
+            const updated = updateSavedQuery(loaded.id, { ...input(), name: loaded.name, description: loaded.description });
+            if (!updated) throw new Error("The loaded query no longer exists. Use Save as new.");
+          })) setNotice(`Updated ${loaded.name}.`);
+        }}>Update existing</Button>}
+        <Button icon={<SaveRegular />} disabled={!!validation.length || !clauses.length} onClick={() => {
+          setSaveName(loaded?.name ?? ""); setSaveDescription(loaded?.description ?? ""); setSaveOpen(true);
+        }}>{loaded ? "Save as new" : "Save query"}</Button>
+        <Button icon={<CopyRegular />} disabled={!!validation.length || !clauses.length} onClick={() => void copy(JSON.stringify({ version: 1, ...input() }, null, 2))}>Copy reusable query JSON</Button>
+        <Button disabled={paired || !!validation.length || !clauses.length} onClick={() => void copy(JSON.stringify(clauses, null, 2))}>Copy clauses JSON</Button>
+      </div>
+      {draft.mode === "basic" && !paired && <details><summary>Generated clauses (read-only)</summary><pre className={styles.json}>{JSON.stringify(builderClauses, null, 2)}</pre></details>}
+    </Card>
+    {busy && <div role="status" className={styles.row}><Spinner size="tiny" />{busy === "export" ? `Fetching export: ${execution?.rows.length.toLocaleString()} rows loaded...` : busy === "more" ? "Loading next page..." : paired ? `Scanning connector evidence: ${scanCount.toLocaleString()} candidate rows checked...` : "Running query..."}</div>}
+    {execution && <Card className={styles.section}>
+      <div className={styles.row}><Text as="h2" weight="semibold">Results</Text>
+        <Text>{execution.rows.length.toLocaleString()} loaded{execution.complete ? " - complete" : " - incomplete / more available"}; approximately {execution.total.toLocaleString()} reported</Text>
+      </div>
+      <Text className={styles.muted}>Executed {new Date(execution.startedAt).toLocaleString()}. The continuation token, not the approximate total, determines completion.</Text>
+      {stale && <Text role="status" className={styles.notice}>Query changed - run again. These results belong to the previous execution; continuation and export are disabled.</Text>}
+      {execution.warning && <Text role="alert" className={styles.error}>{execution.warning}</Text>}
+      {!genericResultShape(execution.rows, execution.clauses) && <Field label="Result columns">
+        <Dropdown className={styles.control} multiselect value={columns.map((path) => columnFields.find((f) => f.path === path)?.label ?? path).join(", ")} selectedOptions={columns} onOptionSelect={(_e, d) => changeDraft({ columns: d.selectedOptions.length ? d.selectedOptions : undefined }, false)}>
+          {columnFields.map((f) => <Option key={f.path} value={f.path} text={f.label}>{f.label} - {f.path}</Option>)}
+        </Dropdown>
+      </Field>}
+      <div className={styles.row}>
+        <Field label="CSV fields"><Dropdown className={styles.control} value={exportShape === "columns" ? "Displayed field paths (raw values)" : "All raw fields (flattened)"} selectedOptions={[exportShape]}
+          onOptionSelect={(_e, d) => changeDraft({ exportShape: d.optionValue as "raw" | "columns" }, false)}>
+          <Option value="columns">Displayed field paths (raw values)</Option><Option value="raw">All raw fields (flattened)</Option>
+        </Dropdown></Field>
+        <Button icon={<ArrowDownloadRegular />} disabled={stale || !!busy || !execution.rows.length} onClick={() => download(execution, "loaded")}>Export loaded ({execution.rows.length})</Button>
+        <Button icon={<ArrowDownloadRegular />} disabled={stale || !!busy || !execution.rows.length || (!execution.complete && !execution.token)}
+          onClick={() => void exportAll()}>Export complete result</Button>
+        {execution.token && <Button appearance="primary" disabled={stale || !!busy} onClick={() => void loadMore()}>Load more</Button>}
+        {busy === "export" && <Button onClick={() => {
+          generation.current++; busyRef.current = false; setBusy(undefined); setPartial(execution);
+          setError("Export cancelled. No file was downloaded; fetched rows are retained.");
+        }}>Cancel export</Button>}
+      </div>
+      <Text className={styles.muted}>CSV preserves original IDs and field values, not resolved display names. Loaded exports contain only currently fetched rows.</Text>
+      {partial && !stale && <div role="alert" className={styles.notice}>
+        <Text>No complete file was downloaded. {partial.rows.length.toLocaleString()} rows are available for an explicitly partial export. </Text>
+        <Button onClick={() => { download(partial, "partial"); setPartial(undefined); }}>Download partial CSV ({partial.rows.length})</Button>
+        <Button onClick={() => setPartial(undefined)}>Keep results without downloading</Button>
+      </div>}
+      {!execution.rows.length ? <Text>No matching rows.</Text> : <QueryResults execution={execution} columns={columns} onError={reportError} />}
+    </Card>}
+    <Dialog open={saveOpen} onOpenChange={(_e, d) => setSaveOpen(d.open)}>
+      <DialogSurface><DialogBody><DialogTitle>Save as new query</DialogTitle>
+        <DialogContent><div className={styles.section}>
+          <Field label="Name"><Input value={saveName} onChange={(_e, d) => setSaveName(d.value)} /></Field>
+          <Field label="Description (optional)"><Textarea value={saveDescription} onChange={(_e, d) => setSaveDescription(d.value)} /></Field>
+          <Text className={styles.muted}>Stored in this browser. Relative builder dates re-evaluate in Queries and dashboard tiles.</Text>
+          {error && <Text role="alert" className={styles.error}>{error}</Text>}
+        </div></DialogContent>
+        <DialogActions><Button onClick={() => setSaveOpen(false)}>Cancel</Button><Button appearance="primary" disabled={!saveName.trim() || !!validation.length} onClick={() => {
+          let created: SavedQuery | undefined;
+          if (persist(() => { created = createSavedQuery(input()); }) && created) {
+            changeDraft({ loadedId: created.id }, false); setSaveOpen(false); setNotice(`Saved ${created.name}.`);
+          }
+        }}>Save</Button></DialogActions>
+      </DialogBody></DialogSurface>
+    </Dialog>
+    <Dialog open={!!renameTarget} onOpenChange={(_e, d) => { if (!d.open) setRenameTarget(undefined); }}>
+      <DialogSurface><DialogBody><DialogTitle>Edit saved query details</DialogTitle>
+        <DialogContent><div className={styles.section}>
+          <Field label="Name"><Input value={renameTarget?.name ?? ""} onChange={(_e, d) => setRenameTarget((q) => q ? { ...q, name: d.value } : q)} /></Field>
+          <Field label="Description"><Textarea value={renameTarget?.description ?? ""} onChange={(_e, d) => setRenameTarget((q) => q ? { ...q, description: d.value } : q)} /></Field>
+          {error && <Text role="alert" className={styles.error}>{error}</Text>}
+        </div></DialogContent>
+        <DialogActions><Button onClick={() => setRenameTarget(undefined)}>Cancel</Button><Button appearance="primary" disabled={!renameTarget?.name.trim()} onClick={() => {
+          if (renameTarget && persist(() => {
+            if (!updateSavedQuery(renameTarget.id, { name: renameTarget.name, description: renameTarget.description })) throw new Error("Query no longer exists.");
+          })) setRenameTarget(undefined);
+        }}>Save details</Button></DialogActions>
+      </DialogBody></DialogSurface>
+    </Dialog>
+    <Dialog open={!!deleteTarget} onOpenChange={(_e, d) => { if (!d.open) setDeleteTarget(undefined); }}>
+      <DialogSurface><DialogBody><DialogTitle>Delete saved query?</DialogTitle>
+        <DialogContent>{deleteTarget?.name} will be removed from this browser. Existing dashboard tiles keep their own query snapshot.
+          {error && <Text role="alert" className={styles.error}>{error}</Text>}</DialogContent>
+        <DialogActions><Button onClick={() => setDeleteTarget(undefined)}>Cancel</Button><Button appearance="primary" onClick={() => {
+          if (deleteTarget && persist(() => deleteSavedQuery(deleteTarget.id))) {
+            if (draft.loadedId === deleteTarget.id) changeDraft({ loadedId: undefined }, false);
+            setDeleteTarget(undefined);
+          }
+        }}>Delete</Button></DialogActions>
+      </DialogBody></DialogSurface>
+    </Dialog>
+    <Dialog open={importOpen} onOpenChange={(_e, d) => setImportOpen(d.open)}>
+      <DialogSurface><DialogBody><DialogTitle>Import query JSON</DialogTitle>
+        <DialogContent><Field label="Reusable query or raw clauses JSON"><Textarea rows={12} className={styles.textarea} value={importText} onChange={(_e, d) => setImportText(d.value)} /></Field>
+          {error && <Text role="alert" className={styles.error}>{error}</Text>}</DialogContent>
+        <DialogActions><Button onClick={() => setImportOpen(false)}>Cancel</Button><Button appearance="primary" disabled={!importText.trim()} onClick={importQuery}>Import draft</Button></DialogActions>
+      </DialogBody></DialogSurface>
+    </Dialog>
+  </div>;
 }

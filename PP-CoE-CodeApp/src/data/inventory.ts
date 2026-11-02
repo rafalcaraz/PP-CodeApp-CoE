@@ -8,6 +8,10 @@
  */
 
 import { PowerPlatformforAdminsV2Service } from "../generated";
+import {
+  extractConnectorOperationEvidence,
+  readConnectorEvidenceSource,
+} from "../shared/connector-usage";
 import type {
   Clause,
   ResourceItem,
@@ -2313,13 +2317,21 @@ export type QueryFilterOp =
   | "has"
   | "has_any"
   | "lastNdays"
+  | "today"
+  | "yesterday"
+  | "onDate"
+  | "dateRange"
   | "isempty"
-  | "!isempty";
+  | "!isempty"
+  | (string & {});
 
 export interface QueryFilter {
   field: string;
   op: QueryFilterOp;
   value: string;
+  /** Exact connector/operation pairing. Requires a complete client-filtered
+   * execution plan; legacy __operation without this stays independent. */
+  connectorId?: string;
 }
 
 export interface QuerySpec {
@@ -2335,6 +2347,78 @@ export interface QueryTemplate {
   name: string;
   description: string;
   spec: QuerySpec;
+}
+
+export const QUERY_DATE_OPERATORS = ["lastNdays", "today", "yesterday", "onDate", "dateRange"] as const;
+
+export function queryFilterNeedsValue(op: QueryFilterOp): boolean {
+  return !["today", "yesterday", "isempty", "!isempty"].includes(op);
+}
+
+function parseCalendarDate(value: string): Date | undefined {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return undefined;
+  const parsed = new Date(`${value}T00:00:00.000Z`);
+  return Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value
+    ? parsed : undefined;
+}
+
+/** Validate builder-owned semantics without rejecting unknown field paths or
+ * legacy/freeform operators. Never silently omit an incomplete filter. */
+export function validateQuerySpec(spec: QuerySpec): string[] {
+  const errors: string[] = [];
+  spec.filters.forEach((filter, index) => {
+    const prefix = `Filter ${index + 1}: `;
+    if (!filter.field.trim()) errors.push(`${prefix}choose a field.`);
+    if (!filter.op.trim()) errors.push(`${prefix}choose an operator.`);
+    if (queryFilterNeedsValue(filter.op) && !filter.value.trim()) {
+      errors.push(`${prefix}enter a value.`);
+    }
+    if (filter.op === "lastNdays" &&
+        (!/^\d+$/.test(filter.value.trim()) || !Number.isSafeInteger(Number(filter.value)) ||
+         Number(filter.value) < 1)) {
+      errors.push(`${prefix}last N days must be a positive whole number.`);
+    }
+    if (filter.op === "onDate" && !parseCalendarDate(filter.value.trim())) {
+      errors.push(`${prefix}enter a valid UTC calendar date (YYYY-MM-DD).`);
+    }
+    if (filter.op === "dateRange") {
+      const parts = filter.value.split(",").map((part) => part.trim());
+      const start = parseCalendarDate(parts[0] ?? "");
+      const end = parseCalendarDate(parts[1] ?? "");
+      if (parts.length !== 2 || !start || !end || start > end) {
+        errors.push(`${prefix}enter an ordered UTC date range (YYYY-MM-DD,YYYY-MM-DD).`);
+      }
+    }
+    if (["in~", "has_any"].includes(filter.op) &&
+        !filter.value.split(",").some((part) => part.trim())) {
+      errors.push(`${prefix}enter at least one list value.`);
+    }
+    if (filter.connectorId !== undefined &&
+        (filter.field.trim() !== OPERATION_FIELD || !filter.connectorId.trim())) {
+      errors.push(`${prefix}a connector ID is only valid on an operation filter and cannot be empty.`);
+    }
+    if (filter.connectorId !== undefined && !["==", "!=", "in~", "has", "has_any"].includes(filter.op)) {
+      errors.push(`${prefix}paired operations support ==, !=, in~, has, or has_any.`);
+    }
+  });
+  return errors;
+}
+
+function assertValidQuerySpec(spec: QuerySpec): void {
+  const errors = validateQuerySpec(spec);
+  if (errors.length) throw new Error(errors.join("\n"));
+}
+
+export function hasPairedOperationFilters(spec: QuerySpec): boolean {
+  return spec.filters.some((filter) => filter.connectorId !== undefined);
+}
+
+function serverQueryErrors(spec: QuerySpec): string[] {
+  const errors = validateQuerySpec(spec);
+  if (hasPairedOperationFilters(spec)) {
+    errors.push("Connector-specific operations require a complete client-filtered drain via buildQueryExecutionPlan; raw clauses and server aggregates cannot preserve pairing.");
+  }
+  return errors;
 }
 
 /** Resolve a visual-query type selection to a stable, explicit scope.
@@ -2397,9 +2481,9 @@ export function isSentinelField(field: string): boolean {
 /** Friendly label for sentinel field paths; passes other values through. */
 export function friendlyFilterField(field: string): string {
   if (field === CONNECTOR_FIELD)
-    return "Connector (any location)";
+    return "Connector reference (any location, independent)";
   if (field === OPERATION_FIELD)
-    return "Operation (any location)";
+    return "Operation (any location, independent)";
   return field;
 }
 
@@ -2440,15 +2524,53 @@ function formatFilterValues(value: string, op: QueryFilterOp): string[] {
  */
 function translateFilter(
   f: QueryFilter,
-  emittedExtends: Set<string>
+  emittedExtends: Set<string>,
+  referenceTime?: Date,
 ): Clause[] {
   const field = f.field.trim();
   if (!field) return [];
+  if (f.connectorId !== undefined) {
+    throw new Error("Connector-specific operations require buildQueryExecutionPlan and a complete client-filtered drain; raw clauses and server aggregates cannot preserve pairing.");
+  }
+
+  if (["today", "yesterday", "onDate", "dateRange"].includes(f.op)) {
+    if (!referenceTime && (f.op === "today" || f.op === "yesterday")) {
+      return [
+        where(`todatetime(${field})`, ">=", [
+          f.op === "today" ? "startofday(now())" : "startofday(now(), -1)",
+        ]),
+        where(`todatetime(${field})`, "<", [
+          f.op === "today" ? "startofday(now(), 1)" : "startofday(now())",
+        ]),
+      ];
+    }
+    let start: Date;
+    let end: Date;
+    if (f.op === "today" || f.op === "yesterday") {
+      const now = referenceTime!;
+      start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+      if (f.op === "yesterday") start.setUTCDate(start.getUTCDate() - 1);
+      end = new Date(start);
+    } else {
+      const values = f.value.split(",").map((value) => value.trim());
+      start = parseCalendarDate(values[0])!;
+      end = f.op === "dateRange" ? parseCalendarDate(values[1])! : new Date(start);
+    }
+    end.setUTCDate(end.getUTCDate() + 1);
+    return [
+      where(`todatetime(${field})`, ">=", [`datetime(${start.toISOString()})`]),
+      where(`todatetime(${field})`, "<", [`datetime(${end.toISOString()})`]),
+    ];
+  }
 
   // "in last N days" is special: emit a raw KQL `ago(Nd)` on the right side.
   if (f.op === "lastNdays") {
-    const n = Math.max(1, Math.floor(Number(f.value) || 0));
-    if (!n) return [];
+    const n = Number(f.value);
+    if (referenceTime) {
+      const cutoff = new Date(referenceTime.getTime() - n * 86_400_000);
+      if (!Number.isFinite(cutoff.getTime())) throw new Error("Last N days exceeds the supported date range.");
+      return [where(field, ">", [`datetime(${cutoff.toISOString()})`])];
+    }
     return [where(field, ">", [`ago(${n}d)`])];
   }
 
@@ -2505,14 +2627,22 @@ function translateFilter(
   return [where(field, f.op, vals)];
 }
 
-/** Translate a user-facing QuerySpec into the connector's `Clauses[]` shape. */
+/** Translate a user-facing QuerySpec into connector clauses. Incomplete draft
+ * filters and client-only pairs fail closed, never throw during view render.
+ * Call validateQuerySpec before execution and use buildQueryExecutionPlan for
+ * paired operations; this sentinel clause is not an executable paired plan. */
 export function buildClausesFromSpec(spec: QuerySpec): Clause[] {
+  return buildServerClausesFromSpec(spec);
+}
+
+function buildServerClausesFromSpec(spec: QuerySpec, referenceTime?: Date): Clause[] {
+  if (serverQueryErrors(spec).length) return [where("1", "==", ["0"])];
   const clauses: Clause[] = [];
   appendResourceTypeScope(clauses, spec.resourceTypes);
 
   const emittedExtends = new Set<string>();
   for (const f of spec.filters) {
-    for (const c of translateFilter(f, emittedExtends)) {
+    for (const c of translateFilter(f, emittedExtends, referenceTime)) {
       clauses.push(c);
     }
   }
@@ -2533,6 +2663,56 @@ export function buildClausesFromSpec(spec: QuerySpec): Clause[] {
   // full count and the user can `Load more` past the first page.
 
   return clauses;
+}
+
+export interface QueryExecutionPlan {
+  /** Candidate clauses only when requiresClientFiltering is true. Do not
+   * expose candidate totals, export or paginate before a complete drain. */
+  clauses: Clause[];
+  requiresClientFiltering: boolean;
+  matches: (item: ResourceItem) => boolean;
+}
+
+/** No serialized-JSON regex can safely correlate arbitrary nested entries.
+ * Drain all candidates with token + cumulative Skip, reject partial/capped
+ * scans, then apply matches before counts, pagination, or export. */
+export function buildQueryExecutionPlan(spec: QuerySpec, referenceTime?: Date): QueryExecutionPlan {
+  assertValidQuerySpec(spec);
+  if (referenceTime && !Number.isFinite(referenceTime.getTime())) {
+    throw new Error("Query reference time must be a valid Date.");
+  }
+  const paired = spec.filters
+    .filter((filter) => filter.connectorId !== undefined)
+    .map((filter) => ({
+      connectorId: filter.connectorId!,
+      negate: filter.op === "!=",
+      selected: new Set(
+        (["in~", "has_any"].includes(filter.op) ? filter.value.split(",") : [filter.value])
+          .map((value) => value.trim().toLowerCase()).filter(Boolean),
+      ),
+    }));
+  // Deliberately omit paired filters from the server candidate query. The
+  // tokenized legacy connector bag is not an exact prefix/ARM equivalence
+  // prefilter and could exclude legitimate candidates.
+  const clauses = buildServerClausesFromSpec({
+    ...spec,
+    filters: spec.filters.filter((filter) => filter.connectorId === undefined),
+  }, referenceTime);
+  return {
+    clauses,
+    requiresClientFiltering: paired.length > 0,
+    matches: (item) => {
+      const source = readConnectorEvidenceSource(
+        (item.properties ?? {}) as Record<string, unknown>,
+        ALL_FLOW_TYPES.includes(item.type as ResourceTypeValue),
+      );
+      return paired.every((filter) => {
+        const evidence = extractConnectorOperationEvidence(source, filter.connectorId);
+        const matched = evidence.some((operation) => filter.selected.has(operation.operationId.toLowerCase()));
+        return filter.negate ? !matched : matched;
+      });
+    },
+  };
 }
 
 /** Run an arbitrary `Clauses[]` payload. Thin public wrapper around the
@@ -2722,6 +2902,8 @@ export async function runAggregateCount(
   opts: { topN?: number } = {},
   cacheOpts?: RunQueryOpts
 ): Promise<DataResult<{ name: string; value: number }[]>> {
+  const errors = serverQueryErrors(spec);
+  if (errors.length) return { ok: false, error: errors.join("\n") };
   if (!groupBy.trim()) {
     return { ok: true, data: [] };
   }
@@ -2813,6 +2995,8 @@ export async function runTimeSeriesAggregate(
   lookbackDays: number,
   cacheOpts?: RunQueryOpts
 ): Promise<DataResult<{ date: string; value: number }[]>> {
+  const errors = serverQueryErrors(spec);
+  if (errors.length) return { ok: false, error: errors.join("\n") };
   const field = dateField.trim();
   if (!field) {
     return { ok: true, data: [] };
@@ -2910,6 +3094,8 @@ export async function runCumulativeSeries(
 ): Promise<
   DataResult<Array<{ date: string; delta: number; total: number }>>
 > {
+  const errors = serverQueryErrors(spec);
+  if (errors.length) return { ok: false, error: errors.join("\n") };
   const field = dateField.trim();
   if (!field) {
     return { ok: true, data: [] };

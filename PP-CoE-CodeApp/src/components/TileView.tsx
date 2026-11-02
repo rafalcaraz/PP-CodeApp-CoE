@@ -36,6 +36,7 @@ import {
   buildClausesFromSpec,
   DASHBOARD_CACHE_TTL_MS,
   friendlyConnectorName,
+  hasPairedOperationFilters,
   runAggregateCount,
   runCumulativeSeries,
   runRawQuery,
@@ -361,6 +362,10 @@ export function TileView({ tile, editable, onEdit, onDelete, onDuplicate, classN
 
       const isRaw = tile.source === "raw" && Array.isArray(tile.clauses);
       const isComputed = tile.source === "computed" && !!tile.computed?.aggregatorId;
+      if (!isRaw && !isComputed && hasPairedOperationFilters(tile.spec)) {
+        setError("Connector-specific operation filters are not supported in dashboard tiles. Run this saved query in Queries for exact paired results.");
+        return;
+      }
 
       // ── Computed branch ─────────────────────────────────────────────────
       // Fetches the agent universe (with msdyn_ excluded) and runs a

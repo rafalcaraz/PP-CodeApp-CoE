@@ -5,7 +5,7 @@
  * Queries view, so we pin the sort, the source-discriminated `spec`
  * field, and the empty-name fallback.
  */
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import {
   createSavedQuery,
   deleteSavedQuery,
@@ -96,6 +96,42 @@ describe("saved queries CRUD", () => {
     const b = createSavedQuery(baseInput({ name: "b" }));
     deleteSavedQuery(a.id);
     expect(listSavedQueries().map((q) => q.id)).toEqual([b.id]);
+  });
+
+  it("updates query content in place without changing identity, creation date or favorites", () => {
+    const q = createSavedQuery(baseInput({ favorite: true }));
+    const spec = { ...q.spec!, filters: [{ field: "properties.lastModifiedAt", op: "lastNdays" as const, value: "7" }] };
+    const next = updateSavedQuery(q.id, { spec, clauses: [{ $type: "count" } as Clause], pageSize: 200 });
+    expect(next?.id).toBe(q.id);
+    expect(next?.createdAt).toBe(q.createdAt);
+    expect(next?.spec).toEqual(spec);
+    expect(next?.pageSize).toBe(200);
+    expect(next?.favorite).toBe(true);
+    expect(listSavedQueries()).toHaveLength(1);
+    expect(updateSavedQuery(q.id, { source: "raw" })?.spec).toBeUndefined();
+  });
+});
+
+describe("saved query persistence failures", () => {
+  beforeEach(() => localStorage.clear());
+  afterEach(() => vi.restoreAllMocks());
+  it("surfaces write failures instead of reporting a created row", () => {
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => { throw new Error("Quota exceeded"); });
+    expect(() => createSavedQuery(baseInput())).toThrow("Quota exceeded");
+  });
+  it("never overwrites malformed legacy data on a failed create/update/delete", () => {
+    localStorage.setItem("ppcoe.savedQueries.v1", '{"valuable":"unrecognized"}');
+    expect(() => createSavedQuery(baseInput())).toThrow();
+    expect(() => deleteSavedQuery("q")).toThrow();
+    expect(localStorage.getItem("ppcoe.savedQueries.v1")).toBe('{"valuable":"unrecognized"}');
+  });
+  it("reads legacy v1 queries without requiring favorites", () => {
+    const q = createSavedQuery(baseInput());
+    const legacy = { ...q };
+    delete legacy.favorite;
+    localStorage.setItem("ppcoe.savedQueries.v1", JSON.stringify([legacy]));
+    expect(listSavedQueries()[0].id).toBe(q.id);
+    expect(listSavedQueries()[0].favorite).toBeUndefined();
   });
 });
 
