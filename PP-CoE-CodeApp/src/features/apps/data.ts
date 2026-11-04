@@ -15,6 +15,7 @@ export {
   listAppsPage,
   getApp,
   ALL_APP_TYPES,
+  MANAGED_APP_SUBTYPE,
   ResourceType,
   shortResourceType,
   friendlyResourceType,

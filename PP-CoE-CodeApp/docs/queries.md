@@ -1,5 +1,87 @@
 # Queries investigation workspace
 
+## Managed Apps Estate dashboard
+
+Create **Managed Apps Estate** from the dashboard templates. Its Overview,
+People, Environment & governance, and Connectors tabs share one in-memory
+snapshot per open dashboard/refresh. Apps (`microsoft.powerapps/apps` with
+`subType: microsoftApp`), environments and groups load concurrently and drain
+every page using both Skip and SkipToken. Repeated/non-advancing pages,
+conflicting duplicate records, missing collections and incomplete reads fail
+explicitly rather than producing capped successful totals. Opening another tab,
+expanding a detail table or rendering another tile reuses that snapshot;
+**Refresh** makes one new shared inventory and assignment read. Snapshot time
+and loading/failure state appear once in the dashboard header. Leaving the dashboard discards its source; fetched
+records are not saved with the dashboard or shared through a global estate cache.
+
+The population includes all environment types and system-associated creators;
+it does not inherit customer-app or Canvas-only exclusions. Creator metrics use
+**createdBy**, never current owner. Inline names and the existing user lookup
+cache supply friendly labels without additional identity requests. Creator cells
+always show the **full GUID**, plus a name when available. Click the GUID to open
+the existing on-demand identity lookup; resolving it updates the cells from the
+shared cache without reloading inventory/ACP or changing counts. A lookup miss
+keeps the GUID and uses neutral wording (deleted accounts and service principals
+cannot be distinguished by an `aaduser` miss). A name not yet looked up is not
+a data-quality issue; a missing creator ID is. Top creators chart labels always
+show the full creator GUID, even when a name is known. Its wider label area and
+locally scrollable plot preserve the full labels on narrow cards; other charts
+keep their existing plot width.
+Creation counts and daily 30/90-day trends use the same snapshot time and exact
+lookback boundaries. Unknown/invalid/future creation dates are reported separately.
+Origins retain returned values, with the existing Copilot Studio friendly label.
+Environment type composition charts count **apps**; their collapsed
+Environment counts tables show the separate distinct environment totals. The
+ranked group table shows group name, app/environment counts and ACP assignment
+without clipping group labels. Missing environment IDs contribute only to app counts;
+missing mappings, unknown managed status and ungrouped membership stay distinct.
+
+For this managed-app population, absent `powerPlatformConnectors` means **No
+connectors used**, just like `[]`. A malformed list or entry remains unknown.
+Popularity counts a normalized connector once per app, even if its ID is repeated
+or expressed as both a bare slug and an ARM path. Friendly catalog labels have a
+slug fallback. An app using several connectors contributes to several bars;
+Other sums connector-app pairs, not distinct apps across the tail. Other
+categorical charts retain their full totals when top categories are collapsed.
+Connector usage and ACP coverage use composition donuts with visible counts
+and snapshot denominators, including unknown/malformed categories. ACP group
+coverage shows counts and the assessed-group count, not a misleading percentage
+over unknown groups. Ranked creators/connectors retain bars; creation stays a
+time series. Recent creation counts stay separate from a collapsed, nonzero-only
+data-coverage disclosure; methodology is under About this measure.
+Detail tables expand locally and link to actual app (including environment
+context), environment and group detail routes; charts do not invent filtered URLs.
+
+ACP coverage reads `ListRuleAssignmentsByEnvironmentGroupId` once per relevant
+app-bearing group, at most three calls concurrently. Complete returned policy and
+group identities establish assignment; even a policy with zero explicit connector
+entries counts as assigned. An empty complete assignment list establishes absence.
+Read errors, incomplete collections and ambiguous associations are **Unable to
+assess**, never absence. Ordinary Model A group-rule buckets are not interpreted
+as ACP assignment identities, merged with Model B policy identities, or fetched
+to infer absence. Policy/action bodies are not needed for this assignment-only
+report. Each app belongs to exactly one coverage category; distinct app-bearing
+groups have separate counts, and groups without ACP list affected app/environment
+counts. Ungrouped is neither non-managed nor proof of unrestricted connectors.
+Coverage is not compliance, an effective-permission test, usage telemetry or a
+transactional tenant snapshot. No mutation/recovery journal or move runner is
+changed by this read-only dashboard.
+
+Existing saved Managed Apps Estate dashboards receive the revised presentation
+through normal dashboard read normalization; recreation is not required. Only
+tiles matching the exact first-build metric, title, parameters and visualization
+defaults are upgraded and marked `presentation: 2`. IDs, tabs, placement, sizes,
+other dashboards and customized titles/visualizations/parameters are preserved.
+The normalized revision is persisted on the next ordinary dashboard write.
+Creator cells always use full identities even in customized legacy tables; a
+customized old chart retains its chosen presentation rather than being overwritten.
+The redundant Managed-environment status tile is no longer included. Only its
+unchanged medium-size default on the original governance tab (or an unassigned
+legacy tab) is removed from existing saved layouts, including the original
+paired-bar and revised donut forms. Renamed, moved, resized or otherwise customized
+versions are retained. Environment classification and move-safety checks are
+unchanged; this is a reporting-tile removal, not a population/eligibility change.
+
 Queries is a local-first investigation tool. The library is searchable,
 collapsible, and supports favorites. Nothing in this workflow provisions
 Dataverse tables, changes tenant permissions, or schedules background exports.

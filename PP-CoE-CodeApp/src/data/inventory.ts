@@ -223,6 +223,8 @@ function __releaseQuerySlot(): void {
 
 type RunQueryResult = DataResult<{
   items: ResourceItem[];
+  rawItems?: ResourceItem[];
+  resultTruncated?: "0" | "1" | "unknown";
   totalRecords: number;
   skipToken?: string;
 }>;
@@ -379,7 +381,10 @@ async function __invokeQueryOnce(
     if (!result.success) {
       return { ok: false, error: formatError(result.error) };
     }
-    const rawItems = result.data?.data ?? [];
+    const rawItems = result.data?.data;
+    if (!Array.isArray(rawItems)) {
+      return { ok: false, error: "Inventory response omitted its resource collection. Refresh to retry; completeness cannot be verified." };
+    }
     // Dedup by resource identity key (type + environmentId + name), but pass nameless rows
     // (summarize aggregates) through untouched. First-seen wins;
     // preserves server-side ordering since arrays + Set keep insertion
@@ -403,6 +408,11 @@ async function __invokeQueryOnce(
       ok: true,
       data: {
         items,
+        ...(droppedAny ? { rawItems } : {}),
+        ...(result.data?.resultTruncated != null ? {
+          resultTruncated: String(result.data.resultTruncated) === "0" ? "0" as const
+            : String(result.data.resultTruncated) === "1" ? "1" as const : "unknown" as const,
+        } : {}),
         totalRecords: result.data?.totalRecords ?? 0,
         skipToken: result.data?.skipToken || undefined,
       },
@@ -1081,15 +1091,7 @@ export async function listEnvironmentGroups(): Promise<DataResult<EnvironmentGro
 
   return {
     ok: true,
-    data: res.data.map((item) => ({
-      id: item.name ?? "",
-      displayName: propStr(item, "displayName"),
-      description: propStr(item, "description"),
-      createdAt: propStr(item, "createdAt"),
-      createdBy: propStr(item, "createdBy"),
-      lastModifiedAt: propStr(item, "lastModifiedAt"),
-      location: item.location ?? "",
-    })),
+    data: res.data.map(toEnvironmentGroupRow),
   };
 }
 
@@ -1108,15 +1110,7 @@ export async function getEnvironmentGroup(
   return {
     ok: true,
     data: {
-      row: {
-        id: item.name ?? "",
-        displayName: propStr(item, "displayName"),
-        description: propStr(item, "description"),
-        createdAt: propStr(item, "createdAt"),
-        createdBy: propStr(item, "createdBy"),
-        lastModifiedAt: propStr(item, "lastModifiedAt"),
-        location: item.location ?? "",
-      },
+      row: toEnvironmentGroupRow(item),
       raw: item,
     },
   };
@@ -1269,7 +1263,19 @@ export async function getEnvironment(
   return { ok: true, data: item ? { row: toEnvironmentRow(item), raw: item } : null };
 }
 
-function toEnvironmentRow(item: ResourceItem): EnvironmentRow {
+export function toEnvironmentGroupRow(item: ResourceItem): EnvironmentGroupRow {
+  return {
+    id: item.name ?? "",
+    displayName: propStr(item, "displayName"),
+    description: propStr(item, "description"),
+    createdAt: propStr(item, "createdAt"),
+    createdBy: propStr(item, "createdBy"),
+    lastModifiedAt: propStr(item, "lastModifiedAt"),
+    location: item.location ?? "",
+  };
+}
+
+export function toEnvironmentRow(item: ResourceItem): EnvironmentRow {
   const raw = item as unknown as Record<string, unknown>;
   return {
     id: item.name ?? "",
@@ -1796,6 +1802,12 @@ export function friendlyResourceType(type: string): string {
   }
 }
 
+export const MANAGED_APP_SUBTYPE = "microsoftApp";
+
+export function isManagedApp(app: { type: string; subType?: string }): boolean {
+  return app.type === ResourceType.AppBuilderApp && app.subType === MANAGED_APP_SUBTYPE;
+}
+
 /** Short label for inline use (e.g. table cells). */
 export function shortResourceType(type: string, subType?: string): string {
   switch (type) {
@@ -1806,7 +1818,7 @@ export function shortResourceType(type: string, subType?: string): string {
     case ResourceType.CodeApp:
       return subType === "vibeApp" ? "Vibe app" : "Code app";
     case ResourceType.AppBuilderApp:
-      return subType === "microsoftApp"
+      return isManagedApp({ type, subType })
         ? "Managed app"
         : subType === "appBuilderApp"
           ? "App Builder app"
@@ -2896,7 +2908,7 @@ export async function runRawQuery(
   options?: { Top?: number; Skip?: number; SkipToken?: string },
   cacheOpts?: RunQueryOpts
 ): Promise<
-  DataResult<{ items: ResourceItem[]; totalRecords: number; skipToken?: string }>
+  DataResult<{ items: ResourceItem[]; rawItems?: ResourceItem[]; resultTruncated?: "0" | "1" | "unknown"; totalRecords: number; skipToken?: string }>
 > {
   return runQuery(
     clauses,

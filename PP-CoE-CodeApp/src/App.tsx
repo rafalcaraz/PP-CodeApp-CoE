@@ -29,6 +29,7 @@ import { loadCatalog } from "./shared/connector-catalog";
 // ---------------------------------------------------------------------------
 import { agentsRoutes } from "./features/agents";
 import { appsRoutes } from "./features/apps";
+import { managedAppsRoutes, ManagedAppsMoveStatus } from "./features/managed-apps";
 import { flowsRoutes } from "./features/flows";
 import { environmentsRoutes } from "./features/environments";
 import { environmentGroupsRoutes } from "./features/environment-groups";
@@ -79,6 +80,7 @@ function AppShell() {
   return (
     <div className={styles.app}>
       <TopBar />
+      <ManagedAppsMoveStatus />
       <div className={styles.body}>
         <SideNav />
         <main className={styles.content}>
@@ -94,6 +96,7 @@ function AppShell() {
               {environmentGroupsRoutes()}
               {environmentsRoutes()}
               {appsRoutes()}
+              {managedAppsRoutes()}
               {flowsRoutes()}
               {agentsRoutes()}
               {queriesRoutes()}

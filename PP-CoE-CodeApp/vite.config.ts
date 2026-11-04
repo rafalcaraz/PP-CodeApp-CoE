@@ -1,10 +1,11 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import { powerApps } from "@microsoft/power-apps-vite/plugin"
+import { localConnectionBindings } from "./scripts/localConnectionBindings";
 
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [react(), powerApps()],
+  plugins: [react(), localConnectionBindings(), powerApps()],
   build: {
     chunkSizeWarningLimit: 700,
     rollupOptions: {

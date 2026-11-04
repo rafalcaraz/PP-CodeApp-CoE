@@ -571,6 +571,14 @@ createdBy, location, lastModifiedAt (list/detail data; shown on detail).
 - The same resource type also includes managed apps with
   `subType: "microsoftApp"`; both are included in app inventory.
 
+**Managed Apps Estate reporting contract:** for `microsoftApp` inventory rows,
+absent `properties.powerPlatformConnectors` means **No connectors used**, the same
+as an empty array. A present malformed list/entry remains unknown, and an inventory
+read failure is an error, not zero usage. This is the managed-app dashboard's
+inventory definition, not an inference about effective permissions or actual
+connector execution. It does not change the separate App Builder payload above
+or the existing governance move-safety evidence gates.
+
 **Current documented connector-usage coverage (September 28, 2026):**
 code/vibe apps, managed apps, and App Builder apps are not covered by the
 connector-usage preview. The `properties.connectors` shape above remains an

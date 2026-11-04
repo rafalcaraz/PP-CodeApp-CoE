@@ -216,6 +216,22 @@ npm install            # installs deps + auto-heals generated connectors via pos
 npm run dev            # local dev server on :5173, accessed through the Power Apps player
 ```
 
+**Connection setup is also required for local development.** The Vite plugin
+serves the entire `power.config.json` to the local Power Apps player, including
+flow dependencies and connectors for routes you have not opened. The tracked
+HTTP `sharedConnectionId` values are portability placeholders, not usable local
+bindings. A working deployed app does not resolve those local placeholders.
+Use the plugin's **Local Play** URL and resolve the three distinct HTTP
+connections in a private `PP-CoE-CodeApp/power.bindings.local` file for the
+configured environment before expecting admission to succeed. This file follows
+the existing `*.local` ignore rule; the dev-only overlay leaves the tracked
+configuration portable. Do not commit resolved IDs, remove capabilities to hide
+the prompt, or reuse one audience's connection for another.
+
+For the exact Graph/licensing/Power Platform API references and the separate
+Cost Controls connection check, see
+[Local-development connection admission](solution/README.md#local-development-connection-admission).
+
 Common commands (run from `PP-CoE-CodeApp/`):
 
 ```powershell

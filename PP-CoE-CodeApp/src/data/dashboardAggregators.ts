@@ -89,12 +89,15 @@ export interface SeriesOutput {
   series: AggregatorSeriesDatum[];
 }
 
-export type AggregatorOutput =
+export type AggregatorOutput = (
   | KpiOutput
   | ChartOutput
   | TableOutput
   | StackedBarOutput
-  | SeriesOutput;
+  | SeriesOutput) & {
+    note?: string;
+    details?: { label: string; items: Array<{ measure: string; apps: number; environments?: number }> };
+  };
 
 export type Aggregator<TRow = AgentRow> = (
   rows: TRow[],
@@ -105,7 +108,7 @@ export type Aggregator<TRow = AgentRow> = (
  *  TileView dispatch path to pick the right "fetch the universe"
  *  function before invoking the aggregator. New data sources should
  *  be added here AND mapped in `TileView`'s computed-tile branch. */
-export type AggregatorDataSource = "agents" | "apps";
+export type AggregatorDataSource = "agents" | "apps" | "managed-apps";
 
 export interface AggregatorRegistration {
   /** The aggregator function. Typed loosely at the registry boundary —

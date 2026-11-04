@@ -20,11 +20,13 @@ import { FluentProvider, webLightTheme } from "@fluentui/react-components";
 import type { DashboardTile } from "../data/dashboards";
 import type { SavedQuery } from "../data/savedQueries";
 
-const { savedQueries } = vi.hoisted(() => ({ savedQueries: vi.fn<() => SavedQuery[]>(() => []) }));
+const { savedQueries, previewProps } = vi.hoisted(() => ({
+  savedQueries: vi.fn<() => SavedQuery[]>(() => []), previewProps: vi.fn(),
+}));
 
 // Stub the live-preview tile so we don't hit the inventory layer here.
 vi.mock("./TileView", () => ({
-  TileView: () => <div data-testid="tile-preview-stub">preview</div>,
+  TileView: (props: unknown) => { previewProps(props); return <div data-testid="tile-preview-stub">preview</div>; },
 }));
 
 // Pin saved-queries to an empty list — the "Start from" picker shouldn't
@@ -101,6 +103,19 @@ function renderEditor(initialTile: DashboardTile, onSave = vi.fn(), onClose = vi
 
 describe("TileEditorDialog — Phase 3 Advanced mode", () => {
   beforeEach(() => { savedQueries.mockReturnValue([]); });
+
+  it("passes the current managed estate snapshot and refresh generation to the preview", () => {
+    const source = {
+      load: vi.fn().mockResolvedValue({ ok: true, data: { apps: [], capturedAt: "2026-03-01T12:00:00Z" } }),
+      subscribe: vi.fn(() => () => {}), getStatus: () => ({ phase: "idle" as const }),
+    };
+    render(<FluentProvider theme={webLightTheme}>
+      <TileEditorDialog open initialTile={computedTile()} onClose={vi.fn()} onSave={vi.fn()}
+        managedAppsSource={source} refreshKey={3} />
+    </FluentProvider>);
+    expect(previewProps).toHaveBeenLastCalledWith(expect.objectContaining({ managedAppsSource: source, refreshKey: 3 }));
+    expect(source.load).not.toHaveBeenCalled();
+  });
 
   const groupedTile = () => {
     const tile = visualTile();

@@ -31,6 +31,57 @@ pushing. This check verifies source wiring, not published metadata or player
 consent. Inspect the exported app's logical references and flow dependencies
 after publishing, before releasing the managed ZIP.
 
+### Local-development connection admission
+
+`npm run dev` uses the modern Vite plugin, which serves the active app-root
+`power.config.json` at `__vite_powerapps_plugin__/power.config.json`. The local
+player admits **all registered connections**, including flow dependencies and
+unused feature routes, before the React app can run. A deployed app uses its
+published registration instead; healthy deployed consent does not prove that
+the local configuration is resolved.
+
+The tracked configuration deliberately has three `<connection-id>` HTTP
+placeholders. The dev-only local binding overlay resolves these from
+`PP-CoE-CodeApp/power.bindings.local`, which is excluded by the existing
+`*.local` ignore rule. Keep tracked `power.config.json` unchanged. Bind each
+logical reference to an existing healthy connection in its configured environment,
+keeping logical references and flow aliases unchanged:
+
+| Logical reference | Purpose / audience | Invoker dependency |
+|---|---|---|
+| `msftcsa_HTTPEntraPreAuthGraph` | Direct Graph calls, `https://graph.microsoft.com` | None (`webcontents` data source) |
+| `msftcsa_PPLicensingAPI` | `https://licensing.powerplatform.microsoft.com` | `PPLicensingAPI-Wrapper-Flow`, `shared_webcontents-1` |
+| `msftcsa_HTTPWithEntraPPAPI` | `https://api.powerplatform.com` | `PP-API-Wrapper-Flow`, `shared_webcontents` |
+
+The HTTP display names are identical, but these are not duplicate references.
+Do not bind all three to the healthy Power Platform API connection or switch
+flows from invoker to embedded connections to bypass admission.
+
+The private file is JSON with exactly `environmentId` and `sharedConnections`.
+The latter maps the three logical names above to full
+`/providers/Microsoft.PowerApps/apis/shared_webcontents/connections/<connection-id>`
+paths. Its environment must equal the tracked configuration's environment.
+The overlay replaces only existing `sharedConnectionId` fields; it does not add
+connectors, change flow mappings, or pin unshared OAuth connectors. Invalid private
+metadata returns an explicit admission error, not unresolved fallback bindings.
+The file is read on each metadata request, and its raw file URL is blocked.
+It is not included in production builds or publishing configuration.
+
+`msftcsa_MACCostControlsConnRef` is a separate custom-connector connection. Its
+lack of a pinned `sharedConnectionId` is not itself an error. If the player asks
+to refresh it, inspect that connection's actual failure in the configured
+environment and its solution binding. Its OAuth configuration depends on
+`msftcsa_MACCostControlsClientId` / `msftcsa_MACCostControlsClientSecret`; the
+tracked placeholders do not establish the live values. Token expiry, missing
+consent, invalid client settings and permissions need the actual connection
+error to distinguish. Do not assume expiry or change credentials automatically.
+
+Use the **Local Play** URL printed by the current dev server after local
+private-binding updates. Never commit resolved connection IDs or credentials, and
+never apply the legacy PAC publishing translation to the modern local-dev
+configuration. Repairing local bindings does not require publishing or
+changing/removing the app's capabilities.
+
 ### Connection-safe publishing workaround (`pa` 1.3.0)
 
 The `pa` 1.3.0 push mapper omits `xrmConnectionReferenceLogicalName`, even when

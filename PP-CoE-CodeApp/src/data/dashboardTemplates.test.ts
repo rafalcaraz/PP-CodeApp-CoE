@@ -6,6 +6,48 @@
 import { describe, it, expect } from "vitest";
 import { DASHBOARD_TEMPLATES, getDashboardTemplate } from "./dashboardTemplates";
 import { getAggregator } from "./dashboardAggregators";
+import { toAppRow, ResourceType } from "./inventory";
+import type { EstateManagedApp } from "./dashboardManagedAppSource";
+
+describe("Managed Apps Estate template", () => {
+  it("registers four populated tabs, fresh IDs and four headline KPIs against the shared managed population", () => {
+    const template = getDashboardTemplate("managed-apps-estate")!;
+    const layout = template.buildLayout!();
+    expect(layout.tabs.map((tab) => tab.name)).toEqual(["Overview", "People", "Environment & governance", "Connectors"]);
+    expect(layout.tiles.filter((tile) => tile.viz.type === "kpi")).toHaveLength(4);
+    for (const tab of layout.tabs) expect(layout.tiles.some((tile) => tile.tabId === tab.id)).toBe(true);
+    const fresh = new Set(template.build().map((tile) => tile.id));
+    for (const tile of layout.tiles) {
+      expect(tile.source).toBe("computed");
+      expect(getAggregator(tile.computed!.aggregatorId)).toBeDefined();
+      expect(fresh.has(tile.id)).toBe(false);
+      expect(layout.tabs.some((tab) => tab.id === tile.tabId)).toBe(true);
+      if (tile.viz.type === "stackedBar") expect(tile.viz.stackSeries).toBe(false);
+    }
+    expect(template.build().every((tile) => !tile.tabId)).toBe(true);
+  });
+  it("every tile's actual output matches its renderer and table fields, with exact internal app/group detail support", () => {
+    const app: EstateManagedApp = {
+      ...toAppRow({ name: "synthetic-app", type: ResourceType.AppBuilderApp, properties: { subType: "microsoftApp" } }),
+      creatorName: "", connectorIds: [], origin: "", environmentType: "", environmentMapped: false, environmentManaged: null,
+      membershipKnown: true, groupId: "group", groupName: "Group", acp: "Without ACP", acpReason: "Empty assignment",
+      snapshotAt: "2026-03-01T12:00:00Z",
+    };
+    const layout = getDashboardTemplate("managed-apps-estate")!.buildLayout!();
+    for (const tile of layout.tiles) {
+      const output = getAggregator(tile.computed!.aggregatorId)!([app], tile.computed!.params);
+      const expected = ["bar", "pie"].includes(tile.viz.type) ? "chart" : tile.viz.type === "line" ? "series" : tile.viz.type;
+      expect(output.kind, tile.title).toBe(expected);
+      if (output.kind === "table") for (const row of output.items) {
+        for (const column of tile.viz.tableColumns ?? []) expect(column.field in row, `${tile.title}: ${column.field}`).toBe(true);
+      }
+    }
+    expect(layout.tiles.find((tile) => tile.title === "Groups without assigned ACP")?.viz.tableColumns).toContainEqual(
+      expect.objectContaining({ linkTo: "environment-group" }));
+    expect(layout.tiles.find((tile) => tile.title === "Managed app inventory")?.viz.tableColumns).toContainEqual(
+      expect.objectContaining({ linkTo: "app" }));
+  });
+});
 
 describe("Copilot Studio Estate template", () => {
   const tpl = getDashboardTemplate("copilot-studio-estate")!;

@@ -14,6 +14,8 @@ import {
   MenuList,
   MenuItem,
   MenuDivider,
+  Link,
+  Button,
 } from "@fluentui/react-components";
 import { MoreHorizontalRegular } from "@fluentui/react-icons";
 import {
@@ -45,8 +47,12 @@ import {
   shortResourceType,
 } from "../data/inventory";
 import type { DashboardTab, DashboardTile, TileTableColumn } from "../data/dashboards";
+import { dashboardTableHref } from "../data/dashboards";
 import { fetchAllCustomerAgents } from "../data/dashboardAgentSource";
 import { fetchAllCustomerApps } from "../data/dashboardAppSource";
+import { createManagedAppsEstateSource, type ManagedAppsEstateSource } from "../data/dashboardManagedAppSource";
+import { formatApiError } from "../shared/api-explorer/schema";
+import { UserChip } from "./UserChip";
 import {
   getAggregator,
   getAggregatorRegistration,
@@ -59,6 +65,7 @@ import {
 // the templates module hasn't been pulled in yet (e.g. when rendering
 // a stored dashboard on cold load without visiting the templates flow).
 import "../data/dashboardAppAggregators";
+import "../data/dashboardManagedAppAggregators";
 
 const useStyles = makeStyles({
   root: {
@@ -124,6 +131,28 @@ const useStyles = makeStyles({
   },
   chartHost: {
     width: "100%",
+  },
+  creatorChartViewport: {
+    overflowX: "auto",
+    width: "100%",
+  },
+  creatorChartPlot: {
+    minWidth: "560px",
+    width: "100%",
+  },
+  resourceCell: {
+    whiteSpace: "normal",
+    overflowWrap: "anywhere",
+    maxWidth: "none",
+  },
+  identityCell: {
+    minWidth: "240px",
+  },
+  disclosure: {
+    fontSize: tokens.fontSizeBase200,
+    marginTop: tokens.spacingVerticalM,
+    color: tokens.colorNeutralForeground2,
+    "& summary": { cursor: "pointer", paddingBlock: tokens.spacingVerticalXS },
   },
   tableWrap: {
     flex: 1,
@@ -196,6 +225,7 @@ interface TileViewProps {
   /** Bumping this triggers a refetch that bypasses the inventory cache.
    *  The dashboard's "Refresh" button increments this. */
   refreshKey?: number;
+  managedAppsSource?: ManagedAppsEstateSource;
   /** Available tabs for the "Move to tab" submenu. Only rendered when
    *  there are ≥2 tabs AND `onMoveToTab` is provided. */
   tabs?: DashboardTab[];
@@ -221,6 +251,9 @@ interface QueryState {
   /** Optional override for the KPI label (computed tiles can supply one). */
   kpiLabelOverride?: string;
   error: string;
+  snapshotAt?: string;
+  note?: string;
+  details?: { label: string; items: Array<{ measure: string; apps: number; environments?: number }> };
 }
 
 interface ChartDatum {
@@ -315,8 +348,10 @@ function collapseOther(rows: ChartDatum[], maxCategories?: number): ChartDatum[]
   return [...head, { name: "Other", value: other }];
 }
 
-export function TileView({ tile, editable, onEdit, onDelete, onDuplicate, className, refreshKey, tabs, onMoveToTab }: TileViewProps) {
+export function TileView({ tile, editable, onEdit, onDelete, onDuplicate, className, refreshKey, tabs, onMoveToTab, managedAppsSource }: TileViewProps) {
   const styles = useStyles();
+  const [localManagedAppsSource] = useState(createManagedAppsEstateSource);
+  const estateSource = managedAppsSource ?? localManagedAppsSource;
   const [state, setState] = useState<QueryState>({
     phase: "loading",
     items: [],
@@ -337,6 +372,7 @@ export function TileView({ tile, editable, onEdit, onDelete, onDuplicate, classN
 
   useEffect(() => {
     let cancelled = false;
+    const managedRead = new AbortController();
     // Dashboard tiles are expensive aggregates that change on minutes-to-
     // hours timescales — bump cache TTL to 5min. When the user clicks
     // "Refresh" on the dashboard (refreshKey > 0), bypass the cache once
@@ -348,13 +384,16 @@ export function TileView({ tile, editable, onEdit, onDelete, onDuplicate, classN
     // Shorthand for "no data of this shape" so each branch below can
     // populate only what it cares about. Saves repeating empty arrays
     // across nine setState() calls.
-    const EMPTY_DATA: Pick<QueryState, "items" | "total" | "chart" | "series" | "trend" | "stackedChart"> = {
+    const EMPTY_DATA: Pick<QueryState, "items" | "total" | "chart" | "series" | "trend" | "stackedChart" | "snapshotAt" | "note" | "details"> = {
       items: [],
       total: 0,
       chart: [],
       series: [],
       trend: [],
       stackedChart: { series: [], data: [] },
+      snapshotAt: undefined,
+      note: undefined,
+      details: undefined,
     };
     const setError = (error: string) =>
       setState({ phase: "error", ...EMPTY_DATA, error });
@@ -396,7 +435,18 @@ export function TileView({ tile, editable, onEdit, onDelete, onDuplicate, classN
         const registration = getAggregatorRegistration(tile.computed!.aggregatorId);
         const dataSource = registration?.dataSource ?? "agents";
         let rows: unknown[];
-        if (dataSource === "apps") {
+        if (dataSource === "managed-apps") {
+          try {
+            const result = await estateSource.load(refreshKey ?? 0, managedRead.signal);
+            if (cancelled) return;
+            if (!result.ok) { setError(result.error); return; }
+            rows = result.data.apps;
+            EMPTY_DATA.snapshotAt = result.data.capturedAt;
+          } catch (error) {
+            if (!cancelled) setError(`Managed Apps Estate snapshot could not be read: ${formatApiError(error)}`);
+            return;
+          }
+        } else if (dataSource === "apps") {
           const res = await fetchAllCustomerApps(registration?.appTypes, {}, cacheOpts);
           if (cancelled) return;
           if (!res.ok) {
@@ -414,6 +464,8 @@ export function TileView({ tile, editable, onEdit, onDelete, onDuplicate, classN
           rows = agentsRes.data;
         }
         const out = aggregator(rows, tile.computed!.params);
+        EMPTY_DATA.note = out.note;
+        EMPTY_DATA.details = out.details;
         if (cancelled) return;
         if (out.kind === "kpi") {
           setState({
@@ -637,6 +689,7 @@ export function TileView({ tile, editable, onEdit, onDelete, onDuplicate, classN
     })();
     return () => {
       cancelled = true;
+      managedRead.abort();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
@@ -656,6 +709,7 @@ export function TileView({ tile, editable, onEdit, onDelete, onDuplicate, classN
     tile.viz.kpiTrend?.lookbackDays,
     tile.viz.kpiTrend?.bucket,
     refreshKey,
+    estateSource,
   ]);
 
   return (
@@ -664,7 +718,9 @@ export function TileView({ tile, editable, onEdit, onDelete, onDuplicate, classN
         header={<Text weight="semibold">{tile.title}</Text>}
         description={
           <Text size={200}>
-            {tile.spec.resourceTypes.map((t) => shortResourceType(t)).join(", ") || "All reportable resources"}
+            {getAggregatorRegistration(tile.computed?.aggregatorId ?? "")?.dataSource === "managed-apps"
+              ? `Managed apps${!managedAppsSource && state.snapshotAt ? ` · Snapshot ${new Date(state.snapshotAt).toLocaleString()}` : ""}`
+              : tile.spec.resourceTypes.map((t) => shortResourceType(t)).join(", ") || "All reportable resources"}
           </Text>
         }
         action={
@@ -721,6 +777,21 @@ export function TileView({ tile, editable, onEdit, onDelete, onDuplicate, classN
           <div className={styles.err}>Couldn't load: {state.error}</div>
         )}
         {state.phase === "ready" && <TileBody tile={tile} state={state} />}
+        {state.phase === "ready" && state.details && <details className={styles.disclosure}>
+          <summary>{state.details.label}</summary>
+          {state.details.items.length ? <table className={styles.table}>
+            <thead><tr><th className={styles.th}>Measure</th><th className={styles.th}>Apps</th>
+              {state.details.items.some((item) => item.environments !== undefined) && <th className={styles.th}>Environments</th>}
+            </tr></thead>
+            <tbody>{state.details.items.map((item) => <tr key={item.measure}>
+              <td className={styles.td}>{item.measure}</td><td className={styles.td}>{item.apps}</td>
+              {item.environments !== undefined && <td className={styles.td}>{item.environments}</td>}
+            </tr>)}</tbody>
+          </table> : <Text size={200}>No missing or invalid fields reported.</Text>}
+        </details>}
+        {state.phase === "ready" && state.note && <details className={styles.disclosure}>
+          <summary>About this measure</summary><Text size={200}>{state.note}</Text>
+        </details>}
       </div>
     </Card>
   );
@@ -729,6 +800,9 @@ export function TileView({ tile, editable, onEdit, onDelete, onDuplicate, classN
 function TileBody({ tile, state }: { tile: DashboardTile; state: QueryState }) {
   const styles = useStyles();
   const viz = tile.viz;
+  const [rowLimit, setRowLimit] = useState(viz.tableRows ?? 10);
+  const isManagedEstate = tile.source === "computed" && tile.computed?.aggregatorId === "managedApps.estate";
+  const isCreatorChart = isManagedEstate && tile.computed?.params?.metric === "topCreators" && viz.type === "bar";
 
   if (viz.type === "kpi") {
     const trend = state.trend;
@@ -790,7 +864,7 @@ function TileBody({ tile, state }: { tile: DashboardTile; state: QueryState }) {
   }
 
   if (viz.type === "table") {
-    const rows = state.items.slice(0, viz.tableRows ?? 10);
+    const rows = state.items.slice(0, rowLimit);
     if (rows.length === 0) return <div className={styles.empty}>No items.</div>;
     const columns =
       viz.tableColumns && viz.tableColumns.length > 0 ? viz.tableColumns : DEFAULT_TABLE_COLUMNS;
@@ -817,9 +891,15 @@ function TileBody({ tile, state }: { tile: DashboardTile; state: QueryState }) {
                   if (!value && col.field === "properties.displayName") {
                     value = toCellString(readPath(it, "name"));
                   }
+                  const creator = isManagedEstate && (col.field === "creator" || col.field === "creatorId");
+                  const creatorId = typeof it.creatorId === "string" ? it.creatorId : "";
+                  const creatorName = typeof it.creator === "string" && it.creator !== creatorId ? it.creator : undefined;
+                  const href = dashboardTableHref(col, it);
                   return (
-                    <td key={i} className={styles.td}>
-                      {value}
+                    <td key={i} className={mergeClasses(styles.td, isManagedEstate && styles.resourceCell, creator && styles.identityCell)}
+                      title={!creator && col.titleField ? toCellString(readPath(it, col.titleField)) : undefined}>
+                      {creator ? <UserChip id={creatorId} displayName={creatorName} showFullId avatarSize={0} fallback="Creator ID unavailable" />
+                        : href ? <Link href={href}>{value}</Link> : value}
                     </td>
                   );
                 })}
@@ -831,6 +911,11 @@ function TileBody({ tile, state }: { tile: DashboardTile; state: QueryState }) {
           <Text size={200} style={{ color: tokens.colorNeutralForeground3, marginTop: 8 }}>
             Showing {rows.length} of {state.total.toLocaleString()}
           </Text>
+        )}
+        {viz.tableExpandable && state.items.length > rows.length && (
+          <Button appearance="subtle" onClick={() => setRowLimit((limit) => limit + (viz.tableRows ?? 10))}>
+            Show more
+          </Button>
         )}
       </div>
     );
@@ -1014,7 +1099,7 @@ function TileBody({ tile, state }: { tile: DashboardTile; state: QueryState }) {
               <Bar
                 key={s}
                 dataKey={s}
-                stackId="a"
+                stackId={viz.stackSeries === false ? undefined : "a"}
                 fill={PALETTE[idx % PALETTE.length]}
               />
             ))}
@@ -1029,7 +1114,7 @@ function TileBody({ tile, state }: { tile: DashboardTile; state: QueryState }) {
   if (data.length === 0) {
     return (
       <div className={styles.empty}>
-        {viz.groupBy
+        {tile.source === "computed" ? "No data in this snapshot." : viz.groupBy
           ? "No data for the current group-by field."
           : "Set a Group by field on this tile to chart it."}
       </div>
@@ -1038,23 +1123,28 @@ function TileBody({ tile, state }: { tile: DashboardTile; state: QueryState }) {
 
   if (viz.type === "pie") {
     const total = data.reduce((s, d) => s + d.value, 0) || 1;
+    const compositionTotal = data.reduce((sum, entry) => sum + entry.value, 0);
+    const assignedGroups = isManagedEstate && tile.computed?.params?.metric === "acpGroups";
+    const assessedGroups = data.filter((entry) => entry.name !== "Unable to assess").reduce((sum, entry) => sum + entry.value, 0);
     // Suppress in-chart labels for slices below this fraction — those are the
     // ones whose connector lines crash into each other. Legend + tooltip carry
     // the full information for small slices.
     const LABEL_THRESHOLD = 0.05;
     return (
       <div className={styles.chartHost}>
-        <ResponsiveContainer width="100%" height={280}>
+        <ResponsiveContainer width="100%" height={viz.compositionUnit ? 180 : 280}>
           <PieChart margin={{ top: 8, right: 8, bottom: 8, left: 8 }}>
             <Pie
               data={data}
               dataKey="value"
               nameKey="name"
-              cx="40%"
+              cx={viz.compositionUnit ? "50%" : "40%"}
               cy="50%"
               outerRadius="70%"
+              innerRadius={viz.compositionUnit ? "45%" : undefined}
               labelLine={false}
               label={(props: { value?: string | number }) => {
+                if (assignedGroups) return "";
                 const v = Number(props.value) || 0;
                 if (v / total < LABEL_THRESHOLD) return "";
                 return `${Math.round((v / total) * 100)}%`;
@@ -1068,42 +1158,59 @@ function TileBody({ tile, state }: { tile: DashboardTile; state: QueryState }) {
               formatter={(value, name) => {
                 const n = typeof value === "number" ? value : Number(value) || 0;
                 return [
-                  `${n.toLocaleString()} (${Math.round((n / total) * 100)}%)`,
+                  assignedGroups ? n.toLocaleString() : `${n.toLocaleString()} (${Math.round((n / total) * 100)}%)`,
                   String(name ?? ""),
                 ];
               }}
             />
-            <Legend
+            {!viz.compositionUnit && <Legend
               layout="vertical"
               verticalAlign="middle"
               align="right"
               wrapperStyle={{ fontSize: 12, maxWidth: "40%" }}
-            />
+            />}
           </PieChart>
         </ResponsiveContainer>
+        {viz.compositionUnit && <table className={styles.table} aria-label={`${compositionTotal} ${viz.compositionUnit} in snapshot`}>
+          <caption>{compositionTotal.toLocaleString()} {viz.compositionUnit} in snapshot{assignedGroups ? ` · ${assessedGroups} assessed` : ""}</caption>
+          <thead><tr><th className={styles.th}>Category</th><th className={styles.th}>Count</th>{!assignedGroups && <th className={styles.th}>Share</th>}</tr></thead>
+          <tbody>{data.map((entry) => <tr key={entry.name}>
+            <td className={mergeClasses(styles.td, styles.resourceCell)}>{entry.name}</td>
+            <td className={styles.td}>{entry.value.toLocaleString()}</td>
+            {!assignedGroups && <td className={styles.td}>{compositionTotal ? `${Math.round(entry.value / compositionTotal * 100)}%` : "—"}</td>}
+          </tr>)}</tbody>
+        </table>}
       </div>
     );
   }
 
   // Bar
   return (
-    <div className={styles.chartHost}>
-      <ResponsiveContainer width="100%" height={280}>
+    <div className={mergeClasses(styles.chartHost, isCreatorChart && styles.creatorChartViewport)}
+      role={isCreatorChart ? "region" : undefined} aria-label={isCreatorChart ? "Top creators by full GUID" : undefined}
+      tabIndex={isCreatorChart ? 0 : undefined}>
+      <div className={isCreatorChart ? styles.creatorChartPlot : undefined}>
+      <ResponsiveContainer width="100%" height={isManagedEstate ? Math.max(220, data.length * 38 + 40) : 280}>
         <BarChart
           data={data}
+          layout={isManagedEstate ? "vertical" : "horizontal"}
           margin={{ top: 8, right: 16, bottom: 24, left: 8 }}
           barCategoryGap="20%"
         >
           <CartesianGrid strokeDasharray="3 3" />
           <XAxis
-            dataKey="name"
+            dataKey={isManagedEstate ? undefined : "name"}
+            type={isManagedEstate ? "number" : "category"}
+            allowDecimals={!isManagedEstate}
             tick={{ fontSize: 11 }}
             interval={0}
-            angle={-20}
-            textAnchor="end"
+            angle={isManagedEstate ? 0 : -20}
+            textAnchor={isManagedEstate ? "middle" : "end"}
             padding={{ left: 16, right: 16 }}
           />
-          <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
+          <YAxis allowDecimals={false} tick={{ fontSize: 11 }}
+            type={isManagedEstate ? "category" : "number"} dataKey={isManagedEstate ? "name" : undefined}
+            width={isCreatorChart ? 300 : isManagedEstate ? 170 : undefined} interval={isManagedEstate ? 0 : undefined} />
           <Tooltip />
           <Bar dataKey="value" maxBarSize={64}>
             {data.map((_, idx) => (
@@ -1112,6 +1219,7 @@ function TileBody({ tile, state }: { tile: DashboardTile; state: QueryState }) {
           </Bar>
         </BarChart>
       </ResponsiveContainer>
+      </div>
     </div>
   );
 }

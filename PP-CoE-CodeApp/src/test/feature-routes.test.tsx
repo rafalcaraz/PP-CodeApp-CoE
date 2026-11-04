@@ -20,6 +20,7 @@ import type { ReactElement } from "react";
 
 import { agentsRoutes } from "../features/agents";
 import { appsRoutes } from "../features/apps";
+import { managedAppsRoutes } from "../features/managed-apps";
 import { flowsRoutes } from "../features/flows";
 import { environmentsRoutes } from "../features/environments";
 import { environmentGroupsRoutes } from "../features/environment-groups";
@@ -47,6 +48,11 @@ const FEATURES: Array<{
   routes: () => ReactElement[];
   expectedPaths: string[];
 }> = [
+  {
+    name: "managed-apps",
+    routes: managedAppsRoutes,
+    expectedPaths: ["/managed-apps"],
+  },
   {
     name: "agents",
     routes: agentsRoutes,

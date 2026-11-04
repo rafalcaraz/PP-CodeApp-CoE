@@ -86,15 +86,24 @@ attempt to merge them into one table.
 GET https://XXXXXXXX.tenant.api.powerplatform.com/governance/environmentGroups/687c6d74-38dc-45a7-a655-e1c846dcbbc7/ruleSets?api-version=2021-10-01-preview
 ```
 
-**Connector op:** ❌ **No direct group-only wrap.** The most obvious
+**Historical connector capture (May 2026):** The then-used
 candidate, `GetRuleSet(environmentId, groupId, api_version)`, builds an
 env-scoped URL
 (`/governance/environments/{environmentId}/environmentGroups/{groupId}/ruleSets`)
 and **returns 404 RouteNotFound** even when both ids are the same group
-id — that env-scoped path simply isn't a route. Verified live in
+id — that env-scoped path wasn't a route. Verified live in
 2026-05 (request id `0d730c48-0cc6-429f-bba1-43b6637b08a5`).
 
-The working fallback is **`GetRuleSetListForTenant(api_version)`** (also
+**Current metadata correction:** the registered SDK metadata and connector
+Swagger now expose group-only `GetRuleSet` (GET) and `CreateRuleSet` (POST)
+at `/governance/environmentGroups/{groupId}/ruleSets`. Named SDK execution
+uses `groupId`, `api-version` and, for creation, `body`; the old generated
+positional signature's extra `environmentId` is not a required route parameter.
+The historical 404 is not evidence that the current group-only API is
+unsupported. See [Independent group copy](managed-apps-governance.md#independent-environment-group-copy)
+for current fidelity/publication and live-validation boundaries.
+
+The existing enrichment fallback is **`GetRuleSetListForTenant(api_version)`** (also
 returns `MgGovODataResponse`) followed by a client-side filter on each
 ruleset's `environmentFilter.values[]` for
 `{ id: <groupId>, type: "EnvironmentGroup" }`. Tenants typically have

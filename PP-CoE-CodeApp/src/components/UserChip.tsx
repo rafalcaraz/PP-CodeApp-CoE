@@ -96,6 +96,22 @@ const useStyles = makeStyles({
     color: tokens.colorPaletteRedForeground1,
     fontSize: tokens.fontSizeBase200,
   },
+  fullIdentity: {
+    display: "inline-flex",
+    flexDirection: "column",
+    alignItems: "flex-start",
+    gap: tokens.spacingVerticalXXS,
+    minWidth: 0,
+  },
+  fullGuid: {
+    overflowWrap: "anywhere",
+    color: tokens.colorBrandForegroundLink,
+    fontSize: tokens.fontSizeBase200,
+  },
+  identityName: {
+    color: tokens.colorNeutralForeground1,
+    fontSize: tokens.fontSizeBase300,
+  },
 });
 
 export interface UserChipProps {
@@ -112,6 +128,10 @@ export interface UserChipProps {
   clickable?: boolean;
   /** Extra class names (e.g. to truncate inside a fixed-width column). */
   className?: string;
+  /** Keep the complete identity visible before and after an on-demand lookup. */
+  showFullId?: boolean;
+  /** Inventory-provided name, used until a lookup supplies a current name. */
+  displayName?: string;
 }
 
 /** Last 8 chars of a normalized GUID — readable enough to triangulate
@@ -126,6 +146,8 @@ export function UserChip({
   avatarSize = 20,
   clickable = true,
   className,
+  showFullId = false,
+  displayName,
 }: UserChipProps) {
   const styles = useStyles();
   const entry = useUserDisplay(id);
@@ -215,6 +237,16 @@ export function UserChip({
         </span>
       </>
     );
+  }
+
+  if (showFullId) {
+    const name = entry.status === "resolved" ? entry.user.displayName : displayName;
+    if (entry.status === "resolved") tip = `${tip} · ${id}`;
+    content = <span className={styles.fullIdentity}>
+      {name && <span className={styles.identityName}>{name}</span>}
+      <span className={styles.fullGuid}>{id}</span>
+      {entry.status === "missing" && <span className={styles.identityName}>No current user found</span>}
+    </span>;
   }
 
   if (!clickable) {

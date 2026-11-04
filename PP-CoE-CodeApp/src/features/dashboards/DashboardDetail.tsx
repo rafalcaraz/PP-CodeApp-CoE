@@ -51,6 +51,8 @@ import {
   type DashboardTile,
 } from "../../data/dashboards";
 import { invalidateInventoryCache } from "../../data/inventory";
+import { createManagedAppsEstateSource } from "../../data/dashboardManagedAppSource";
+import { ManagedAppsEstateFreshness } from "../../components/ManagedAppsEstateFreshness";
 import { ErrorPane, LoadingPane } from "../../components/Status";
 import { TileView } from "../../components/TileView";
 import { TileEditorDialog } from "../../components/TileEditorDialog";
@@ -168,6 +170,7 @@ export function DashboardDetail() {
   /** Bumped by the Refresh button to bypass the inventory cache and
    *  retrigger every tile's data fetch. */
   const [refreshKey, setRefreshKey] = useState(0);
+  const managedAppsSource = useMemo(() => dashboardId ? createManagedAppsEstateSource() : undefined, [dashboardId]);
 
   const handleRefreshAll = () => {
     invalidateInventoryCache();
@@ -367,6 +370,9 @@ export function DashboardDetail() {
           {dashboard.description && (
             <Text className={styles.subtitle}>{dashboard.description}</Text>
           )}
+          {managedAppsSource && dashboard.tiles.some((tile) => tile.computed?.aggregatorId === "managedApps.estate") && (
+            <ManagedAppsEstateFreshness source={managedAppsSource} />
+          )}
         </div>
         <div className={styles.controls}>
           <Button icon={<ArrowClockwiseRegular />} onClick={handleRefreshAll}>
@@ -486,6 +492,7 @@ export function DashboardDetail() {
                 onDelete={() => handleDeleteTile(tile.id, tile.title)}
                 onDuplicate={() => handleDuplicateTile(tile)}
                 refreshKey={refreshKey}
+                managedAppsSource={managedAppsSource}
               />
             </div>
           ))}
@@ -494,6 +501,8 @@ export function DashboardDetail() {
 
       {editingTile && (
         <TileEditorDialog
+          managedAppsSource={managedAppsSource}
+          refreshKey={refreshKey}
           open={editorOpen}
           initialTile={editingTile}
           onClose={() => {

@@ -173,6 +173,12 @@ const PRE_ZONES_SECTIONS: NavSection[] = [
     defaultOpen: true,
     items: [
       {
+        key: "managed-apps",
+        label: "Managed apps",
+        icon: <AppsRegular />,
+        path: "/managed-apps",
+      },
+      {
         key: "ownerless",
         label: "Ownerless resources",
         icon: <PersonQuestionMarkRegular />,

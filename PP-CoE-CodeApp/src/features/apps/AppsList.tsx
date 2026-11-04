@@ -14,6 +14,7 @@ import {
 import { useNavigate } from "react-router-dom";
 import {
   ALL_APP_TYPES,
+  MANAGED_APP_SUBTYPE,
   ResourceType,
   listAppsPage,
   shortResourceType,
@@ -51,7 +52,7 @@ const TYPE_OPTIONS: { value: ResourceTypeValue; label: string }[] = [
 const SUBTYPE_OPTIONS = [
   { value: "byocApp", label: "Code app", type: ResourceType.CodeApp },
   { value: "vibeApp", label: "Vibe app", type: ResourceType.CodeApp },
-  { value: "microsoftApp", label: "Managed app", type: ResourceType.AppBuilderApp },
+  { value: MANAGED_APP_SUBTYPE, label: "Managed app", type: ResourceType.AppBuilderApp },
   { value: "appBuilderApp", label: "App Builder app", type: ResourceType.AppBuilderApp },
 ];
 

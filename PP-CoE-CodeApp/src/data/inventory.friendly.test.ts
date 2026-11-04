@@ -9,6 +9,8 @@ import {
   CONNECTOR_FIELD,
   OPERATION_FIELD,
   ResourceType,
+  isManagedApp,
+  MANAGED_APP_SUBTYPE,
 } from "./inventory";
 
 describe("friendlyResourceType", () => {
@@ -34,6 +36,15 @@ describe("friendlyResourceType", () => {
 });
 
 describe("shortResourceType / resourceTypeShort", () => {
+  it("uses the same exact managed-app classifier as governance and the Apps subtype picker", () => {
+    expect(isManagedApp({ type: ResourceType.AppBuilderApp, subType: MANAGED_APP_SUBTYPE })).toBe(true);
+    for (const app of [
+      { type: ResourceType.AppBuilderApp, subType: "appBuilderApp" },
+      { type: ResourceType.CodeApp, subType: MANAGED_APP_SUBTYPE },
+      { type: ResourceType.AppBuilderApp }, { type: ResourceType.AppBuilderApp, subType: "MicrosoftApp" },
+    ]) expect(isManagedApp(app)).toBe(false);
+    expect(shortResourceType(ResourceType.AppBuilderApp, MANAGED_APP_SUBTYPE)).toBe("Managed app");
+  });
   it.each([
     [ResourceType.CodeApp, "byocApp", "Code app"],
     [ResourceType.CodeApp, "vibeApp", "Vibe app"],

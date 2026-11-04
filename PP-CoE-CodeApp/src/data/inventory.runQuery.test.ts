@@ -44,12 +44,30 @@ import {
   listEnvironmentsPage,
   listFlowsPage,
   runAggregateCount,
+  runRawQuery,
   ResourceType,
 } from "./inventory";
 
 beforeEach(() => {
   queryResourcesMock.mockReset();
   invalidateInventoryCache();
+});
+
+describe("resource collection completeness metadata", () => {
+  it("does not turn a missing resource collection into successful empty inventory", async () => {
+    queryResourcesMock.mockResolvedValue({ success: true, data: { totalRecords: 100 } });
+    const result = await runRawQuery([]);
+    expect(result.ok).toBe(false);
+    expect(!result.ok && result.error).toContain("omitted its resource collection");
+  });
+  it("retains raw duplicate rows for completeness checks while preserving deduplicated callers", async () => {
+    const item = { name: "synthetic-resource", type: ResourceType.CanvasApp, properties: { environmentId: "synthetic-pde" } };
+    queryResourcesMock.mockResolvedValue({ success: true, data: { data: [item, item], resultTruncated: 0 } });
+    const result = await runRawQuery([]);
+    expect(result.ok && result.data.items).toHaveLength(1);
+    expect(result.ok && result.data.rawItems).toHaveLength(2);
+    expect(result.ok && result.data.resultTruncated).toBe("0");
+  });
 });
 
 // ---------------------------------------------------------------------------

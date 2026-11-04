@@ -27,6 +27,8 @@
  */
 
 import type { Clause } from "../generated/models/PowerPlatformforAdminsV2Model";
+import { MANAGED_APP_ESTATE_AGGREGATOR } from "./dashboardManagedAppAggregators";
+import { reviseManagedAppsEstateTile } from "./dashboardManagedAppPresentation";
 import {
   ResourceType,
   extend,
@@ -2129,6 +2131,66 @@ function powerAutomateEstateTiles(): DashboardTile[] {
 // Public API
 // ---------------------------------------------------------------------------
 
+function managedAppsEstateLayout(): { tabs: DashboardTab[]; tiles: DashboardTile[] } {
+  const tabs: DashboardTab[] = [
+    { id: "managed-overview", name: "Overview" },
+    { id: "managed-people", name: "People" },
+    { id: "managed-governance", name: "Environment & governance" },
+    { id: "managed-connectors", name: "Connectors" },
+  ];
+  const tile = (title: string, metric: string, type: TileVizType, tab: number,
+    opts: Parameters<typeof computedTile>[3] = {}) => ({
+    ...computedTile(title, MANAGED_APP_ESTATE_AGGREGATOR, type, {
+      ...opts, tabId: tabs[tab].id, params: { metric, ...opts.params },
+    }),
+    ...(type === "table" ? { viz: {
+      type, tableRows: opts.tableRows ?? 25, tableColumns: opts.tableColumns, tableExpandable: true,
+    } } : type === "stackedBar" ? { viz: { type, stackSeries: false } } : {}),
+  });
+  const appColumns: TileTableColumn[] = [
+    { field: "displayName", header: "Managed app", linkTo: "app", titleField: "id" },
+    { field: "environmentName", header: "Environment", linkTo: "environment", titleField: "environmentId" },
+    { field: "groupName", header: "Environment group", linkTo: "environment-group", titleField: "groupId" },
+  ];
+  return { tabs, tiles: [
+    tile("Managed apps", "total", "kpi", 0, { size: "xs" }),
+    tile("Creators", "creators", "kpi", 0, { size: "xs" }),
+    tile("App-bearing environments", "environments", "kpi", 0, { size: "xs" }),
+    tile("New apps · 30 days", "new", "kpi", 0, { size: "xs" }),
+    tile("Creation trend · 90 days", "trend", "line", 0, { size: "large", params: { days: 90 } }),
+    tile("App origins", "origins", "bar", 0),
+    tile("Creation & data coverage", "coverage", "table", 0, { tableRows: 10, tableColumns: [
+      { field: "field", header: "Measure" }, { field: "apps", header: "Apps" },
+    ] }),
+    tile("Top creators", "topCreators", "bar", 1),
+    tile("Creator counts", "creatorsTable", "table", 1, { tableColumns: [
+      { field: "creator", header: "Created by", titleField: "creatorId" }, { field: "apps", header: "Apps" },
+    ] }),
+    tile("Recent creation · 30 days", "trend", "line", 1, { size: "large", params: { days: 30 } }),
+    tile("Apps & environments by group", "environmentGroups", "stackedBar", 2, { size: "large" }),
+    tile("Environment types", "environmentTypes", "stackedBar", 2),
+    tile("ACP coverage · apps", "acpApps", "bar", 2),
+    tile("ACP coverage · app-bearing groups", "acpGroups", "bar", 2),
+    tile("Groups without assigned ACP", "withoutAcp", "table", 2, { size: "large", tableColumns: [
+      { field: "groupName", header: "Environment group", linkTo: "environment-group", titleField: "groupId" },
+      { field: "apps", header: "Affected apps" }, { field: "environments", header: "App-bearing environments" },
+    ] }),
+    tile("Managed app inventory", "appsTable", "table", 2, { size: "large", tableColumns: [
+      ...appColumns, { field: "creator", header: "Created by", titleField: "creatorId" },
+      { field: "origin", header: "Origin" }, { field: "acp", header: "ACP assignment", titleField: "reason" },
+    ] }),
+    tile("Apps using each connector", "connectors", "bar", 3, { size: "large" }),
+    tile("Connector usage coverage", "connectorCoverage", "bar", 3, { size: "large" }),
+    tile("Connector app details", "connectorApps", "table", 3, { size: "large", tableColumns: [
+      { field: "connector", header: "Connector", titleField: "connectorId" }, ...appColumns,
+    ] }),
+    tile("Apps by creator", "appsTable", "table", 1, { size: "large", tableColumns: [
+      { field: "creator", header: "Created by", titleField: "creatorId" }, ...appColumns,
+      { field: "createdAt", header: "Created at" },
+    ] }),
+  ].map(reviseManagedAppsEstateTile) };
+}
+
 export interface DashboardTemplate {
   id: string;
   name: string;
@@ -2177,6 +2239,17 @@ export const DASHBOARD_TEMPLATES: DashboardTemplate[] = [
       "rather than buried under the larger canvas / model-driven population.",
     build: modernAppsEstateTiles,
     buildLayout: modernAppsEstateLayout,
+  },
+  {
+    id: "managed-apps-estate",
+    name: "Managed Apps Estate",
+    description: "Managed apps across every environment type: creation, creators, origins, connector usage and ACP assignment coverage. One shared snapshot; use Refresh for fresh inventory and assignments. Coverage is not a compliance assessment.",
+    build: () => managedAppsEstateLayout().tiles.map((tile) => {
+      const flat = { ...tile };
+      delete flat.tabId;
+      return flat;
+    }),
+    buildLayout: managedAppsEstateLayout,
   },
   {
     id: "power-automate-estate",

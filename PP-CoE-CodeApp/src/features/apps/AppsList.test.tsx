@@ -50,6 +50,7 @@ vi.mock("../../components/EnvironmentPicker", () => ({
 
 import { AppsList } from "../../features/apps/AppsList";
 import { listAppsPage } from "../../features/apps/data";
+import { MANAGED_APP_SUBTYPE } from "../../features/apps/data";
 
 function renderAppsList() {
   return render(
@@ -94,6 +95,14 @@ describe("AppsList smoke", () => {
       });
     });
     expect(screen.getByRole("combobox", { name: "App sub-type" })).toBeDisabled();
+  });
+
+  it("uses the shared managed-app subtype when matching governance counts", async () => {
+    renderAppsList();
+    await screen.findByText("Onboarding App");
+    await userEvent.click(screen.getByRole("combobox", { name: "App sub-type" }));
+    await userEvent.click(screen.getByRole("option", { name: "Managed app" }));
+    await waitFor(() => expect(vi.mocked(listAppsPage).mock.calls.at(-1)?.[0]).toMatchObject({ subType: MANAGED_APP_SUBTYPE }));
   });
 
   it("typing in the search box eventually refetches with the nameContains filter", async () => {

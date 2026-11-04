@@ -10,6 +10,7 @@
 
 import { ResourceType, type QuerySpec, type ResourceTypeValue } from "./inventory";
 import type { Clause } from "../generated/models/PowerPlatformforAdminsV2Model";
+import { isRetiredManagedAppsDefaultTile, reviseManagedAppsEstateTile } from "./dashboardManagedAppPresentation";
 
 export type TileVizType = "kpi" | "table" | "bar" | "pie" | "line" | "combo" | "stackedBar";
 
@@ -19,6 +20,9 @@ export interface TileTableColumn {
   field: string;
   /** Optional header label. Falls back to a humanized version of `field`. */
   header?: string;
+  /** Known internal resource route, built from the row's identity, never an arbitrary URL. */
+  linkTo?: "app" | "environment" | "environment-group";
+  titleField?: string;
 }
 
 /** Time bucket size for line-chart tiles. */
@@ -53,11 +57,17 @@ export interface TileViz {
   };
   /** For table viz: max rows to display. Defaults to 10. */
   tableRows?: number;
+  /** Allow access to the rest of a computed snapshot without refetching. */
+  tableExpandable?: boolean;
   /** For table viz: ordered list of columns to render. If unset, the renderer
    *  falls back to a sensible default (display name, type, environment). */
   tableColumns?: TileTableColumn[];
   /** Optional: cap categories shown in charts (others bucketed as "Other"). */
   maxCategories?: number;
+  /** False renders separate comparable bars rather than adding unlike series together. */
+  stackSeries?: boolean;
+  /** Donut composition with visible counts and denominator. */
+  compositionUnit?: "apps" | "environments" | "groups";
   /** For line / combo viz: date field to bucket on X axis.
    *  e.g. "properties.createdAt", "properties.lastModifiedAt". */
   dateField?: string;
@@ -110,6 +120,16 @@ export interface DashboardTile {
 export interface ComputedTileSource {
   aggregatorId: string;
   params?: Record<string, unknown>;
+}
+
+export function dashboardTableHref(column: TileTableColumn, row: Record<string, unknown>): string | undefined {
+  const field = column.linkTo === "app" ? "id" : column.linkTo === "environment" ? "environmentId" : "groupId";
+  const identity = typeof row[field] === "string" ? row[field].trim() : "";
+  if (!column.linkTo || !identity) return undefined;
+  const route = column.linkTo === "app" ? "apps" : column.linkTo === "environment" ? "environments" : "environment-groups";
+  const env = column.linkTo === "app" && typeof row.environmentId === "string" && row.environmentId.trim()
+    ? `?${new URLSearchParams({ envId: row.environmentId }).toString()}` : "";
+  return `#/${route}/${encodeURIComponent(identity)}${env}`;
 }
 
 /** A grouping page inside a dashboard. Tabs are a pure layout concern —
@@ -191,10 +211,16 @@ export function normalizeDashboard(d: Dashboard): Dashboard {
   const fallbackId = tabs[0].id;
 
   let tilesChanged = false;
-  const tiles = d.tiles.map((t) => {
-    if (t.tabId && validIds.has(t.tabId)) return t;
+  const tiles = d.tiles.filter((tile) => {
+    if (!isRetiredManagedAppsDefaultTile(tile)) return true;
     tilesChanged = true;
-    return { ...t, tabId: fallbackId };
+    return false;
+  }).map((t) => {
+    const revised = reviseManagedAppsEstateTile(t);
+    if (revised !== t) tilesChanged = true;
+    if (revised.tabId && validIds.has(revised.tabId)) return revised;
+    tilesChanged = true;
+    return { ...revised, tabId: fallbackId };
   });
 
   if (hasTabs && !tilesChanged) return d;

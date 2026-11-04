@@ -49,6 +49,7 @@ import {
   type ResourceTypeValue,
 } from "../data/inventory";
 import type { Clause } from "../generated/models/PowerPlatformforAdminsV2Model";
+import type { ManagedAppsEstateSource } from "../data/dashboardManagedAppSource";
 import {
   getFieldSuggestions,
   groupFields,
@@ -305,6 +306,8 @@ interface TileEditorDialogProps {
   initialTile: DashboardTile;
   onClose: () => void;
   onSave: (tile: DashboardTile) => void;
+  managedAppsSource?: ManagedAppsEstateSource;
+  refreshKey?: number;
 }
 
 /** Renders an `InventoryField[]` as Fluent `<OptionGroup>` sections.
@@ -522,7 +525,7 @@ function ClausesEditorStatus({ validation }: { validation: ValidationResult }) {
   );
 }
 
-export function TileEditorDialog({ open, initialTile, onClose, onSave }: TileEditorDialogProps) {
+export function TileEditorDialog({ open, initialTile, onClose, onSave, managedAppsSource, refreshKey }: TileEditorDialogProps) {
   const styles = useStyles();
   const [tile, setTile] = useState<DashboardTile>(initialTile);
   // Track validity of the clauses textarea. Save is disabled while invalid.
@@ -1499,7 +1502,7 @@ export function TileEditorDialog({ open, initialTile, onClose, onSave }: TileEdi
                   </Text>
                 </div>
                 <div className={styles.previewHost}>
-                  <TileView tile={previewTile} editable={false} />
+                  <TileView tile={previewTile} editable={false} managedAppsSource={managedAppsSource} refreshKey={refreshKey} />
                 </div>
               </div>
             </div>

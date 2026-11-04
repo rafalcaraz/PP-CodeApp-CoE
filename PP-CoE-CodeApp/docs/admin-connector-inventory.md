@@ -69,6 +69,14 @@ in the main inventory store.
 > `src/shared/deep-inventory/catalog/` for the curated / observed
 > property catalog that drives the filter and column picker.
 
+The **Managed Apps Estate** dashboard is also an explicit read-only reporting
+exception: opening/refreshing it reads ACP assignment identities only for its
+distinct app-bearing groups, with concurrency capped at three and one shared
+snapshot across tiles/tabs. It does not fan out across empty tenant groups,
+fetch policy action bodies or infer assignments from generic Model A rules.
+Failed or ambiguous reads remain unable to assess. See
+[Managed Apps Estate dashboard](queries.md#managed-apps-estate-dashboard).
+
 ### Copilot Studio agent property scans
 
 The `copilot-agents-dataverse` source uses a two-stage scan so Dataverse
