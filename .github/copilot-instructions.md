@@ -164,9 +164,12 @@ work. Do not overwrite that work with an older checkout.
 
 - A passing build or successful CLI exit does **not** prove deployability.
 - Do not use `pa app push` with CLI 1.3.0: its mapper drops logical connection
-  reference names. Use `scripts/prepare-code-app-publish.mjs` with privately
-  resolved modern configuration, followed by `pac code push` from the generated
-  private directory. Do not run `pac code push` directly against modern
+  reference names. Use `npm --prefix PP-CoE-CodeApp run push`, which builds the
+  current checkout, resolves its ignored local bindings, prepares compatible
+  PAC metadata, backs up the source and verifies a fresh post-push export.
+  `-- --dry-run` performs local build/staging only. The low-level
+  `scripts/prepare-code-app-publish.mjs` adapter remains available for diagnosis.
+  Do not run `pac code push` directly against modern
   `workflowDetails` configuration. See `solution/README.md` for the exact steps.
 - Never publish placeholder bindings, reuse Graph's HTTP connection for another
   audience, or change a flow's invoker/run-only model as a shortcut. Keep each

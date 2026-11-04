@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
@@ -25,7 +25,21 @@ export function verifyCodeAppExport(xml, config) {
   assert.ok(expected && Object.keys(expected).length > 0, "Expected configuration must contain app connections.");
   assert.deepEqual(Object.keys(actual).sort(), Object.keys(expected).sort(), "App connection keys changed.");
   const reverseDependencies = Object.fromEntries(Object.keys(expected).map((key) => [key, []]));
-  const cdsNames = new Set(cds.cdsdependencies.map((dependency) => dependency.logicalname));
+  const cdsNames = new Set(cds.cdsdependencies
+    .filter((dependency) => Number(dependency.componenttype) === 10156)
+    .map((dependency) => dependency.logicalname));
+  const missingLogical = Object.entries(expected)
+    .filter(([key, ref]) => ref.xrmConnectionReferenceLogicalName
+      && actual[key]?.xrmConnectionReferenceLogicalName !== ref.xrmConnectionReferenceLogicalName)
+    .map(([, ref]) => ref.xrmConnectionReferenceLogicalName);
+  const missingHttpDependencies = Object.values(expected)
+    .filter((ref) => ref.id.toLowerCase().endsWith("/shared_webcontents")
+      && !cdsNames.has(ref.xrmConnectionReferenceLogicalName))
+    .map((ref) => ref.xrmConnectionReferenceLogicalName);
+  assert.ok(missingLogical.length === 0 && missingHttpDependencies.length === 0,
+    `Nonportable app registration: ${missingLogical.length} missing/changed logical references [${missingLogical.join(", ")}]; `
+    + `${missingHttpDependencies.length} missing HTTP solution dependencies [${missingHttpDependencies.join(", ")}]. `
+    + "Republish the source app with the connection-safe adapter and export again; do not repair the ZIP by hand.");
   for (const [key, reference] of Object.entries(expected)) {
     const exported = actual[key];
     assert.equal(exported.id.toLowerCase(), reference.id.toLowerCase(), `Connector identity changed for ${key}.`);
@@ -68,6 +82,13 @@ export function verifyCodeAppExport(xml, config) {
   for (const [key, dependents] of Object.entries(reverseDependencies)) {
     assert.deepEqual([...(actual[key].dependents ?? [])].sort(), dependents.sort(), `Reverse dependencies changed for ${key}.`);
   }
+}
+
+export function verifySolutionDirectory(directory, config) {
+  const appDirectory = path.join(directory, "CanvasApps");
+  const files = readdirSync(appDirectory).filter((name) => name.endsWith(".meta.xml"));
+  assert.equal(files.length, 1, "Expected exactly one exported Code App metadata file.");
+  verifyCodeAppExport(readFileSync(path.join(appDirectory, files[0]), "utf8"), config);
 }
 
 function main() {
