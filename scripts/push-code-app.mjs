@@ -17,27 +17,60 @@ export function windowsCommand(executable, args) {
   if ([executable, ...args].some((value) => /["%\r\n\0]/.test(value))) {
     throw new Error("Windows tool paths/arguments cannot contain quotes, percent expansion or control characters.");
   }
-  const quote = (value) => `'${value.replaceAll("'", "''")}'`;
-  const command = `& ${quote(executable)} ${args.map((value) => quote(`"${value}"`)).join(" ")}; exit $LASTEXITCODE`;
-  return ["-NoProfile", "-NonInteractive", "-EncodedCommand", Buffer.from(command, "utf16le").toString("base64")];
+  const quote = (value) => `"${value.replace(/\\+$/g, "$&$&")}"`;
+  return ["/d", "/v:off", "/s", "/c", `"${[executable, ...args].map(quote).join(" ")}"`];
 }
 
-function runCommand(tool, args, cwd) {
+export function resolvePacLauncher(shim, probe = spawnSync) {
+  const source = readFileSync(shim, "utf8").replace(/\r\n/g, "\n").trim();
+  if (!/^@echo off\s*\n"%~dp0pac\.launcher\.exe" %\*$/i.test(source)) {
+    throw new Error("Unrecognized PAC batch launcher; cannot establish native exit-code propagation. No publication was started.");
+  }
+  const directory = path.dirname(shim);
+  const launcher = path.join(directory, "pac.launcher.exe");
+  const help = probe(launcher, ["help"], { encoding: "utf8" });
+  const version = help.stdout?.match(/^Version: (\d+\.\d+\.\d+)(?:[+\s]|$)/m)?.[1];
+  if (help.error || help.status !== 0 || !version || /^Error:/m.test(`${help.stdout}\n${help.stderr}`)) {
+    throw new Error("PAC launcher did not identify its selected installed version. No publication was started.");
+  }
+  const native = path.join(directory, `Microsoft.PowerApps.CLI.${version}`, "tools", "pac.exe");
+  if (!existsSync(native)) throw new Error("Selected native PAC executable is missing; refusing a launcher that can hide failures.");
+  const nativeHelp = probe(native, ["help"], { encoding: "utf8" });
+  if (nativeHelp.error || nativeHelp.status !== 0
+    || nativeHelp.stdout?.match(/^Version: (\d+\.\d+\.\d+)(?:[+\s]|$)/m)?.[1] !== version
+    || !/^\s+env\s/m.test(nativeHelp.stdout)
+    || /^Error:/m.test(`${nativeHelp.stdout}\n${nativeHelp.stderr}`)) {
+    throw new Error("Selected native PAC version or env command could not be verified. No publication was started.");
+  }
+  return native;
+}
+
+export function runCommand(tool, args, cwd) {
   let executable = tool;
   let parameters = args;
+  let windowsVerbatimArguments = false;
   if (process.platform === "win32" && tool !== process.execPath) {
-    const lookup = spawnSync("where.exe", [tool], { encoding: "utf8" });
-    if (lookup.error || lookup.status !== 0) throw new Error(`Required tool "${tool}" is not on PATH.`);
-    const resolved = lookup.stdout.trim().split(/\r?\n/).find((candidate) => /\.(exe|cmd|bat)$/i.test(candidate));
+    let resolved;
+    if (path.isAbsolute(tool)) {
+      if (existsSync(tool) && /\.(exe|cmd|bat)$/i.test(tool)) resolved = tool;
+    } else {
+      const lookup = spawnSync("where.exe", [tool], { encoding: "utf8" });
+      if (lookup.error || lookup.status !== 0) throw new Error(`Required tool "${tool}" is not on PATH.`);
+      resolved = lookup.stdout.trim().split(/\r?\n/).find((candidate) => /\.(exe|cmd|bat)$/i.test(candidate));
+    }
     if (!resolved) throw new Error(`Required Windows executable for "${tool}" is not on PATH.`);
-    if (/\.(cmd|bat)$/i.test(resolved)) {
-      executable = "powershell.exe";
+    if (tool.toLowerCase() === "pac" && /\.(cmd|bat)$/i.test(resolved)) {
+      // The official launcher can return 0 for a failed child PAC command.
+      executable = resolvePacLauncher(resolved);
+    } else if (/\.(cmd|bat)$/i.test(resolved)) {
+      executable = process.env.ComSpec || "cmd.exe";
       parameters = windowsCommand(resolved, args);
+      windowsVerbatimArguments = true;
     } else {
       executable = resolved;
     }
   }
-  const result = spawnSync(executable, parameters, { cwd, stdio: "inherit" });
+  const result = spawnSync(executable, parameters, { cwd, stdio: "inherit", windowsVerbatimArguments });
   if (result.error || result.status !== 0) {
     throw new Error(`${path.basename(tool)} ${args.slice(0, 2).join(" ")} failed${result.status === null ? "" : ` (exit ${result.status})`}.`);
   }
@@ -127,7 +160,7 @@ export async function pushCodeApp({
     writeFileSync(path.join(lock, "pid"), String(process.pid), { mode: 0o600 });
     working = mkdtempSync(path.join(temporaryRoot, "ppcoe-push-"));
     chmodSync(working, 0o700);
-    if (!dryRun) run("pac", ["org", "who", "--environment", config.environmentId], appRoot);
+    if (!dryRun) run("pac", ["env", "who", "--environment", config.environmentId], appRoot);
     log("Building this checkout (never reusing an earlier dist or prepared publish folder)...");
     rmSync(path.join(appRoot, "dist"), { recursive: true, force: true });
     run("npm", ["run", "build"], appRoot);

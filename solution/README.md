@@ -106,7 +106,9 @@ Configured binding IDs do not prove their actual OAuth health/audience.
 
 The command:
 
-1. Confirms the source target and checks PAC access to that explicit environment.
+1. Confirms the source target and checks PAC access with
+   `pac env who --environment <configured-environment-id>`. Failure stops
+   before building, exporting a backup or publishing.
 2. Clears only this app's `dist/` and builds the current checkout. It never uses
    an earlier session's staging folder, private config or stale built assets.
 3. Resolves bindings privately, runs the connection-safe adapter and checks the
@@ -125,6 +127,16 @@ temporary directory/backup inherits the current user's Windows permissions
 (owner-only modes on POSIX); no identifiers/credentials are put in tracked files.
 If a process is killed, follow the explicit stale-lock path in its error only
 after confirming the owning process stopped. Do not delete broad temp folders.
+
+On Windows, the official `pac.cmd` launcher can return exit zero even when its
+child PAC command fails. The publisher reads the launcher's locally advertised
+selected version and verifies/invokes that installation's native `tools/pac.exe`
+instead, preserving the actual exit code. An unrecognized shim, missing selected
+installation or inconsistent version fails explicitly, without trying another
+version or changing authentication. Batch tools such as npm use `cmd.exe` with
+literal argument quoting and disabled expansion; switches are not passed with
+embedded quote characters. Real local Windows tests check argument round-trip
+and nonzero exits without tenant requests.
 
 ```powershell
 npm run push -- --dry-run  # fresh build + private staging checks; NO tenant commands

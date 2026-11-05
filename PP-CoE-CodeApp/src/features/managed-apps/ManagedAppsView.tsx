@@ -516,7 +516,7 @@ export function ManagedAppsView() {
         onClose={() => { setInspection(null); restoreFocus(); }} />}
       {duplicateOpen && inventory.kind === "ready" && <Dialog open onOpenChange={(_, data) => { if (!data.open) { setDuplicateOpen(false); restoreFocus(); } }}>
         <DialogSurface><DialogBody><DialogTitle>Duplicate environment group</DialogTitle><DialogContent className={styles.dialogContent}>
-          <Text>Choose any actual group, including empty template groups. The existing fresh independent-copy review preserves group rules and ACP safety gates.</Text>
+          <Text>Choose the group whose settings you want to copy. Its environments stay where they are.</Text>
           <SearchPicker label="Source environment group" showIds value={duplicateSource} onChange={setDuplicateSource}
             options={inventory.data.groups.map((entry) => ({ id: entry.id, name: entry.displayName || entry.id }))} />
         </DialogContent><DialogActions><Button onClick={() => { setDuplicateOpen(false); restoreFocus(); }}>Cancel</Button>

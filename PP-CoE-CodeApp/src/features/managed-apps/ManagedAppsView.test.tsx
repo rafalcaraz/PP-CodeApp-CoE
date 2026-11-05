@@ -249,6 +249,7 @@ describe("ManagedAppsView", () => {
   it("loads ACP only on explicit inspection and does not label missing assignments allowed", async () => {
     renderView();
     fireEvent.click(await screen.findByRole("button", { name: "Inspect ACP permissions" }));
+    fireEvent.click(await screen.findByText("Group settings and policy details"));
     expect(await screen.findByText(/No policy assignments were returned/)).toBeInTheDocument();
     expect(loadGroupPolicies).toHaveBeenCalledWith("group-one");
   });
@@ -259,6 +260,7 @@ describe("ManagedAppsView", () => {
     ] });
     renderView();
     fireEvent.click(await screen.findByRole("button", { name: "Inspect ACP permissions" }));
+    fireEvent.click(await screen.findByText("Group settings and policy details"));
     expect(await screen.findByText("Policy ID: p-first")).toBeInTheDocument();
     expect(screen.getByText("Policy ID: p-second")).toBeInTheDocument();
     expect(screen.getAllByText("ACP-only flag: Unavailable")).toHaveLength(2);
@@ -308,8 +310,8 @@ describe("ManagedAppsView", () => {
     const nameInput = await screen.findByRole("textbox", { name: "New group name" });
     await act(async () => { nameInput.focus(); });
     fireEvent.change(nameInput, { target: { value: "New empty group" } });
-    fireEvent.click(await screen.findByRole("button", { name: "Review independent copy" }));
-    fireEvent.click(await screen.findByRole("checkbox", { name: /I confirm copying/ }));
+    fireEvent.click(await screen.findByRole("button", { name: "Review copy" }));
+    fireEvent.click(await screen.findByRole("checkbox", { name: /Create "New empty group"/ }));
     fireEvent.click(screen.getByRole("button", { name: "Create independent copy" }));
     expect(await screen.findByRole("link", { name: "Open verified destination group in admin center" })).toHaveAttribute("href", outcome.destinationUrl);
     await waitFor(() => expect(loadManagedApps).toHaveBeenLastCalledWith(true, expect.any(AbortSignal)));
@@ -528,9 +530,10 @@ describe("ManagedAppsView", () => {
     expect(screen.getByText("Open / configure this group in Power Platform admin center")).toHaveAttribute("href", "https://admin.powerplatform.microsoft.com/manage/envgroups/group-one/details");
     fireEvent.focus(input);
     fireEvent.change(input, { target: { value: "New empty group" } });
-    fireEvent.click(await screen.findByRole("button", { name: "Review independent copy" }));
-    expect(await screen.findByText("0 environments copied · 1 independent ACP copies proposed")).toBeInTheDocument();
-    expect(screen.getByText("Create independent copy (unavailable)")).toBeDisabled();
+    fireEvent.click(await screen.findByRole("button", { name: "Review copy" }));
+    expect(await screen.findByText(/Independent ACP · 0 environments copied/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Create independent copy" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("checkbox", { name: /Create "New empty group"/ })).not.toBeInTheDocument();
   });
   it("allows refresh to cancel an in-flight evidence read and ignores its late response", async () => {
     let finish!: (value: unknown[]) => void;

@@ -10,16 +10,14 @@ import {
   type CloneBackend, type CloneOperation, type ClonePlan, type CloneSnapshot, type CloneStore,
 } from "./groupClone";
 
-export const PUBLICATION_BLOCKER =
-  "Live writes are gated: the registered API has no verified source draft/published selector, group Publish rules operation or authoritative publication read-back. POST, PATCH and assignment are not proof of publication.";
-export const MODEL_A_BLOCKER =
-  "Model A group-only GET/POST is registered. Fresh ruleset ID generation, destination cardinality and stored parameter fidelity still require an authorized disposable-group verification.";
+const APPLIED_SETTINGS_EVIDENCE =
+  "Verified admin-center contract: Save stages browser changes without governance writes; Apply persists group rules and policy/assignment through the registered operations. Fresh API reads return applied settings, not the browser's pending edits.";
 export const AUTHORIZATION_NOTICE =
   "Group management requires tenant administrator authority; governance writes require the actual caller's permission (service principals: Power Platform contributor/owner). Reads do not prove write permission. Authorization errors are reported, not bypassed; no action-level permission endpoint is invented.";
 
 const operations = {
   GetEnvironmentGroup: false, GetRuleSet: false, ListRuleAssignmentsByEnvironmentGroupId: false,
-  ListRuleAssignmentsByPolicyId: false, CreateEnvironmentGroup: true, CreateRuleSet: true,
+  ListRuleAssignmentsByPolicyId: false, ListEnvironmentsForUser: false, CreateEnvironmentGroup: true, CreateRuleSet: true,
   CreateRuleBasedPolicy: true, PatchRuleBasedPolicy: true, CreateEnviornmentGroupRuleBasedAssignment: true,
 };
 type OperationName = keyof typeof operations;
@@ -44,7 +42,8 @@ async function collection<T>(result: DataResult<unknown>, validate: (value: unkn
   if (!result.ok) return result;
   const body = result.data;
   if (!jsonObject(body) || !Array.isArray(body.value)) return { ok: false, error: `${label} omitted its collection; empty completion cannot be inferred from a body-less SDK response.` };
-  if (body["@odata.nextLink"] || body.nextLink) return { ok: false, error: `${label} returned continuation not supported by the registered group operation. Full-copy evidence is incomplete.` };
+  if (body["@odata.nextLink"] || body["@odata.nextlink"] || body.nextLink || body.continuationToken) return { ok: false, error: `${label} returned continuation not supported by the registered group operation. Full-copy evidence is incomplete.` };
+  if (body["@odata.count"] !== undefined && body["@odata.count"] !== body.value.length) return { ok: false, error: `${label} count disagrees with its completed collection.` };
   if (!body.value.every(validate)) return { ok: false, error: `${label} returned incomplete identities or malformed data.` };
   return { ok: true, data: body.value };
 }
@@ -64,7 +63,18 @@ async function readGroup(id: string): Promise<DataResult<EnvironmentGroup>> {
   return { ok: true, data: result.data };
 }
 async function readRules(id: string): Promise<DataResult<RuleSetDto[]>> {
-  return collection(await call("GetRuleSet", { groupId: id }), modelARule, "Group Model A rules");
+  const result = await call("GetRuleSet", { groupId: id });
+  if (result.ok && (result.data === undefined || result.data === null || result.data === "")) {
+    // PPAC receives 204 for a new group. The body-only SDK still needs an
+    // independent complete tenant read before absence can authorize a write.
+    const [evidence] = await loadGroupEvidenceBatch([id]);
+    if (!evidence?.rulesets.ok) return { ok: false, error: evidence?.rulesets.ok === false ? evidence.rulesets.error : "Complete tenant rule applicability is unavailable." };
+    if (evidence.rulesets.data.matching.length || evidence.rulesets.data.unresolved.length) {
+      return { ok: false, error: "Body-less group rule read disagrees with tenant applicability. Empty configuration is not established." };
+    }
+    return { ok: true, data: [] };
+  }
+  return collection(result, modelARule, "Group Model A rules");
 }
 async function readAssignments(id: string): Promise<DataResult<RuleAssignment[]>> {
   const result = await collection(await call("ListRuleAssignmentsByEnvironmentGroupId", {
@@ -74,6 +84,20 @@ async function readAssignments(id: string): Promise<DataResult<RuleAssignment[]>
     return { ok: false, error: "Assignment response includes another resource scope." };
   }
   return result;
+}
+
+async function readEmptyMembership(id: string): Promise<DataResult<boolean>> {
+  if (!membershipId(id)) return { ok: false, error: "A returned group identity is required to verify empty membership." };
+  const [inventory, direct] = await Promise.all([
+    loadEmptyGroupMembership(id),
+    call("ListEnvironmentsForUser", { "$filter": `environmentGroupId eq '${id.replace(/'/g, "''")}'`, "$select": "id,environmentGroupId", "$top": 1 }),
+  ]);
+  if (!inventory.ok) return inventory;
+  const environments = await collection(direct, (value): value is Record<string, unknown> =>
+    jsonObject(value) && typeof value.id === "string" && !!membershipId(value.id)
+    && typeof value.environmentGroupId === "string" && membershipId(value.environmentGroupId) === membershipId(id), "Live group membership");
+  if (!environments.ok) return environments;
+  return { ok: true, data: inventory.data && environments.data.length === 0 };
 }
 
 async function readSource(id: string, signal?: AbortSignal): Promise<DataResult<CloneSnapshot>> {
@@ -98,15 +122,17 @@ async function readSource(id: string, signal?: AbortSignal): Promise<DataResult<
   if (membershipId(policy.id ?? "") !== ids[0]) return { ok: false, error: "Policy changed between source assignment reads." };
   return { ok: true, data: {
     group: group.data, rules: rules.data, assignments: assignments.data, policy,
-    publication: "unknown", publicationEvidence: "",
+    publication: "applied", publicationEvidence: APPLIED_SETTINGS_EVIDENCE,
     blockers: evidence.rulesets.data.unresolved.length ? ["Tenant rules have unresolved applicability; exact Model A coverage is not established."] : [],
   } };
 }
 
 export const groupCloneBackend: CloneBackend = {
   readSource,
-  executionBlockers: (plan) => [PUBLICATION_BLOCKER, ...(plan.rules.length ? [MODEL_A_BLOCKER] : []),
-    "Connector response status/headers and authoritative empty-membership verification must be established before enabling writes; uncertain creates cannot be retried safely."],
+  executionBlockers: (plan) => [
+    ...(plan.publication !== "applied" ? ["Only applied API configuration has a verified copy contract; pending drafts cannot be copied."] : []),
+    ...(plan.rules.length > 1 ? ["This source has multiple group rule resources. The API doesn't establish whether repeated creation preserves them separately."] : []),
+  ],
   createGroup: (body) => call("CreateEnvironmentGroup", { body }),
   createRule: (groupId, body) => call("CreateRuleSet", { groupId, body }),
   createPolicy: (body) => call("CreateRuleBasedPolicy", { body }),
@@ -120,8 +146,13 @@ export const groupCloneBackend: CloneBackend = {
     }
     return result;
   },
-  readEmptyMembership: loadEmptyGroupMembership,
-  readPublication: async () => ({ ok: false, error: PUBLICATION_BLOCKER }),
+  readEmptyMembership,
+  readPublication: async (id) => {
+    const snapshot = await readSource(id);
+    if (!snapshot.ok) return snapshot;
+    if (snapshot.data.blockers.length) return { ok: false, error: snapshot.data.blockers.join(" ") };
+    return { ok: true, data: snapshot.data.publication };
+  },
 };
 
 export async function prepareGroupClone(id: string, name: string, signal?: AbortSignal): Promise<DataResult<ClonePlan>> {

@@ -2,7 +2,7 @@ import type { EnvironmentGroup, Policy, PolicyRequest, RuleAssignment, RuleSetDt
 import { membershipId, type DataResult } from "./data";
 import { groupPortalUrl } from "./governance";
 
-export type PublicationState = "published" | "draft" | "unknown";
+export type PublicationState = "applied" | "published" | "draft" | "unknown";
 export interface CloneSnapshot {
   group: EnvironmentGroup;
   rules: RuleSetDto[];
@@ -24,6 +24,7 @@ export interface ClonePlan {
   policy: PolicyRequest;
   publication: PublicationState;
   copied: Array<{ identity: string; path: string; value: unknown }>;
+  unsupported?: Array<{ path: string; value: unknown }>;
   blockers: string[];
 }
 
@@ -53,6 +54,20 @@ function sourceIdentity(snapshot: CloneSnapshot): unknown {
 }
 
 const groupMetadata = new Set(["id", "displayName", "description", "parentGroupId", "childrenGroupIds", "createdTime", "createdBy", "lastModifiedTime", "lastModifiedBy"]);
+const policyFields = new Set(["id", "tenantId", "name", "lastModified", "lastModifiedOffset", "ruleSets", "ruleSetCount"]);
+
+function validResponseTimestamp(value: object): boolean {
+  if (!("lastModifiedDate" in value)) return true;
+  return typeof value.lastModifiedDate === "string" && Number.isFinite(Date.parse(value.lastModifiedDate));
+}
+
+function storedSettings(values: object[] | undefined): unknown {
+  return values?.map((value) => Object.fromEntries(Object.entries(value).filter(([key]) => key !== "lastModifiedDate")));
+}
+
+function sameSettings(actual: object[] | undefined, expected: object[] | undefined): boolean {
+  return !!actual?.every(validResponseTimestamp) && canonical(storedSettings(actual)) === canonical(storedSettings(expected));
+}
 
 function inputReferences(value: unknown, identities: string[]): boolean {
   if (typeof value === "string") return identities.some((id) => id && value.toLowerCase().includes(id.toLowerCase()));
@@ -73,15 +88,28 @@ export async function planGroupClone(snapshot: CloneSnapshot, name: string, now 
   const sourcePolicyId = snapshot.policy.id ?? "";
   const sourceRuleIds = snapshot.rules.map((rule) => rule.id ?? "");
   const copied: ClonePlan["copied"] = [];
+  const unsupported: NonNullable<ClonePlan["unsupported"]> = [];
+  const checkFields = (value: object, allowed: Set<string>, path: string) => {
+    for (const [key, entry] of Object.entries(value)) {
+      if (allowed.has(key)) continue;
+      unsupported.push({ path: `${path}.${key}`, value: structuredClone(entry) });
+      blockers.push(`${path}.${key} isn't in the writable API contract. Its returned value is retained in copy details.`);
+    }
+  };
+  const checkTimestamp = (value: object, path: string) => {
+    if (!validResponseTimestamp(value)) blockers.push(`${path}.lastModifiedDate is not a valid response timestamp.`);
+  };
   const destinationName = name.trim();
   if (!sourceId || !membershipId(sourceId)) blockers.push("Source group identity is missing.");
   if (!destinationName) blockers.push("A user-selected new group name is required.");
   if (!sourcePolicyId || !Array.isArray(snapshot.policy.ruleSets)) blockers.push("Source policy identity or rule collection is missing.");
-  for (const key of Object.keys(snapshot.policy)) {
-    if (!["id", "tenantId", "name", "lastModified", "ruleSets", "ruleSetCount"].includes(key)) blockers.push(`Policy.${key} has no verified create/state mapping.`);
+  checkFields(snapshot.policy, policyFields, "Policy");
+  const offset = (snapshot.policy as Record<string, unknown>).lastModifiedOffset;
+  if (offset !== undefined && (typeof offset !== "string" || !Number.isFinite(Date.parse(offset)))) {
+    blockers.push("Policy.lastModifiedOffset is not a valid response timestamp.");
   }
   if (snapshot.publication === "unknown" || !snapshot.publicationEvidence) {
-    blockers.push("Source draft versus published configuration cannot be selected authoritatively. No Save/Publish mapping is verified; copying returned settings could copy an unpublished draft.");
+    blockers.push("Applied source state couldn't be verified; returned settings may be an unpublished draft. Read a fresh supported source before copying.");
   }
   if (snapshot.assignments.length !== 1 || snapshot.assignments.some((assignment) =>
     membershipId(assignment.resourceId ?? "") !== membershipId(sourceId)
@@ -99,7 +127,10 @@ export async function planGroupClone(snapshot: CloneSnapshot, name: string, now 
     }
   }
   for (const key of Object.keys(snapshot.group)) {
-    if (!groupMetadata.has(key)) blockers.push(`Group.${key} has no verified create mapping.`);
+    if (!groupMetadata.has(key)) {
+      unsupported.push({ path: `Group.${key}`, value: structuredClone((snapshot.group as Record<string, unknown>)[key]) });
+      blockers.push(`Group.${key} has no verified create mapping.`);
+    }
   }
   if (snapshot.group.parentGroupId || snapshot.group.childrenGroupIds?.length) {
     blockers.push("Source group has parent/child hierarchy. Hierarchy is not copied and inherited rule fidelity has no verified independent-group mapping.");
@@ -117,40 +148,43 @@ export async function planGroupClone(snapshot: CloneSnapshot, name: string, now 
         || Object.keys(value).some((key) => !["id", "type"].includes(key))))) {
       blockers.push(`Model A ${rule.id} has unsupported source scope/override fields.`);
     }
-    if (Object.keys(rule).some((key) => !["id", "lastModified", "parameters", "environmentFilter"].includes(key))) {
-      blockers.push(`Model A ${rule.id} has unsupported resource properties.`);
-    }
+    checkFields(rule, new Set(["id", "lastModified", "parameters", "environmentFilter"]), `GroupRules.${rule.id}`);
     const buckets = new Set<string>();
     for (const bucket of rule.parameters ?? []) {
       const bucketKey = `${bucket.type}/${bucket.resourceType}`;
-      if (!bucket.type || !bucket.resourceType || !Array.isArray(bucket.value) || buckets.has(bucketKey)
-        || Object.keys(bucket).some((key) => !["type", "resourceType", "value"].includes(key))) {
-        blockers.push(`Model A ${rule.id}/${bucketKey} has incomplete, duplicate or unsupported bucket settings.`);
+      if (!bucket.type || !bucket.resourceType || !Array.isArray(bucket.value) || buckets.has(bucketKey)) {
+        blockers.push(`GroupRules.${rule.id}/${bucketKey} has missing values or a duplicate bucket.`);
       }
+      checkFields(bucket, new Set(["type", "resourceType", "value", "lastModifiedDate"]), `GroupRules.${rule.id}/${bucketKey}`);
+      checkTimestamp(bucket, `GroupRules.${rule.id}/${bucketKey}`);
       buckets.add(bucketKey);
       const settingIds = new Set<string>();
       for (const setting of bucket.value ?? []) {
         const path = `ModelA.${bucketKey}/${setting.id}`;
         copied.push({ identity: rule.id ?? "", path, value: setting.value });
-        if (!setting.id || typeof setting.value !== "string" || settingIds.has(setting.id)
-          || Object.keys(setting).some((key) => !["id", "value"].includes(key))) {
-          blockers.push(`${path} cannot be copied losslessly: missing/duplicate identity, non-string value or unsupported fields.`);
+        if (!setting.id || typeof setting.value !== "string" || settingIds.has(setting.id)) {
+          blockers.push(`${path} cannot be copied losslessly: missing/duplicate identity or non-string value.`);
         }
+        checkFields(setting, new Set(["id", "value"]), path);
         settingIds.add(setting.id ?? "");
         if (inputReferences(setting.value, [sourceId, sourcePolicyId, ...sourceRuleIds])) {
           blockers.push(`${path} references source-owned resources without a verified remapping contract.`);
         }
       }
     }
-    return { sourceId: rule.id ?? "", parameters: structuredClone(rule.parameters) };
+    return {
+      sourceId: rule.id ?? "",
+      parameters: rule.parameters?.map(({ type, resourceType, value }) => ({ type, resourceType, value: structuredClone(value) })),
+    };
   });
   if (new Set(sourceRuleIds.map(membershipId)).size !== sourceRuleIds.length) blockers.push("Duplicate Model A resource identities were returned.");
   for (const rule of snapshot.policy.ruleSets ?? []) {
     copied.push({ identity: sourcePolicyId, path: `ModelB.${rule.id} v${rule.version}`, value: structuredClone(rule.inputs) });
-    if (!rule.id || !rule.version || !jsonObject(rule.inputs) || !validJson(rule.inputs) || moduleIds.has(rule.id)
-      || Object.keys(rule).some((key) => !["id", "version", "inputs"].includes(key))) {
+    if (!rule.id || !rule.version || !jsonObject(rule.inputs) || !validJson(rule.inputs) || moduleIds.has(rule.id)) {
       blockers.push(`Model B ${rule.id || "(missing module)"} has missing/duplicate identity, version or unsupported inputs.`);
     }
+    checkFields(rule, new Set(["id", "version", "inputs", "lastModifiedDate"]), `PolicyRules.${rule.id}`);
+    checkTimestamp(rule, `PolicyRules.${rule.id}`);
     moduleIds.add(rule.id ?? "");
     if (inputReferences(rule.inputs, [sourceId, sourcePolicyId, ...sourceRuleIds])) {
       blockers.push(`Model B ${rule.id} references source-owned resources without a verified remapping contract.`);
@@ -180,8 +214,11 @@ export async function planGroupClone(snapshot: CloneSnapshot, name: string, now 
   return {
     sourceId, sourcePolicyId, sourceRuleIds, sourceFingerprint: await fingerprint(sourceIdentity(snapshot)),
     preparedAt: now, group: { displayName: destinationName, description: snapshot.group.description },
-    rules, policy: { name: `${destinationName} - ${snapshot.policy.name || sourcePolicyId}`, ruleSets: structuredClone(snapshot.policy.ruleSets) },
-    publication: snapshot.publication, copied, blockers: [...new Set(blockers)],
+    rules, policy: {
+      name: `${destinationName} - ${snapshot.policy.name || sourcePolicyId}`,
+      ruleSets: snapshot.policy.ruleSets?.map(({ id, version, inputs }) => ({ id, version, inputs: structuredClone(inputs) })),
+    },
+    publication: snapshot.publication, copied, unsupported, blockers: [...new Set(blockers)],
   };
 }
 
@@ -272,8 +309,8 @@ function sameGroup(group: EnvironmentGroup, plan: ClonePlan, id: string): boolea
 }
 function samePolicy(policy: Policy, plan: ClonePlan, id: string): boolean {
   return membershipId(policy.id ?? "") === membershipId(id) && policy.name === plan.policy.name
-    && canonical(policy.ruleSets) === canonical(plan.policy.ruleSets)
-    && Object.keys(policy).every((key) => ["id", "tenantId", "name", "lastModified", "ruleSets", "ruleSetCount"].includes(key))
+    && sameSettings(policy.ruleSets, plan.policy.ruleSets)
+    && Object.keys(policy).every((key) => policyFields.has(key))
     && (policy.ruleSetCount === undefined || policy.ruleSetCount === plan.policy.ruleSets?.length);
 }
 function sameRules(rules: RuleSetDto[], plan: ClonePlan, operation: CloneOperation): boolean {
@@ -282,7 +319,7 @@ function sameRules(rules: RuleSetDto[], plan: ClonePlan, operation: CloneOperati
     && plan.rules.every((rule) => {
       const mapped = operation.rules.find((entry) => entry.sourceId === rule.sourceId);
       const stored = rules.find((entry) => membershipId(entry.id ?? "") === membershipId(mapped?.destinationId ?? ""));
-      return stored && canonical(stored.parameters) === canonical(rule.parameters)
+      return stored && sameSettings(stored.parameters, rule.parameters)
         && canonical(stored.environmentFilter) === canonical(ruleCreateBody(rule, operation.destinationId!).environmentFilter)
         && Object.keys(stored).every((key) => ["id", "lastModified", "parameters", "environmentFilter"].includes(key));
     });
@@ -384,13 +421,29 @@ export async function executeGroupClone(plan: ClonePlan, requested: CloneOperati
     }
     for (const rule of plan.rules) {
       await sourceUnchanged(plan, backend);
-      const created = await write(`create-rule:${rule.sourceId}`, () => backend.createRule(groupId, ruleCreateBody(rule, groupId)), true);
-      const id = identity(created)!;
+      const created = await write(`create-rule:${rule.sourceId}`, () => backend.createRule(groupId, ruleCreateBody(rule, groupId)));
+      // The registered POST permits 204. Only the known new group's exact read-back
+      // can identify that result; never retry POST or adopt a resource by name.
+      let storedRules: RuleSetDto[];
+      try {
+        storedRules = await readResult(backend.readRules(groupId));
+      } catch (error) {
+        if (!identity(created)) writeInFlight = true;
+        throw error;
+      }
+      const candidates = storedRules.filter((entry) => identity(entry)
+        && !operation.rules.some((mapped) => membershipId(mapped.destinationId) === membershipId(entry.id ?? ""))
+        && sameSettings(entry.parameters, rule.parameters)
+        && canonical(entry.environmentFilter) === canonical(ruleCreateBody(rule, groupId).environmentFilter));
+      const id = identity(created) ?? (candidates.length === 1 ? identity(candidates[0]) : undefined);
+      if (!id) {
+        writeInFlight = true;
+        throw new Error("Rule creation has no unique destination-scoped read-back identity. Do not retry creation; review the new group's rules.");
+      }
       if (plan.sourceRuleIds.map(membershipId).includes(membershipId(id)) || operation.rules.some((entry) => membershipId(entry.destinationId) === membershipId(id))) {
         throw new Error("Model A creation reused a source or destination resource identity.");
       }
       operation.rules.push({ sourceId: rule.sourceId, destinationId: id }); save();
-      const storedRules = await readResult(backend.readRules(groupId));
       if (!sameRules(storedRules, { ...plan, rules: plan.rules.slice(0, operation.rules.length) }, operation)) throw new Error("Created Model A rules did not preserve complete settings and destination-only scope.");
     }
     await sourceUnchanged(plan, backend);
@@ -413,7 +466,7 @@ export async function executeGroupClone(plan: ClonePlan, requested: CloneOperati
     save();
     return {
       operation,
-      message: operation.phase === "verified" ? "Independent group copy verified, including empty membership, both rule models and publication state."
+      message: operation.phase === "verified" ? "Independent copy verified: settings applied, its own ACP, and no environments. Source unchanged."
         : "Stored copy verified, but publication differs or is unknown. This is not a completed group clone. Admin publication/state verification is required.",
       ...(operation.phase === "verified" ? { destinationUrl: groupPortalUrl(groupId) } : {}),
     };

@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
-import { pushCodeApp, windowsCommand } from "./push-code-app.mjs";
+import { pushCodeApp, resolvePacLauncher, runCommand, windowsCommand } from "./push-code-app.mjs";
 
 function fixture() {
   const root = mkdtempSync(path.join(tmpdir(), "ppcoe push fixture "));
@@ -102,8 +102,8 @@ test("builds invoking checkout, prepares complete current registration, pushes e
     const privateBefore = readFileSync(f.bindingFile, "utf8");
     await pushCodeApp(f.options);
     assert.deepEqual(f.calls.map((call) => call.operation),
-      ["pac org who", "npm run build", "adapter", "pac solution export", "pac code push", "pac solution export", "pac solution unpack"]);
-    assert.ok(f.calls.filter((call) => ["pac org who", "pac code push", "pac solution export"].includes(call.operation))
+      ["pac env who", "npm run build", "adapter", "pac solution export", "pac code push", "pac solution export", "pac solution unpack"]);
+    assert.ok(f.calls.filter((call) => ["pac env who", "pac code push", "pac solution export"].includes(call.operation))
       .every((call) => call.args[call.args.indexOf("--environment") + 1] === f.config.environmentId));
     assert.equal(f.calls[1].cwd, f.app);
     assert.equal(readFileSync(f.configFile, "utf8"), before);
@@ -127,7 +127,7 @@ test("dry run builds and validates adapter output without ANY tenant command", a
 });
 
 for (const operation of [
-  "pac org who", "npm run build", "adapter", "changed config", "wrong stage", "bad stage",
+  "pac env who", "npm run build", "adapter", "changed config", "wrong stage", "bad stage",
   "backup", "pac code push", "pac solution export", "pac solution unpack", "verifier",
 ]) {
   test(`fails safely and cleans owned staging/lock on ${operation}`, async () => {
@@ -137,6 +137,7 @@ for (const operation of [
       const afterPush = ["pac solution export", "pac solution unpack", "verifier"].includes(operation);
       await assert.rejects(pushCodeApp(f.options), afterPush ? /Published, but export verification failed; do not distribute/ : /failed|failure|changed|different|Nonportable/);
       if (!afterPush && operation !== "pac code push") assert.ok(!f.calls.some((call) => call.operation === "pac code push"));
+      if (operation === "pac env who") assert.deepEqual(f.calls.map((call) => call.operation), ["pac env who"]);
       assert.ok(readdirSync(f.temporaryRoot).every((name) => name.startsWith("ppcoe-source-backup-")));
       assert.ok(!f.messages.some((message) => message.includes("Published and verified")));
     } finally { f.cleanup(); }
@@ -189,29 +190,82 @@ test("target lock blocks another checkout without removing its lock", async () =
   } finally { f.cleanup(); }
 });
 
-test("Windows executable/arguments preserve spaces, quotes and shell metacharacters as literal arguments", () => {
+test("Windows batch command quotes arguments once and disables command expansion", () => {
   const arguments_ = windowsCommand("C:\\Program Files\\PAC\\pac.cmd", ["solution", "unpack", "--folder", "C:\\User's files\\a&b"]);
-  const command = Buffer.from(arguments_.at(-1), "base64").toString("utf16le");
-  assert.equal(command, "& 'C:\\Program Files\\PAC\\pac.cmd' '\"solution\"' '\"unpack\"' '\"--folder\"' '\"C:\\User''s files\\a&b\"'; exit $LASTEXITCODE");
+  assert.deepEqual(arguments_, ["/d", "/v:off", "/s", "/c",
+    `""C:\\Program Files\\PAC\\pac.cmd" "solution" "unpack" "--folder" "C:\\User's files\\a&b""`]);
   for (const unsafe of ['a"b', "a%PATH%b", "a\nb"]) {
     assert.throws(() => windowsCommand("pac.cmd", [unsafe]), /cannot contain/);
   }
 });
 
-test("Windows launcher delivers spaced paths and metacharacters unchanged to a native batch tool", {
+test("Windows launcher delivers switches, empty arguments, paths and metacharacters unchanged through cmd and bat", {
   skip: process.platform !== "win32",
 }, () => {
   const directory = mkdtempSync(path.join(tmpdir(), "ppcoe command test "));
   try {
     const probe = path.join(directory, "probe.mjs");
-    const batch = path.join(directory, "native tool.cmd");
     writeFileSync(probe, "console.log(JSON.stringify(process.argv.slice(2)))");
-    writeFileSync(batch, `@echo off\r\n"${process.execPath}" "${probe}" %*\r\n`);
-    const args = ["C:\\User's files\\a&b", "simple", "C:\\a&b"];
-    const result = spawnSync("powershell.exe", windowsCommand(batch, args), { encoding: "utf8" });
-    assert.equal(result.status, 0, result.stderr);
-    assert.deepEqual(JSON.parse(result.stdout.trim()), args);
+    const args = ["org", "who", "--environment", "C:\\User's files\\a&b", "simple", "C:\\a&b", "", "C:\\trailing path\\", "(x)", "a!b", "a^b", "|<>"];
+    for (const extension of ["cmd", "bat"]) {
+      const batch = path.join(directory, `native tool.${extension}`);
+      writeFileSync(batch, `@echo off\r\n"${process.execPath}" "${probe}" %*\r\n`);
+      const result = spawnSync(process.env.ComSpec || "cmd.exe", windowsCommand(batch, args), { encoding: "utf8", windowsVerbatimArguments: true });
+      assert.equal(result.status, 0, result.stderr);
+      assert.deepEqual(JSON.parse(result.stdout.trim()), args);
+      assert.doesNotThrow(() => runCommand(batch, args, directory));
+    }
   } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
+test("real Windows child failure stops identity preflight before build, backup or publish", {
+  skip: process.platform !== "win32",
+}, async () => {
+  const f = fixture();
+  try {
+    const failing = path.join(f.root, "failing tool.cmd");
+    const probe = path.join(f.root, "failure.mjs");
+    writeFileSync(probe, "process.exit(23)");
+    writeFileSync(failing, `@echo off\r\n"${process.execPath}" "${probe}" %*\r\nexit /b %errorlevel%\r\n`);
+    const calls = [];
+    await assert.rejects(pushCodeApp({ ...f.options, run: (tool, args, cwd) => {
+      calls.push([tool, args]);
+      runCommand(failing, args, cwd);
+    } }), /exit 23/);
+    assert.deepEqual(calls, [["pac", ["env", "who", "--environment", f.config.environmentId]]]);
+    assert.ok(existsSync(path.join(f.app, "dist", "stale.js")), "build must not start");
+    assert.deepEqual(readdirSync(f.temporaryRoot), []);
+    const launchFailure = path.join(f.root, "launch failure.bat");
+    writeFileSync(launchFailure, "@echo off\r\nexit /b 31\r\n");
+    assert.throws(() => runCommand(launchFailure, [], f.root), /exit 31/);
+  } finally { f.cleanup(); }
+});
+
+test("PAC shim resolution selects only the advertised native installation and fails closed", () => {
+  const root = mkdtempSync(path.join(tmpdir(), "ppcoe pac resolution "));
+  try {
+    const shim = path.join(root, "pac.cmd");
+    const native = path.join(root, "Microsoft.PowerApps.CLI.2.14.1", "tools", "pac.exe");
+    mkdirSync(path.dirname(native), { recursive: true });
+    writeFileSync(native, "fixture path, never executed");
+    writeFileSync(shim, '@echo off\r\n"%~dp0pac.launcher.exe" %*\r\n');
+    const calls = [];
+    const probe = (tool, args) => {
+      calls.push([tool, args]);
+      return { status: 0, stdout: "Microsoft PowerPlatform CLI\nVersion: 2.14.1+fixture\n  env Work with Dataverse\n", stderr: "" };
+    };
+    assert.equal(resolvePacLauncher(shim, probe), native);
+    assert.deepEqual(calls, [[path.join(root, "pac.launcher.exe"), ["help"]], [native, ["help"]]]);
+    assert.throws(() => resolvePacLauncher(shim, () => ({ status: 0, stdout: "Error: failed\nVersion: 2.14.1\n", stderr: "" })), /did not identify/);
+    assert.throws(() => resolvePacLauncher(shim, () => ({ status: 1, stdout: "Version: 2.14.1\n", stderr: "" })), /did not identify/);
+    assert.throws(() => resolvePacLauncher(shim, () => ({ status: 0, stdout: "Version: 99.0.0\n", stderr: "" })), /missing/);
+    let index = 0;
+    assert.throws(() => resolvePacLauncher(shim, () => ({
+      status: 0, stdout: `Version: ${index++ ? "2.13.0" : "2.14.1"}\n  env Work with Dataverse\n`, stderr: "",
+    })), /could not be verified/);
+    writeFileSync(shim, '@echo off\r\ncall another-pac.cmd %*\r\n');
+    assert.throws(() => resolvePacLauncher(shim, probe), /Unrecognized/);
+  } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
 test("npm exposes push without changing local dev and help works from root or app directory", () => {
