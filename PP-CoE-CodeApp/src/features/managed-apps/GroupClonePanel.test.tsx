@@ -19,7 +19,7 @@ import { GroupClonePanel } from "./GroupClonePanel";
 function plan(blockers = ["Publication is unknown; no writes are enabled."]): ClonePlan {
   return {
     sourceId: "source-id", sourcePolicyId: "source-policy-id", sourceRuleIds: ["source-rule-id"], sourceFingerprint: "synthetic",
-    preparedAt: 123, publication: "unknown", group: { displayName: "New empty group", description: "" },
+    preparedAt: 123, publication: blockers.length ? "unknown" : "applied", group: { displayName: "New empty group", description: "" },
     rules: [{ sourceId: "source-rule-id", parameters: [] }], policy: { name: "Independent policy", ruleSets: [] },
     copied: [{ identity: "source-rule-id", path: "ModelA.Sharing/UsersBot/MaximumShareLimit", value: "99" }], blockers,
   };
@@ -33,7 +33,7 @@ const renderPanel = (onCompleted = vi.fn()) => render(<FluentProvider theme={web
 </FluentProvider>);
 async function review() {
   fireEvent.change(screen.getByRole("textbox", { name: "New group name" }), { target: { value: "New empty group" } });
-  fireEvent.click(screen.getByRole("button", { name: "Review independent copy" }));
+  fireEvent.click(screen.getByRole("button", { name: "Review copy" }));
 }
 beforeEach(() => {
   vi.clearAllMocks(); loadRecords.mockReturnValue([]);
@@ -44,11 +44,13 @@ beforeEach(() => {
 describe("independent copy panel (synthetic UI evidence)", () => {
   it("uses a fresh preflight and shows concrete source/destination, both-model scope and the publication blocker", async () => {
     renderPanel(); await review();
-    expect(await screen.findByText(/Source: Synthetic source/)).toHaveTextContent("New empty group");
+    expect(await screen.findByText("Synthetic source → New empty group")).toBeInTheDocument();
     expect(prepare).toHaveBeenCalledWith("source-id", "New empty group", expect.any(AbortSignal));
-    expect(screen.getByText("Publication is unknown; no writes are enabled.")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Create independent copy (unavailable)" })).toBeDisabled();
-    expect(screen.getByRole("checkbox")).toBeDisabled();
+    expect(screen.getByText(/Copy isn't ready:/)).toHaveTextContent("Publication is unknown");
+    expect(screen.queryByRole("button", { name: /Create independent copy/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
+    expect(screen.getByText("Copy details and checks (1)").closest("details")).not.toHaveAttribute("open");
+    expect(screen.getByText(/Source group: source-id/)).not.toBeVisible();
     expect(screen.queryByRole("link", { name: /destination/ })).not.toBeInTheDocument();
     expect(execute).not.toHaveBeenCalled();
   });
@@ -73,6 +75,8 @@ describe("independent copy panel (synthetic UI evidence)", () => {
     prepare.mockResolvedValue({ ok: true, data: plan([]) });
     renderPanel(); await review();
     await screen.findByRole("checkbox");
+    expect(screen.getByText("Copies applied settings. Pending changes in admin center aren't copied.")).toBeVisible();
+    expect(screen.getByRole("checkbox")).toHaveAccessibleName(/all reviewed applied settings and a separate ACP/);
     fireEvent.click(screen.getByRole("checkbox"));
     expect(screen.getByRole("button", { name: "Create independent copy" })).not.toBeDisabled();
     fireEvent.change(screen.getByRole("textbox", { name: "New group name" }), { target: { value: "Changed name" } });
@@ -85,10 +89,10 @@ describe("independent copy panel (synthetic UI evidence)", () => {
     prepare.mockResolvedValue({ ok: true, data: plan([]) });
     reconcile.mockResolvedValue({ operation: record, message: "Policy ID unresolved; admin recovery required." });
     renderPanel(); await review();
-    await screen.findByRole("checkbox");
-    fireEvent.click(screen.getByRole("checkbox"));
-    expect(screen.getByRole("button", { name: "Create independent copy" })).toBeDisabled();
-    fireEvent.click(screen.getByText(/Copy operation records and manual recovery/));
+    await screen.findByText("Synthetic source → New empty group");
+    expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Create independent copy" })).not.toBeInTheDocument();
+    expect(screen.getByText(/Copy history and recovery/).closest("details")).toHaveAttribute("open");
     expect(screen.getByText(/returned-group-id/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Reconcile known IDs (read only)" }));
     expect(await screen.findByText("Policy ID unresolved; admin recovery required.")).toBeInTheDocument();

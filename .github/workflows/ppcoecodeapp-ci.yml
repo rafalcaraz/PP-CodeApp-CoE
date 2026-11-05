@@ -51,7 +51,7 @@ jobs:
 
       - name: Connection and publishing regression tests
         working-directory: .
-        run: node --test scripts/connection-config.test.mjs scripts/prepare-code-app-publish.test.mjs scripts/verify-code-app-export.test.mjs
+        run: node --test scripts/connection-config.test.mjs scripts/prepare-code-app-publish.test.mjs scripts/verify-code-app-export.test.mjs scripts/local-connection-bindings.test.mjs scripts/push-code-app.test.mjs
 
       - name: Lint
         run: npm run lint

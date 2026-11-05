@@ -17,9 +17,10 @@
 // `pac auth list` / `pac org select` to change.
 
 import { execSync } from "node:child_process";
-import { rmSync, mkdirSync, existsSync, readdirSync } from "node:fs";
+import { rmSync, mkdirSync, existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { verifySolutionDirectory } from "./verify-code-app-export.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "..");
@@ -63,6 +64,14 @@ async function main() {
   if (!existsSync(tmpZip)) {
     throw new Error(`Export reported success but ${tmpZip} was not created.`);
   }
+
+  const stagedSolution = path.join(tmpDir, "verified");
+  log("Checking exported app registration before overwriting solution source");
+  run(
+    `pac solution unpack --zipFile "${tmpZip}" --folder "${stagedSolution}" --packageType Unmanaged`,
+  );
+  const config = JSON.parse(readFileSync(path.join(repoRoot, "PP-CoE-CodeApp", "power.config.json"), "utf8"));
+  verifySolutionDirectory(stagedSolution, config);
 
   log(`Unpacking into ${path.relative(repoRoot, solutionSrc).split(path.sep).join("/")} (--allowDelete mirrors cloud)`);
   run(

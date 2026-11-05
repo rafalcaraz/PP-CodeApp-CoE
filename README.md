@@ -198,15 +198,19 @@ tenant:
    [Releases](../../releases).
 2. Import it into a Dataverse environment (maker portal → **Solutions** →
    **Import**, or `pac solution import`).
-3. In the solution's **Connection References**, set the **Power Platform for
-   Admins V2** connection (created with an account that has tenant admin / PIM
-   access).
+3. Bind the solution's **Connection References** to destination connections.
+   The Admins connections require tenant admin / PIM access. Graph, licensing
+   and Power Platform API HTTP references need separate audience-specific
+   connections; preserve the flow invoker mappings.
 4. Open the **PP CoE Code App** from the apps list. The preflight gate confirms
    access on first load.
 
 For pulling cloud changes back into git, building self-contained zips, and how
 the release workflow ships managed solutions, see
 [`solution/README.md`](solution/README.md).
+For recurring red HTTP connection rows after import, see the
+[deployed admission diagnosis and recovery](solution/README.md#recurring-imported-app-admission-failure).
+Re-exporting a broken source publication does not repair it.
 
 ### Run it locally (contributors)
 
@@ -232,12 +236,29 @@ For the exact Graph/licensing/Power Platform API references and the separate
 Cost Controls connection check, see
 [Local-development connection admission](solution/README.md#local-development-connection-admission).
 
+### Push the current checkout to the source environment
+
+From `PP-CoE-CodeApp/`, use **`npm run push`** when ready to deploy, separately
+from `npm run dev`. It reads this checkout's ignored `power.bindings.local`,
+shows the configured source environment and existing app for confirmation,
+builds fresh assets, takes a private source backup, publishes through PAC with
+the solution mappings preserved, then verifies a fresh source solution export.
+It does not import anywhere or produce a managed release.
+
+Requires Node 22.18+, npm and authenticated PAC on PATH. The one-time private
+bindings setup is shared with local development. Use `npm run push -- --dry-run`
+to build/check local staging without any tenant commands, or
+`npm run push -- --help` for details. Do not use `pa app push` 1.3.0 for this
+solution-backed app: its mapper drops logical connection names.
+See [publishing details](solution/README.md#single-command-source-publish).
+
 Common commands (run from `PP-CoE-CodeApp/`):
 
 ```powershell
 npm run lint           # ESLint (incl. feature-boundary rules)
 npx tsc --noEmit       # type-check
 npm run build          # tsc -b && vite build
+npm run push           # confirm, build, back up, publish source app and verify its export
 npm run test:run       # Vitest, single CI run
 npm test               # Vitest in watch mode
 ```

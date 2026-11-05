@@ -33,6 +33,25 @@ test("direct Graph calls retain their dedicated logical connection reference", (
   assert.equal(graph.xrmConnectionReferenceLogicalName, "msftcsa_HTTPEntraPreAuthGraph");
 });
 
+test("three HTTP audiences have distinct solution references with their documented endpoints", () => {
+  const customizations = readFileSync(new URL("../solution/src/Other/Customizations.xml", import.meta.url), "utf8");
+  for (const [logicalName, audience] of [
+    ["msftcsa_HTTPEntraPreAuthGraph", "https://graph.microsoft.com"],
+    ["msftcsa_PPLicensingAPI", "https://licensing.powerplatform.microsoft.com"],
+    ["msftcsa_HTTPWithEntraPPAPI", "https://api.powerplatform.com"],
+  ]) {
+    const references = Object.values(config.connectionReferences)
+      .filter((ref) => ref.xrmConnectionReferenceLogicalName === logicalName);
+    assert.equal(references.length, 1);
+    assert.ok(references[0].id.toLowerCase().endsWith("/shared_webcontents"));
+    const definition = customizations.match(new RegExp(
+      `<connectionreference connectionreferencelogicalname="${logicalName}">([\\s\\S]*?)</connectionreference>`,
+    ));
+    assert.ok(definition, `Missing solution connection reference ${logicalName}`);
+    assert.ok(definition[1].includes(`<description>Use ${audience}</description>`));
+  }
+});
+
 test("tracked app metadata preserves configured logical references and flow mappings without source connection IDs", () => {
   const directory = new URL("../solution/src/CanvasApps/", import.meta.url);
   const files = readdirSync(directory).filter((name) => name.endsWith(".meta.xml"));

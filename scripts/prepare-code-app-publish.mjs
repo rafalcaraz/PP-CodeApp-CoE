@@ -1,9 +1,37 @@
 import { cpSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { parseArgs } from "node:util";
+import { isDeepStrictEqual, parseArgs } from "node:util";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+
+export function validatePublishConfig(config, expected) {
+  if (config.appId !== expected.appId || config.environmentId !== expected.environmentId) {
+    throw new Error("Publish configuration must target the canonical source app and environment.");
+  }
+  const registration = (references) => Object.fromEntries(
+    Object.entries(references ?? {}).map(([key, ref]) => [key, {
+      id: ref.id.toLowerCase(),
+      logicalName: ref.xrmConnectionReferenceLogicalName,
+      dataSources: [...(ref.dataSources ?? [])].sort(),
+      dataSets: ref.dataSets ?? {},
+      authenticationType: ref.authenticationType,
+      workflowEntityId: ref.workflowDetails?.workflowEntityId,
+      dependencies: ref.workflowDetails?.dependencies ?? {},
+    }]),
+  );
+  if (!isDeepStrictEqual(registration(config.connectionReferences), registration(expected.connectionReferences))
+    || !isDeepStrictEqual(config.databaseReferences ?? {}, expected.databaseReferences ?? {})) {
+    throw new Error("Private publish configuration has stale or changed registration. Copy the current modern configuration and resolve only its bindings privately.");
+  }
+  const httpBindings = Object.values(config.connectionReferences)
+    .filter((ref) => ref.id.toLowerCase().endsWith("/shared_webcontents"))
+    .map((ref) => ref.sharedConnectionId?.toLowerCase())
+    .filter((binding) => binding && !binding.includes("<"));
+  if (new Set(httpBindings).size !== httpBindings.length) {
+    throw new Error("Graph, licensing and Power Platform API require distinct HTTP audience bindings.");
+  }
+}
 
 export function toPacPublishConfig(config) {
   const references = config.connectionReferences ?? {};
@@ -81,6 +109,8 @@ function main() {
   if (!config.appId || !config.environmentId) {
     throw new Error("An existing app ID and explicit source environment ID are required.");
   }
+  const canonical = JSON.parse(readFileSync(path.join(repoRoot, "PP-CoE-CodeApp", "power.config.json"), "utf8"));
+  validatePublishConfig(config, canonical);
   const compatible = toPacPublishConfig(config);
   const appRoot = path.join(repoRoot, "PP-CoE-CodeApp");
   if (!existsSync(path.join(appRoot, "dist", config.buildEntryPoint))) {

@@ -18,10 +18,12 @@
 // switch APPS to an explicit array.
 
 import { execSync } from "node:child_process";
-import { readFileSync, writeFileSync, rmSync, mkdirSync, cpSync, readdirSync, existsSync } from "node:fs";
+import { readFileSync, writeFileSync, rmSync, mkdirSync, mkdtempSync, cpSync, readdirSync, existsSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { readdir, stat } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { verifySolutionDirectory } from "./verify-code-app-export.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "..");
@@ -177,6 +179,9 @@ async function buildAndBundle({ folder, appName }) {
 }
 
 async function main() {
+  const config = JSON.parse(readFileSync(path.join(repoRoot, "PP-CoE-CodeApp", "power.config.json"), "utf8"));
+  verifySolutionDirectory(solutionSrc, config);
+
   // Resolve appName for each app (auto-discover if null).
   const resolvedApps = APPS.map((app) => ({
     ...app,
@@ -219,6 +224,16 @@ async function main() {
   await stat(zipPath).catch(() => {
     throw new Error(`pac solution pack reported success but ${path.relative(repoRoot, zipPath)} was not created. Scroll up for the pac error.`);
   });
+
+  const verificationDir = mkdtempSync(path.join(tmpdir(), "ppcoe-pack-check-"));
+  try {
+    run(`pac solution unpack --zipFile "${zipPath}" --folder "${verificationDir}" --packageType ${packageType}`);
+    verifySolutionDirectory(verificationDir, config);
+  } catch (error) {
+    throw new Error(`Packed artifact verification failed; do not import ${path.basename(zipPath)}. ${error.message}`);
+  } finally {
+    rmSync(verificationDir, { recursive: true, force: true });
+  }
 
   log("Done");
   console.log(`  📦 ${relZip}`);

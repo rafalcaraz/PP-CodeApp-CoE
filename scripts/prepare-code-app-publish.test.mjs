@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { toPacPublishConfig } from "./prepare-code-app-publish.mjs";
+import { toPacPublishConfig, validatePublishConfig } from "./prepare-code-app-publish.mjs";
 
 function fixture() {
   return {
@@ -80,3 +80,32 @@ test("deduplicates graph edges while retaining every invoker alias", () => {
   assert.deepEqual(refs.licensing.dependents, ["flow"]);
   assert.deepEqual(refs.flow.parameterHintsV2.anotherAlias, { value: "licensing" });
 });
+
+test("private publish configuration may resolve bindings without changing registration", () => {
+  const expected = fixture();
+  const config = structuredClone(expected);
+  config.connectionReferences.graph.sharedConnectionId = "/connections/source-graph";
+  config.connectionReferences.flow.workflowDetails.workflowName = "export-created-runtime-name";
+  validatePublishConfig(config, expected);
+});
+
+for (const [name, mutate] of [
+  ["wrong app", (c) => { c.appId = "other-app"; }],
+  ["wrong environment", (c) => { c.environmentId = "other-environment"; }],
+  ["lost logical name", (c) => { delete c.connectionReferences.licensing.xrmConnectionReferenceLogicalName; }],
+  ["lost flow dependency", (c) => { c.connectionReferences.flow.workflowDetails.dependencies = {}; }],
+  ["stale workflow", (c) => { c.connectionReferences.flow.workflowDetails.workflowEntityId = "old-flow"; }],
+  ["missing connector", (c) => { delete c.connectionReferences.graph; }],
+  ["changed data source", (c) => { c.connectionReferences.graph.dataSources = ["different"]; }],
+  ["changed Dataverse registration", (c) => { c.databaseReferences = {}; }],
+  ["reused HTTP audience binding", (c) => {
+    c.connectionReferences.licensing.sharedConnectionId = c.connectionReferences.graph.sharedConnectionId;
+  }],
+]) {
+  test(`publish preparation rejects ${name} instead of publishing stale private metadata`, () => {
+    const expected = fixture();
+    const config = structuredClone(expected);
+    mutate(config);
+    assert.throws(() => validatePublishConfig(config, expected), /canonical|stale|distinct HTTP/);
+  });
+}

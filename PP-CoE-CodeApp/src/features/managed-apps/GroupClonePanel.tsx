@@ -73,32 +73,42 @@ export function GroupClonePanel({ sourceId, sourceName, onCompleted }: { sourceI
   }
   const unresolved = records.some((record) => !["blocked", "planned", "verified"].includes(record.phase));
   return <div className={styles.stack}>
-    <Text as="h3" weight="semibold">Copy to an empty group</Text>
-    <Text>Copy group properties, all Model A settings and every Model B module, including an independent ACP. No environments, PDEs, source assignments, hierarchy or permissions are copied. The source is never changed.</Text>
+    <Text as="h3" weight="semibold">Duplicate environment group</Text>
+    <Text>Copy settings from {sourceName} into a new empty group with its own ACP. No environments are copied; the source stays unchanged.</Text>
     <Field label="New group name"><Input value={name} disabled={busy} onChange={(_, data) => {
       ++generation.current; controller.current?.abort();
       setName(data.value); setResult(null); setConfirmed(false); setOutcome(null);
     }} /></Field>
-    <Button disabled={!name.trim() || busy} onClick={() => void review()}>Review independent copy</Button>
-    {busy && <LoadingPane label="Reading / verifying the independent group copy..." />}
-    {result && !result.ok && <ErrorPane title="Copy preflight unavailable" message={result.error} />}
+    <Button disabled={!name.trim() || busy} onClick={() => void review()}>Review copy</Button>
+    {busy && <LoadingPane label="Checking group copy..." />}
+    {result && !result.ok && <ErrorPane title="Couldn't review this copy" message={result.error} />}
     {storageError && <ErrorPane title="Recovery storage unavailable" message={storageError} />}
     {plan && <>
-      <Text weight="semibold">Source: {sourceName} ({plan.sourceId}) → New empty group: {plan.group.displayName}</Text>
-      <Text>0 environments copied · 1 independent ACP copies proposed</Text>
-      <Caption1>Source policy {plan.sourcePolicyId} → a newly returned policy ID. Module IDs, versions, connector/action identifiers and complete input values are preserved; group/policy/ruleset resource IDs are not reused.</Caption1>
-      <Caption1>Fresh nontransactional source read: {new Date(plan.preparedAt).toLocaleTimeString()}. Source state: {plan.publication}. Writes would recheck this snapshot.</Caption1>
-      <RawJsonAccordion title={`Exact copied properties and settings (${plan.copied.length})`} data={plan.copied} />
-      <Caption1>Model A scope becomes destination-only Include. Model B assignment uses the documented empty body for the whole new group. Unknown input keys and explicit connection-type/action lists are preserved, not normalized away.</Caption1>
+      <Text weight="semibold">{sourceName} → {plan.group.displayName}</Text>
+      <Caption1>{plan.copied.length} settings · Independent ACP · 0 environments copied</Caption1>
+      {plan.publication === "applied" && <Caption1>Copies applied settings. Pending changes in admin center aren't copied.</Caption1>}
       {!!plan.blockers.length && <>
-        <MessageBar intent="warning"><MessageBarBody>Full-copy fidelity is not established. No group, ruleset or ACP has been created. These are evidence-specific blockers, not a missing CreateRuleSet route.</MessageBarBody></MessageBar>
-        <ul className={styles.list}>{plan.blockers.map((blocker) => <li key={blocker}>{blocker}</li>)}</ul>
+        <MessageBar intent="warning"><MessageBarBody>Copy isn't ready: {plan.blockers[0]} This review hasn't created resources.</MessageBarBody></MessageBar>
       </>}
-      <Text>{AUTHORIZATION_NOTICE}</Text>
-      <Checkbox checked={confirmed} disabled={busy || !!plan.blockers.length} label={`I confirm copying ${sourceName} (${plan.sourceId}) to NEW empty group "${plan.group.displayName}", with all listed settings and a separate ACP. Source state ${plan.publication} must be preserved; no membership or source changes. Partial resources may require manual admin recovery; no automatic deletion.`} onChange={(_, data) => setConfirmed(data.checked === true)} />
+      <details><summary>Copy details{plan.blockers.length ? ` and checks (${plan.blockers.length})` : ""}</summary>
+        <div className={styles.stack}>
+          <Caption1>Source group: {plan.sourceId} · Source policy: {plan.sourcePolicyId}</Caption1>
+          <Caption1>Read {new Date(plan.preparedAt).toLocaleTimeString()} · Stored source state: {plan.publication}. Source settings are checked again before writes.</Caption1>
+          {!!plan.blockers.length && <ul className={styles.list}>{plan.blockers.map((blocker) => <li key={blocker}>{blocker}</li>)}</ul>}
+          <RawJsonAccordion title={`Copied settings (${plan.copied.length})`} data={plan.copied} />
+          {!!plan.unsupported?.length && <RawJsonAccordion title="Unmapped fields (exact returned values)" data={plan.unsupported} />}
+          <Text>{AUTHORIZATION_NOTICE}</Text>
+          <Caption1>Setting and module identifiers, versions and complete input values are preserved. New resource identities and destination-only assignment are verified. No hierarchy, roles or membership are copied.</Caption1>
+        </div>
+      </details>
       {unresolved && <MessageBar intent="warning"><MessageBarBody>A previous copy has incomplete or uncertain writes. Reconcile its IDs; do not start another copy and create duplicate/orphan resources.</MessageBarBody></MessageBar>}
-      <Button appearance="primary" disabled={busy || !confirmed || !!plan.blockers.length || !!storageError || unresolved || !!outcome}
-        onClick={() => void execute()}>{plan.blockers.length ? "Create independent copy (unavailable)" : "Create independent copy"}</Button>
+      {!plan.blockers.length && !unresolved && !storageError && !outcome && <>
+        <Checkbox checked={confirmed} disabled={busy || unresolved}
+          label={`Create "${plan.group.displayName}" from "${sourceName}" with all reviewed ${plan.publication} settings and a separate ACP. No environments or source changes. Incomplete writes may need manual recovery.`}
+          onChange={(_, data) => setConfirmed(data.checked === true)} />
+        <Button appearance="primary" disabled={busy || !confirmed}
+          onClick={() => void execute()}>Create independent copy</Button>
+      </>}
     </>}
     {outcome && <>
       <MessageBar intent={outcome.operation.phase === "verified" && outcome.destinationUrl ? "success" : "warning"}><MessageBarBody>{outcome.message}</MessageBarBody></MessageBar>
@@ -108,7 +118,7 @@ export function GroupClonePanel({ sourceId, sourceName, onCompleted }: { sourceI
       }} />
       {outcome.destinationUrl && <Link href={outcome.destinationUrl} target="_blank" rel="noopener noreferrer">Open verified destination group in admin center</Link>}
     </>}
-    {!!records.length && <details><summary>Copy operation records and manual recovery ({records.length})</summary>
+    {!!records.length && <details open={unresolved}><summary>Copy history and recovery ({records.length})</summary>
       <Caption1>Stored locally in this browser: IDs, fingerprints and step outcomes only, not credentials or copied settings. No automatic cleanup or creation retry. A lost response can leave an unidentifiable orphan; names are not ownership evidence.</Caption1>
       {records.map((record) => <div key={record.id} className={styles.record}>
         <Text weight="semibold">{record.phase} · operation {record.id}</Text>

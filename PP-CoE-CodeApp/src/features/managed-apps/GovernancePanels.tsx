@@ -74,13 +74,16 @@ export function GroupPanel({ group, evidence, loading, onClose, onCompleted }: {
   return <OverlayDrawer open position="end" className={styles.drawer} onOpenChange={(_, data) => { if (!data.open) onClose(); }}>
     <DrawerHeader><DrawerHeaderTitle action={<Button appearance="subtle" icon={<DismissRegular />} aria-label="Close group inspection" onClick={onClose} />}>{group.displayName || group.id}</DrawerHeaderTitle></DrawerHeader>
     <DrawerBody className={styles.stack}>
-      <Caption1>Group ID: {group.id}</Caption1>
       {portalUrl && <Link href={portalUrl} target="_blank" rel="noopener noreferrer">Open / configure this group in Power Platform admin center</Link>}
-      <MessageBar intent="info"><MessageBarBody>Returned configuration, not a runtime allow / block verdict. Publication, environment overrides and overlapping policies remain unverified. An absent connector is not automatically blocked.</MessageBarBody></MessageBar>
+      <GroupClonePanel sourceId={group.id} sourceName={group.displayName || group.id} onCompleted={onCompleted} />
       {loading && <LoadingPane label="Loading group properties, rules and ACP evidence..." />}
       {!loading && evidence && <>
-        <Caption1 className={styles.muted}>Historical configuration snapshot read {new Date(evidence.capturedAt).toLocaleTimeString()}. Refresh after external changes; this is not a current permission guarantee.</Caption1>
         <EvidenceProblems evidence={evidence} />
+        {evidence.policies.ok && <Text>{evidence.policies.data.length
+          ? `${evidence.policies.data.length} assigned polic${evidence.policies.data.length === 1 ? "y" : "ies"} · ${connectors.length} configured connectors`
+          : "No policy assignments were returned. Connector permissions are unknown, not unrestricted."}</Text>}
+        <details><summary>Group settings and policy details</summary>
+        <Caption1 className={styles.muted}>Group ID: {group.id} · Read {new Date(evidence.capturedAt).toLocaleTimeString()}. Configuration only, not a runtime permission verdict.</Caption1>
         <section className={styles.section}>
           <Text as="h3" weight="semibold">Properties and rules</Text>
           {evidence.details.ok && <><Text>{evidence.details.data.description || "No description returned."}</Text><RawJsonAccordion title="Group properties" data={evidence.details.data} /></>}
@@ -93,20 +96,19 @@ export function GroupPanel({ group, evidence, loading, onClose, onCompleted }: {
         </section>
         <section className={styles.section}>
           <Text as="h3" weight="semibold">ACP and assigned policies</Text>
-          {evidence.policies.ok && !evidence.policies.data.length && <Text>No policy assignments were returned. Connector permissions are unknown, not unrestricted.</Text>}
           {evidence.policies.ok && evidence.policies.data.map((policy) => <div key={policy.id} className={styles.stack}>
             <Text weight="semibold">{policy.name || policy.id}</Text><Caption1>Policy ID: {policy.id}</Caption1>
             <Caption1>ACP-only flag: {policy.ruleSets?.find((rule) => rule.id === "AdvancedConnectorPoliciesOnly")?.inputs?.EnableAdvancedConnectorPoliciesOnly === true ? "Enabled in returned configuration" : policy.ruleSets?.find((rule) => rule.id === "AdvancedConnectorPoliciesOnly")?.inputs?.EnableAdvancedConnectorPoliciesOnly === false ? "Disabled in returned configuration" : "Unavailable"}</Caption1>
-            <GovernanceRulesGrid items={getPolicyRuleItems(policy)} />
+            <details><summary>Policy settings ({policy.ruleSets?.length ?? 0})</summary><GovernanceRulesGrid items={getPolicyRuleItems(policy)} /></details>
             <RawJsonAccordion title="Policy evidence (rule versions and raw modes)" data={policy} />
           </div>)}
           {!declarations.ok && evidence.policies.ok && <ErrorPane title="Connector declarations unavailable" message={declarations.error} />}
-          {connectors.map((id) => <div key={id}><Text weight="semibold">{id}</Text><ConnectorConfiguration value={connectorEvidence(evidence, id)} /></div>)}
+          {!!connectors.length && <details><summary>Configured connectors ({connectors.length})</summary>
+            {connectors.map((id) => <div key={id}><Text weight="semibold">{id}</Text><ConnectorConfiguration value={connectorEvidence(evidence, id)} /></div>)}
+          </details>}
           <Caption1>Runtime blocked connectors: unavailable. These APIs do not supply a verified effective blocked-connector list.</Caption1>
         </section>
-        <section className={styles.section}>
-          <GroupClonePanel sourceId={group.id} sourceName={group.displayName || group.id} onCompleted={onCompleted} />
-        </section>
+        </details>
       </>}
     </DrawerBody>
   </OverlayDrawer>;

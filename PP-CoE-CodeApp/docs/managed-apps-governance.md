@@ -372,8 +372,8 @@ No real tenant move was performed during development. Focused tests use
 synthetic adapter responses, including async/ambiguous completion and
 permission failures. Safe user-run verification still needs an explicitly
 confirmed expendable PDE, actual authority, and inspection of destination
-membership plus published-rule behavior. Independent-clone publication gates
-remain separate and unchanged.
+membership plus published-rule behavior. Independent-copy applicability and
+completion checks remain separate from this movement contract.
 
 Contract references: [add](https://learn.microsoft.com/rest/api/power-platform/environmentmanagement/environment-groups/add-environment-to-group),
 [remove](https://learn.microsoft.com/rest/api/power-platform/environmentmanagement/environment-groups/remove-environment-from-group),
@@ -381,7 +381,14 @@ and [Admins V2 connector](https://learn.microsoft.com/connectors/powerplatformad
 
 ## Independent environment-group copy
 
-In the group panel, enter a new name and choose **Review independent copy**.
+In the group panel, enter a new name and choose **Review copy**.
+The duplication form appears before the group evidence. The default view shows
+the new name, independent ACP and zero environments copied. Group settings,
+policy grids, connector declarations, technical identities and raw values are
+under closed disclosures. A blocked review shows one short actionable reason;
+the complete checks and exact unmapped fields remain in **Copy details**.
+There is no disabled creation confirmation for an unavailable path. Unfinished
+operations and their recovery controls remain expanded.
 This now runs a **fresh preflight**, not an assessment of the historical drawer
 snapshot. It reads group properties, direct group Model A rules, complete tenant
 rule applicability, group assignments and complete Model B policy bodies.
@@ -398,7 +405,16 @@ remain unchanged. Source Model A resource IDs/timestamps are omitted; its filter
 becomes destination-only `Include / EnvironmentGroup`. Model B module IDs,
 versions and complete inputs are deep-copied, including ACP-only mode, explicit
 action/connection-type lists, unknown readable modules, empty arrays and false
-values. Policy/group/ruleset resource IDs must be newly returned identities.
+values. Observed `Policy.lastModifiedOffset` and the `lastModifiedDate` fields
+on Model A buckets and Model B modules are server-generated response timestamps,
+not writable settings. Their types are validated, but they are not sent or
+compared as destination settings. An identically named property **inside inputs**
+is still copied unchanged. `PolicyRequest` contains only `name` and `ruleSets`.
+Other unknown container
+fields are not guessed to be metadata: their exact paths and returned values
+remain in the review, and block writing until their mapping is established.
+Policy/group identities must come from creation; group rule identities must
+come from the creation response or exact destination-scoped read-back.
 References to source-owned resources without a verified remapping rule, duplicate
 identities and unknown non-input resource settings are concrete blockers, not
 silently omitted settings. A nonempty source hierarchy is also blocked: copying
@@ -423,36 +439,74 @@ source module, reads it back and, if necessary, patches only the new exclusive
 policy before assignment. It never patches a source or existing target policy.
 It then assigns the new policy only to the new group and re-reads both models,
 group properties, assignment scope/exclusivity, empty membership, source
-fingerprint and publication state. Success requires equivalence of **both**
-rule models and the promised source/destination publication state.
+fingerprint and applied state. Success requires equivalence of **both**
+rule models and fresh read-back of their applied configuration.
 The board refreshes only after verified completion and retains the verified
 destination link after closing the stale drawer.
 
-### Deliberate live-execution boundary
+### Applied configuration and remaining boundaries
 
-The production backend still **blocks all writes**, with specific reasons:
+The supported single-resource path is enabled. An explicitly authorized disposable
+empty-group test established the admin center's Save/Apply contract:
 
-- The registered models do not establish which returned settings are drafts
-  versus published configuration. A fresh read does not resolve that distinction.
-- A group **Publish rules** operation and authoritative state read-back are not
-  established. [Microsoft distinguishes Save from Publish](
-  https://learn.microsoft.com/power-platform/admin/advanced-connector-policies);
-  POST/PATCH/assignment cannot be labeled publication. There is no invented
-  publish call, implicit draft selection or automatic manual-publish success.
-- Model A fresh-ID generation, cardinality and stored settings require separate
-  authorized disposable-group verification. The planner preserves each resource
-  independently; it does not merge multiple resources to guess cardinality.
-- The SDK's HTTP status/header/operation envelope and an authoritative
-  empty-membership read need verification. The inventory membership check reads
-  **all environment types**, not only PDEs, but inventory alone is not certified
-  authoritative completion evidence.
+- Adding rules and saving an edited rule staged changes in the browser without
+  governance writes. A fresh group-rule API GET still returned the previous value.
+  Staged state could survive SPA navigation; it was not stored in that API response.
+- **Apply changes** (the control titled **Publish rules**) created the independent
+  policy, POSTed the new group's Model A parameters and assigned the new policy
+  with `{}`. There was no additional Publish request. The UI reported **Applied**.
+- Applying a later saved change PUT the existing Model A resource, and a fresh GET
+  returned the changed value. Fresh policy/assignment reads showed one independent
+  policy assigned only to the new group. The group remained empty after reload.
+- Saving a confirmed edit to that existing ACP also issued no governance write.
+  The browser staged a 23-connector list while a fresh policy GET still returned
+  24. **Apply changes** PATCHed the same independent policy; a subsequent fresh GET
+  returned 23. No second group, policy or assignment was created.
+- The server added `lastModifiedDate` to bucket/module responses even when it was
+  absent from their write payloads. These are the specifically recognized metadata
+  fields, not permission to discard arbitrary extensions.
 
-The production source state is therefore explicitly **unknown**. These gates are
-not configurable UI switches. Synthetic backend contracts exercise the
-orchestration in unit tests; they are not tenant evidence, a production capability
-certificate or permission to enable writes. A stored-equivalent copy with unknown
-or mismatched publication is **publication-pending**, never a completed clone.
-There is no partial-copy success or shared-ACP substitute.
+Production copies **applied API configuration**, not pending admin-center browser
+edits. This distinction appears in review and the final confirmation. No draft-only
+copy mode, invented Publish endpoint, synthetic published flag, or manual-publish
+success shortcut is used. Final applied-state verification repeats the independent
+group, tenant-rule, assignment and policy reads; disagreement or unavailable reads
+cannot produce success.
+
+The observed PPAC governance calls used `2021-10-01-preview`; production uses the
+registered `2024-10-01` operations and documented request models. The disposable
+test verifies PPAC's operation/staging semantics, **not an end-to-end run through
+this app's connector identity** or every source module combination. The
+production-adapter integration tests use synthetic responses. Caller-specific
+permission/transport behavior still requires verification when the user runs a copy.
+
+Multiple Model A source resources remain a specific cardinality gate: the API
+does not specify whether repeated creation preserves separate resources.
+A single resource is read back with its complete settings and new-group scope.
+Its identity may be group-keyed; a fresh unrelated UUID is not assumed.
+
+The documented synchronous `200`/`201` and body-less `204` outcomes do not justify
+a blanket missing-HTTP-headers gate. A group or policy creation without an
+identifiable result still stops, and async/operation bodies are not treated as
+completion. For a `204` group-rule creation, the known new group's complete GET
+must identify exactly one previously absent resource with the exact settings
+and destination-only scope; POST is never retried. A body-less group-rule GET
+establishes empty configuration only when an independent complete tenant-rule
+read agrees. Missing collections elsewhere are not treated as empty.
+
+Empty membership requires agreement between fresh inventory across **all
+environment types** and the live `ListEnvironmentsForUser` operation filtered by
+`environmentGroupId`. The latter alone cannot prove tenant-wide absence because
+its scope is the caller's visible environments. The live check requests at most
+one matching environment; any returned environment makes the group nonempty.
+Missing bodies, foreign membership, continuation or inconsistent counts fail
+explicitly. This combined app-connector check was tested with mocked SDK responses,
+not exercised against tenant inventory by the agent.
+
+Specific unsupported settings, ambiguous scope, incomplete reads and unknown or
+mismatched state remain blocked or incomplete, never a successful partial copy.
+There is no shared-ACP substitute. Test resources are retained for review/manual
+cleanup; the workflow does not delete them automatically.
 
 Group management requires tenant administrator authority. Governance writes
 require the actual caller's permission; Microsoft documents Power Platform
@@ -477,7 +531,7 @@ browser-local recovery, not a transactional or cross-device tenant journal.
 
 Each non-idempotent step persists its intent before the request and its returned
 ID before further work. Requests have a 60-second bound; a timed-out request may
-still complete in the service. Missing returned IDs, async operation bodies,
+still complete in the service. Unresolved creation IDs, async operation bodies,
 authorization/network failures during writes and lost responses stop later
 writes. Actual operation IDs are retained when exposed, but no unrelated lifecycle
 operation endpoint is guessed or polled. There is no blind POST retry or
@@ -501,16 +555,16 @@ still closes stale previews. No unverified destination link is fabricated.
 
 ### Required safe tenant verification
 
-Without changing the source, first verify authenticated group-only reads and
-compare both raw models/assignment scope with PPAC. Then, only under separate
-explicit authorization for disposable-resource writes, establish source
-draft/published selection and the actual Save/Publish/state-read contract;
-Model A fresh identity/cardinality and complete stored settings; the runtime
-invoker's governance rights; transport status/header/ambiguous completion; and
-authoritative empty membership. Finally verify independent policy identity,
-every module/input/action/connection-type setting, destination-only scope,
-source unchanged, publication and manual recovery behavior. Do not enable the
-production gate from passing mocked tests or a successful CLI/build alone.
+The authorized disposable PPAC check established Save versus Apply and fresh
+read-back as described above; it did not run an app-originated end-to-end clone.
+Before wider rollout, verify a user-confirmed copy through the app's actual
+connector identity: complete source models, every module/input/action/connection-
+type setting, new identities, destination-only assignment, both empty-membership
+reads and unchanged source. Observe authorization failures and ambiguous transport
+outcomes rather than assuming PPAC's interactive account and the app connector
+have identical rights. Recovery remains read-only; cleanup needs separate explicit
+authorization. Broader Model A cardinality is not enabled by this single-resource
+test. Passing mocked tests or a successful CLI/build alone is not tenant proof.
 
 ## Inventory loading
 
@@ -538,12 +592,17 @@ verified display membership without reloading the screen.
 
 ## Validation boundary
 
-Clone tests use synthetic identities and mocked reads, never tenant mutations.
+Automated clone tests use synthetic identities and mocked reads, never tenant mutations.
 The existing authenticated deployed app was freshly reloaded and its inventory,
 group selectors and ACP configuration reads were observed with real data. This
-verifies the incumbent read path only: the new local clone adapter, raw group-only
-Model A response, publication/override semantics and write authority remain
-unverified. No tenant mutation or raw tenant capture was performed.
+verified the incumbent read path only. Subsequently, the separately authorized
+disposable PPAC test verified group-only Model A responses, response timestamp
+metadata, Save/Apply persistence and an independent exclusive ACP on an empty
+group. Only those test resources were written; no source or memberships changed.
+Raw responses were inspected transiently, without committing tenant payloads.
+The app-originated clone adapter, its combined live/inventory membership check,
+all module combinations, caller permissions and real partial-failure recovery
+remain tenant-unverified. Test resources remain for manual review/cleanup.
 Review screenshots from the previous increments are explicitly synthetic UI
 evidence, not deployed or authenticated tenant proof.
 

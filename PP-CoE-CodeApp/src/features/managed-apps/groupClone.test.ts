@@ -88,10 +88,76 @@ describe("lossless independent group-copy planning", () => {
     expect(plan.copied.map((setting) => setting.path)).toContain("ModelA.Sharing/UsersBot/MaximumShareLimit");
     expect(snapshot.rules[0].environmentFilter?.values).toHaveLength(2);
   });
-  it.each(["draft", "published"] as const)("keeps explicit source %s state, without treating returned settings as published", async (publication) => {
+  it.each(["applied", "draft", "published"] as const)("keeps explicit source %s state, without treating returned settings as published", async (publication) => {
     expect((await planGroupClone({ ...source(), publication }, "New")).publication).toBe(publication);
     const plan = await planGroupClone({ ...source(), publication: "unknown", publicationEvidence: "" }, "New");
     expect(plan.blockers.join(" ")).toContain("unpublished draft");
+  });
+  it("recognizes observed policy timestamps as response metadata, without sending or comparing them as settings", async () => {
+    const snapshot = source();
+    Object.assign(snapshot.policy, { lastModifiedOffset: "2026-11-04T10:00:00+00:00" });
+    const plan = await planGroupClone(snapshot, "New");
+    expect(plan.blockers).toEqual([]);
+    expect(plan.policy).not.toHaveProperty("lastModifiedOffset");
+    expect(plan.policy.ruleSets).toEqual(snapshot.policy.ruleSets);
+    const h = await harness();
+    const read = h.backend.readPolicy;
+    h.backend.readPolicy = vi.fn(async (id) => {
+      const result = await read(id);
+      if (result.ok) Object.assign(result.data, { lastModifiedOffset: "2026-11-04T11:00:00+00:00" });
+      return result;
+    });
+    expect((await h.run()).operation.phase).toBe("verified");
+    expect(h.backend.patchPolicy).not.toHaveBeenCalled();
+  });
+  it("omits only verified bucket/module response timestamps, preserving complete inputs and identities", async () => {
+    const snapshot = source();
+    Object.assign(snapshot.rules[0].parameters![0], { lastModifiedDate: "2026-01-01T10:00:00Z" });
+    Object.assign(snapshot.policy.ruleSets![0], { lastModifiedDate: "2026-01-01T10:00:00Z" });
+    snapshot.policy.ruleSets![2].inputs!.lastModifiedDate = "This is an actual input, not response metadata";
+    const plan = await planGroupClone(snapshot, "New");
+    expect(plan.blockers).toEqual([]);
+    expect(plan.rules[0].parameters![0]).not.toHaveProperty("lastModifiedDate");
+    expect(plan.policy.ruleSets![0]).not.toHaveProperty("lastModifiedDate");
+    expect(plan.policy.ruleSets![2].inputs!.lastModifiedDate).toBe("This is an actual input, not response metadata");
+    expect(snapshot.rules[0].parameters![0]).toHaveProperty("lastModifiedDate");
+    const h = await harness();
+    const readRules = h.backend.readRules, readPolicy = h.backend.readPolicy;
+    h.backend.readRules = vi.fn(async (id) => {
+      const result = await readRules(id);
+      if (result.ok) result.data.forEach((rule) => rule.parameters?.forEach((bucket) => Object.assign(bucket, { lastModifiedDate: "2026-01-02T10:00:00Z" })));
+      return result;
+    });
+    h.backend.readPolicy = vi.fn(async (id) => {
+      const result = await readPolicy(id);
+      if (result.ok) result.data.ruleSets?.forEach((module) => Object.assign(module, { lastModifiedDate: "2026-01-02T10:00:00Z" }));
+      return result;
+    });
+    expect((await h.run()).operation.phase).toBe("verified");
+    expect(h.backend.patchPolicy).not.toHaveBeenCalled();
+  });
+  it("blocks malformed response timestamps and client-side staged state instead of ignoring unknown fields", async () => {
+    const snapshot = source();
+    Object.assign(snapshot.rules[0].parameters![0], { lastModifiedDate: false, hasStagedChanges: true });
+    Object.assign(snapshot.policy.ruleSets![0], { lastModifiedDate: "invalid" });
+    const plan = await planGroupClone(snapshot, "New");
+    expect(plan.blockers.join(" ")).toContain("hasStagedChanges");
+    expect(plan.blockers.filter((reason) => reason.includes("not a valid response timestamp"))).toHaveLength(2);
+    expect(plan.unsupported).toContainEqual({ path: "GroupRules.source-rule-id/Sharing/UsersBot.hasStagedChanges", value: true });
+  });
+  it("retains exact unknown container fields and distinguishes them from malformed inputs", async () => {
+    const snapshot = source();
+    Object.assign(snapshot.rules[0].parameters![0], { futureBucketMode: { enabled: false } });
+    Object.assign(snapshot.policy.ruleSets![0], { futureRuleState: null });
+    const plan = await planGroupClone(snapshot, "New");
+    expect(plan.unsupported).toEqual([
+      { path: "GroupRules.source-rule-id/Sharing/UsersBot.futureBucketMode", value: { enabled: false } },
+      { path: "PolicyRules.ConnectorManagement.futureRuleState", value: null },
+    ]);
+    expect(plan.blockers.join(" ")).toContain("futureBucketMode");
+    expect(plan.blockers.join(" ")).toContain("futureRuleState");
+    expect(plan.blockers.join(" ")).not.toContain("missing/duplicate");
+    expect(plan.policy.ruleSets![0].inputs).toEqual(snapshot.policy.ruleSets![0].inputs);
   });
   it("blocks multiple assignments, stale counts, malformed ACP and source-owned references", async () => {
     const snapshot = source();
@@ -134,6 +200,40 @@ describe("lossless independent group-copy planning", () => {
 });
 
 describe("guarded creation orchestration (synthetic backend contracts)", () => {
+  it("identifies a no-content rule creation only through exact new-group read-back, including group-keyed identities", async () => {
+    const h = await harness();
+    h.backend.createRule = vi.fn<CloneBackend["createRule"]>(async (_groupId, body) => {
+      h.state.rules = [{ ...structuredClone(body), id: h.state.group.id }];
+      return { ok: true, data: undefined };
+    });
+    const result = await h.run();
+    expect(result.operation.phase).toBe("verified");
+    expect(result.operation.rules).toEqual([{ sourceId: "source-rule-id", destinationId: "new-group-id" }]);
+    expect(h.backend.createRule).toHaveBeenCalledTimes(1);
+  });
+  it("never advances after a no-content rule write without unique exact read-back, or retries the POST", async () => {
+    const h = await harness();
+    h.backend.createRule = vi.fn<CloneBackend["createRule"]>(async () => ({ ok: true, data: undefined }));
+    const result = await h.run();
+    expect(result.message).toContain("no unique destination-scoped");
+    expect(result.operation.phase).toBe("indeterminate");
+    expect(result.operation.steps.at(-1)?.outcome).toBe("indeterminate");
+    expect(result.operation.destinationId).toBe("new-group-id");
+    expect(h.backend.createPolicy).not.toHaveBeenCalled();
+    await h.run();
+    expect(h.backend.createRule).toHaveBeenCalledTimes(1);
+  });
+  it("retains uncertainty when the read after a no-content rule write is unavailable", async () => {
+    const h = await harness();
+    h.backend.createRule = vi.fn<CloneBackend["createRule"]>(async () => ({ ok: true, data: undefined }));
+    vi.mocked(h.backend.readRules).mockResolvedValueOnce({ ok: true, data: [] })
+      .mockResolvedValue({ ok: false, error: "403 ReadBackDenied" });
+    const result = await h.run();
+    expect(result.message).toContain("403 ReadBackDenied");
+    expect(result.operation.phase).toBe("indeterminate");
+    expect(result.operation.destinationId).toBe("new-group-id");
+    expect(h.backend.createPolicy).not.toHaveBeenCalled();
+  });
   it("creates an independent empty copy and verifies both complete models, assignment exclusivity, publication and unchanged source", async () => {
     const h = await harness();
     const result = await h.run();
