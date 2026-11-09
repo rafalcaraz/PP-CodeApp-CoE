@@ -18,6 +18,7 @@ import {
 } from "./governance";
 import { membershipId, type EnvironmentGroupRow, type DataResult } from "./data";
 import { GroupClonePanel } from "./GroupClonePanel";
+import { RuleSyncPanel } from "./RuleSyncPanel";
 import type { CloneOutcome } from "./groupClone";
 import { SearchPicker } from "./SearchPicker";
 import { PdeMoveExecution } from "./PdeMoveExecution";
@@ -64,25 +65,37 @@ export function ConnectorConfiguration({ value }: { value: ConnectorEvidence }) 
   </div>;
 }
 
-export function GroupPanel({ group, evidence, loading, onClose, onCompleted }: {
+export function GroupPanel({ group, evidence, loading, onClose, onCompleted, initialSection = "copy", loadError, onRetry }: {
   group: EnvironmentGroupRow; evidence?: GroupEvidence; loading: boolean; onClose: () => void; onCompleted: (outcome: CloneOutcome) => void;
+  initialSection?: "copy" | "rules"; loadError?: string; onRetry?: () => void;
 }) {
   const styles = useStyles();
   const portalUrl = groupPortalUrl(group.id);
+  const [syncOpen, setSyncOpen] = useState(false);
   const declarations = connectorDeclarations(evidence);
   const connectors = declarations.ok ? [...new Set(declarations.data.map((entry) => entry.connectorId))].sort() : [];
+  const copy = <GroupClonePanel sourceId={group.id} sourceName={group.displayName || group.id}
+    sourceDescription={evidence?.details.ok && membershipId(evidence.details.data.id ?? "") === membershipId(group.id)
+      ? evidence.details.data.description : group.description}
+    onCompleted={onCompleted} />;
   return <OverlayDrawer open position="end" className={styles.drawer} onOpenChange={(_, data) => { if (!data.open) onClose(); }}>
     <DrawerHeader><DrawerHeaderTitle action={<Button appearance="subtle" icon={<DismissRegular />} aria-label="Close group inspection" onClick={onClose} />}>{group.displayName || group.id}</DrawerHeaderTitle></DrawerHeader>
     <DrawerBody className={styles.stack}>
       {portalUrl && <Link href={portalUrl} target="_blank" rel="noopener noreferrer">Open / configure this group in Power Platform admin center</Link>}
-      <GroupClonePanel sourceId={group.id} sourceName={group.displayName || group.id} onCompleted={onCompleted} />
+      {initialSection === "rules" ? <details><summary>Duplicate environment group</summary>{copy}</details> : copy}
+      <details onToggle={(event) => setSyncOpen(event.currentTarget.open)}>
+        <summary>Sync rules to other groups</summary>
+        {syncOpen && <RuleSyncPanel sourceId={group.id} />}
+      </details>
       {loading && <LoadingPane label="Loading group properties, rules and ACP evidence..." />}
+      {!loading && loadError && <ErrorPane title="Group governance unavailable" message={loadError} />}
+      {!loading && onRetry && <Button onClick={onRetry}>Refresh rules &amp; ACP</Button>}
       {!loading && evidence && <>
         <EvidenceProblems evidence={evidence} />
         {evidence.policies.ok && <Text>{evidence.policies.data.length
           ? `${evidence.policies.data.length} assigned polic${evidence.policies.data.length === 1 ? "y" : "ies"} · ${connectors.length} configured connectors`
           : "No policy assignments were returned. Connector permissions are unknown, not unrestricted."}</Text>}
-        <details><summary>Group settings and policy details</summary>
+        <details open={initialSection === "rules"}><summary>Group settings and policy details</summary>
         <Caption1 className={styles.muted}>Group ID: {group.id} · Read {new Date(evidence.capturedAt).toLocaleTimeString()}. Configuration only, not a runtime permission verdict.</Caption1>
         <section className={styles.section}>
           <Text as="h3" weight="semibold">Properties and rules</Text>

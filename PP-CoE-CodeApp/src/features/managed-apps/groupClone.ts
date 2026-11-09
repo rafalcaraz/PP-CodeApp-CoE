@@ -25,7 +25,15 @@ export interface ClonePlan {
   publication: PublicationState;
   copied: Array<{ identity: string; path: string; value: unknown }>;
   unsupported?: Array<{ path: string; value: unknown }>;
+  skipped?: CloneOmission[];
+  skippedEvidence?: Array<{ path: string; value: unknown }>;
   blockers: string[];
+}
+
+export interface CloneOmission {
+  kind: "group-rule" | "policy-module";
+  id: string;
+  reasons: string[];
 }
 
 export function jsonObject(value: unknown): value is Record<string, unknown> {
@@ -82,18 +90,27 @@ function validJson(value: unknown): boolean {
   return jsonObject(value) && Object.values(value).every(validJson);
 }
 
-export async function planGroupClone(snapshot: CloneSnapshot, name: string, now = Date.now()): Promise<ClonePlan> {
+export async function planGroupClone(snapshot: CloneSnapshot, name: string, description = snapshot.group.description, now = Date.now(),
+  options: { preserveExistingReferences?: boolean } = {}): Promise<ClonePlan> {
   const blockers = [...snapshot.blockers];
   const sourceId = snapshot.group.id ?? "";
   const sourcePolicyId = snapshot.policy.id ?? "";
   const sourceRuleIds = snapshot.rules.map((rule) => rule.id ?? "");
   const copied: ClonePlan["copied"] = [];
   const unsupported: NonNullable<ClonePlan["unsupported"]> = [];
-  const checkFields = (value: object, allowed: Set<string>, path: string) => {
+  const skipped: CloneOmission[] = [];
+  const skippedEvidence: NonNullable<ClonePlan["skippedEvidence"]> = [];
+  const checkFields = (value: object, allowed: Set<string>, path: string, omissionReasons?: string[]) => {
     for (const [key, entry] of Object.entries(value)) {
       if (allowed.has(key)) continue;
       unsupported.push({ path: `${path}.${key}`, value: structuredClone(entry) });
-      blockers.push(`${path}.${key} isn't in the writable API contract. Its returned value is retained in copy details.`);
+      if (inputReferences({ [key]: entry }, [sourceId, sourcePolicyId, ...sourceRuleIds])) {
+        blockers.push(`${path}.${key} references source-owned resources without a verified remapping contract.`);
+      }
+      if (key === "hasStagedChanges") blockers.push(`${path}.hasStagedChanges makes applied source state ambiguous.`);
+      const reason = omissionReasons ? `Unsupported field: ${key}. The whole rule is omitted, not just this field.`
+        : `${path}.${key} has no supported independent-copy mapping.`;
+      (omissionReasons ?? blockers).push(reason);
     }
   };
   const checkTimestamp = (value: object, path: string) => {
@@ -136,7 +153,9 @@ export async function planGroupClone(snapshot: CloneSnapshot, name: string, now 
     blockers.push("Source group has parent/child hierarchy. Hierarchy is not copied and inherited rule fidelity has no verified independent-group mapping.");
   }
   const moduleIds = new Set<string>();
-  const rules = snapshot.rules.map((rule) => {
+  const rules = snapshot.rules.flatMap((rule) => {
+    const omissionReasons: string[] = [];
+    const settings: ClonePlan["copied"] = [];
     if (!rule.id || !Array.isArray(rule.parameters)) blockers.push(`Model A ${rule.id || "(missing ID)"} omitted identity or parameters.`);
     const filter = rule.environmentFilter;
     if (filter?.type !== "Include" || !Array.isArray(filter.values)
@@ -148,45 +167,53 @@ export async function planGroupClone(snapshot: CloneSnapshot, name: string, now 
         || Object.keys(value).some((key) => !["id", "type"].includes(key))))) {
       blockers.push(`Model A ${rule.id} has unsupported source scope/override fields.`);
     }
-    checkFields(rule, new Set(["id", "lastModified", "parameters", "environmentFilter"]), `GroupRules.${rule.id}`);
+    checkFields(rule, new Set(["id", "lastModified", "parameters", "environmentFilter"]), `GroupRules.${rule.id}`, omissionReasons);
     const buckets = new Set<string>();
     for (const bucket of rule.parameters ?? []) {
       const bucketKey = `${bucket.type}/${bucket.resourceType}`;
       if (!bucket.type || !bucket.resourceType || !Array.isArray(bucket.value) || buckets.has(bucketKey)) {
         blockers.push(`GroupRules.${rule.id}/${bucketKey} has missing values or a duplicate bucket.`);
       }
-      checkFields(bucket, new Set(["type", "resourceType", "value", "lastModifiedDate"]), `GroupRules.${rule.id}/${bucketKey}`);
+      checkFields(bucket, new Set(["type", "resourceType", "value", "lastModifiedDate"]), `GroupRules.${rule.id}/${bucketKey}`, omissionReasons);
       checkTimestamp(bucket, `GroupRules.${rule.id}/${bucketKey}`);
       buckets.add(bucketKey);
       const settingIds = new Set<string>();
       for (const setting of bucket.value ?? []) {
         const path = `ModelA.${bucketKey}/${setting.id}`;
-        copied.push({ identity: rule.id ?? "", path, value: setting.value });
+        settings.push({ identity: rule.id ?? "", path, value: setting.value });
         if (!setting.id || typeof setting.value !== "string" || settingIds.has(setting.id)) {
           blockers.push(`${path} cannot be copied losslessly: missing/duplicate identity or non-string value.`);
         }
-        checkFields(setting, new Set(["id", "value"]), path);
+        checkFields(setting, new Set(["id", "value"]), path, omissionReasons);
         settingIds.add(setting.id ?? "");
-        if (inputReferences(setting.value, [sourceId, sourcePolicyId, ...sourceRuleIds])) {
+        if (!options.preserveExistingReferences && inputReferences(setting.value, [sourceId, sourcePolicyId, ...sourceRuleIds])) {
           blockers.push(`${path} references source-owned resources without a verified remapping contract.`);
         }
       }
     }
-    return {
+    if (omissionReasons.length) {
+      skipped.push({ kind: "group-rule", id: rule.id ?? "", reasons: omissionReasons });
+      skippedEvidence.push({ path: `GroupRules.${rule.id}`, value: structuredClone(rule) });
+      return [];
+    }
+    copied.push(...settings);
+    return [{
       sourceId: rule.id ?? "",
       parameters: rule.parameters?.map(({ type, resourceType, value }) => ({ type, resourceType, value: structuredClone(value) })),
-    };
+    }];
   });
   if (new Set(sourceRuleIds.map(membershipId)).size !== sourceRuleIds.length) blockers.push("Duplicate Model A resource identities were returned.");
+  const policyRules: NonNullable<PolicyRequest["ruleSets"]> = [];
   for (const rule of snapshot.policy.ruleSets ?? []) {
-    copied.push({ identity: sourcePolicyId, path: `ModelB.${rule.id} v${rule.version}`, value: structuredClone(rule.inputs) });
+    const omissionReasons: string[] = [];
     if (!rule.id || !rule.version || !jsonObject(rule.inputs) || !validJson(rule.inputs) || moduleIds.has(rule.id)) {
       blockers.push(`Model B ${rule.id || "(missing module)"} has missing/duplicate identity, version or unsupported inputs.`);
     }
-    checkFields(rule, new Set(["id", "version", "inputs", "lastModifiedDate"]), `PolicyRules.${rule.id}`);
+    checkFields(rule, new Set(["id", "version", "inputs", "lastModifiedDate"]), `PolicyRules.${rule.id}`,
+      rule.id === "ConnectorManagement" ? undefined : omissionReasons);
     checkTimestamp(rule, `PolicyRules.${rule.id}`);
     moduleIds.add(rule.id ?? "");
-    if (inputReferences(rule.inputs, [sourceId, sourcePolicyId, ...sourceRuleIds])) {
+    if (!options.preserveExistingReferences && inputReferences(rule.inputs, [sourceId, sourcePolicyId, ...sourceRuleIds])) {
       blockers.push(`Model B ${rule.id} references source-owned resources without a verified remapping contract.`);
     }
     if (rule.id === "ConnectorManagement") {
@@ -207,18 +234,25 @@ export async function planGroupClone(snapshot: CloneSnapshot, name: string, now 
         if (jsonObject(connector) && typeof connector.AllowedConnector === "string") ids.add(connector.AllowedConnector.toLowerCase());
       }
     }
+    if (omissionReasons.length) {
+      skipped.push({ kind: "policy-module", id: rule.id ?? "", reasons: omissionReasons });
+      skippedEvidence.push({ path: `PolicyRules.${rule.id}`, value: structuredClone(rule) });
+    } else {
+      copied.push({ identity: sourcePolicyId, path: `ModelB.${rule.id} v${rule.version}`, value: structuredClone(rule.inputs) });
+      policyRules.push({ id: rule.id, version: rule.version, inputs: structuredClone(rule.inputs) });
+    }
   }
-  if (!moduleIds.has("ConnectorManagement")) blockers.push("No source ACP module is available for an independent copy.");
+  if (!policyRules.some((rule) => rule.id === "ConnectorManagement")) blockers.push("A supported source ACP module is required; it cannot be skipped or replaced.");
   if (snapshot.policy.ruleSetCount !== undefined && snapshot.policy.ruleSetCount !== snapshot.policy.ruleSets?.length) blockers.push("Source policy rule count is incomplete.");
-  copied.unshift({ identity: sourceId, path: "Group.description", value: snapshot.group.description });
+  copied.unshift({ identity: sourceId, path: "Group.description", value: description });
   return {
     sourceId, sourcePolicyId, sourceRuleIds, sourceFingerprint: await fingerprint(sourceIdentity(snapshot)),
-    preparedAt: now, group: { displayName: destinationName, description: snapshot.group.description },
+    preparedAt: now, group: { displayName: destinationName, description },
     rules, policy: {
       name: `${destinationName} - ${snapshot.policy.name || sourcePolicyId}`,
-      ruleSets: snapshot.policy.ruleSets?.map(({ id, version, inputs }) => ({ id, version, inputs: structuredClone(inputs) })),
+      ruleSets: policyRules,
     },
-    publication: snapshot.publication, copied, unsupported, blockers: [...new Set(blockers)],
+    publication: snapshot.publication, copied, unsupported, ...(skipped.length ? { skipped, skippedEvidence } : {}), blockers: [...new Set(blockers)],
   };
 }
 
@@ -229,7 +263,11 @@ export function ruleCreateBody(rule: ClonePlan["rules"][number], destinationId: 
   };
 }
 
-export type ClonePhase = "planned" | "blocked" | "running" | "failed" | "indeterminate" | "publication-pending" | "verified";
+export type ClonePhase = "planned" | "blocked" | "running" | "failed" | "indeterminate" | "publication-pending" | "verified" | "created-with-omissions";
+
+export function isCompletedClone(phase: ClonePhase): boolean {
+  return phase === "verified" || phase === "created-with-omissions";
+}
 export interface CloneStep {
   key: string;
   outcome: "started" | "returned" | "verified" | "failed" | "indeterminate";
@@ -247,6 +285,7 @@ export interface CloneOperation {
   policyId?: string;
   rules: Array<{ sourceId: string; destinationId: string }>;
   steps: CloneStep[];
+  skipped?: CloneOmission[];
   updatedAt: number;
 }
 
@@ -304,7 +343,7 @@ async function readResult<T>(request: Promise<DataResult<T>>): Promise<T> {
 
 function sameGroup(group: EnvironmentGroup, plan: ClonePlan, id: string): boolean {
   return membershipId(group.id ?? "") === membershipId(id) && group.displayName === plan.group.displayName
-    && group.description === plan.group.description && !group.parentGroupId && !group.childrenGroupIds?.length
+    && (group.description ?? "") === (plan.group.description ?? "") && !group.parentGroupId && !group.childrenGroupIds?.length
     && Object.keys(group).every((key) => groupMetadata.has(key));
 }
 function samePolicy(policy: Policy, plan: ClonePlan, id: string): boolean {
@@ -336,6 +375,7 @@ export async function newCloneOperation(plan: ClonePlan): Promise<CloneOperation
   return {
     version: 1, id: crypto.randomUUID(), sourceId: plan.sourceId, sourceFingerprint: plan.sourceFingerprint,
     planFingerprint: await fingerprint(planIdentity(plan)), phase: "planned", rules: [], steps: [], updatedAt: Date.now(),
+    ...(plan.skipped?.length ? { skipped: structuredClone(plan.skipped) } : {}),
   };
 }
 
@@ -370,7 +410,7 @@ async function verifyDestination(plan: ClonePlan, operation: CloneOperation, bac
 
 const activeOperations = new Set<string>();
 
-export async function executeGroupClone(plan: ClonePlan, requested: CloneOperation, backend: CloneBackend, store: CloneStore, confirmed: boolean): Promise<CloneOutcome> {
+export async function executeGroupClone(plan: ClonePlan, requested: CloneOperation, backend: CloneBackend, store: CloneStore, confirmed: boolean, omissionsConfirmed = false): Promise<CloneOutcome> {
   const operation = structuredClone(store.read(requested.id) ?? requested);
   const save = () => { operation.updatedAt = Date.now(); store.save(structuredClone(operation)); };
   if (activeOperations.has(operation.id)) return { operation, message: "This operation is already running. Do not submit another copy." };
@@ -382,9 +422,12 @@ export async function executeGroupClone(plan: ClonePlan, requested: CloneOperati
   let writeInFlight = false;
   try {
     if (!confirmed) throw new Error("Confirm the source, new empty destination, independent ACP, full copied scope and publication changes before tenant writes.");
-    if (operation.sourceId !== plan.sourceId || operation.sourceFingerprint !== plan.sourceFingerprint || operation.planFingerprint !== await fingerprint(planIdentity(plan))) throw new Error("The operation does not match the reviewed copy plan.");
+    if (operation.sourceId !== plan.sourceId || operation.sourceFingerprint !== plan.sourceFingerprint
+      || operation.planFingerprint !== await fingerprint(planIdentity(plan))
+      || canonical(operation.skipped ?? []) !== canonical(plan.skipped ?? [])) throw new Error("The operation does not match the reviewed copy plan.");
     const blockers = [...plan.blockers, ...backend.executionBlockers(plan)];
     if (blockers.length) { operation.phase = "blocked"; save(); return { operation, message: blockers.join(" ") }; }
+    if (plan.skipped?.length && !omissionsConfirmed) throw new Error("Explicitly acknowledge the listed skipped rules and incomplete governance before creating a partial copy.");
     if (Date.now() - plan.preparedAt > 5 * 60_000) throw new Error("Preview expired. Read a fresh source preview before creating resources.");
     await sourceUnchanged(plan, backend);
     operation.phase = "running";
@@ -461,14 +504,17 @@ export async function executeGroupClone(plan: ClonePlan, requested: CloneOperati
     if (!await readResult(backend.readEmptyMembership(groupId)) || (await readResult(backend.readAssignments(groupId))).length) throw new Error("Destination changed before assignment. No existing policy or membership will be overwritten.");
     await write("assign-policy", () => backend.assign(policyId, groupId));
     const publication = await verifyDestination(plan, operation, backend);
-    operation.phase = publication !== "unknown" && publication === plan.publication ? "verified" : "publication-pending";
-    if (operation.phase === "verified") operation.steps.forEach((step) => { step.outcome = "verified"; });
+    operation.phase = publication !== "unknown" && publication === plan.publication
+      ? plan.skipped?.length ? "created-with-omissions" : "verified" : "publication-pending";
+    if (isCompletedClone(operation.phase)) operation.steps.forEach((step) => { step.outcome = "verified"; });
     save();
     return {
       operation,
-      message: operation.phase === "verified" ? "Independent copy verified: settings applied, its own ACP, and no environments. Source unchanged."
+      message: operation.phase === "created-with-omissions"
+        ? "Created with omissions. Copied settings and independent ACP verified; governance is incomplete and is not equivalent to the source. No environments copied; source unchanged."
+        : operation.phase === "verified" ? "Independent copy verified: settings applied, its own ACP, and no environments. Source unchanged."
         : "Stored copy verified, but publication differs or is unknown. This is not a completed group clone. Admin publication/state verification is required.",
-      ...(operation.phase === "verified" ? { destinationUrl: groupPortalUrl(groupId) } : {}),
+      ...(isCompletedClone(operation.phase) ? { destinationUrl: groupPortalUrl(groupId) } : {}),
     };
   } catch (error) {
     operation.phase = writeInFlight ? "indeterminate" : "failed";
@@ -486,20 +532,23 @@ export async function executeGroupClone(plan: ClonePlan, requested: CloneOperati
 export async function reconcileGroupClone(plan: ClonePlan, operation: CloneOperation, backend: CloneBackend, store: CloneStore): Promise<CloneOutcome> {
   if (activeOperations.has(operation.id)) return { operation, message: "Wait for this operation to stop before reconciliation." };
   const current = structuredClone(store.read(operation.id) ?? operation);
-  if (current.planFingerprint !== await fingerprint(planIdentity(plan))) return {
-    operation: { ...current, phase: current.phase === "verified" ? "blocked" : current.phase },
+  if (current.planFingerprint !== await fingerprint(planIdentity(plan)) || canonical(current.skipped ?? []) !== canonical(plan.skipped ?? [])) return {
+    operation: { ...current, phase: isCompletedClone(current.phase) ? "blocked" : current.phase },
     message: "The recovery plan does not match this operation. No current verification is established. Do not adopt resources by name or retry creation.",
   };
   try {
     const publication = await verifyDestination(plan, current, backend);
-    current.phase = publication !== "unknown" && publication === plan.publication ? "verified" : "publication-pending";
-    if (current.phase === "verified") current.steps.forEach((step) => { step.outcome = "verified"; });
+    current.phase = publication !== "unknown" && publication === plan.publication
+      ? plan.skipped?.length ? "created-with-omissions" : "verified" : "publication-pending";
+    if (isCompletedClone(current.phase)) current.steps.forEach((step) => { step.outcome = "verified"; });
     current.updatedAt = Date.now(); store.save(current);
-    return { operation: current, message: current.phase === "verified" ? "Existing operation reconciled and fully verified; no writes were retried."
+    return { operation: current, message: current.phase === "created-with-omissions"
+      ? "Created copy reconciled with the recorded skipped rules. Copied settings verified, but governance remains incomplete; no writes were retried."
+      : current.phase === "verified" ? "Existing operation reconciled and fully verified; no writes were retried."
       : "Stored configuration reconciled. Publication is pending/unverified; this is not clone success.",
-    ...(current.phase === "verified" ? { destinationUrl: groupPortalUrl(current.destinationId!) } : {}) };
+    ...(isCompletedClone(current.phase) ? { destinationUrl: groupPortalUrl(current.destinationId!) } : {}) };
   } catch (error) {
-    if (current.phase === "verified") current.phase = "failed";
+    if (isCompletedClone(current.phase)) current.phase = "failed";
     return { operation: current, message: `Read-only reconciliation did not establish completion: ${String(error)}. Known IDs and uncertain steps remain recorded. Admin recovery is required; no deletion or POST retry was attempted.` };
   }
 }

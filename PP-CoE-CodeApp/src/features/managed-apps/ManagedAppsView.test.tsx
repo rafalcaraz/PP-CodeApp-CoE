@@ -288,11 +288,14 @@ describe("ManagedAppsView", () => {
     await waitFor(() => expect(loadManagedApps).toHaveBeenLastCalledWith(true, expect.any(AbortSignal)));
     await waitFor(() => expect(loadGroupEvidenceBatch).toHaveBeenCalledWith(["group-one"], expect.any(AbortSignal)));
   });
-  it("keeps the verified destination link visible after clone completion refresh closes the drawer", async () => {
+  it.each(["verified", "created-with-omissions"] as const)("keeps the destination and omissions visible after %s refresh closes the drawer", async (phase) => {
+    const skipped = phase === "created-with-omissions"
+      ? [{ kind: "policy-module" as const, id: "MicrosoftAppsContentSecurityPolicy", reasons: ["Unsupported field: managedBy."] }]
+      : undefined;
     prepareGroupClone.mockResolvedValue({ ok: true, data: {
       sourceId: "group-one", sourcePolicyId: "source-policy", sourceRuleIds: [], sourceFingerprint: "synthetic",
       preparedAt: Date.now(), group: { displayName: "New empty group", description: "" }, rules: [],
-      policy: { name: "Independent ACP", ruleSets: [] }, publication: "published", copied: [], blockers: [],
+      policy: { name: "Independent ACP", ruleSets: [] }, publication: "published", copied: [], blockers: [], skipped,
     } });
     const operation: CloneOperation = {
       version: 1, id: "synthetic-operation", sourceId: "group-one", sourceFingerprint: "synthetic", planFingerprint: "synthetic",
@@ -300,8 +303,8 @@ describe("ManagedAppsView", () => {
     };
     newCloneOperation.mockResolvedValue(operation);
     const outcome: CloneOutcome = {
-      operation: { ...operation, phase: "verified", destinationId: "returned-group", policyId: "returned-policy" },
-      message: "Synthetic verified independent copy",
+      operation: { ...operation, phase, destinationId: "returned-group", policyId: "returned-policy", skipped },
+      message: phase === "verified" ? "Synthetic verified independent copy" : "Synthetic partial copy: governance incomplete",
       destinationUrl: "https://admin.powerplatform.microsoft.com/manage/envgroups/returned-group/details",
     };
     executeGroupClone.mockResolvedValue(outcome);
@@ -312,11 +315,12 @@ describe("ManagedAppsView", () => {
     fireEvent.change(nameInput, { target: { value: "New empty group" } });
     fireEvent.click(await screen.findByRole("button", { name: "Review copy" }));
     fireEvent.click(await screen.findByRole("checkbox", { name: /Create "New empty group"/ }));
-    fireEvent.click(screen.getByRole("button", { name: "Create independent copy" }));
+    fireEvent.click(screen.getByRole("button", { name: skipped ? "Create partial copy" : "Create independent copy" }));
     expect(await screen.findByRole("link", { name: "Open verified destination group in admin center" })).toHaveAttribute("href", outcome.destinationUrl);
     await waitFor(() => expect(loadManagedApps).toHaveBeenLastCalledWith(true, expect.any(AbortSignal)));
     expect(screen.queryByRole("textbox", { name: "New group name" })).not.toBeInTheDocument();
-    expect(screen.getByText("Synthetic verified independent copy")).toBeInTheDocument();
+    expect(screen.getByText(outcome.message)).toBeInTheDocument();
+    if (skipped) expect(screen.getByText(/MicrosoftAppsContentSecurityPolicy: Unsupported field: managedBy/)).toBeVisible();
   });
   it("prepares selected PDEs through an accessible action and shows hidden sibling impact", async () => {
     renderView();

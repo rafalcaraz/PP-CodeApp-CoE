@@ -1,5 +1,6 @@
-import { lazy } from "react";
+import { lazy, type ComponentType } from "react";
 import { Route } from "react-router-dom";
+import type { GroupInspectionProps } from "./EnvironmentGroupDetail";
 
 // Feature routes are lazy-loaded at the feature boundary so a new feature
 // adds at most one lazy() call instead of touching the App.tsx central
@@ -18,9 +19,9 @@ const EnvironmentGroupDetail = lazy(() =>
  * inside a `<Routes>` block. react-router 7 still walks fragment children
  * but spreading is unambiguous and survives lint/dead-code removal.
  */
-export function environmentGroupsRoutes() {
+export function environmentGroupsRoutes(GroupInspection?: ComponentType<GroupInspectionProps>) {
   return [
     <Route key="environment-groups-EnvironmentGroupsList--environment-groups" path="/environment-groups" element={<EnvironmentGroupsList />} />,
-    <Route key="environment-groups-EnvironmentGroupDetail--environment-groups--groupId" path="/environment-groups/:groupId" element={<EnvironmentGroupDetail />} />,
+    <Route key="environment-groups-EnvironmentGroupDetail--environment-groups--groupId" path="/environment-groups/:groupId" element={<EnvironmentGroupDetail GroupInspection={GroupInspection} />} />,
   ];
 }

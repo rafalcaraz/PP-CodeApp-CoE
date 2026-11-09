@@ -10,7 +10,7 @@ vi.mock("./governance", async () => ({
 vi.mock("./data", async () => ({
   ...await vi.importActual<typeof import("./data")>("./data"), loadPolicy: readPolicy, loadEmptyGroupMembership: emptyMembership,
 }));
-import { groupCloneBackend, groupCloneStore, loadCloneOperations, prepareGroupClone } from "./groupCloneData";
+import { groupCloneBackend, groupCloneStore, loadCloneOperations, prepareGroupClone, updateGroupRule } from "./groupCloneData";
 import { executeGroupClone, newCloneOperation } from "./groupClone";
 
 const group = { id: "source-group-id", displayName: "Source", description: "Synthetic" };
@@ -37,6 +37,52 @@ beforeEach(async () => {
 });
 
 describe("registered clone SDK adapter", () => {
+  it("updates an existing ruleset by its actual resource ID without creation or scope substitution", async () => {
+    await updateGroupRule("existing-rule-id", rule);
+    expect(execute).toHaveBeenCalledExactlyOnceWith({
+      connectorOperation: { tableName: "powerplatformadminv2", operationName: "UpdateRuleSet",
+        parameters: { "api-version": "2024-10-01", ruleSetId: "existing-rule-id", body: rule } },
+    });
+  });
+  it("prepares a disclosed whole CSP-module omission, retaining raw evidence and requiring partial confirmation", async () => {
+    const csp = {
+      id: "MicrosoftAppsContentSecurityPolicy", version: "1.0", managedBy: "synthetic-manager",
+      inputs: { managedBy: "synthetic-input-setting", nested: { managedBy: false } },
+    };
+    const extended = { ...policy, ruleSets: [...policy.ruleSets!, csp] };
+    readPolicy.mockResolvedValue({ ok: true, data: extended });
+    evidence.mockResolvedValue([{
+      groupId: group.id, capturedAt: Date.now(), details: { ok: true, data: group },
+      rulesets: { ok: true, data: { matching: [rule], unresolved: [] } }, policies: { ok: true, data: [extended] },
+    }]);
+    const result = await prepareGroupClone(group.id, "New");
+    if (!result.ok) throw new Error(result.error);
+    expect(result.data.blockers).toEqual([]);
+    expect(result.data.skipped).toEqual([{
+      kind: "policy-module", id: csp.id,
+      reasons: ["Unsupported field: managedBy. The whole rule is omitted, not just this field."],
+    }]);
+    expect(result.data.unsupported).toContainEqual({
+      path: "PolicyRules.MicrosoftAppsContentSecurityPolicy.managedBy", value: "synthetic-manager",
+    });
+    expect(result.data.policy.ruleSets).toEqual(policy.ruleSets);
+    expect(result.data.copied.some((setting) => setting.path.includes(csp.id))).toBe(false);
+    const operation = await newCloneOperation(result.data);
+    const outcome = await executeGroupClone(result.data, operation, groupCloneBackend, groupCloneStore, true);
+    expect(outcome.operation.phase).toBe("failed");
+    expect(outcome.message).toContain("Explicitly acknowledge");
+    expect(execute.mock.calls.every(([input]) => !/Create|Patch|Publish/.test(input.connectorOperation.operationName))).toBe(true);
+  });
+  it.each(["Custom description\nSecond line", ""])("carries the edited description %j through fresh preview and group creation", async (description) => {
+    const result = await prepareGroupClone(group.id, "New", undefined, description);
+    if (!result.ok) throw new Error(result.error);
+    expect(result.data.group.description).toBe(description);
+    expect(result.data.copied.find((setting) => setting.path === "Group.description")?.value).toBe(description);
+    await groupCloneBackend.createGroup(result.data.group);
+    const request = execute.mock.calls.find(([input]) => input.connectorOperation.operationName === "CreateEnvironmentGroup")?.[0];
+    expect(request.connectorOperation.parameters.body).toEqual({ displayName: "New", description });
+    expect(group.description).toBe("Synthetic");
+  });
   it("prepares applied settings through independent fresh reads, without tenant writes or an invented Publish call", async () => {
     const result = await prepareGroupClone(group.id, "New");
     expect(result.ok).toBe(true);
@@ -110,11 +156,14 @@ describe("registered clone SDK adapter", () => {
     const denied = await groupCloneBackend.readEmptyMembership("new-group-id");
     expect(!denied.ok && denied.error).toContain("AuthorizationFailed");
   });
-  it("runs the production adapter end-to-end using mocked SDK responses with observed server metadata and empty-group shapes", async () => {
+  it.each([false, true])("runs the production adapter with partial=%s using mocked SDK responses and exact subset read-back", async (partial) => {
     const timestamp = "2026-01-01T10:00:00Z";
     const sourceRule = structuredClone(rule), sourcePolicy = structuredClone(policy);
     Object.assign(sourceRule.parameters![0], { lastModifiedDate: timestamp });
     Object.assign(sourcePolicy.ruleSets![0], { lastModifiedDate: timestamp });
+    if (partial) sourcePolicy.ruleSets!.push(Object.assign({
+      id: "MicrosoftAppsContentSecurityPolicy", version: "1.0", inputs: { managedBy: "nested-setting" },
+    }, { managedBy: "synthetic-owner" }));
     const destination = { ...group, id: "new-group-id", displayName: "New" };
     const state = { rules: [] as RuleSetDto[], policy: undefined as Policy | undefined, assignments: [] as typeof assignment[] };
     evidence.mockImplementation(async ([id]) => [{
@@ -151,8 +200,10 @@ describe("registered clone SDK adapter", () => {
     const plan = await prepareGroupClone(group.id, "New");
     if (!plan.ok) throw new Error(plan.error);
     expect(plan.data.blockers).toEqual([]);
-    const outcome = await executeGroupClone(plan.data, await newCloneOperation(plan.data), groupCloneBackend, groupCloneStore, true);
-    expect(outcome.operation.phase).toBe("verified");
+    const outcome = await executeGroupClone(plan.data, await newCloneOperation(plan.data), groupCloneBackend, groupCloneStore, true, partial);
+    expect(outcome.operation.phase).toBe(partial ? "created-with-omissions" : "verified");
+    expect(state.policy?.ruleSets?.map(({ id }) => id)).toEqual(["ConnectorManagement"]);
+    expect(loadCloneOperations(group.id)[0].skipped).toEqual(plan.data.skipped);
     expect(outcome.destinationUrl).toContain("new-group-id");
     const writes = execute.mock.calls.map(([input]) => input.connectorOperation).filter((request) => /Create|Patch|Publish/.test(request.operationName));
     expect(writes.map((request) => request.operationName)).toEqual([
@@ -161,6 +212,8 @@ describe("registered clone SDK adapter", () => {
     expect(JSON.stringify(writes)).not.toContain("source-group-id");
     expect(JSON.stringify(writes)).not.toContain("source-policy-id");
     expect(JSON.stringify(writes)).not.toContain("lastModifiedDate");
+    expect(JSON.stringify(writes)).not.toContain("managedBy");
+    expect(JSON.stringify(writes)).not.toContain("MicrosoftAppsContentSecurityPolicy");
     expect(outcome.operation.steps.every((step) => step.outcome === "verified")).toBe(true);
   });
   it("preserves raw overrides and unknown group settings as concrete blockers", async () => {
@@ -203,6 +256,26 @@ describe("registered clone SDK adapter", () => {
 });
 
 describe("private durable copy records", () => {
+  it("persists omission identities/reasons but rejects raw omitted payloads or unsubstantiated partial completion", async () => {
+    const result = await prepareGroupClone(group.id, "New");
+    if (!result.ok) throw new Error(result.error);
+    result.data.skipped = [{
+      kind: "policy-module", id: "MicrosoftAppsContentSecurityPolicy", reasons: ["Unsupported field: managedBy."],
+    }];
+    const operation = await newCloneOperation(result.data);
+    operation.phase = "created-with-omissions";
+    operation.destinationId = "returned-group-id";
+    operation.policyId = "returned-policy-id";
+    groupCloneStore.save(operation);
+    expect(loadCloneOperations(group.id)[0].skipped).toEqual(result.data.skipped);
+    expect(localStorage.getItem(localStorage.key(0)!)!).not.toContain("AllowedConnectorList");
+    expect(() => groupCloneStore.save({ ...operation, phase: "verified" })).toThrow("Unsafe");
+    expect(() => groupCloneStore.save({ ...operation, destinationId: undefined })).toThrow("Unsafe");
+    Object.assign(operation.skipped![0], { value: "private-payload" });
+    expect(() => groupCloneStore.save(operation)).toThrow("Unsafe");
+    delete operation.skipped;
+    expect(() => groupCloneStore.save(operation)).toThrow("Unsafe");
+  });
   it("persists only identities, payload fingerprints and outcomes, and reloads by source", async () => {
     const plan = await prepareGroupClone(group.id, "New");
     if (!plan.ok) throw new Error(plan.error);
