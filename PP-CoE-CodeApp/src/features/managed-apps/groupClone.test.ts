@@ -33,9 +33,15 @@ const source = (): CloneSnapshot => ({
   publication: "published", publicationEvidence: "synthetic verified state contract", blockers: [],
 });
 
-async function harness() {
-  let snapshot = source();
-  const plan = await planGroupClone(snapshot, "Independent test group");
+function partialSource(): CloneSnapshot {
+  const snapshot = source();
+  Object.assign(snapshot.policy.ruleSets![2], { id: "MicrosoftAppsContentSecurityPolicy", managedBy: "synthetic-manager" });
+  return snapshot;
+}
+
+async function harness(description?: string, initialSnapshot = source()) {
+  let snapshot = initialSnapshot;
+  const plan = await planGroupClone(snapshot, "Independent test group", description);
   const records = new Map<string, CloneOperation>();
   const store: CloneStore = { read: (id) => records.get(id), save: (record) => records.set(record.id, structuredClone(record)) };
   const state = { group: { id: "new-group-id", ...plan.group }, rules: [] as RuleSetDto[], policy: undefined as Policy | undefined, assignments: [] as RuleAssignment[] };
@@ -67,11 +73,200 @@ async function harness() {
     readPublication: vi.fn<CloneBackend["readPublication"]>(async () => ({ ok: true, data: "published" })),
   };
   const operation = await newCloneOperation(plan);
-  const run = () => executeGroupClone(plan, operation, backend, store, true);
+  const run = (omissionsConfirmed = false) => executeGroupClone(plan, operation, backend, store, true, omissionsConfirmed);
   return { plan, store, records, state, backend, operation, run, changeSource: (next: CloneSnapshot) => { snapshot = next; } };
 }
 
-describe("lossless independent group-copy planning", () => {
+describe("explicit partial governance copies (synthetic responses only)", () => {
+  it("requires separate omission acknowledgement before any write", async () => {
+    const h = await harness(undefined, partialSource());
+    const outcome = await h.run();
+    expect(outcome.operation.phase).toBe("failed");
+    expect(outcome.message).toContain("Explicitly acknowledge");
+    expect(h.backend.createGroup).not.toHaveBeenCalled();
+    expect(h.backend.createPolicy).not.toHaveBeenCalled();
+  });
+  it("verifies the exact retained subset and reports omissions without a complete-copy claim", async () => {
+    const snapshot = partialSource(), original = structuredClone(snapshot);
+    const h = await harness("Copy description", snapshot);
+    const outcome = await h.run(true);
+    expect(outcome.operation.phase).toBe("created-with-omissions");
+    expect(outcome.message).toContain("governance is incomplete");
+    expect(outcome.destinationUrl).toContain("new-group-id");
+    expect(outcome.operation.skipped).toEqual(h.plan.skipped);
+    expect(h.store.read(outcome.operation.id)?.skipped).toEqual(h.plan.skipped);
+    expect(h.state.policy?.ruleSets).toEqual(snapshot.policy.ruleSets!.slice(0, 2));
+    expect(h.backend.createPolicy).toHaveBeenCalledWith(h.plan.policy);
+    expect(h.backend.assign).toHaveBeenCalledWith("new-policy-id", "new-group-id");
+    expect(h.backend.createRule).toHaveBeenCalledWith("new-group-id", ruleCreateBody(h.plan.rules[0], "new-group-id"));
+    expect(snapshot).toEqual(original);
+    expect(outcome.operation.steps.every((step) => step.outcome === "verified")).toBe(true);
+    const writes = JSON.stringify([h.backend.createGroup, h.backend.createRule, h.backend.createPolicy, h.backend.assign]
+      .map((write) => vi.mocked(write).mock.calls));
+    expect(writes).not.toContain("source-group-id");
+    expect(writes).not.toContain("source-policy-id");
+    expect(writes).not.toContain("managedBy");
+    expect(writes).not.toContain("MicrosoftAppsContentSecurityPolicy");
+    await h.run(true);
+    expect(h.backend.createGroup).toHaveBeenCalledTimes(1);
+    const reconciled = await reconcileGroupClone({ ...h.plan, preparedAt: Date.now() }, outcome.operation, h.backend, h.store);
+    expect(reconciled.operation.phase).toBe("created-with-omissions");
+    expect(reconciled.message).toContain("governance remains incomplete");
+    expect(h.backend.createPolicy).toHaveBeenCalledTimes(1);
+  });
+  it("omits an entire group-rule resource, including its otherwise-supported buckets", async () => {
+    const snapshot = source();
+    Object.assign(snapshot.rules[0].parameters![0].value![0], { unsupportedBehavior: true });
+    const h = await harness(undefined, snapshot);
+    expect(h.plan.blockers).toEqual([]);
+    expect(h.plan.rules).toEqual([]);
+    expect(h.plan.skipped?.[0].kind).toBe("group-rule");
+    expect(h.plan.copied.some((setting) => setting.path.startsWith("ModelA."))).toBe(false);
+    expect((await h.run(true)).operation.phase).toBe("created-with-omissions");
+    expect(h.backend.createRule).not.toHaveBeenCalled();
+    expect(h.state.policy?.ruleSets).toEqual(snapshot.policy.ruleSets);
+  });
+  it("keeps skipped values in the source fingerprint and invalidates changes before and during writes", async () => {
+    const snapshot = partialSource();
+    const h = await harness(undefined, snapshot);
+    const changed = structuredClone(snapshot);
+    Object.assign(changed.policy.ruleSets![2], { managedBy: "changed-manager" });
+    const changedPlan = await planGroupClone(changed, h.plan.group.displayName!);
+    expect(changedPlan.policy).toEqual(h.plan.policy);
+    expect(changedPlan.sourceFingerprint).not.toBe(h.plan.sourceFingerprint);
+    expect((await newCloneOperation(changedPlan)).planFingerprint).not.toBe(h.operation.planFingerprint);
+    h.changeSource(changed);
+    expect((await h.run(true)).message).toContain("Source changed");
+    expect(h.backend.createGroup).not.toHaveBeenCalled();
+    const during = await harness(undefined, snapshot);
+    during.backend.createGroup = vi.fn<CloneBackend["createGroup"]>(async () => {
+      during.changeSource(changed);
+      return { ok: true, data: during.state.group };
+    });
+    const outcome = await during.run(true);
+    expect(outcome.operation.phase).toBe("failed");
+    expect(outcome.operation.destinationId).toBe("new-group-id");
+    expect(outcome.operation.skipped).toEqual(during.plan.skipped);
+    expect(during.backend.createRule).not.toHaveBeenCalled();
+    expect(during.backend.createPolicy).not.toHaveBeenCalled();
+  });
+  it("does not turn ownership, references, malformed policy or missing source evidence into omissions", async () => {
+    const cases: Array<(snapshot: CloneSnapshot) => void> = [
+      (snapshot) => Object.assign(snapshot.policy, { managedBy: "unknown-policy-owner" }),
+      (snapshot) => Object.assign(snapshot.policy.ruleSets![2], { managedBy: snapshot.group.id }),
+      (snapshot) => { snapshot.policy.ruleSets![2].inputs = { ownedResource: snapshot.policy.id }; },
+      (snapshot) => { snapshot.policy.ruleSets![2].inputs = undefined; },
+      (snapshot) => { snapshot.policy.ruleSets![0].inputs = { AllowedConnectorList: "malformed" }; },
+      (snapshot) => { snapshot.publication = "unknown"; },
+      (snapshot) => { snapshot.blockers.push("Source reads incomplete."); },
+      (snapshot) => { snapshot.assignments.push({ ...snapshot.assignments[0] }); },
+      (snapshot) => { snapshot.rules[0].environmentFilter = undefined; },
+      (snapshot) => { snapshot.policy.ruleSets!.forEach((module) => Object.assign(module, { managedBy: "unknown" })); },
+    ];
+    for (const change of cases) {
+      const snapshot = partialSource();
+      change(snapshot);
+      const h = await harness(undefined, snapshot);
+      expect(h.plan.blockers.length).toBeGreaterThan(0);
+      expect((await h.run(true)).operation.phase).toBe("blocked");
+      expect(h.backend.createGroup).not.toHaveBeenCalled();
+    }
+  });
+  it("rejects omitted modules reappearing in destination read-back instead of declaring partial success", async () => {
+    const snapshot = partialSource();
+    const h = await harness(undefined, snapshot);
+    h.backend.readPolicy = vi.fn<CloneBackend["readPolicy"]>(async () => ({
+      ok: true, data: { ...h.state.policy!, ruleSets: [...h.plan.policy.ruleSets!, snapshot.policy.ruleSets![2]] },
+    }));
+    const outcome = await h.run(true);
+    expect(outcome.operation.phase).toBe("failed");
+    expect(outcome.message).toContain("verification");
+    expect(outcome.destinationUrl).toBeUndefined();
+    expect(outcome.operation.policyId).toBe("new-policy-id");
+    expect(outcome.operation.skipped).toEqual(h.plan.skipped);
+    expect(h.backend.assign).not.toHaveBeenCalled();
+  });
+  it("keeps async partial writes indeterminate without repeating creation", async () => {
+    const h = await harness(undefined, partialSource());
+    h.backend.createPolicy = vi.fn<CloneBackend["createPolicy"]>(async () => ({ ok: true, data: { operationId: "pending-policy", status: "Running" } }));
+    const outcome = await h.run(true);
+    expect(outcome.operation.phase).toBe("indeterminate");
+    expect(outcome.operation.destinationId).toBe("new-group-id");
+    expect(outcome.operation.skipped).toEqual(h.plan.skipped);
+    expect(outcome.destinationUrl).toBeUndefined();
+    await h.run(true);
+    expect(h.backend.createPolicy).toHaveBeenCalledTimes(1);
+    expect(h.backend.assign).not.toHaveBeenCalled();
+  });
+  it("binds omission disclosures to execution and recovery rather than trusting edited journal labels", async () => {
+    const h = await harness(undefined, partialSource());
+    const tampered = { ...h.operation, skipped: [] };
+    expect((await executeGroupClone(h.plan, tampered, h.backend, h.store, true, true)).message).toContain("does not match");
+    expect(h.backend.createGroup).not.toHaveBeenCalled();
+    const fresh = await harness(undefined, partialSource());
+    const outcome = await fresh.run(true);
+    const changedPlan = { ...fresh.plan, skipped: [] };
+    const reconciled = await reconcileGroupClone(changedPlan, outcome.operation, fresh.backend, fresh.store);
+    expect(reconciled.operation.phase).toBe("blocked");
+    expect(reconciled.destinationUrl).toBeUndefined();
+  });
+});
+
+describe("independent group-copy planning", () => {
+  it.each([null, "synthetic-manager", { owner: "synthetic-owner" }])("omits a whole optional module with undocumented managedBy %j, without assuming response metadata", async (managedBy) => {
+    const snapshot = source();
+    const module = snapshot.policy.ruleSets![2];
+    module.id = "MicrosoftAppsContentSecurityPolicy";
+    Object.assign(module, { managedBy, futureEnvelopeSetting: true });
+    const plan = await planGroupClone(snapshot, "New");
+    expect(plan.unsupported).toContainEqual({ path: "PolicyRules.MicrosoftAppsContentSecurityPolicy.managedBy", value: managedBy });
+    expect(plan.blockers).toEqual([]);
+    expect(plan.skipped).toEqual([{
+      kind: "policy-module", id: "MicrosoftAppsContentSecurityPolicy",
+      reasons: [
+        "Unsupported field: managedBy. The whole rule is omitted, not just this field.",
+        "Unsupported field: futureEnvelopeSetting. The whole rule is omitted, not just this field.",
+      ],
+    }]);
+    expect(plan.policy.ruleSets).toEqual(snapshot.policy.ruleSets!.slice(0, 2));
+    expect(plan.skippedEvidence).toEqual([{ path: "PolicyRules.MicrosoftAppsContentSecurityPolicy", value: module }]);
+    expect(plan.skippedEvidence![0].value).not.toBe(module);
+    expect(plan.copied.some((setting) => setting.path.includes("MicrosoftAppsContentSecurityPolicy"))).toBe(false);
+    expect(module).toHaveProperty("managedBy", managedBy);
+  });
+  it("preserves managedBy inside CSP module inputs, including nested values", async () => {
+    const snapshot = source();
+    const module = snapshot.policy.ruleSets![2];
+    module.id = "MicrosoftAppsContentSecurityPolicy";
+    module.inputs = { managedBy: "synthetic-input-setting", nested: { managedBy: ["synthetic-value", null] } };
+    const plan = await planGroupClone(snapshot, "New");
+    expect(plan.blockers).toEqual([]);
+    expect(plan.policy.ruleSets![2].inputs).toEqual(module.inputs);
+    expect(plan.policy.ruleSets![2].inputs).not.toBe(module.inputs);
+    expect(plan.copied.find((setting) => setting.path === "ModelB.MicrosoftAppsContentSecurityPolicy v2.1")?.value).toEqual(module.inputs);
+  });
+  it.each(["Description for the copy\nSecond line", ""])("uses the reviewed description %j without changing the source", async (description) => {
+    const snapshot = source();
+    const original = structuredClone(snapshot);
+    const defaultPlan = await planGroupClone(snapshot, "New");
+    const plan = await planGroupClone(snapshot, "New", description);
+    expect(defaultPlan.group.description).toBe(snapshot.group.description);
+    expect(plan.group.description).toBe(description);
+    expect(plan.copied.find((setting) => setting.path === "Group.description")?.value).toBe(description);
+    expect(plan.sourceFingerprint).toBe(defaultPlan.sourceFingerprint);
+    expect((await newCloneOperation(plan)).planFingerprint).not.toBe((await newCloneOperation(defaultPlan)).planFingerprint);
+    expect(snapshot).toEqual(original);
+    const h = await harness(description);
+    if (!description) delete h.state.group.description;
+    expect((await h.run()).operation.phase).toBe("verified");
+    expect(h.backend.createGroup).toHaveBeenCalledWith({ displayName: "Independent test group", description });
+  });
+  it("rejects a destination that returns the source description instead of the edited description", async () => {
+    const h = await harness("Description for the copy");
+    h.state.group.description = source().group.description;
+    expect((await h.run()).operation.phase).toBe("failed");
+    expect(h.backend.createPolicy).not.toHaveBeenCalled();
+  });
   it("preserves both wire models, setting/module identities, raw values and every input without sharing resources", async () => {
     const snapshot = source();
     const plan = await planGroupClone(snapshot, " New empty group ");
@@ -154,7 +349,11 @@ describe("lossless independent group-copy planning", () => {
       { path: "GroupRules.source-rule-id/Sharing/UsersBot.futureBucketMode", value: { enabled: false } },
       { path: "PolicyRules.ConnectorManagement.futureRuleState", value: null },
     ]);
-    expect(plan.blockers.join(" ")).toContain("futureBucketMode");
+    expect(plan.skipped).toContainEqual({
+      kind: "group-rule", id: "source-rule-id",
+      reasons: ["Unsupported field: futureBucketMode. The whole rule is omitted, not just this field."],
+    });
+    expect(plan.rules).toEqual([]);
     expect(plan.blockers.join(" ")).toContain("futureRuleState");
     expect(plan.blockers.join(" ")).not.toContain("missing/duplicate");
     expect(plan.policy.ruleSets![0].inputs).toEqual(snapshot.policy.ruleSets![0].inputs);
@@ -177,9 +376,10 @@ describe("lossless independent group-copy planning", () => {
     Object.assign(snapshot.assignments[0], { assignmentOverrides: [{ behaviorType: "Exclude" }] });
     const plan = await planGroupClone(snapshot, "New");
     expect(plan.blockers.join(" ")).toContain("Group.UnknownGovernanceSetting");
-    expect(plan.blockers.join(" ")).toContain("ModelA.Sharing/UsersBot/MaximumShareLimit");
+    expect(plan.skipped?.[0].reasons.join(" ")).toContain("extraSetting");
     expect(plan.blockers.join(" ")).toContain("overrides");
-    expect(plan.copied.find((item) => item.path.includes("MaximumShareLimit"))?.value).toBe("99");
+    expect(plan.copied.some((item) => item.path.includes("MaximumShareLimit"))).toBe(false);
+    expect(plan.unsupported).toContainEqual({ path: "ModelA.Sharing/UsersBot/MaximumShareLimit.extraSetting", value: true });
   });
   it("blocks source hierarchy rather than omitting inherited scope from a complete-copy claim", async () => {
     const snapshot = source();

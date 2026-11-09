@@ -21,7 +21,7 @@ vi.mock("../../data/userEnrichment", () => ({
 
 import {
   buildBoard, createBoardInventoryLoader, loadEmptyGroupMembership, loadGroupPolicies, loadManagedApps, loadPdeApps, loadPdeResources, loadPdeMemberships, matchesApp, membershipId,
-  originLabel, readManagedApp, matchesContext, groupPdeApps, pdeMoveBlocker, type EnvironmentRow,
+  originLabel, readManagedApp, matchesContext, groupPdeApps, pdeMoveBlocker, loadRuleSyncGroups, loadRuleSyncEnvironments, type EnvironmentRow,
 } from "./data";
 
 const env: EnvironmentRow = {
@@ -51,6 +51,22 @@ beforeEach(() => {
 });
 
 describe("managed apps inventory", () => {
+  it("loads all group choices without app/policy fanout and fresh affected environments without a PDE-only filter", async () => {
+    expect((await loadRuleSyncGroups()).ok).toBe(true);
+    expect(appQuery).not.toHaveBeenCalled();
+    expect(assignments).not.toHaveBeenCalled();
+    const result = await loadRuleSyncEnvironments("group-one");
+    expect(result.ok && result.data.map((row) => row.id)).toEqual(["pde-one"]);
+    expect(JSON.stringify(envQuery.mock.calls[0][0])).toContain("properties.environmentGroupId");
+    expect(JSON.stringify(envQuery.mock.calls[0][0])).not.toContain("Developer");
+    expect(runRawQuery.mock.calls.find(([clauses]) => JSON.stringify(clauses).includes("microsoft.powerplatform/environments"))?.[2]).toMatchObject({ forceFresh: true });
+  });
+  it("rejects foreign, incomplete or duplicate sync impact/group identities", async () => {
+    envQuery.mockResolvedValue({ ok: true, data: { items: [{ name: "foreign", type: "microsoft.powerplatform/environments", properties: { ...env, environmentGroupId: "other" } }] } });
+    expect((await loadRuleSyncEnvironments("group-one")).ok).toBe(false);
+    groupQuery.mockResolvedValue({ ok: true, data: { items: [{ type: "microsoft.powerplatform/environmentgroups", properties: {} }] } });
+    expect((await loadRuleSyncGroups()).ok).toBe(false);
+  });
   it("starts app, environment and group reads independently before any collection completes", async () => {
     let finish!: (value: { ok: true; data: { items: [] } }) => void;
     envQuery.mockImplementation(() => new Promise((resolve) => { finish = resolve; }));

@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from "react";
-import { Button, Caption1, Checkbox, Field, Input, Link, MessageBar, MessageBarBody, Text, makeStyles, tokens } from "@fluentui/react-components";
+import { Button, Caption1, Checkbox, Field, Input, Link, MessageBar, MessageBarBody, Text, Textarea, makeStyles, tokens } from "@fluentui/react-components";
 import { ErrorPane, LoadingPane } from "../../components/Status";
 import { RawJsonAccordion } from "../../components/RawJsonAccordion";
 import { AUTHORIZATION_NOTICE, groupCloneBackend, groupCloneStore, loadCloneOperations, prepareGroupClone } from "./groupCloneData";
-import { executeGroupClone, newCloneOperation, reconcileGroupClone, type CloneOperation, type CloneOutcome, type ClonePlan } from "./groupClone";
+import { executeGroupClone, isCompletedClone, newCloneOperation, reconcileGroupClone, type CloneOperation, type CloneOutcome, type ClonePlan } from "./groupClone";
 import type { DataResult } from "./data";
 
 const useStyles = makeStyles({
@@ -12,9 +12,22 @@ const useStyles = makeStyles({
   record: { display: "flex", flexDirection: "column", gap: tokens.spacingVerticalXS, paddingBlock: tokens.spacingVerticalS, borderBottom: `1px solid ${tokens.colorNeutralStroke2}` },
 });
 
-export function GroupClonePanel({ sourceId, sourceName, onCompleted }: { sourceId: string; sourceName: string; onCompleted: (outcome: CloneOutcome) => void }) {
+interface GroupClonePanelProps {
+  sourceId: string;
+  sourceName: string;
+  sourceDescription?: string;
+  onCompleted: (outcome: CloneOutcome) => void;
+}
+
+export function GroupClonePanel(props: GroupClonePanelProps) {
+  return <GroupCloneForm key={props.sourceId} {...props} />;
+}
+
+function GroupCloneForm({ sourceId, sourceName, sourceDescription, onCompleted }: GroupClonePanelProps) {
   const styles = useStyles();
   const [name, setName] = useState("");
+  const [description, setDescription] = useState(sourceDescription ?? "");
+  const descriptionEdited = useRef(false);
   const [result, setResult] = useState<DataResult<ClonePlan> | null>(null);
   const [busy, setBusy] = useState(false);
   const [confirmed, setConfirmed] = useState(false);
@@ -24,6 +37,12 @@ export function GroupClonePanel({ sourceId, sourceName, onCompleted }: { sourceI
   const generation = useRef(0);
   const controller = useRef<AbortController | null>(null);
   const writeActive = useRef(false);
+  useEffect(() => {
+    if (descriptionEdited.current || writeActive.current) return;
+    ++generation.current; controller.current?.abort();
+    setDescription(sourceDescription ?? "");
+    setResult(null); setConfirmed(false); setOutcome(null); setBusy(false);
+  }, [sourceDescription]);
   useEffect(() => {
     const invalidate = () => { ++generation.current; controller.current?.abort(); };
     const reload = () => {
@@ -45,7 +64,7 @@ export function GroupClonePanel({ sourceId, sourceName, onCompleted }: { sourceI
     controller.current?.abort();
     controller.current = new AbortController();
     setBusy(true); setResult(null); setConfirmed(false); setOutcome(null);
-    const next = await prepareGroupClone(sourceId, name, controller.current.signal);
+    const next = await prepareGroupClone(sourceId, name, controller.current.signal, description);
     if (request !== generation.current) return;
     setResult(next); setBusy(false);
   }
@@ -55,9 +74,9 @@ export function GroupClonePanel({ sourceId, sourceName, onCompleted }: { sourceI
     try {
       const operation = await newCloneOperation(plan);
       groupCloneStore.save(operation);
-      const next = await executeGroupClone(plan, operation, groupCloneBackend, groupCloneStore, confirmed);
+      const next = await executeGroupClone(plan, operation, groupCloneBackend, groupCloneStore, confirmed, confirmed && !!plan.skipped?.length);
       setOutcome(next);
-      if (next.operation.phase === "verified" && next.destinationUrl) onCompleted(next);
+      if (isCompletedClone(next.operation.phase) && next.destinationUrl) onCompleted(next);
     } catch (error) { setStorageError(`Copy could not be started safely: ${String(error)}`); }
     finally { writeActive.current = false; setBusy(false); }
   }
@@ -67,11 +86,11 @@ export function GroupClonePanel({ sourceId, sourceName, onCompleted }: { sourceI
     try {
       const next = await reconcileGroupClone(plan, operation, groupCloneBackend, groupCloneStore);
       setOutcome(next);
-      if (next.operation.phase === "verified" && next.destinationUrl) onCompleted(next);
+      if (isCompletedClone(next.operation.phase) && next.destinationUrl) onCompleted(next);
     } catch (error) { setStorageError(`Recovery read failed: ${String(error)}`); }
     finally { writeActive.current = false; setBusy(false); }
   }
-  const unresolved = records.some((record) => !["blocked", "planned", "verified"].includes(record.phase));
+  const unresolved = records.some((record) => !["blocked", "planned"].includes(record.phase) && !isCompletedClone(record.phase));
   return <div className={styles.stack}>
     <Text as="h3" weight="semibold">Duplicate environment group</Text>
     <Text>Copy settings from {sourceName} into a new empty group with its own ACP. No environments are copied; the source stays unchanged.</Text>
@@ -79,6 +98,13 @@ export function GroupClonePanel({ sourceId, sourceName, onCompleted }: { sourceI
       ++generation.current; controller.current?.abort();
       setName(data.value); setResult(null); setConfirmed(false); setOutcome(null);
     }} /></Field>
+    <Field label="Description" hint="Optional. Starts with the source group's description.">
+      <Textarea value={description} rows={3} disabled={busy} onChange={(_, data) => {
+        descriptionEdited.current = true;
+        ++generation.current; controller.current?.abort();
+        setDescription(data.value); setResult(null); setConfirmed(false); setOutcome(null);
+      }} />
+    </Field>
     <Button disabled={!name.trim() || busy} onClick={() => void review()}>Review copy</Button>
     {busy && <LoadingPane label="Checking group copy..." />}
     {result && !result.ok && <ErrorPane title="Couldn't review this copy" message={result.error} />}
@@ -86,6 +112,12 @@ export function GroupClonePanel({ sourceId, sourceName, onCompleted }: { sourceI
     {plan && <>
       <Text weight="semibold">{sourceName} → {plan.group.displayName}</Text>
       <Caption1>{plan.copied.length} settings · Independent ACP · 0 environments copied</Caption1>
+      {!!plan.skipped?.length && <>
+        <MessageBar intent="warning"><MessageBarBody>Partial copy: {plan.skipped.length} {plan.skipped.length === 1 ? "rule" : "rules"} skipped. Review the list below; governance won't match the source.</MessageBarBody></MessageBar>
+        <ul className={styles.list}>{plan.skipped.map((entry) => <li key={`${entry.kind}:${entry.id}`}>
+          <Text weight="semibold">{entry.kind === "group-rule" ? "Group settings" : entry.id}</Text>: {entry.reasons.join(" ")}
+        </li>)}</ul>
+      </>}
       {plan.publication === "applied" && <Caption1>Copies applied settings. Pending changes in admin center aren't copied.</Caption1>}
       {!!plan.blockers.length && <>
         <MessageBar intent="warning"><MessageBarBody>Copy isn't ready: {plan.blockers[0]} This review hasn't created resources.</MessageBarBody></MessageBar>
@@ -97,17 +129,20 @@ export function GroupClonePanel({ sourceId, sourceName, onCompleted }: { sourceI
           {!!plan.blockers.length && <ul className={styles.list}>{plan.blockers.map((blocker) => <li key={blocker}>{blocker}</li>)}</ul>}
           <RawJsonAccordion title={`Copied settings (${plan.copied.length})`} data={plan.copied} />
           {!!plan.unsupported?.length && <RawJsonAccordion title="Unmapped fields (exact returned values)" data={plan.unsupported} />}
+          {!!plan.skippedEvidence?.length && <RawJsonAccordion title="Skipped rules (exact source configuration)" data={plan.skippedEvidence} />}
           <Text>{AUTHORIZATION_NOTICE}</Text>
-          <Caption1>Setting and module identifiers, versions and complete input values are preserved. New resource identities and destination-only assignment are verified. No hierarchy, roles or membership are copied.</Caption1>
+          <Caption1>Copied rules retain their setting/module identifiers, versions and complete inputs. Skipped rules are omitted in full. New resource identities and destination-only assignment are verified. No hierarchy, roles or membership are copied.</Caption1>
         </div>
       </details>
       {unresolved && <MessageBar intent="warning"><MessageBarBody>A previous copy has incomplete or uncertain writes. Reconcile its IDs; do not start another copy and create duplicate/orphan resources.</MessageBarBody></MessageBar>}
       {!plan.blockers.length && !unresolved && !storageError && !outcome && <>
         <Checkbox checked={confirmed} disabled={busy || unresolved}
-          label={`Create "${plan.group.displayName}" from "${sourceName}" with all reviewed ${plan.publication} settings and a separate ACP. No environments or source changes. Incomplete writes may need manual recovery.`}
+          label={plan.skipped?.length
+            ? `Create "${plan.group.displayName}" with a separate ACP and the supported settings. I accept the listed skipped rules: governance will be incomplete, not equivalent to "${sourceName}". No environments or source changes. Incomplete writes may need manual recovery.`
+            : `Create "${plan.group.displayName}" from "${sourceName}" with all reviewed ${plan.publication} settings and a separate ACP. No environments or source changes. Incomplete writes may need manual recovery.`}
           onChange={(_, data) => setConfirmed(data.checked === true)} />
         <Button appearance="primary" disabled={busy || !confirmed}
-          onClick={() => void execute()}>Create independent copy</Button>
+          onClick={() => void execute()}>{plan.skipped?.length ? "Create partial copy" : "Create independent copy"}</Button>
       </>}
     </>}
     {outcome && <>
@@ -119,12 +154,15 @@ export function GroupClonePanel({ sourceId, sourceName, onCompleted }: { sourceI
       {outcome.destinationUrl && <Link href={outcome.destinationUrl} target="_blank" rel="noopener noreferrer">Open verified destination group in admin center</Link>}
     </>}
     {!!records.length && <details open={unresolved}><summary>Copy history and recovery ({records.length})</summary>
-      <Caption1>Stored locally in this browser: IDs, fingerprints and step outcomes only, not credentials or copied settings. No automatic cleanup or creation retry. A lost response can leave an unidentifiable orphan; names are not ownership evidence.</Caption1>
+      <Caption1>Stored locally in this browser: IDs, fingerprints, skipped-rule reasons and step outcomes, not credentials or copied settings. No automatic cleanup or creation retry. A lost response can leave an unidentifiable orphan; names are not ownership evidence.</Caption1>
       {records.map((record) => <div key={record.id} className={styles.record}>
         <Text weight="semibold">{record.phase} · operation {record.id}</Text>
         <Text>Destination group: {record.destinationId || "Not reconciled"} · independent policy: {record.policyId || "Not reconciled"}</Text>
+        {!!record.skipped?.length && <ul className={styles.list}>{record.skipped.map((entry) => <li key={`${entry.kind}:${entry.id}`}>
+          Skipped {entry.kind === "group-rule" ? "group settings" : entry.id}: {entry.reasons.join(" ")} Governance is incomplete.
+        </li>)}</ul>}
         <RawJsonAccordion title="Returned resource IDs and actual step outcomes" data={{ rules: record.rules, steps: record.steps }} />
-        <Caption1>Before read-only reconciliation, enter the original destination name and read a fresh preview. A changed source/plan cannot be treated as equivalent. Partially created group/rules/policy may need manual recovery; policy delete/unassignment and group-delete cascades are not verified.</Caption1>
+        <Caption1>Before read-only reconciliation, enter the original destination name and description and read a fresh preview. A changed source/plan cannot be treated as equivalent. Partially created group/rules/policy may need manual recovery; policy delete/unassignment and group-delete cascades are not verified.</Caption1>
         <Button disabled={!plan || busy} onClick={() => void reconcile(record)}>Reconcile known IDs (read only)</Button>
       </div>)}
     </details>}

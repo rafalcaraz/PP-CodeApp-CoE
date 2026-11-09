@@ -1,7 +1,7 @@
 import { memo, useCallback, useDeferredValue, useEffect, useId, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import {
   Badge, Button, Caption1, Checkbox, Dialog, DialogActions, DialogBody, DialogContent,
-  DialogSurface, DialogTitle, Field, InfoLabel, Link, Menu, MenuItem, MenuList,
+  DialogSurface, DialogTitle, Field, InfoLabel, Menu, MenuItem, MenuList,
   MenuPopover, MenuTrigger, MessageBar, MessageBarBody, Input, SearchBox, Select,
   Text, makeStyles, mergeClasses, shorthands, tokens,
 } from "@fluentui/react-components";
@@ -15,6 +15,7 @@ import { useUserLookup } from "../../hooks/useUserLookup";
 import { GroupPanel, MovePreparationDialog } from "./GovernancePanels";
 import { groupFacts, loadGroupEvidenceBatch, matchesGroup, type GroupEvidence, type MoveSelection } from "./governance";
 import type { CloneOutcome } from "./groupClone";
+import { CloneCompletionNotice } from "./CloneCompletionNotice";
 import { moveCanResume, moveNeedsCheck, moveOutcomeLabel, type MembershipRead, type MoveOutcome, type MoveRecord } from "./pdeMoves";
 import { pdeMoveStore } from "./pdeMoveData";
 import { liveMoveTask } from "./liveMoveTask";
@@ -172,6 +173,14 @@ export function ManagedAppsView() {
   }, [revision, loadInventory]);
 
   useEffect(() => {
+    const written = (event: Event) => {
+      const detail: unknown = (event as CustomEvent<unknown>).detail;
+      if (!detail || typeof detail !== "object" || !("targetIds" in detail) || !Array.isArray(detail.targetIds)
+        || detail.targetIds.some((id: unknown) => typeof id !== "string")) return;
+      const ids = new Set(detail.targetIds.map(membershipId));
+      ++evidenceRevision.current; evidenceRequest.current?.abort(); setEvidenceLoading(false);
+      setEvidence((previous) => Object.fromEntries(Object.entries(previous).filter(([id]) => !ids.has(id))));
+    };
     const invalidate = () => {
       if (transferActive.current || liveMoveTask.getSnapshot()?.running) return;
       ++evidenceRevision.current;
@@ -187,8 +196,10 @@ export function ManagedAppsView() {
       setRecentMemberships([]);
     };
     window.addEventListener("focus", invalidate);
+    window.addEventListener("ppcoe:managed-apps:rule-sync:written", written);
     return () => {
       window.removeEventListener("focus", invalidate);
+      window.removeEventListener("ppcoe:managed-apps:rule-sync:written", written);
       evidenceRequest.current?.abort();
     };
   }, []);
@@ -365,9 +376,7 @@ export function ManagedAppsView() {
         {inventory.kind !== "ready" && <Button icon={<ArrowClockwiseRegular />} disabled={inventory.kind === "loading" || transferBusy} onClick={refreshInventory}>Refresh inventory</Button>}
       </div>
       {externalChanges && <MessageBar intent="warning"><MessageBarBody>Returned to this app: earlier policy evidence and previews were invalidated. Inventory is still the previous snapshot. Refresh inventory after external membership or policy changes.</MessageBarBody></MessageBar>}
-      {cloneCompletion?.operation.phase === "verified" && cloneCompletion.destinationUrl && <MessageBar intent="success"><MessageBarBody>
-        {cloneCompletion.message} <Link href={cloneCompletion.destinationUrl} target="_blank" rel="noopener noreferrer">Open verified destination group in admin center</Link>
-      </MessageBarBody></MessageBar>}
+      <CloneCompletionNotice outcome={cloneCompletion} />
       {moveCompletion && <MessageBar intent={moveCompletion.record.pdes.every((pde) => pde.phase === "verified" || pde.phase === "already-member") ? "success" : "warning"}><MessageBarBody>
         {moveCompletion.record.pdes.map((pde, index) => <p key={pde.environmentId}>
           {inventory.kind === "ready" ? inventory.data.environments.find((environment) => membershipId(environment.id) === membershipId(pde.environmentId))?.displayName || `PDE ${index + 1}` : `PDE ${index + 1}`}: {moveOutcomeLabel(moveCompletion, pde)}.

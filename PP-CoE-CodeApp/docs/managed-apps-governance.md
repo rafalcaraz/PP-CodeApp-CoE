@@ -381,7 +381,95 @@ and [Admins V2 connector](https://learn.microsoft.com/connectors/powerplatformad
 
 ## Independent environment-group copy
 
+### One-time selective rule sync
+
+In either group inspector, expand **Sync rules to other groups**. Check
+individual rules and individual destination groups; neither list starts selected.
+**Preview selected changes** reads fresh applied source/target configuration,
+complete policy assignment scope and force-fresh, completely paginated inventory
+membership. The preview identifies **Add**, **Replace** and **No change** for
+each checked rule × checked group, including affected environment names (not
+only PDEs). Search hides choices without silently clearing checked targets.
+Review exact old/new values and scope under disclosure, then explicitly confirm
+**Apply selected rules once**. There is no ongoing link, schedule or propagation
+relationship. No group, policy or membership is created/copied/reassigned.
+
+The first enabled version supports the portable group-setting identifiers in
+`ruleSync.ts` (sharing, solution-checker mode/email settings, AI settings, retention,
+anonymous chat and admin-digest settings) and complete policy rules
+`ConnectorManagement`, `AdvancedConnectorPoliciesOnly` and `CopilotTranscripts`
+at version `1.0` with their reviewed input contracts. A named policy rule is an atomic selection:
+all its inputs are replaced/added from the reviewed source, not a subset of its
+connectors or nested inputs. Other rules, unknown input extensions, ownership
+envelopes and resource-pointer settings are named under **Unavailable rules**;
+they are not stripped or silently included. Sync does not weaken mandatory
+connector/security or source-completeness checks. This eligibility list is
+deliberately narrower than independent group copy.
+
+Existing-target contracts are distinct from creation:
+
+- [Update Rule Set](https://learn.microsoft.com/rest/api/power-platform/governance/rule-sets/update-rule-set)
+  is a full-resource PUT. Sync requires one complete writable target resource
+  scoped exclusively to that group, retains its actual ID/filter, and merges
+  only checked setting values into **all** unselected buckets/settings.
+  Unsupported envelopes, missing resources, ambiguous cardinality or shared
+  applicability block the checked selection; no replacement resource is created.
+- [Patch Rule Based Policy](https://learn.microsoft.com/rest/api/power-platform/governance/rule-based-policies/patch-rule-based-policy)
+  explicitly adds/updates one or more rules. The registered operation sends
+  **only changed checked modules** in `ruleSets`, without a name or an entire
+  policy replacement. The full authoritative assignment collection must prove
+  the target policy is exclusive to that group before policy mutation. Shared
+  policies are blocked, never automatically forked/reassigned. A group-setting
+  update may leave a shared ACP untouched. An existing checked target module with
+  unsupported ownership fields, input extensions or versions is explicitly
+  blocked, not replaced by a smaller supported shape.
+
+Full previews are fingerprint-bound and revalidated before writes and before
+each sequential target step, including unrelated configuration, memberships and
+policy scope. Checkbox edits, source changes and focus return discard review and
+confirmation. Web Locks serialize this app's sync operations in a secure browser;
+missing lock support or overlapping uncertain local journals blocks writes.
+These APIs expose no registered conditional-write/transaction contract: avoid
+simultaneous governance editing in PPAC or other clients. The immediate fresh
+checks cannot eliminate that external race; mismatched read-back is reported as
+uncertain, not unchanged/successful.
+
+Success requires authoritative read-back of selected **and unselected** target
+settings, unchanged group properties/membership/assignment scope, and unchanged
+source. Only specifically documented response timestamps are normalized. Stored
+journals contain resource IDs, fingerprints and per-target/per-step outcomes,
+not rule payloads or credentials. A refused, asynchronous, timed-out or mismatched
+write stops later steps and cannot report all-target success. **Reconcile sync
+(read only)** checks known IDs against the original reviewed end-state; it never
+retries, rolls back or deletes. Closing stops remaining steps, not a request
+already in flight. Changed/uncertain target evidence is invalidated on the Managed
+Apps board without discarding the source inspector/recovery result.
+
+Development tests use synthetic SDK responses. Selective sync through the app's
+tenant connector identity and browser-level focus/concurrency remain
+tenant-unverified; this work does not deploy or run real governance mutations.
+
+**Environment groups → open a group → View rules & ACP** opens the same
+governance inspection and independent-copy workflow as Managed Apps, including
+empty groups. Rules and assigned-policy summaries are shown first; expand
+**Duplicate environment group** to enter a name/description and review a copy.
+Raw evidence stays collapsed. Inspection is requested on demand for the
+selected group, with cancellation/identity protection when navigating or closing.
+The shared loader enumerates group rules to resolve applicability, but does not
+fetch every other group's properties or assigned policies.
+Read failures stay unavailable, not "no policy" or unrestricted access.
+After a verified full or explicitly partial copy, the destination link and
+any skipped rules remain visible on the detail page.
+
+The app shell composes the existing inspector through the managed-apps public
+API and the Environment groups detail slot. Neither feature imports its
+sibling, and there is no second policy renderer, copy planner or write backend.
+
 In the group panel, enter a new name and choose **Review copy**.
+The optional **Description** box starts with the selected source group's
+description. Edit or clear it for the new group; changes require a fresh review
+and confirmation. Late source-property reads do not replace user edits, and
+selecting another source resets the form to that group's description.
 The duplication form appears before the group evidence. The default view shows
 the new name, independent ACP and zero environments copied. Group settings,
 policy grids, connector declarations, technical identities and raw values are
@@ -397,8 +485,12 @@ continuation, unresolved applicability or malformed/missing evidence fails
 explicitly. Reads are nontransactional; a SHA-256 source fingerprint is rechecked
 before writes and at completion.
 
-The proposed copy includes the new name, source description, **all Model A
-parameter buckets/settings**, and **all Model B modules**, not just ACP.
+The proposed full copy includes the new name, reviewed description, **all Model A
+parameter buckets/settings**, and **all Model B modules**, not just ACP. A
+**partial copy** may instead omit whole rules with unsupported fields, but only
+after review lists their names and reasons and the user explicitly acknowledges
+incomplete governance. The supported settings, independent ACP and empty-group
+verification remain mandatory. **Create partial copy** is distinct from full copy.
 The exact copied values and original resource/module identities are expandable.
 Model A setting IDs and string values (including `"false"` and numeric strings)
 remain unchanged. Source Model A resource IDs/timestamps are omitted; its filter
@@ -410,14 +502,33 @@ on Model A buckets and Model B modules are server-generated response timestamps,
 not writable settings. Their types are validated, but they are not sent or
 compared as destination settings. An identically named property **inside inputs**
 is still copied unchanged. `PolicyRequest` contains only `name` and `ruleSets`.
-Other unknown container
-fields are not guessed to be metadata: their exact paths and returned values
-remain in the review, and block writing until their mapping is established.
+Other unknown container fields are not guessed to be metadata: their exact paths
+and returned values remain under **Copy details**. An unsupported optional policy
+module is omitted in full, including its inputs. An unsupported Model A setting,
+bucket or resource field omits the **entire source rule resource**, including
+otherwise-supported buckets in that resource; individual fields are never
+stripped to manufacture a writable rule. These omissions appear before
+confirmation and remain visible in the completion notice and recovery history.
+In particular, a `managedBy` field on a policy module envelope (reported on
+`MicrosoftAppsContentSecurityPolicy`) is not defined by the published
+[RuleSet create contract](https://learn.microsoft.com/rest/api/power-platform/governance/rule-based-policies/create-rule-based-policy#ruleset)
+or the registered connector model. Its type, ownership semantics and safe
+independent-copy behavior are not established. It is not transferred or treated
+as read-only metadata: the whole optional CSP module can instead be explicitly
+skipped. Microsoft's independent-copy tutorial establishes creation and
+whole-group assignment of a new policy containing only `ConnectorManagement`;
+omitting a separate optional module does not reuse or transfer source ownership.
+Unknown ownership on the **policy/group itself**, source-resource references,
+malformed rule/security structures, unknown applied state and incomplete reads
+still block all creation. `ConnectorManagement` cannot be skipped or replaced
+with a dummy ACP, even if every other module is unsupported. A `managedBy` property
+inside `inputs`, at any depth, is still preserved as actual configuration.
 Policy/group identities must come from creation; group rule identities must
 come from the creation response or exact destination-scoped read-back.
-References to source-owned resources without a verified remapping rule, duplicate
-identities and unknown non-input resource settings are concrete blockers, not
-silently omitted settings. A nonempty source hierarchy is also blocked: copying
+References to source-owned resources without a verified remapping rule and
+duplicate identities remain concrete blockers, including inside omitted rules.
+Unknown group/policy/assignment settings also remain blockers, not rule omissions.
+A nonempty source hierarchy is blocked: copying
 neither its parent nor its children cannot establish inherited rule fidelity.
 
 The current connector's **runtime metadata and both playground registries do
@@ -434,13 +545,21 @@ documents independent Model B copying and whole-group assignment with `{}`.
 The documented path has **one assigned policy per group**. Multiple assignments
 or overrides without a verified mapping block preflight; policies are never
 unioned or selected by position. The orchestration creates a new group, creates
-destination-scoped Model A rules, creates one independent policy containing every
-source module, reads it back and, if necessary, patches only the new exclusive
+destination-scoped retained Model A rules, creates one independent policy containing
+every retained source module, reads it back and, if necessary, patches only the new exclusive
 policy before assignment. It never patches a source or existing target policy.
 It then assigns the new policy only to the new group and re-reads both models,
 group properties, assignment scope/exclusivity, empty membership, source
-fingerprint and applied state. Success requires equivalence of **both**
-rule models and fresh read-back of their applied configuration.
+fingerprint and applied state. Full success requires equivalence of **both**
+rule models and fresh read-back of their applied configuration. A partial result
+requires exact verification of the **reviewed retained subset**, including absence
+of omitted modules/resources, and is recorded as **created-with-omissions**, never
+full policy equivalence or evidence of effective connector allowances.
+The source fingerprint includes skipped rules and their raw values; changes still
+invalidate the plan. Operation journals retain omission identities/reasons, not
+raw inputs, and bind the same omissions to read-only reconciliation. Async,
+failed or unverifiable writes remain indeterminate/failed, not completed partial
+copies. There is no automatic creation retry or cleanup.
 The board refreshes only after verified completion and retains the verified
 destination link after closing the stale drawer.
 
@@ -480,7 +599,7 @@ this app's connector identity** or every source module combination. The
 production-adapter integration tests use synthetic responses. Caller-specific
 permission/transport behavior still requires verification when the user runs a copy.
 
-Multiple Model A source resources remain a specific cardinality gate: the API
+Multiple retained Model A resources remain a specific cardinality gate: the API
 does not specify whether repeated creation preserves separate resources.
 A single resource is read back with its complete settings and new-group scope.
 Its identity may be group-keyed; a fresh unrelated UUID is not assumed.
@@ -503,8 +622,10 @@ Missing bodies, foreign membership, continuation or inconsistent counts fail
 explicitly. This combined app-connector check was tested with mocked SDK responses,
 not exercised against tenant inventory by the agent.
 
-Specific unsupported settings, ambiguous scope, incomplete reads and unknown or
-mismatched state remain blocked or incomplete, never a successful partial copy.
+Ambiguous scope/ownership, incomplete reads and unknown or mismatched state remain
+blocked or incomplete; permission errors and write failures cannot be recast as
+rule omissions. The partial-copy path has focused synthetic tests, not tenant
+verification; live caller-specific behavior still needs user-run confirmation.
 There is no shared-ACP substitute. Test resources are retained for review/manual
 cleanup; the workflow does not delete them automatically.
 

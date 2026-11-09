@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState, type ComponentType } from "react";
 import {
   makeStyles,
   tokens,
@@ -20,6 +20,7 @@ import {
   CardHeader,
   Divider,
   Link,
+  Button,
 } from "@fluentui/react-components";
 import { useNavigate, useParams } from "react-router-dom";
 import {
@@ -92,7 +93,17 @@ interface AsyncSlot<T> {
   data?: T;
 }
 
-export function EnvironmentGroupDetail() {
+export interface GroupInspectionProps {
+  group: EnvironmentGroupRow;
+  open: boolean;
+  onClose: () => void;
+}
+
+export interface EnvironmentGroupDetailProps {
+  GroupInspection?: ComponentType<GroupInspectionProps>;
+}
+
+export function EnvironmentGroupDetail({ GroupInspection }: EnvironmentGroupDetailProps = {}) {
   const styles = useDetailStyles();
   const navigate = useNavigate();
   const { groupId = "" } = useParams<{ groupId: string }>();
@@ -206,19 +217,21 @@ export function EnvironmentGroupDetail() {
 
       {group.kind === "ready" && group.data && (
         <ReadyView
+          key={group.data.row.id}
           row={group.data.row}
           raw={group.data.raw}
           envs={envs}
           counts={counts}
           envColumns={envColumns}
           navigate={navigate}
+          GroupInspection={GroupInspection}
         />
       )}
     </div>
   );
 }
 
-interface ReadyViewProps {
+interface ReadyViewProps extends EnvironmentGroupDetailProps {
   row: EnvironmentGroupRow;
   raw: unknown;
   envs: AsyncSlot<EnvironmentRow[]>;
@@ -227,9 +240,10 @@ interface ReadyViewProps {
   navigate: ReturnType<typeof useNavigate>;
 }
 
-function ReadyView({ row, raw, envs, counts, envColumns, navigate }: ReadyViewProps) {
+function ReadyView({ row, raw, envs, counts, envColumns, navigate, GroupInspection }: ReadyViewProps) {
   const styles = useDetailStyles();
   const page = usePageStyles();
+  const [inspectionOpen, setInspectionOpen] = useState<boolean | null>(null);
   return (
     <>
       <div className={styles.colFull}>
@@ -355,14 +369,28 @@ function ReadyView({ row, raw, envs, counts, envColumns, navigate }: ReadyViewPr
           that fires both governance APIs in parallel, then renders the
           unified rules grid. See `docs/admin-payload-samples.md` and
           `docs/admin-connector-inventory.md`. */}
-      <SupplementalAdminCard
+      {GroupInspection ? <>
+        <Card className={styles.colHalf}>
+          <CardHeader header={<Text weight="semibold">Rules &amp; ACP</Text>}
+            description={<Text size={200}>Inspect configured governance or duplicate this group.</Text>} />
+          <Divider />
+          <div className={styles.cardBody}>
+            <Button onClick={() => setInspectionOpen(true)}>View rules &amp; ACP</Button>
+          </div>
+        </Card>
+        {inspectionOpen !== null && <div className={styles.colFull}>
+          <Suspense fallback={<LoadingPane label="Opening group inspection..." />}>
+            <GroupInspection group={row} open={inspectionOpen} onClose={() => setInspectionOpen(false)} />
+          </Suspense>
+        </div>}
+      </> : <SupplementalAdminCard
         className={styles.colHalf}
-        title="Governance rules — all rules effective on this group"
+        title="Group rules and assigned policies"
         buttonLabel="View all rules"
         loadingLabel="Loading rules from both governance models…"
         loadFn={() => getEnvironmentGroupGovernance(row.id)}
         renderReady={(result) => <GovernanceRulesBody result={result} currentGroupId={row.id} />}
-      />
+      />}
 
       {/* 5. Environments table */}
       <Card className={styles.colFull}>

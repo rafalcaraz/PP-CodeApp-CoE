@@ -29,7 +29,7 @@ import { loadCatalog } from "./shared/connector-catalog";
 // ---------------------------------------------------------------------------
 import { agentsRoutes } from "./features/agents";
 import { appsRoutes } from "./features/apps";
-import { managedAppsRoutes, ManagedAppsMoveStatus } from "./features/managed-apps";
+import { managedAppsRoutes, ManagedAppsMoveStatus, GroupGovernanceInspector } from "./features/managed-apps";
 import { flowsRoutes } from "./features/flows";
 import { environmentsRoutes } from "./features/environments";
 import { environmentGroupsRoutes } from "./features/environment-groups";
@@ -93,7 +93,7 @@ function AppShell() {
               <Route path="/home" element={<HomeRedirect />} />
               {/* Feature routes — see src/features/<name>/routes.tsx */}
               {dashboardsRoutes()}
-              {environmentGroupsRoutes()}
+              {environmentGroupsRoutes(GroupGovernanceInspector)}
               {environmentsRoutes()}
               {appsRoutes()}
               {managedAppsRoutes()}

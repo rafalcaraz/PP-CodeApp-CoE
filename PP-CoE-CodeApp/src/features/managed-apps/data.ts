@@ -388,6 +388,42 @@ export async function loadEmptyGroupMembership(groupId: string): Promise<DataRes
   return { ok: true, data: result.data.length === 0 };
 }
 
+export async function loadRuleSyncGroups(signal?: AbortSignal): Promise<DataResult<EnvironmentGroupRow[]>> {
+  const result = await drainInventory(buildClausesFromSpec({
+    resourceTypes: [ResourceType.EnvironmentGroup], filters: [],
+    orderField: "name", orderDirection: "asc", limit: 500,
+  }), true, signal);
+  if (!result.ok) return result;
+  const rows = result.data.map(toEnvironmentGroupRow);
+  if (rows.some((row) => !membershipId(row.id)) || new Set(rows.map((row) => membershipId(row.id))).size !== rows.length) {
+    return { ok: false, error: "Group inventory has missing or duplicate identities. Sync targets are unavailable." };
+  }
+  return { ok: true, data: rows };
+}
+
+export async function loadRuleSyncEnvironments(groupId: string): Promise<DataResult<EnvironmentRow[]>> {
+  if (!membershipId(groupId)) return { ok: false, error: "A group identity is required for sync impact." };
+  const result = await drainInventory(buildClausesFromSpec({
+    resourceTypes: [ResourceType.Environment],
+    filters: [{ field: "properties.environmentGroupId", op: "==", value: groupId }],
+    orderField: "name", orderDirection: "asc", limit: 500,
+  }), true);
+  if (!result.ok) return result;
+  const rows: EnvironmentRow[] = [];
+  for (const item of result.data) {
+    const parsed = readMembershipEnvironment(item);
+    if (!parsed.ok) return parsed;
+    if (membershipId(parsed.data.environmentGroupId) !== membershipId(groupId)) {
+      return { ok: false, error: "Sync impact returned an environment outside the selected group." };
+    }
+    rows.push(parsed.data);
+  }
+  if (new Set(rows.map((row) => membershipId(row.id))).size !== rows.length) {
+    return { ok: false, error: "Sync impact has duplicate environment identities." };
+  }
+  return { ok: true, data: rows };
+}
+
 export async function loadPolicy(policyId: string): Promise<DataResult<Policy>> {
   try {
     const result = await PowerPlatformforAdminsV2Service.GetRuleBasedPolicyByID(policyId, "2024-10-01");

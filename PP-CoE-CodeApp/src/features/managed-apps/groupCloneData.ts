@@ -17,7 +17,7 @@ export const AUTHORIZATION_NOTICE =
 
 const operations = {
   GetEnvironmentGroup: false, GetRuleSet: false, ListRuleAssignmentsByEnvironmentGroupId: false,
-  ListRuleAssignmentsByPolicyId: false, ListEnvironmentsForUser: false, CreateEnvironmentGroup: true, CreateRuleSet: true,
+  ListRuleAssignmentsByPolicyId: false, ListEnvironmentsForUser: false, CreateEnvironmentGroup: true, CreateRuleSet: true, UpdateRuleSet: true,
   CreateRuleBasedPolicy: true, PatchRuleBasedPolicy: true, CreateEnviornmentGroupRuleBasedAssignment: true,
 };
 type OperationName = keyof typeof operations;
@@ -155,7 +155,11 @@ export const groupCloneBackend: CloneBackend = {
   },
 };
 
-export async function prepareGroupClone(id: string, name: string, signal?: AbortSignal): Promise<DataResult<ClonePlan>> {
+export function updateGroupRule(ruleSetId: string, body: RuleSetDto): Promise<DataResult<unknown>> {
+  return call("UpdateRuleSet", { ruleSetId, body });
+}
+
+export async function prepareGroupClone(id: string, name: string, signal?: AbortSignal, description?: string): Promise<DataResult<ClonePlan>> {
   const cancelled = readCancelled(signal);
   if (cancelled) return cancelled;
   try {
@@ -163,7 +167,7 @@ export async function prepareGroupClone(id: string, name: string, signal?: Abort
     const afterRead = readCancelled(signal);
     if (afterRead) return afterRead;
     if (!source.ok) return source;
-    const plan = await planGroupClone(source.data, name);
+    const plan = await planGroupClone(source.data, name, description);
     plan.blockers = [...new Set([...plan.blockers, ...groupCloneBackend.executionBlockers(plan)])];
     return readCancelled(signal) ?? { ok: true, data: plan };
   } catch (error) {
@@ -175,10 +179,18 @@ const STORE_PREFIX = "ppcoe:managed-apps:group-clone:v1:";
 
 function operationRecord(value: unknown): value is CloneOperation {
   if (!jsonObject(value)) return false;
-  const allowed = ["version", "id", "sourceId", "sourceFingerprint", "planFingerprint", "phase", "destinationId", "policyId", "rules", "steps", "updatedAt"];
+  const allowed = ["version", "id", "sourceId", "sourceFingerprint", "planFingerprint", "phase", "destinationId", "policyId", "rules", "steps", "skipped", "updatedAt"];
   return Object.keys(value).every((key) => allowed.includes(key)) && value.version === 1
     && ["id", "sourceId", "sourceFingerprint", "planFingerprint"].every((key) => typeof value[key] === "string")
-    && ["planned", "blocked", "running", "failed", "indeterminate", "publication-pending", "verified"].includes(String(value.phase))
+    && ["planned", "blocked", "running", "failed", "indeterminate", "publication-pending", "verified", "created-with-omissions"].includes(String(value.phase))
+    && (value.skipped === undefined || (Array.isArray(value.skipped) && value.skipped.every((entry) =>
+      jsonObject(entry) && Object.keys(entry).every((key) => ["kind", "id", "reasons"].includes(key))
+      && ["group-rule", "policy-module"].includes(String(entry.kind)) && typeof entry.id === "string"
+      && Array.isArray(entry.reasons) && entry.reasons.length > 0 && entry.reasons.every((reason) => typeof reason === "string"))))
+    && (value.phase !== "created-with-omissions" || (Array.isArray(value.skipped) && value.skipped.length > 0
+      && typeof value.destinationId === "string" && !!membershipId(value.destinationId)
+      && typeof value.policyId === "string" && !!membershipId(value.policyId)))
+    && (value.phase !== "verified" || value.skipped === undefined || (Array.isArray(value.skipped) && value.skipped.length === 0))
     && typeof value.updatedAt === "number" && ["destinationId", "policyId"].every((key) => value[key] === undefined || typeof value[key] === "string")
     && Array.isArray(value.rules) && value.rules.every((entry) => jsonObject(entry) && Object.keys(entry).every((key) => ["sourceId", "destinationId"].includes(key))
       && typeof entry.sourceId === "string" && typeof entry.destinationId === "string")
@@ -198,7 +210,7 @@ export const groupCloneStore: CloneStore = {
     return value;
   },
   save: (operation) => {
-    if (!operationRecord(operation)) throw new Error("Unsafe group-copy recovery record; only operation IDs, fingerprints and outcomes may be stored.");
+    if (!operationRecord(operation)) throw new Error("Unsafe group-copy recovery record; only operation IDs, fingerprints, omission reasons and outcomes may be stored.");
     localStorage.setItem(`${STORE_PREFIX}${operation.id}`, JSON.stringify(operation));
     window.dispatchEvent(new Event("ppcoe:managed-apps:group-clone:changed"));
   },
