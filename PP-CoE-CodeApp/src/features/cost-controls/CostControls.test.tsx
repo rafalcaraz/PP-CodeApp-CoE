@@ -34,7 +34,9 @@ function makeContext(): PolicyContext {
   };
 }
 function renderArea(path = "/cost-controls/reporting") {
-  return render(<FluentProvider theme={webLightTheme}><MemoryRouter initialEntries={[path]}><CostControls /></MemoryRouter></FluentProvider>);
+  const view = render(<FluentProvider theme={webLightTheme}><MemoryRouter initialEntries={[path]}><CostControls /></MemoryRouter></FluentProvider>);
+  if (path === "/cost-controls/reporting") fireEvent.click(screen.getByRole("tab", { name: "Current balances" }));
+  return view;
 }
 function input(label: string, value: string) {
   fireEvent.change(screen.getByRole("textbox", { name: label }), { target: { value } });
@@ -73,7 +75,7 @@ describe("read-only Cost Controls reporting", () => {
     expect(table).toHaveTextContent("75");
     expect(table).toHaveTextContent("Source time not reported");
     expect(screen.getByText(/Remaining credits are calculated by the service/)).toBeInTheDocument();
-    expect(screen.getByText(/Historical usage, currency spend, per-agent attribution/)).toBeInTheDocument();
+    expect(screen.getByText(/Use Usage or User investigation for history/)).toBeInTheDocument();
     expect(getTenantBalance).toHaveBeenCalledOnce();
     expect(getUserBalance).not.toHaveBeenCalled();
     expect(listPolicies).not.toHaveBeenCalled();
@@ -314,7 +316,11 @@ describe("public Cost Controls routes", () => {
       <Suspense fallback="Loading route"><Routes>{costControlsRoutes()}</Routes></Suspense>
     </MemoryRouter></FluentProvider>);
     await screen.findByRole("heading", { name: "Cost Controls" });
-    await waitFor(() => expect(path.endsWith("/management") ? listPolicies : getTenantBalance).toHaveBeenCalled());
+    if (path.endsWith("/management")) await waitFor(() => expect(listPolicies).toHaveBeenCalled());
+    else {
+      expect(screen.getByRole("heading", { name: "Daily credit usage" })).toBeInTheDocument();
+      expect(getTenantBalance).not.toHaveBeenCalled();
+    }
     expect(applyChange).not.toHaveBeenCalled();
   });
 });

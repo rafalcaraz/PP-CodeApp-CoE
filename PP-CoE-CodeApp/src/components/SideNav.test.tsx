@@ -31,7 +31,7 @@ describe("SideNav playgrounds", () => {
     const group = document.getElementById(header.getAttribute("aria-controls") ?? "");
     if (!group) throw new Error("Cost Controls navigation group is missing.");
     const reporting = within(group).getByRole("tab", { name: "Credit reporting" });
-    const management = within(group).getByRole("tab", { name: "Policy management" });
+    const management = within(group).getByRole("tab", { name: "Policies & requests" });
     expect(reporting).toHaveAttribute("aria-selected", "true");
     expect(within(group).queryByRole("tab", { name: "Cost Management API" })).not.toBeInTheDocument();
     fireEvent.click(management);

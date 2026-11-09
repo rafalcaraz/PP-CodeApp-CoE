@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import {
   Badge, Button, Dialog, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle,
-  Field, Input, Skeleton, SkeletonItem, Text,
+  Field, Input, Skeleton, SkeletonItem, Tab, TabList, Text,
 } from "@fluentui/react-components";
 import type { CreateSpendingPolicy, SpendingPolicyCollection } from "../../generated/models/CostControsl_CustomConnModel";
 import { ErrorPane } from "../../components/Status";
@@ -14,12 +14,24 @@ import { PolicyDetails } from "./PolicyDetails";
 import { PolicyForm } from "./PolicyForms";
 import { Diagnostics } from "./Diagnostics";
 import { useCostStyles } from "./styles";
+import { CreditRequests } from "./CreditRequests";
 
 type Pending =
   | { kind: "create"; title: string; body: CreateSpendingPolicy }
   | { kind: "change"; title: string; policyId: string; policyName: string; etag: string; change: PolicyChange };
 
 export function Management() {
+  const styles = useCostStyles();
+  const [tab, setTab] = useState("policies");
+  return <div className={styles.root}>
+    <TabList aria-label="Management workflows" selectedValue={tab} onTabSelect={(_, data) => setTab(String(data.value))}>
+      <Tab value="policies">Policies</Tab><Tab value="requests">Credit requests</Tab>
+    </TabList>
+    {tab === "requests" ? <CreditRequests /> : <PolicyManagement />}
+  </div>;
+}
+
+function PolicyManagement() {
   const styles = useCostStyles();
   const [policies, setPolicies] = useState<Result<SpendingPolicyCollection> | null>(null);
   const [selectedId, setSelectedId] = useState("");

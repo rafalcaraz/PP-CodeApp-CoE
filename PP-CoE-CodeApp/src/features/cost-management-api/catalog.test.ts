@@ -13,7 +13,7 @@ function action(id: string) {
 
 describe("Cost Management registered catalog", () => {
   it("covers every registered action, resolves shared parameter references and hides only connectionId", () => {
-    expect(costActions).toHaveLength(24);
+    expect(costActions).toHaveLength(38);
     expect(costActions.map((entry) => entry.id).sort()).toEqual(Object.keys(dataSourcesInfo[costDataSourceName].apis).sort());
     for (const entry of costActions) {
       expect(entry.registered).toBe(true);
@@ -28,11 +28,23 @@ describe("Cost Management registered catalog", () => {
   });
 
   it("requires a parent ETag on all ten existing-policy mutations, but not creation", () => {
-    const writes = costActions.filter((entry) => !entry.readOnly && entry.id !== "CreateSpendingPolicy");
+    const writes = costActions.filter((entry) => !entry.readOnly && entry.id !== "CreateSpendingPolicy" && !entry.id.includes("CreditRequest"));
     expect(writes).toHaveLength(10);
     for (const entry of writes) expect(entry.parameters.find((p) => p.name === "If-Match")).toMatchObject({ in: "header", required: true });
     expect(action("CreateSpendingPolicy").parameters.some((p) => p.name === "If-Match")).toBe(false);
     expect(costActions.some((entry) => entry.path.includes("serviceSettings") && entry.method === "DELETE")).toBe(false);
+  });
+
+  it("uses request-specific ETags and validates Wave 2 time windows and batch uniqueness", () => {
+    const parameters = { id: "r", "If-Match": '"7"', body: { state: "approved" } };
+    expect(() => validateParameters(action("UpdateCreditRequest"), parameters)).not.toThrow();
+    expect(() => validateParameters(action("UpdateCreditRequest"), { ...parameters, "If-Match": 'W/"7"' })).toThrow();
+    const item = { requestId: "r", etag: '"7"', state: "approved" };
+    expect(() => validateParameters(action("BatchRecordCreditRequestDecisions"), { body: { requests: [item, item] } })).toThrow("unique");
+    expect(() => validateParameters(action("ListUserUsageRecords"), { startDate: "2026-01-01", endDate: "2026-01-03" })).toThrow("one completed");
+    expect(() => validateParameters(action("ListUserUsageRecords"), { startDate: "2026-01-01", endDate: "2026-01-02", $top: 101 })).toThrow("maximum");
+    expect(() => validateParameters(action("ListFundingUsageRecords"), { month: "2026-13" })).toThrow();
+    expect(() => validateParameters(action("ListFundingUsageRecords"), { month: "2026-01", $top: 100 })).toThrow("Unknown parameter");
   });
 
   it("does not invent default IDs, headers or query values", () => {

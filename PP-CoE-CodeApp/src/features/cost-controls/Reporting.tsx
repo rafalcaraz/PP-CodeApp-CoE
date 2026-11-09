@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Button, Field, Input, Skeleton, SkeletonItem, Text, tokens } from "@fluentui/react-components";
+import { Button, Field, Input, Skeleton, SkeletonItem, Tab, TabList, Text, tokens } from "@fluentui/react-components";
 import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import type { TenantCreditBalance, UserBalance } from "../../generated/models/CostControsl_CustomConnModel";
 import { ErrorPane } from "../../components/Status";
@@ -7,8 +7,27 @@ import { getTenantBalance, getUserBalance, type Result } from "./data";
 import { freshness, numberText, quantityText } from "./domain";
 import { useCostStyles } from "./styles";
 import { Diagnostics } from "./Diagnostics";
+import { UsageReporting } from "./UsageReporting";
+import { FundingReporting } from "./FundingReporting";
+import { UserInvestigation } from "./UserInvestigation";
 
 export function Reporting() {
+  const styles = useCostStyles();
+  const [tab, setTab] = useState("usage");
+  const [investigation, setInvestigation] = useState<{ userId: string; day: string }>();
+  return <div className={styles.root}>
+    <Text className={styles.coverage}>Source: Microsoft 365 admin center (MAC), via Graph beta. PPAC-managed Copilot Studio consumption is a separate source; it is not included or added to these reports. Missing source data is not zero.</Text>
+    <TabList className={styles.tabs} aria-label="Reporting workflows" selectedValue={tab} onTabSelect={(_, data) => setTab(String(data.value))}>
+      <Tab value="usage">Usage</Tab><Tab value="funding">Funding by month</Tab><Tab value="balances">Current balances</Tab><Tab value="investigation">User investigation</Tab>
+    </TabList>
+    {tab === "usage" && <UsageReporting onInvestigate={(userId, day) => { setInvestigation({ userId, day }); setTab("investigation"); }} />}
+    {tab === "funding" && <FundingReporting />}
+    {tab === "balances" && <CurrentBalances />}
+    {tab === "investigation" && <UserInvestigation initial={investigation} />}
+  </div>;
+}
+
+function CurrentBalances() {
   const styles = useCostStyles();
   const [tenant, setTenant] = useState<Result<TenantCreditBalance> | null>(null);
   const [busy, setBusy] = useState(false);
@@ -142,6 +161,6 @@ export function Reporting() {
         <Diagnostics label={`Inspect user ${userRun.id} SDK response`} data={userRun.result.raw} />
       </>}
     </section>
-    <Text className={styles.muted}>Snapshot reporting only. Historical usage, currency spend, per-agent attribution and policy-consumption aggregation are not supplied by this API. Reporting never makes changes.</Text>
+    <Text className={styles.muted}>These are current balances and eligibility diagnostics, not historical usage. Use Usage or User investigation for history. Currency spend, per-agent attribution and policy-consumption aggregation are not supplied. Reporting never makes changes.</Text>
   </div>;
 }

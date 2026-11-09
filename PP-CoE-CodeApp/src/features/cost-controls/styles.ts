@@ -6,6 +6,9 @@ export const useCostStyles = makeStyles({
   row: { display: "flex", alignItems: "center", flexWrap: "wrap", gap: tokens.spacingHorizontalM },
   spread: { display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: tokens.spacingHorizontalM },
   muted: { color: tokens.colorNeutralForeground2 },
+  coverage: { color: tokens.colorNeutralForeground2, maxWidth: "85ch" },
+  tabs: { flexWrap: "wrap", rowGap: tokens.spacingVerticalXS },
+  summary: { display: "grid", gridTemplateColumns: "max-content minmax(0, 1fr)", gap: tokens.spacingHorizontalM, margin: 0, "& dd": { margin: 0, overflowWrap: "anywhere" } },
   panel: {
     display: "flex", flexDirection: "column", gap: tokens.spacingVerticalM,
     padding: tokens.spacingHorizontalL, border: `1px solid ${tokens.colorNeutralStroke2}`,
@@ -16,6 +19,7 @@ export const useCostStyles = makeStyles({
   warning: { padding: tokens.spacingHorizontalM, backgroundColor: tokens.colorStatusWarningBackground1, color: tokens.colorStatusWarningForeground1, borderRadius: tokens.borderRadiusMedium },
   success: { padding: tokens.spacingHorizontalM, backgroundColor: tokens.colorStatusSuccessBackground1, color: tokens.colorStatusSuccessForeground1, borderRadius: tokens.borderRadiusMedium },
   tableWrap: { overflowX: "auto", maxWidth: "100%" },
+  wideTable: { minWidth: "900px" },
   table: {
     width: "100%", borderCollapse: "collapse",
     "& th, & td": { textAlign: "left", verticalAlign: "top", padding: tokens.spacingHorizontalM, borderBottom: `1px solid ${tokens.colorNeutralStroke2}` },

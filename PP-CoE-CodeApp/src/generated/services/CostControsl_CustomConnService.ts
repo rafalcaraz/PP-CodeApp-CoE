@@ -4,18 +4,28 @@
  */
 
 import type { AlertSetting } from '../models/CostControsl_CustomConnModel';
+import type { BatchCreditRequestDecisions } from '../models/CostControsl_CustomConnModel';
 import type { CreateServiceSetting } from '../models/CostControsl_CustomConnModel';
 import type { CreateSpendingPolicy } from '../models/CostControsl_CustomConnModel';
+import type { CreditRequest } from '../models/CostControsl_CustomConnModel';
+import type { CreditRequestCollection } from '../models/CostControsl_CustomConnModel';
+import type { CreditRequestUpdateResponse } from '../models/CostControsl_CustomConnModel';
+import type { FundingUsageRecordCollection } from '../models/CostControsl_CustomConnModel';
 import type { GroupCollection } from '../models/CostControsl_CustomConnModel';
 import type { GroupReference } from '../models/CostControsl_CustomConnModel';
+import type { GroupUsageRecord } from '../models/CostControsl_CustomConnModel';
+import type { GroupUsageRecordCollection } from '../models/CostControsl_CustomConnModel';
 import type { IOperationResult } from '@microsoft/power-apps/data';
 import type { ReferenceCollection } from '../models/CostControsl_CustomConnModel';
 import type { ServiceSetting } from '../models/CostControsl_CustomConnModel';
 import type { ServiceSettingCollection } from '../models/CostControsl_CustomConnModel';
+import type { ServiceUsageRecord } from '../models/CostControsl_CustomConnModel';
+import type { ServiceUsageRecordCollection } from '../models/CostControsl_CustomConnModel';
 import type { SpendingPolicy } from '../models/CostControsl_CustomConnModel';
 import type { SpendingPolicyCollection } from '../models/CostControsl_CustomConnModel';
 import type { TenantCreditBalance } from '../models/CostControsl_CustomConnModel';
 import type { UpdateAlertSetting } from '../models/CostControsl_CustomConnModel';
+import type { UpdateCreditRequest } from '../models/CostControsl_CustomConnModel';
 import type { UpdateServiceSetting } from '../models/CostControsl_CustomConnModel';
 import type { UpdateSpendingPolicy } from '../models/CostControsl_CustomConnModel';
 import type { UserBalance } from '../models/CostControsl_CustomConnModel';
@@ -23,6 +33,11 @@ import type { UserCollection } from '../models/CostControsl_CustomConnModel';
 import type { UserReference } from '../models/CostControsl_CustomConnModel';
 import type { UserServiceBalance } from '../models/CostControsl_CustomConnModel';
 import type { UserServiceBalanceCollection } from '../models/CostControsl_CustomConnModel';
+import type { UserUsageDetail } from '../models/CostControsl_CustomConnModel';
+import type { UserUsageRecord } from '../models/CostControsl_CustomConnModel';
+import type { UserUsageRecordCollection } from '../models/CostControsl_CustomConnModel';
+import type { UserUsageServiceDetailCollection } from '../models/CostControsl_CustomConnModel';
+import type { UserUsageSessionDetailCollection } from '../models/CostControsl_CustomConnModel';
 import { dataSourcesInfo } from '../../../.power/schemas/appschemas/dataSourcesInfo';
 import { getClient } from '@microsoft/power-apps/data';
 
@@ -431,6 +446,244 @@ export class CostControsl_CustomConnService {
         connectorOperation: {
           tableName: CostControsl_CustomConnService.dataSourceName,
           operationName: 'GetUserServiceBalance',
+          parameters: params
+        },
+      });
+    return result;
+  }
+
+  /**
+   * List credit requests
+   * Delegated CopilotCostManagement-CreditReq.Read.All or ReadWrite.All. Runtime role: Billing Administrator, Global Administrator, AI Administrator, Global Reader or AI Reader. Excludes audit-only requests from rows/count; newest first. Follow complete @odata.nextLink unchanged; this action returns one page. Credit requests are access signals, not credit amounts.
+   */
+  public static async ListCreditRequests($select?: string, $count?: boolean, $top?: number, $filter?: string): Promise<IOperationResult<CreditRequestCollection>> {
+    const params: { $select?: string, $count?: boolean, $top?: number, $filter?: string } = { $select, $count, $top, $filter };
+    const result = await CostControsl_CustomConnService.client.executeAsync<{ $select?: string, $count?: boolean, $top?: number, $filter?: string }, CreditRequestCollection>(
+      {
+        connectorOperation: {
+          tableName: CostControsl_CustomConnService.dataSourceName,
+          operationName: 'ListCreditRequests',
+          parameters: params
+        },
+      });
+    return result;
+  }
+
+  /**
+   * Get credit request
+   * Delegated CopilotCostManagement-CreditReq.Read.All or ReadWrite.All. Runtime role: Billing Administrator, Global Administrator, AI Administrator, Global Reader or AI Reader. Includes strong @odata.etag in the body and ETag header. Audit-only requests can be read by ID; missing/out-of-scope requests return 404 itemNotFound.
+   */
+  public static async GetCreditRequest(id: string, $select?: string): Promise<IOperationResult<CreditRequest>> {
+    const params: { id: string, $select?: string } = { id, $select };
+    const result = await CostControsl_CustomConnService.client.executeAsync<{ id: string, $select?: string }, CreditRequest>(
+      {
+        connectorOperation: {
+          tableName: CostControsl_CustomConnService.dataSourceName,
+          operationName: 'GetCreditRequest',
+          parameters: params
+        },
+      });
+    return result;
+  }
+
+  /**
+   * Record credit request decision
+   * Delegated CopilotCostManagement-CreditReq.ReadWrite.All. Runtime role: Global Administrator, Billing Administrator or AI Administrator. Only state is writable. Pending can become approved/rejected; same-state decisions are no-ops but still check the request's strong ETag. Approval does not assign credits by itself. Missing If-Match: 428; weak/wildcard/malformed: 400; stale: 412. Do not retry writes automatically.
+   */
+  public static async UpdateCreditRequest(id: string, If_Match: string, body: UpdateCreditRequest): Promise<IOperationResult<void>> {
+    const params: { id: string, "If-Match": string, body: UpdateCreditRequest } = { id, "If-Match": If_Match, body };
+    const result = await CostControsl_CustomConnService.client.executeAsync<{ id: string, "If-Match": string, body: UpdateCreditRequest }, void>(
+      {
+        connectorOperation: {
+          tableName: CostControsl_CustomConnService.dataSourceName,
+          operationName: 'UpdateCreditRequest',
+          parameters: params
+        },
+      });
+    return result;
+  }
+
+  /**
+   * Record credit request decisions in bulk
+   * Delegated CopilotCostManagement-CreditReq.ReadWrite.All. Runtime role: Global Administrator, Billing Administrator or AI Administrator. 1-100 unique request IDs; each supplies its own strong etag, not an If-Match header. Non-atomic: HTTP 200 can contain failures. After partial success, reread affected requests and explicitly review only remaining decisions; never replay the original batch automatically. Approval records a decision, not a credit allocation.
+   */
+  public static async BatchRecordCreditRequestDecisions(body: BatchCreditRequestDecisions): Promise<IOperationResult<CreditRequestUpdateResponse>> {
+    const params: { body: BatchCreditRequestDecisions } = { body };
+    const result = await CostControsl_CustomConnService.client.executeAsync<{ body: BatchCreditRequestDecisions }, CreditRequestUpdateResponse>(
+      {
+        connectorOperation: {
+          tableName: CostControsl_CustomConnService.dataSourceName,
+          operationName: 'BatchRecordCreditRequestDecisions',
+          parameters: params
+        },
+      });
+    return result;
+  }
+
+  /**
+   * List daily user usage
+   * Delegated CopilotCostManagement-UserData.Read.All or CopilotCostManagement.Read.All; no application permission. Processed billable consumption for exactly one completed UTC day, not an arbitrary range. Follow complete @odata.nextLink unchanged; this action returns one page, not a snapshot-consistent tenant total. No currency or per-agent attribution.
+   */
+  public static async ListUserUsageRecords(startDate: string, endDate: string, $select?: string, $count?: boolean, $top?: number, $orderby?: string, $filter?: string): Promise<IOperationResult<UserUsageRecordCollection>> {
+    const params: { startDate: string, endDate: string, $select?: string, $count?: boolean, $top?: number, $orderby?: string, $filter?: string } = { startDate, endDate, $select, $count, $top, $orderby, $filter };
+    const result = await CostControsl_CustomConnService.client.executeAsync<{ startDate: string, endDate: string, $select?: string, $count?: boolean, $top?: number, $orderby?: string, $filter?: string }, UserUsageRecordCollection>(
+      {
+        connectorOperation: {
+          tableName: CostControsl_CustomConnService.dataSourceName,
+          operationName: 'ListUserUsageRecords',
+          parameters: params
+        },
+      });
+    return result;
+  }
+
+  /**
+   * Get daily user usage
+   * Delegated CopilotCostManagement-UserData.Read.All or CopilotCostManagement.Read.All; no application permission. One completed UTC day. 404 usageDataUnavailable is not proof of zero usage or user existence; 503 sourceUnavailable is not zero.
+   */
+  public static async GetUserUsageRecord(userId: string, startDate: string, endDate: string, $select?: string): Promise<IOperationResult<UserUsageRecord>> {
+    const params: { userId: string, startDate: string, endDate: string, $select?: string } = { userId, startDate, endDate, $select };
+    const result = await CostControsl_CustomConnService.client.executeAsync<{ userId: string, startDate: string, endDate: string, $select?: string }, UserUsageRecord>(
+      {
+        connectorOperation: {
+          tableName: CostControsl_CustomConnService.dataSourceName,
+          operationName: 'GetUserUsageRecord',
+          parameters: params
+        },
+      });
+    return result;
+  }
+
+  /**
+   * List daily group usage
+   * Delegated CopilotCostManagement-UserData.Read.All or CopilotCostManagement.Read.All; no application permission. Processed billable consumption attributed to security-group members for exactly one completed UTC day. Not a group allocation, balance or chargeback. Follow complete @odata.nextLink unchanged; this action returns one page and paging is not snapshot-consistent.
+   */
+  public static async ListGroupUsageRecords(startDate: string, endDate: string, $select?: string, $count?: boolean, $top?: number, $orderby?: string, $filter?: string): Promise<IOperationResult<GroupUsageRecordCollection>> {
+    const params: { startDate: string, endDate: string, $select?: string, $count?: boolean, $top?: number, $orderby?: string, $filter?: string } = { startDate, endDate, $select, $count, $top, $orderby, $filter };
+    const result = await CostControsl_CustomConnService.client.executeAsync<{ startDate: string, endDate: string, $select?: string, $count?: boolean, $top?: number, $orderby?: string, $filter?: string }, GroupUsageRecordCollection>(
+      {
+        connectorOperation: {
+          tableName: CostControsl_CustomConnService.dataSourceName,
+          operationName: 'ListGroupUsageRecords',
+          parameters: params
+        },
+      });
+    return result;
+  }
+
+  /**
+   * Get daily group usage
+   * Delegated CopilotCostManagement-UserData.Read.All or CopilotCostManagement.Read.All; no application permission. One completed UTC day. 404 usageDataUnavailable is not proof of zero usage or group existence; 503 sourceUnavailable is not zero.
+   */
+  public static async GetGroupUsageRecord(groupId: string, startDate: string, endDate: string, $select?: string): Promise<IOperationResult<GroupUsageRecord>> {
+    const params: { groupId: string, startDate: string, endDate: string, $select?: string } = { groupId, startDate, endDate, $select };
+    const result = await CostControsl_CustomConnService.client.executeAsync<{ groupId: string, startDate: string, endDate: string, $select?: string }, GroupUsageRecord>(
+      {
+        connectorOperation: {
+          tableName: CostControsl_CustomConnService.dataSourceName,
+          operationName: 'GetGroupUsageRecord',
+          parameters: params
+        },
+      });
+    return result;
+  }
+
+  /**
+   * List daily service usage
+   * Delegated CopilotCostManagement-Reports.Read.All or CopilotCostManagement.Read.All. The API also supports those application permissions, but this connector remains delegated. Exactly one completed UTC day. Follow complete @odata.nextLink unchanged; this action returns one page and paging is not snapshot-consistent. Service categories, not individual agents.
+   */
+  public static async ListServiceUsageRecords(startDate: string, endDate: string, $select?: string, $count?: boolean, $top?: number, $orderby?: string, $filter?: string): Promise<IOperationResult<ServiceUsageRecordCollection>> {
+    const params: { startDate: string, endDate: string, $select?: string, $count?: boolean, $top?: number, $orderby?: string, $filter?: string } = { startDate, endDate, $select, $count, $top, $orderby, $filter };
+    const result = await CostControsl_CustomConnService.client.executeAsync<{ startDate: string, endDate: string, $select?: string, $count?: boolean, $top?: number, $orderby?: string, $filter?: string }, ServiceUsageRecordCollection>(
+      {
+        connectorOperation: {
+          tableName: CostControsl_CustomConnService.dataSourceName,
+          operationName: 'ListServiceUsageRecords',
+          parameters: params
+        },
+      });
+    return result;
+  }
+
+  /**
+   * Get daily service usage
+   * Delegated CopilotCostManagement-Reports.Read.All or CopilotCostManagement.Read.All. The API also supports those application permissions, but this connector remains delegated. One completed UTC day. 404 usageDataUnavailable is not proof of zero usage; 503 sourceUnavailable is not zero.
+   */
+  public static async GetServiceUsageRecord(serviceId: string, startDate: string, endDate: string, $select?: string): Promise<IOperationResult<ServiceUsageRecord>> {
+    const params: { serviceId: string, startDate: string, endDate: string, $select?: string } = { serviceId, startDate, endDate, $select };
+    const result = await CostControsl_CustomConnService.client.executeAsync<{ serviceId: string, startDate: string, endDate: string, $select?: string }, ServiceUsageRecord>(
+      {
+        connectorOperation: {
+          tableName: CostControsl_CustomConnService.dataSourceName,
+          operationName: 'GetServiceUsageRecord',
+          parameters: params
+        },
+      });
+    return result;
+  }
+
+  /**
+   * List monthly usage by funding class
+   * Delegated CopilotCostManagement-Reports.Read.All or CopilotCostManagement.Read.All. The API also supports those application permissions, but this connector remains delegated. Requires a calendar month, not date ranges. Complete unpaged funding-class collection, including unbilled overage and non-billable consumption. No currency, invoices, prices or settlement amounts. Freshness is snapshot sync time, not evidence that the month closed.
+   */
+  public static async ListFundingUsageRecords(month: string, $select?: string, $count?: boolean, $orderby?: string): Promise<IOperationResult<FundingUsageRecordCollection>> {
+    const params: { month: string, $select?: string, $count?: boolean, $orderby?: string } = { month, $select, $count, $orderby };
+    const result = await CostControsl_CustomConnService.client.executeAsync<{ month: string, $select?: string, $count?: boolean, $orderby?: string }, FundingUsageRecordCollection>(
+      {
+        connectorOperation: {
+          tableName: CostControsl_CustomConnService.dataSourceName,
+          operationName: 'ListFundingUsageRecords',
+          parameters: params
+        },
+      });
+    return result;
+  }
+
+  /**
+   * Get raw user usage detail
+   * Delegated CopilotCostManagement-UserData.Read.All or CopilotCostManagement.Read.All; no application permission. Raw billable-flagged usage bounded to the processed watermark, not reprocessed daily rankings. Required UTC timestamp window: start before end, end not future, at most 24 hours, no crossing UTC month boundaries except an exclusive end at next month's midnight. Totals/session counts need not equal processed reports. Parent collection is not listable.
+   */
+  public static async GetUserUsageDetail(userId: string, startDateTime: string, endDateTime: string, $select?: string, $expand?: string): Promise<IOperationResult<UserUsageDetail>> {
+    const params: { userId: string, startDateTime: string, endDateTime: string, $select?: string, $expand?: string } = { userId, startDateTime, endDateTime, $select, $expand };
+    const result = await CostControsl_CustomConnService.client.executeAsync<{ userId: string, startDateTime: string, endDateTime: string, $select?: string, $expand?: string }, UserUsageDetail>(
+      {
+        connectorOperation: {
+          tableName: CostControsl_CustomConnService.dataSourceName,
+          operationName: 'GetUserUsageDetail',
+          parameters: params
+        },
+      });
+    return result;
+  }
+
+  /**
+   * List raw user usage by service
+   * Delegated CopilotCostManagement-UserData.Read.All or CopilotCostManagement.Read.All; no application permission. Use the same required UTC timestamp window as parent detail: at most 24 hours, nonfuture end, no crossing a UTC month except an exclusive end at next month's midnight. Unpaged; independently rounded child rows need not sum to the parent. Service key is id, not serviceId.
+   */
+  public static async ListUserUsageServiceDetails(userId: string, startDateTime: string, endDateTime: string, $select?: string): Promise<IOperationResult<UserUsageServiceDetailCollection>> {
+    const params: { userId: string, startDateTime: string, endDateTime: string, $select?: string } = { userId, startDateTime, endDateTime, $select };
+    const result = await CostControsl_CustomConnService.client.executeAsync<{ userId: string, startDateTime: string, endDateTime: string, $select?: string }, UserUsageServiceDetailCollection>(
+      {
+        connectorOperation: {
+          tableName: CostControsl_CustomConnService.dataSourceName,
+          operationName: 'ListUserUsageServiceDetails',
+          parameters: params
+        },
+      });
+    return result;
+  }
+
+  /**
+   * List raw user usage sessions
+   * Delegated CopilotCostManagement-UserData.Read.All or CopilotCostManagement.Read.All; no application permission. Same required UTC timestamp window as parent detail: at most 24 hours, nonfuture end, no crossing a UTC month except an exclusive end at next month's midnight. Follow complete @odata.nextLink unchanged; this action returns one page, not snapshot-consistent. Activity without session identifiers can be omitted; rows need not sum to the parent. No single-session GET.
+   */
+  public static async ListUserUsageSessionDetails(userId: string, startDateTime: string, endDateTime: string, $select?: string, $top?: number): Promise<IOperationResult<UserUsageSessionDetailCollection>> {
+    const params: { userId: string, startDateTime: string, endDateTime: string, $select?: string, $top?: number } = { userId, startDateTime, endDateTime, $select, $top };
+    const result = await CostControsl_CustomConnService.client.executeAsync<{ userId: string, startDateTime: string, endDateTime: string, $select?: string, $top?: number }, UserUsageSessionDetailCollection>(
+      {
+        connectorOperation: {
+          tableName: CostControsl_CustomConnService.dataSourceName,
+          operationName: 'ListUserUsageSessionDetails',
           parameters: params
         },
       });

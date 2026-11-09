@@ -253,6 +253,196 @@ export interface UserServiceBalanceCollection {
   value?: UserServiceBalance[];
 }
 
+export interface CreditRequest {
+  "@odata.context"?: string;
+  // Quoted strong request ETag, returned in the body as well as the header. Preserve quotes; not a weak policy ETag.
+  "@odata.etag"?: string;
+  id?: string;
+  // pending, approved, rejected, cancelled, unknownFutureValue. cancelled is historical; only a same-state no-op can target it.
+  state?: string;
+  // unknown, firstTimeAccess, additionalCredits, unknownFutureValue.
+  requestType?: string;
+  // Open lowerCamelCase service-category identifier, for example cowork or workIQ. Not a fixed service catalog or agent ID.
+  serviceId?: string;
+  requestedBy?: IdentitySet;
+  decisionBy?: CreditRequestDecisionIdentity;
+  createdDateTime?: string;
+  lastModifiedDateTime?: string;
+  expirationDateTime?: string;
+}
+
+export interface CreditRequestDecisionIdentity {
+  user?: Identity;
+}
+
+export type UpdateCreditRequeststate = 'pending'|'approved'|'rejected'|'cancelled';
+
+export interface UpdateCreditRequest {
+  // Use approved/rejected for a pending request. A recognized current state, including pending/cancelled, can be sent only as a same-state no-op with a valid ETag; other transitions are rejected.
+  state: UpdateCreditRequeststate;
+}
+
+export interface BatchCreditRequestDecisions {
+  // Unique requestId values required; uniqueness is by ID, not whole object. Empty/over-100/duplicate-ID/malformed payloads, including explicit null state, fail the whole action before processing.
+  requests: CreditRequestUpdateItem[];
+}
+
+export type CreditRequestUpdateItemstate = 'pending'|'approved'|'rejected'|'cancelled';
+
+export interface CreditRequestUpdateItem {
+  // Credit request identifier. Each ID must be unique within the batch.
+  requestId: string;
+  // Use approved/rejected for pending requests; recognized same-state no-ops still require a fresh ETag.
+  state: CreditRequestUpdateItemstate;
+  // Current quoted strong request ETag, not a weak or wildcard token. Missing/malformed/stale tokens produce a per-item preconditionFailed result.
+  etag: string;
+}
+
+export interface CreditRequestUpdateResponse {
+  succeededCount?: number;
+  // Count of all results other than succeeded; HTTP 200 does not mean every item succeeded.
+  failedCount?: number;
+  // Results in input order; not atomic. Reread/review unresolved decisions before resubmitting.
+  responses?: CreditRequestUpdateResponseItem[];
+}
+
+export interface CreditRequestUpdateResponseItem {
+  // Target ID; an omitted input ID is represented by the all-zero GUID.
+  requestId?: string;
+  // succeeded, notFound, preconditionFailed, invalidStateTransition, failed, unknownFutureValue. Unknown statuses are not success.
+  status?: string;
+  // Updated strong token, present only for succeeded items.
+  etag?: string;
+  // Optional failure explanation.
+  message?: string;
+}
+
+export interface CreditRequestCollection {
+  "@odata.context"?: string;
+  "@odata.nextLink"?: string;
+  "@odata.count"?: number;
+  value?: CreditRequest[];
+}
+
+export interface UserUsageRecord {
+  userId?: string;
+  consumedQuantity?: number;
+  // copilotCredit; preserve unknown future units rather than convert to currency.
+  unit?: string;
+  // Distinct non-null billable session identifiers subject to source filters/processing watermarks; need not equal raw detail sessionCount.
+  sessionCount?: number;
+}
+
+export interface GroupUsageRecord {
+  groupId?: string;
+  consumedQuantity?: number;
+  // copilotCredit or a future unit.
+  unit?: string;
+  // Distinct non-null billable sessions attributed to the group, subject to source filters/processing watermarks.
+  sessionCount?: number;
+}
+
+export interface ServiceUsageRecord {
+  // Governed service category, not catalog entry or agent ID.
+  serviceId?: string;
+  consumedQuantity?: number;
+  // copilotCredit or a future unit.
+  unit?: string;
+}
+
+export interface UsageDataStatus {
+  // Snapshot sync time for funding reports; source enqueue watermark for raw detail. Later reads can include more rows or a later watermark.
+  latestSourceDateTime?: string;
+}
+
+export interface FundingUsageRecord {
+  // Equals fundingClass.
+  id?: string;
+  // prepaid, payAsYouGo, overage, nonBillable, unknownFutureValue. overage is unbilled consumption, not an invoiced excess charge. Distinct from billing-method enums.
+  fundingClass?: string;
+  consumedQuantity?: number;
+  // copilotCredit or a future unit.
+  unit?: string;
+  dataStatus?: UsageDataStatus;
+}
+
+export interface UserUsageDetail {
+  "@odata.context"?: string;
+  userId?: string;
+  consumedQuantity?: number;
+  // copilotCredit or a future unit.
+  unit?: string;
+  // Billable-flagged activity sessions contributing to quantity; excludes non-billable activity and need not equal daily report counts.
+  sessionCount?: number;
+  dataStatus?: UsageDataStatus;
+  // Complete unpaged breakdown when expanded; independently rounded child rows need not sum to parent.
+  services?: UserUsageServiceDetail[];
+  // Expanded session rows can be paged and need not sum to parent.
+  sessions?: UserUsageSessionDetail[];
+  // Nested session continuation URL; preserve unchanged.
+  "sessions@odata.nextLink"?: string;
+}
+
+export interface UserUsageServiceDetail {
+  // Governed service-category key, named id here rather than serviceId.
+  id?: string;
+  // Independently rounded raw billable-flagged usage; child quantities need not sum to parent.
+  consumedQuantity?: number;
+  // copilotCredit or a future unit.
+  unit?: string;
+}
+
+export interface UserUsageSessionDetail {
+  // Opaque row ID scoped to user/detail window; stable for repeated identical requests, not a global persistent session ID.
+  id?: string;
+  // Native source identifier preserved verbatim, including null; distinct from id.
+  sourceSessionId?: string;
+  // Raw billable-flagged session quantity; rows need not sum to parent.
+  consumedQuantity?: number;
+  // copilotCredit or a future unit.
+  unit?: string;
+  firstActivityDateTime?: string;
+  lastActivityDateTime?: string;
+}
+
+export interface UserUsageRecordCollection {
+  "@odata.context"?: string;
+  "@odata.nextLink"?: string;
+  "@odata.count"?: number;
+  value?: UserUsageRecord[];
+}
+
+export interface GroupUsageRecordCollection {
+  "@odata.context"?: string;
+  "@odata.nextLink"?: string;
+  "@odata.count"?: number;
+  value?: GroupUsageRecord[];
+}
+
+export interface ServiceUsageRecordCollection {
+  "@odata.context"?: string;
+  "@odata.nextLink"?: string;
+  "@odata.count"?: number;
+  value?: ServiceUsageRecord[];
+}
+
+export interface FundingUsageRecordCollection {
+  "@odata.context"?: string;
+  "@odata.count"?: number;
+  value?: FundingUsageRecord[];
+}
+
+export interface UserUsageServiceDetailCollection {
+  "@odata.context"?: string;
+  value?: UserUsageServiceDetail[];
+}
+
+export interface UserUsageSessionDetailCollection {
+  "@odata.context"?: string;
+  "@odata.nextLink"?: string;
+  value?: UserUsageSessionDetail[];
+}
+
 export interface GraphErrorEnvelope {
   error?: {
     code?: string;

@@ -4,6 +4,7 @@ import {
   createSchemaTools, isJsonObject, type JsonSchema,
 } from "../../shared/api-explorer/schema";
 import { validateCostBody } from "../../shared/cost-controls/validation";
+import { validateWave2Parameters } from "../../shared/cost-controls/wave2";
 
 export interface ActionParameter extends Omit<JsonSchema, "required"> {
   name: string;
@@ -97,6 +98,7 @@ export function validateParameters(action: CostAction, parameters: Record<string
       }
     }
   }
+  validateWave2Parameters(action.id, parameters);
 }
 
 export function parseInputs(action: CostAction, inputs: Record<string, string>): Record<string, unknown> {
