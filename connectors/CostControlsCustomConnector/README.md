@@ -6,13 +6,14 @@ Its exact display name is **CostControlsCustomConnector**.
 
 **Beta: Microsoft does not support these APIs in production applications.**
 Contracts were checked against the Microsoft Learn operation and resource
-pages on 2026-11-02. Commercial Microsoft Graph only.
+pages on 2026-11-09, including the Wave 2 usage reports and credit requests.
+Commercial Microsoft Graph only.
 
 ## Files and import route
 
 | File | Purpose |
 |---|---|
-| [apiDefinition.swagger.json](./apiDefinition.swagger.json) | Import this Swagger/OpenAPI **2.0** definition in the custom connector designer. Includes all 22 overview operations plus both documented read-only `$ref` list variants (24 actions). |
+| [apiDefinition.swagger.json](./apiDefinition.swagger.json) | Import this Swagger/OpenAPI **2.0** definition in the custom connector designer. Includes all 36 overview operations plus both documented read-only `$ref` list variants (38 actions). |
 | [apiProperties.json](./apiProperties.json) | Companion metadata for CLI-based import; derived from `pac connector init --connection-template OAuthAAD`. Contains only explicit non-secret placeholders. **Not** the file to upload in the designer's OpenAPI import. |
 | [validate.mjs](./validate.mjs) | Offline, dependency-free contract and connector-compatibility checks: `node connectors\CostControlsCustomConnector\validate.mjs` from the repository root. |
 
@@ -29,6 +30,25 @@ See the [app usage guide](../../PP-CoE-CodeApp/docs/connector-playground.md#dedi
 The exported connector and connection-reference components are under
 `solution/src/`; configure their client settings and connection in your own
 environment.
+
+**Upgrade checkpoint:** the standalone definition, refreshed `.power` schema and
+regenerated service now expose all 38 actions. The app wires the new typed methods
+into the playground and separate historical-reporting/request-review workflows.
+The refreshed SDK still has no continuation method, policy creation remains
+`IOperationResult<void>`, and nullable wire annotations are not reflected in its
+TypeScript fields. The UI preserves nullable values and explicitly labels partial
+pages; it does not claim exhaustive reports or manufacture creation bodies.
+
+The registered OAuth metadata still advertises the earlier four delegated grants,
+without CreditReq.ReadWrite.All. Broad Read.All covers usage reports, but request
+access/decisions require their documented permission and runtime roles. Verify the
+actual connection scope and consent privately if these operations return 403;
+this change does not alter user authentication settings. The checked-in
+`solution/src/` connector is still an earlier 24-action snapshot, not evidence of
+the current source environment. Reconcile it through the authorized export/unpack
+workflow in `solution/README.md` before packaging a release; do not distribute
+that older snapshot as the Wave 2 build.
+Local app wiring is neither a publish nor proof of tenant runtime availability.
 
 ## 1. Register your Microsoft Entra application
 
@@ -48,21 +68,38 @@ environment.
    Delegated permissions**, select the cost-management permissions needed below.
    An authorized tenant administrator must grant admin consent. Existing
    Power Platform connector permissions do **not** grant these Graph permissions.
-   If a beta permission is not available in your tenant, stop and check rollout
-   and documentation; do not substitute a similarly named permission or manually
-   invent a permission GUID.
+   Some permissions might not appear in the picker. The
+   [overview](https://learn.microsoft.com/en-us/microsoft-365/copilot/extensibility/api/admin-settings/cost-management/overview#permissions)
+   documents requesting delegated scopes by their fully qualified names, for
+   example `https://graph.microsoft.com/CopilotCostManagement-Reports.Read.All`,
+   through your app's authentication flow and an authorized tenant-specific
+   [administrator consent request](https://learn.microsoft.com/en-us/entra/identity-platform/v2-admin-consent#request-the-permissions-from-a-directory-admin).
+   Use your app's actual registered redirect URI; do not invent permission GUIDs
+   or change this connector's v1 resource-based provider to v2 endpoints as a
+   shortcut. Scope-name consent applies to delegated grants, not application
+   permissions. Verify the resulting grant with this connector after reconnecting.
 
-For **all 24 actions**, the smallest permission families that cover the surface
-are the following four delegated grants:
+For **all 38 actions**, the following five delegated grants cover the surface:
 
 - `CopilotCostManagement.Read.All`
 - `CopilotCostManagement-Policy.ReadWrite.All`
 - `CopilotCostManagement-Assignment.ReadWrite.All`
 - `CopilotCostManagement-UserData.Read.All`
+- `CopilotCostManagement-CreditReq.ReadWrite.All`
+
+`CopilotCostManagement.Read.All` also covers all usage-report reads, so a separate
+Reports grant is not required when that broad grant is already present. For
+aggregate service/funding reports alone, prefer the narrower
+`CopilotCostManagement-Reports.Read.All`; user/group reports and raw detail use
+`CopilotCostManagement-UserData.Read.All` as their least-privileged grant.
+The nine documented scope names are Read.All, Policy.Read/ReadWrite.All,
+Assignment.Read/ReadWrite.All, UserData.Read.All, Reports.Read.All and
+CreditReq.Read/ReadWrite.All, all with the `CopilotCostManagement` prefix.
 
 For read-only use, substitute `CopilotCostManagement-Policy.Read.All` and
 `CopilotCostManagement-Assignment.Read.All` for their corresponding ReadWrite
-grants. ReadWrite is explicitly documented as the higher-privileged alternative
+grants, and use `CopilotCostManagement-CreditReq.Read.All` instead of its
+ReadWrite counterpart. ReadWrite is explicitly documented as the higher-privileged alternative
 on policy/assignment read operations; both read and write variants need not be
 granted together. Restrict granted permissions to your intended actions. The
 Swagger does not add authentication input fields or solicit bearer tokens.
@@ -72,7 +109,7 @@ Swagger does not add authentication input fields or solicit bearer tokens.
 All grants below are **delegated work/school account** permissions. Admin consent
 does not replace the signed-in user's qualifying directory role or resource
 scope. The operation pages explicitly state an additional runtime role only for
-**CreateSpendingPolicy**. For the other actions, the overview supplies persona
+**CreateSpendingPolicy** and the credit-request operations. For the other actions, the overview supplies persona
 guidance, not an exhaustive per-operation role matrix; that gap must not be
 mistaken for either "no role required" or a verified allow-list.
 
@@ -89,9 +126,15 @@ mistaken for either "no role required" or a verified allow-list.
 | `GetAlertSetting`, `ListRecipients`, `ListRecipientReferences` | `CopilotCostManagement-Policy.Read.All` | Per-operation role not enumerated; overview read guidance. |
 | `UpdateAlertSetting`, `DeleteAlertSetting`, `AddRecipient`, `RemoveRecipient` | `CopilotCostManagement-Policy.ReadWrite.All` | Per-operation role not enumerated; overview policy-management guidance. |
 | `GetUserBalance`, `ListUserServiceBalances`, `GetUserServiceBalance` | `CopilotCostManagement-UserData.Read.All` | Per-operation role not enumerated; overview user-diagnostics personas include Support/Helpdesk administrators. |
+| `ListCreditRequests`, `GetCreditRequest` | `CopilotCostManagement-CreditReq.Read.All` | Billing Administrator, Global Administrator, AI Administrator, Global Reader or AI Reader. |
+| `UpdateCreditRequest`, `BatchRecordCreditRequestDecisions` | `CopilotCostManagement-CreditReq.ReadWrite.All` | Global Administrator, Billing Administrator or AI Administrator. |
+| `ListUserUsageRecords`, `GetUserUsageRecord`, `ListGroupUsageRecords`, `GetGroupUsageRecord`, `GetUserUsageDetail`, `ListUserUsageServiceDetails`, `ListUserUsageSessionDetails` | `CopilotCostManagement-UserData.Read.All` | Broader `CopilotCostManagement.Read.All` is also documented for usage reports; do not infer a directory-role allowlist from personas. |
+| `ListServiceUsageRecords`, `GetServiceUsageRecord`, `ListFundingUsageRecords` | `CopilotCostManagement-Reports.Read.All` | Broader `CopilotCostManagement.Read.All` is also documented; overview personas include FinOps and Billing administrators. |
 
-Only the tenant credit balance operation additionally documents application
-permission support. **This connector deliberately does not use it:** all actions
+Only four operations additionally document application permission support:
+tenant balance, service usage list/get, and funding usage list. The report
+operations accept Reports.Read.All or Read.All; tenant balance accepts Read.All.
+**This connector deliberately does not use app-only access:** all actions
 use a user's delegated sign-in. A 403 can mean a missing permission **or** runtime
 role. Row-level authorization precedes lookup, so an out-of-scope tenant resource
 can return 404 rather than 403.
@@ -173,12 +216,69 @@ properties containing a client secret, connection IDs or tenant-specific values.
 
 ## Contracts and safe usage
 
+### Updating the existing registered connector
+
+For the app's existing connector, **update rather than create a duplicate**:
+
+1. Verify the intended environment and existing connector identity, privately back
+   up its configuration, and update its Definition with this Swagger in the maker
+   portal. Preserve its OAuth app, actual redirect URI, connection reference and
+   local bindings. This is a tenant mutation requiring separate authorization.
+2. Grant the additional delegated permissions needed for the chosen features and
+   reconnect. Reports.Read.All is the narrower aggregate-report permission;
+   CreditReq.Read.All/ReadWrite.All cover request review/decisions. Admin consent
+   does not replace the runtime roles in the table above.
+3. Refresh the existing app custom-connector data source using supported Power Apps
+   tooling. This must regenerate `.power` metadata and `src/generated` models and
+   service methods; **do not edit generated files by hand**. Confirm the installed
+   tooling's help rather than guessing an add-data-source command. Follow the
+   [generator fixup guide](../../PP-CoE-CodeApp/docs/connector-generator-fixup.md).
+4. Verify the 14 new named methods, typed report/batch response bodies, body
+   `@odata.etag`, nullable fields and the actual policy-create return type.
+   Earlier registration generated `CreateSpendingPolicy` as
+   `IOperationResult<void>` despite its 201 response schema. Do not assume a Swagger
+   change fixes that generator behavior or makes headers accessible.
+5. Prove a supported typed continuation transport before wiring complete rankings
+   or scans. These sources preserve nextLink but deliberately do not invent an
+   arbitrary-URL action, offset, or unverified automatic paging. If complete URL
+   replay is unavailable through the generated connector, report that blocker;
+   do not bypass the direct typed service with raw HTTP or a passthrough flow.
+6. Reconcile exported solution connector metadata only through the authorized
+   export/unpack workflow in `solution/README.md`. Preserve the existing MAC
+   connection reference and unrelated Power Platform/Graph/licensing connections.
+   A standalone definition update is not an app publish or a verified solution.
+
+The installed tools' help confirms these targeted commands. They are **not**
+offline checks and have not been executed; replace placeholders privately and
+obtain authorization for the intended environment first:
+
+```powershell
+# From the repository root, update only the existing connector definition.
+pac connector update `
+  --environment "<target-environment>" `
+  --connector-id "<existing-connector-id>" `
+  --api-definition-file .\connectors\CostControlsCustomConnector\apiDefinition.swagger.json
+
+# From PP-CoE-CodeApp, after connector update/consent/reconnection.
+pa app refresh data-source `
+  --name "<registered-cost-controls-data-source-name>" `
+  --environment-id "<target-environment-id>"
+```
+
+Refresh only the intended data source, not every registered connector. Inspect
+the resulting diff for unrelated binding changes; run the documented generator
+fixup/model regressions and app build before using the regenerated service.
+`apiProperties.json` is unchanged because its resource-based OAuth placeholders
+remain correct; permission grants belong to Entra/connection consent, not
+embedded credentials or a fabricated scopes array.
+
 ### Policy concurrency and lifecycle
 
 - Every mutation beneath an **existing** policy requires **`If-Match` containing
   the parent policy ETag**, including service creation and alert creation, group
   references and recipient references. All 10 such mutations expose it as a
-  required header. Policy creation is the only mutation without it.
+  required header. Policy creation has no existing parent ETag; credit-request
+  decisions use a separate request token as described below.
 - Read a fresh policy before a mutation. Copy the weak prefix/quotes exactly
   (for example `W/"7"`); never fabricate the value or use `*`. Inspect successful
   action response **headers**, not just the body. The definition declares
@@ -257,6 +357,64 @@ listable. Only `GetUserBalance` supports `$expand=serviceBalances`. Inspect
 can mean `upstreamFailure` or `noApplicablePolicy`, not zero consumption.
 All-services evaluation failure is 503 `sourceUnavailable`.
 
+### Credit requests and decisions
+
+Requests are binary service-access signals with **no amount/unit**. Approval
+records a decision; it does not itself assign credits. Users create requests
+outside Graph; this API cannot create or delete them. The service manages the
+90-day expiration from creation or a state-changing update. List/count exclude
+audit-only requests, although those can be read/decided by ID.
+
+Read `@odata.etag` in the request body. It is a **quoted strong** token, unlike a
+weak policy token. PATCH sends it as required `If-Match` and only changes `state`;
+pending can become approved/rejected. Same-state recognized values (including
+pending/cancelled) are no-ops but still require a matching token. Other transitions
+are rejected. Cancelled is not an ordinary writable decision. Missing header is
+428; weak/wildcard/malformed is 400; stale is 412. A successful PATCH is 204, not a
+returned request object. Read again before another decision.
+
+Bulk decisions take 1-100 unique request IDs, each with its own `etag`; they do
+not use an If-Match header. Duplicate IDs/empty/over-100/malformed payloads fail
+the whole action. Otherwise results are independent, in input order: HTTP 200
+contains `succeededCount`, `failedCount` and `responses` with per-item statuses.
+Treat only `succeeded` as success; retain `notFound`, `preconditionFailed`,
+`invalidStateTransition`, `failed` and future statuses. After partial success,
+reread/review the remaining decisions rather than replaying the original batch.
+No automatic write retry is safe.
+
+### Historical usage reports
+
+- **Processed daily rankings:** user/group/service list/get require `startDate`
+  and `endDate` in UTC `YYYY-MM-DD`; inclusive start, exclusive end exactly one
+  day later, with end midnight not in the future. Older completed days can be
+  requested without previously collecting daily snapshots, but current-day,
+  future and multi-day ranges are rejected, not clamped. No oldest validation
+  limit is documented; actual retention remains a runtime question.
+- **Funding month:** `month=YYYY-MM`, not a date range. Unpaged rows classify
+  consumption as `prepaid`, `payAsYouGo`, `overage` (unbilled, not an invoiced excess
+  charge), `nonBillable` or a future value. These are not the policy billing flags.
+  Source sync time does not establish that the month closed.
+- **Raw named-user detail:** required UTC `startDateTime`/`endDateTime`, up to seven
+  fractional digits, start before end, end not future, window at most 24 hours.
+  It cannot cross a UTC month boundary, except an exclusive end at next month's
+  midnight. `services` is complete/unpaged and uses `id`, not `serviceId`;
+  `sessions` can be paged and distinguishes opaque row `id` from nullable native
+  `sourceSessionId`. Null activity timestamps/freshness are not fabricated.
+
+Processed daily and raw-window totals/session counts need not match. Raw
+services round independently, and activity without a session identifier can be
+omitted from session rows; neither child collection is guaranteed to sum to its
+parent. Group attribution is not an allocation, balance or chargeback hierarchy.
+Do not sum overlapping groups, report dimensions, raw/processed reports or MAC
+and PPAC consumption into a supposedly disjoint total. The documented reports
+do not establish the future MAC/PPAC source-routing migration.
+
+`GET /usageReports` and listing `/usageReports/userUsageDetails` are unsupported;
+there is no keyed session read. A keyed report's 404 `usageDataUnavailable`
+does not prove zero consumption or identity existence. 503 source failures are
+not zero. Funding/raw-detail `dataStatus.latestSourceDateTime` describes source
+freshness, not request time/completeness; daily rows have no documented freshness.
+
 ### Query options and paging
 
 | Operation | Exposed query options |
@@ -265,6 +423,14 @@ All-services evaluation failure is 503 `sourceUnavailable`.
 | `GetSpendingPolicy`, `ListServiceSettings`, `GetServiceSetting`, `GetAlertSetting`, `GetUserServiceBalance` | `$select` only; no policy child expansion. |
 | `GetUserBalance` | `$select`, `$expand=serviceBalances` only. |
 | `ListUserServiceBalances` | `$select`, `$top`, `$count`, `$orderby` on serviceId; `$filter` serviceId eq/in and isConsumptionAllowed eq, with and only. Comparisons are case-sensitive for serviceId. |
+| `ListCreditRequests` | `$select` allowlist, `$count`, `$top` 1-200/default 50, `$filter` with at most one case-insensitive state and serviceId `eq` clause joined by `and`. State is an unqualified string literal; newest-first order is fixed. |
+| `GetCreditRequest` | `$select` allowlist only. |
+| `ListUserUsageRecords`, `ListGroupUsageRecords`, `ListServiceUsageRecords` | Required `startDate`/`endDate`; `$select`, `$count`, dimension-ID `eq` filter, consumedQuantity-only ordering, `$top` 1-100/default 10. |
+| `GetUserUsageRecord`, `GetGroupUsageRecord`, `GetServiceUsageRecord` | Required `startDate`/`endDate`; `$select` only. |
+| `ListFundingUsageRecords` | Required `month`; `$select`, `$count`, consumedQuantity-only ordering. No filter/top/date range. |
+| `GetUserUsageDetail` | Required `startDateTime`/`endDateTime`; `$select`, `$expand` on services/sessions. Expanded sessions may have nested nextLink. |
+| `ListUserUsageServiceDetails` | Required timestamp window; `$select` only; unpaged. |
+| `ListUserUsageSessionDetails` | Required timestamp window; `$select`, `$top` max 100/default 20; no undocumented minimum imposed. |
 | Other reads and all writes | No OData query options exposed. |
 
 Collections retain the OData envelope (`value`, `@odata.context`,
@@ -274,13 +440,18 @@ undocumented `$skip`, `$skiptoken`, URL-rewrite policy, arbitrary-URL action, or
 automatic paging is added. `$top` is only an upper bound.
 
 If Graph returns a next link, the consumer must follow the **complete URL
-unchanged** using an appropriately authorized Graph-capable client after checking
-that it belongs to `https://graph.microsoft.com/beta/copilot/costManagement/`.
+unchanged** through verified connector-native continuation support, after checking
+that it belongs to `https://graph.microsoft.com/beta/copilot/costManagement/`
+and matches the original resource and selectors.
 This connector intentionally has no continuation action for an opaque URL:
 Power Platform custom-connector automatic paging and a currently undocumented
 continuation parameter cannot be assumed. It is suitable for the documented
-first-page calls; **exhaustive multi-page scans require separate consumer wiring**
-and are not delivered by these files. Do not rebuild an offset from the number
+first-page calls; **exhaustive multi-page scans remain blocked until typed
+continuation wiring is verified**, and are not delivered by these files. For
+usage reports `$skiptoken` is the documented server continuation mechanism, not a
+license to reconstruct the URL or expose an unverified input. Paging is not a
+point-in-time snapshot, so rows can repeat or be missed between pages. Do not
+rebuild an offset from the number
 of received rows or silently drop a nonempty next link.
 
 Failures preserve the standard Graph `error`/`innerError` envelope and diagnostic
@@ -290,11 +461,37 @@ headers when supplied. Relevant conflicts include `lastAssignedGroup`,
 when supplied. No connector policy retries writes or converts failures into
 success-shaped data.
 
-**These APIs provide credit snapshots and policy governance, not rated currency
-costs, invoices, prices, forecasts, consumption history, or per-agent attribution.**
-Do not label the balance rows as those missing capabilities.
+**These APIs provide credit snapshots, historical credit consumption and policy/
+request governance, not rated currency costs, invoices, prices, forecasts or
+per-agent attribution.** Do not label balance rows as historical reports.
 
 ## Validation and remaining import/runtime checks
+
+### Connector description compatibility
+
+Keep `info.description` concise; this repository enforces a **255-character
+compatibility budget**, with extended concurrency, permissions, reporting and
+paging guidance in this guide and the operation descriptions. The Wave 2 import
+attempt reported `ConnectorBase.Description` truncation. Its connector-level
+description was 570 ASCII characters, compared with 371 in the prior definition;
+the replacement is 175 ASCII characters, shorter than both.
+
+The published [Dataverse connector table reference](https://learn.microsoft.com/en-us/power-apps/developer/data-platform/reference/entities/connector#description)
+lists **Description MaxLength 1000**, not 255 or 512. Consequently, the reported
+error does not establish a universal 500/512-character platform limit, and 570
+characters alone do not explain exceeding the published maximum. The 255 cap is
+a conservative local guard, not a claim about the tenant's actual column or the
+importer's stored value. The same reference lists DisplayName MaxLength 200 and
+OpenApiDefinition MaxLength 1000000; the validator checks the title and already
+limits the full definition to less than 1 MB.
+
+Retry updating the existing connector with the revised Swagger, and verify its
+**General > Description** contains the new short text rather than a retained
+older value. Use the actual short text, not an empty-field workaround. If the
+same error remains, capture the failing import route and submitted/stored
+description length privately for further diagnosis; do not trim operation
+contracts or response schemas. No successful tenant import is claimed by the
+offline checks.
 
 Run the local contract checks from the repository root:
 
@@ -330,7 +527,13 @@ tenant's role/permission availability. There is no claim of production readiness
 
 ## Authoritative references
 
-- [Cost Management overview and all 22 operation links](https://learn.microsoft.com/en-us/microsoft-365/copilot/extensibility/api/admin-settings/cost-management/overview)
+- [Cost Management overview and all 36 operation links](https://learn.microsoft.com/en-us/microsoft-365/copilot/extensibility/api/admin-settings/cost-management/overview)
+- Wave 2 contracts: [credit request](https://learn.microsoft.com/en-us/microsoft-365/copilot/extensibility/api/admin-settings/cost-management/resources/creditrequest),
+  [batch decisions](https://learn.microsoft.com/en-us/microsoft-365/copilot/extensibility/api/admin-settings/cost-management/creditrequest-batchrecorddecisions),
+  [daily rankings](https://learn.microsoft.com/en-us/microsoft-365/copilot/extensibility/api/admin-settings/cost-management/costmanagementuserusagerecord-list),
+  [funding](https://learn.microsoft.com/en-us/microsoft-365/copilot/extensibility/api/admin-settings/cost-management/resources/costmanagementfundingusagerecord),
+  [raw user detail](https://learn.microsoft.com/en-us/microsoft-365/copilot/extensibility/api/admin-settings/cost-management/resources/costmanagementuserusagedetail),
+  [raw sessions](https://learn.microsoft.com/en-us/microsoft-365/copilot/extensibility/api/admin-settings/cost-management/resources/costmanagementuserusagesessiondetail).
 - Each Swagger operation's `externalDocs.url` points to its verified operation page;
   the two additional GET actions reuse the corresponding list page's documented
   `$ref` variant.

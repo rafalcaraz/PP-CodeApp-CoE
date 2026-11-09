@@ -45,6 +45,22 @@ const cases: { id: keyof typeof costDispatch; parameters: Record<string, unknown
   { id: "GetUserBalance", parameters: { userId: "u", $select: "id", $expand: "serviceBalances" }, args: ["u", "id", "serviceBalances"] },
   { id: "ListUserServiceBalances", parameters: { userId: "u", ...queries }, args: ["u", "id", 2, false, "test filter", "id"] },
   { id: "GetUserServiceBalance", parameters: { userId: "u", serviceId: "workIQ", $select: "remainingQuantity" }, args: ["u", "workIQ", "remainingQuantity"] },
+  { id: "ListCreditRequests", parameters: { $select: "id,state", $count: false, $top: 100, $filter: "state eq 'pending'" }, args: ["id,state", false, 100, "state eq 'pending'"] },
+  { id: "GetCreditRequest", parameters: { id: "r", $select: "id,state" }, args: ["r", "id,state"] },
+  { id: "UpdateCreditRequest", parameters: { id: "r", "If-Match": '"7"', body: { state: "approved" } }, args: ["r", '"7"', { state: "approved" }] },
+  { id: "BatchRecordCreditRequestDecisions", parameters: { body: { requests: [{ requestId: "r", state: "rejected", etag: '"7"' }] } }, args: [{ requests: [{ requestId: "r", state: "rejected", etag: '"7"' }] }] },
+  ...(["User", "Group", "Service"] as const).flatMap((dimension) => {
+    const key = `${dimension.toLowerCase()}Id`;
+    const filter = `${key} eq 'entity'`;
+    return [
+      { id: `List${dimension}UsageRecords` as const, parameters: { startDate: "2026-01-01", endDate: "2026-01-02", $select: "consumedQuantity", $count: false, $top: 2, $orderby: "consumedQuantity desc", $filter: filter }, args: ["2026-01-01", "2026-01-02", "consumedQuantity", false, 2, "consumedQuantity desc", filter] },
+      { id: `Get${dimension}UsageRecord` as const, parameters: { [key]: "entity", startDate: "2026-01-01", endDate: "2026-01-02", $select: "consumedQuantity" }, args: ["entity", "2026-01-01", "2026-01-02", "consumedQuantity"] },
+    ];
+  }),
+  { id: "ListFundingUsageRecords", parameters: { month: "2026-01", $select: "fundingClass", $count: false, $orderby: "consumedQuantity desc" }, args: ["2026-01", "fundingClass", false, "consumedQuantity desc"] },
+  { id: "GetUserUsageDetail", parameters: { userId: "u", startDateTime: "2026-01-01T00:00:00Z", endDateTime: "2026-01-02T00:00:00Z", $select: "userId", $expand: "services,sessions" }, args: ["u", "2026-01-01T00:00:00Z", "2026-01-02T00:00:00Z", "userId", "services,sessions"] },
+  { id: "ListUserUsageServiceDetails", parameters: { userId: "u", startDateTime: "2026-01-01T00:00:00Z", endDateTime: "2026-01-02T00:00:00Z", $select: "id" }, args: ["u", "2026-01-01T00:00:00Z", "2026-01-02T00:00:00Z", "id"] },
+  { id: "ListUserUsageSessionDetails", parameters: { userId: "u", startDateTime: "2026-01-01T00:00:00Z", endDateTime: "2026-01-02T00:00:00Z", $select: "sourceSessionId", $top: 100 }, args: ["u", "2026-01-01T00:00:00Z", "2026-01-02T00:00:00Z", "sourceSessionId", 100] },
 ];
 
 beforeEach(() => {
@@ -62,6 +78,7 @@ describe("Cost Management direct generated dispatch", () => {
   });
 
   it.each(cases)("$id calls its generated typed method with exact positional arguments and wire parameter names", async ({ id, parameters, args }) => {
+    if (id === "BatchRecordCreditRequestDecisions") executeAsync.mockResolvedValueOnce({ success: true, data: { succeededCount: 1, failedCount: 0, responses: [{ requestId: "r", status: "succeeded", etag: '"8"' }] } });
     const spy = vi.spyOn(service, id);
     const result = await executeCostRequest({ actionId: id, parameters }, true);
     expect(result.ok).toBe(true);
@@ -72,7 +89,17 @@ describe("Cost Management direct generated dispatch", () => {
         ...(id === "GetTenantCreditBalance" ? {} : { parameters }),
       },
     });
+
     expect(invalidateInventoryCache).toHaveBeenCalledTimes(costActions.find((a) => a.id === id)?.readOnly ? 0 : 1);
+  });
+
+  it("does not turn a non-atomic HTTP-200 batch into an all-green result or replay failures", async () => {
+    const data = { succeededCount: 1, failedCount: 1, responses: [{ requestId: "r1", status: "succeeded" }, { requestId: "r2", status: "preconditionFailed", message: "Stale ETag" }] };
+    executeAsync.mockResolvedValueOnce({ success: true, data });
+    const result = await executeCostRequest({ actionId: "BatchRecordCreditRequestDecisions", parameters: { body: { requests: ["r1", "r2"].map((requestId) => ({ requestId, state: "approved", etag: '"7"' })) } } }, true);
+    expect(result).toMatchObject({ ok: false, partial: true, error: expect.stringContaining("do not replay"), data: { success: true, data } });
+    expect(executeAsync).toHaveBeenCalledOnce();
+    expect(invalidateInventoryCache).toHaveBeenCalledOnce();
   });
 
   it("keeps omitted options undefined without coercing false or zero", async () => {

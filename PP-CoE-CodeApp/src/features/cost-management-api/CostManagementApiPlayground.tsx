@@ -145,7 +145,7 @@ export function CostManagementApiPlayground() {
           using your connection and permissions. No passthrough flow. Nothing runs automatically.
         </Text>
         <Text size={200} className={styles.muted}>
-          Credits and policy governance, not currency costs, consumption history or per-agent attribution.{" "}
+          Credit balances, historical usage, credit requests and policy governance — not currency costs or per-agent attribution.{" "}
           <Link href="https://learn.microsoft.com/en-us/microsoft-365/copilot/extensibility/api/admin-settings/cost-management/overview"
             target="_blank" rel="noopener noreferrer">Microsoft Learn reference</Link>
         </Text>
@@ -193,8 +193,10 @@ export function CostManagementApiPlayground() {
               <code>{action.path}</code>
             </div>
             {!action.readOnly && <Text className={styles.warning}>
-              This request can change policies, audiences, alerting or service availability. Review every input before confirming.
-              Existing-policy changes require a fresh parent ETag, including child and reference edits. No automatic undo or retry.
+              {action.id.includes("CreditRequest")
+                ? "This records access decisions, not credit allocations. Each request requires its own current strong ETag; policy ETags are not interchangeable. Batch HTTP 200 can contain per-item failures. Never replay a partial batch."
+                : "This request can change policies, audiences, alerting or service availability. Existing-policy changes require a fresh parent ETag, including child and reference edits."}
+              {" "}Review every input before confirming. No automatic undo or retry.
             </Text>}
             {["CreateSpendingPolicy", "CreateServiceSetting"].includes(action.id) && <Text className={styles.warning}>
               The generated service types this creation response as void. Any runtime data exposed by the SDK is shown unchanged;
@@ -255,7 +257,7 @@ export function CostManagementApiPlayground() {
           <div aria-busy={busy}>
             {busy ? <LoadingPane label="Running Cost Management action..." /> : lastRun ? <div className={styles.column}>
               <div className={styles.row} role="status">
-                <Badge color={lastRun.result.ok ? "success" : "danger"}>{lastRun.result.ok ? "Succeeded" : "Failed"}</Badge>
+                <Badge color={lastRun.result.ok ? "success" : "danger"}>{lastRun.result.ok ? "Succeeded" : lastRun.result.partial ? "Partial result" : "Failed"}</Badge>
                 <Text>{lastRun.request.actionId} &middot; {lastRun.elapsedMs} ms</Text>
               </div>
               {!lastRun.result.ok && <ErrorPane title="Connector call failed" message={lastRun.result.error} />}
@@ -282,7 +284,7 @@ export function CostManagementApiPlayground() {
             <DialogTitle>Confirm Cost Management action</DialogTitle>
             <DialogContent>
               <div className={styles.column}>
-                <Text>This sends a real tenant write. Check the target IDs, parent ETag and body. There is no automatic undo.</Text>
+                <Text>This sends a real tenant write. Check the target IDs, the applicable parent or request ETags and body. There is no automatic undo.</Text>
                 <pre className={styles.code}>{JSON.stringify(pending?.preview, null, 2)}</pre>
                 <Field label={`Type ${pending?.request.actionId ?? ""} to confirm`}>
                   <Input value={confirmation} autoComplete="off" onChange={(_, data) => setConfirmation(data.value)} />

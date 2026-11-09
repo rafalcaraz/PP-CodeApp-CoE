@@ -67,9 +67,9 @@
     "swagger": {
       "swagger": "2.0",
       "info": {
-        "title": "CostControlsCustomConnector",
-        "version": "1.0.0",
-        "description": "Microsoft Graph beta Copilot Cost Management: credit balances, spending policies, group assignments, service settings, notify-only alerts and user diagnostics. Beta APIs are not supported for production. Delegated work/school sign-in only. Existing-policy mutations require the current parent policy ETag. No currency costs, historical reporting or per-agent attribution."
+        "title": "CostControsl-CustomConn",
+        "version": "2.0.0",
+        "description": "Microsoft Graph beta Copilot Cost Management: credit balances, policies, credit requests and usage reports. Delegated sign-in only. Beta APIs are not supported for production."
       },
       "host": "92ac575fd43de38d80a0d70cec8237.15.environment.api.powerplatform.com",
       "basePath": "/connectors/runtime/invoke/scalegroups/usa002/shards/02/apis/msftcsa-5fcostcontrosl-2dcustomconn-5f55e4fbc80e016c41/connections/",
@@ -119,6 +119,12 @@
         },
         {
           "name": "User balances"
+        },
+        {
+          "name": "Credit requests"
+        },
+        {
+          "name": "Usage reports"
         }
       ],
       "paths": {
@@ -1166,6 +1172,701 @@
               }
             }
           }
+        },
+        "/{connectionId}/creditRequests": {
+          "get": {
+            "operationId": "ListCreditRequests",
+            "summary": "List credit requests",
+            "description": "Delegated CopilotCostManagement-CreditReq.Read.All or ReadWrite.All. Runtime role: Billing Administrator, Global Administrator, AI Administrator, Global Reader or AI Reader. Excludes audit-only requests from rows/count; newest first. Follow complete @odata.nextLink unchanged; this action returns one page. Credit requests are access signals, not credit amounts.",
+            "tags": [
+              "Credit requests"
+            ],
+            "externalDocs": {
+              "url": "https://learn.microsoft.com/en-us/microsoft-365/copilot/extensibility/api/admin-settings/cost-management/creditrequest-list"
+            },
+            "parameters": [
+              {
+                "name": "connectionId",
+                "in": "path",
+                "required": true,
+                "x-ms-visibility": "internal",
+                "type": "string"
+              },
+              {
+                "$ref": "#/parameters/CreditRequestSelect"
+              },
+              {
+                "$ref": "#/parameters/Count"
+              },
+              {
+                "name": "$top",
+                "in": "query",
+                "type": "integer",
+                "format": "int32",
+                "minimum": 1,
+                "maximum": 200,
+                "default": 50,
+                "description": "Upper bound, not a guaranteed page size."
+              },
+              {
+                "name": "$filter",
+                "in": "query",
+                "type": "string",
+                "description": "eq only on state and serviceId, case-insensitive, using unqualified string literals such as state eq 'pending'. At most one clause per property, combined with and. Qualified enum literals are rejected. No orderby, expand, skip, search or delta."
+              }
+            ],
+            "responses": {
+              "200": {
+                "description": "One page; each request includes its strong @odata.etag.",
+                "schema": {
+                  "$ref": "#/definitions/CreditRequestCollection"
+                }
+              },
+              "default": {
+                "$ref": "#/responses/GraphError"
+              }
+            }
+          }
+        },
+        "/{connectionId}/creditRequests/{id}": {
+          "get": {
+            "operationId": "GetCreditRequest",
+            "summary": "Get credit request",
+            "description": "Delegated CopilotCostManagement-CreditReq.Read.All or ReadWrite.All. Runtime role: Billing Administrator, Global Administrator, AI Administrator, Global Reader or AI Reader. Includes strong @odata.etag in the body and ETag header. Audit-only requests can be read by ID; missing/out-of-scope requests return 404 itemNotFound.",
+            "tags": [
+              "Credit requests"
+            ],
+            "externalDocs": {
+              "url": "https://learn.microsoft.com/en-us/microsoft-365/copilot/extensibility/api/admin-settings/cost-management/creditrequest-get"
+            },
+            "parameters": [
+              {
+                "name": "connectionId",
+                "in": "path",
+                "required": true,
+                "x-ms-visibility": "internal",
+                "type": "string"
+              },
+              {
+                "$ref": "#/parameters/CreditRequestId"
+              },
+              {
+                "$ref": "#/parameters/CreditRequestSelect"
+              }
+            ],
+            "responses": {
+              "200": {
+                "description": "Credit request with its current strong concurrency token.",
+                "schema": {
+                  "$ref": "#/definitions/CreditRequest"
+                },
+                "headers": {
+                  "ETag": {
+                    "type": "string",
+                    "description": "Quoted strong ETag, also returned as @odata.etag."
+                  }
+                }
+              },
+              "default": {
+                "$ref": "#/responses/GraphError"
+              }
+            }
+          },
+          "patch": {
+            "operationId": "UpdateCreditRequest",
+            "summary": "Record credit request decision",
+            "description": "Delegated CopilotCostManagement-CreditReq.ReadWrite.All. Runtime role: Global Administrator, Billing Administrator or AI Administrator. Only state is writable. Pending can become approved/rejected; same-state decisions are no-ops but still check the request's strong ETag. Approval does not assign credits by itself. Missing If-Match: 428; weak/wildcard/malformed: 400; stale: 412. Do not retry writes automatically.",
+            "tags": [
+              "Credit requests"
+            ],
+            "externalDocs": {
+              "url": "https://learn.microsoft.com/en-us/microsoft-365/copilot/extensibility/api/admin-settings/cost-management/creditrequest-update"
+            },
+            "parameters": [
+              {
+                "name": "connectionId",
+                "in": "path",
+                "required": true,
+                "x-ms-visibility": "internal",
+                "type": "string"
+              },
+              {
+                "$ref": "#/parameters/CreditRequestId"
+              },
+              {
+                "$ref": "#/parameters/CreditRequestIfMatch"
+              },
+              {
+                "name": "body",
+                "in": "body",
+                "required": true,
+                "schema": {
+                  "$ref": "#/definitions/UpdateCreditRequest"
+                }
+              }
+            ],
+            "responses": {
+              "204": {
+                "description": "Decision recorded, or same-state no-op; no response body.",
+                "headers": {
+                  "ETag": {
+                    "type": "string",
+                    "description": "Advanced strong ETag on a state change; unchanged for a same-state no-op."
+                  }
+                }
+              },
+              "default": {
+                "$ref": "#/responses/GraphError"
+              }
+            }
+          }
+        },
+        "/{connectionId}/creditRequests/batchRecordDecisions": {
+          "post": {
+            "operationId": "BatchRecordCreditRequestDecisions",
+            "summary": "Record credit request decisions in bulk",
+            "description": "Delegated CopilotCostManagement-CreditReq.ReadWrite.All. Runtime role: Global Administrator, Billing Administrator or AI Administrator. 1-100 unique request IDs; each supplies its own strong etag, not an If-Match header. Non-atomic: HTTP 200 can contain failures. After partial success, reread affected requests and explicitly review only remaining decisions; never replay the original batch automatically. Approval records a decision, not a credit allocation.",
+            "tags": [
+              "Credit requests"
+            ],
+            "externalDocs": {
+              "url": "https://learn.microsoft.com/en-us/microsoft-365/copilot/extensibility/api/admin-settings/cost-management/creditrequest-batchrecorddecisions"
+            },
+            "parameters": [
+              {
+                "name": "connectionId",
+                "in": "path",
+                "required": true,
+                "x-ms-visibility": "internal",
+                "type": "string"
+              },
+              {
+                "name": "body",
+                "in": "body",
+                "required": true,
+                "schema": {
+                  "$ref": "#/definitions/BatchCreditRequestDecisions"
+                }
+              }
+            ],
+            "responses": {
+              "200": {
+                "description": "Ordered per-item results, including failures; inspect responses and failedCount.",
+                "schema": {
+                  "$ref": "#/definitions/CreditRequestUpdateResponse"
+                }
+              },
+              "default": {
+                "$ref": "#/responses/GraphError"
+              }
+            }
+          }
+        },
+        "/{connectionId}/usageReports/userUsageRecords": {
+          "get": {
+            "operationId": "ListUserUsageRecords",
+            "summary": "List daily user usage",
+            "description": "Delegated CopilotCostManagement-UserData.Read.All or CopilotCostManagement.Read.All; no application permission. Processed billable consumption for exactly one completed UTC day, not an arbitrary range. Follow complete @odata.nextLink unchanged; this action returns one page, not a snapshot-consistent tenant total. No currency or per-agent attribution.",
+            "tags": [
+              "Usage reports"
+            ],
+            "externalDocs": {
+              "url": "https://learn.microsoft.com/en-us/microsoft-365/copilot/extensibility/api/admin-settings/cost-management/costmanagementuserusagerecord-list"
+            },
+            "parameters": [
+              {
+                "name": "connectionId",
+                "in": "path",
+                "required": true,
+                "x-ms-visibility": "internal",
+                "type": "string"
+              },
+              {
+                "$ref": "#/parameters/StartDate"
+              },
+              {
+                "$ref": "#/parameters/EndDate"
+              },
+              {
+                "$ref": "#/parameters/Select"
+              },
+              {
+                "$ref": "#/parameters/Count"
+              },
+              {
+                "$ref": "#/parameters/DailyReportTop"
+              },
+              {
+                "$ref": "#/parameters/ConsumptionOrderBy"
+              },
+              {
+                "name": "$filter",
+                "in": "query",
+                "type": "string",
+                "description": "Only userId eq with a string literal. No other operators, skip or search; order only by consumedQuantity."
+              }
+            ],
+            "responses": {
+              "200": {
+                "description": "One page of processed daily user consumption.",
+                "schema": {
+                  "$ref": "#/definitions/UserUsageRecordCollection"
+                }
+              },
+              "default": {
+                "$ref": "#/responses/GraphError"
+              }
+            }
+          }
+        },
+        "/{connectionId}/usageReports/userUsageRecords/{userId}": {
+          "get": {
+            "operationId": "GetUserUsageRecord",
+            "summary": "Get daily user usage",
+            "description": "Delegated CopilotCostManagement-UserData.Read.All or CopilotCostManagement.Read.All; no application permission. One completed UTC day. 404 usageDataUnavailable is not proof of zero usage or user existence; 503 sourceUnavailable is not zero.",
+            "tags": [
+              "Usage reports"
+            ],
+            "externalDocs": {
+              "url": "https://learn.microsoft.com/en-us/microsoft-365/copilot/extensibility/api/admin-settings/cost-management/costmanagementuserusagerecord-get"
+            },
+            "parameters": [
+              {
+                "name": "connectionId",
+                "in": "path",
+                "required": true,
+                "x-ms-visibility": "internal",
+                "type": "string"
+              },
+              {
+                "$ref": "#/parameters/UserId"
+              },
+              {
+                "$ref": "#/parameters/StartDate"
+              },
+              {
+                "$ref": "#/parameters/EndDate"
+              },
+              {
+                "$ref": "#/parameters/Select"
+              }
+            ],
+            "responses": {
+              "200": {
+                "description": "Processed consumption for the named user and day.",
+                "schema": {
+                  "$ref": "#/definitions/UserUsageRecord"
+                }
+              },
+              "default": {
+                "$ref": "#/responses/GraphError"
+              }
+            }
+          }
+        },
+        "/{connectionId}/usageReports/groupUsageRecords": {
+          "get": {
+            "operationId": "ListGroupUsageRecords",
+            "summary": "List daily group usage",
+            "description": "Delegated CopilotCostManagement-UserData.Read.All or CopilotCostManagement.Read.All; no application permission. Processed billable consumption attributed to security-group members for exactly one completed UTC day. Not a group allocation, balance or chargeback. Follow complete @odata.nextLink unchanged; this action returns one page and paging is not snapshot-consistent.",
+            "tags": [
+              "Usage reports"
+            ],
+            "externalDocs": {
+              "url": "https://learn.microsoft.com/en-us/microsoft-365/copilot/extensibility/api/admin-settings/cost-management/costmanagementgroupusagerecord-list"
+            },
+            "parameters": [
+              {
+                "name": "connectionId",
+                "in": "path",
+                "required": true,
+                "x-ms-visibility": "internal",
+                "type": "string"
+              },
+              {
+                "$ref": "#/parameters/StartDate"
+              },
+              {
+                "$ref": "#/parameters/EndDate"
+              },
+              {
+                "$ref": "#/parameters/Select"
+              },
+              {
+                "$ref": "#/parameters/Count"
+              },
+              {
+                "$ref": "#/parameters/DailyReportTop"
+              },
+              {
+                "$ref": "#/parameters/ConsumptionOrderBy"
+              },
+              {
+                "name": "$filter",
+                "in": "query",
+                "type": "string",
+                "description": "Only groupId eq with a string literal. No other operators, skip or search; order only by consumedQuantity."
+              }
+            ],
+            "responses": {
+              "200": {
+                "description": "One page of processed daily group-attributed consumption.",
+                "schema": {
+                  "$ref": "#/definitions/GroupUsageRecordCollection"
+                }
+              },
+              "default": {
+                "$ref": "#/responses/GraphError"
+              }
+            }
+          }
+        },
+        "/{connectionId}/usageReports/groupUsageRecords/{groupId}": {
+          "get": {
+            "operationId": "GetGroupUsageRecord",
+            "summary": "Get daily group usage",
+            "description": "Delegated CopilotCostManagement-UserData.Read.All or CopilotCostManagement.Read.All; no application permission. One completed UTC day. 404 usageDataUnavailable is not proof of zero usage or group existence; 503 sourceUnavailable is not zero.",
+            "tags": [
+              "Usage reports"
+            ],
+            "externalDocs": {
+              "url": "https://learn.microsoft.com/en-us/microsoft-365/copilot/extensibility/api/admin-settings/cost-management/costmanagementgroupusagerecord-get"
+            },
+            "parameters": [
+              {
+                "name": "connectionId",
+                "in": "path",
+                "required": true,
+                "x-ms-visibility": "internal",
+                "type": "string"
+              },
+              {
+                "$ref": "#/parameters/GroupId"
+              },
+              {
+                "$ref": "#/parameters/StartDate"
+              },
+              {
+                "$ref": "#/parameters/EndDate"
+              },
+              {
+                "$ref": "#/parameters/Select"
+              }
+            ],
+            "responses": {
+              "200": {
+                "description": "Processed consumption attributed to the named group and day.",
+                "schema": {
+                  "$ref": "#/definitions/GroupUsageRecord"
+                }
+              },
+              "default": {
+                "$ref": "#/responses/GraphError"
+              }
+            }
+          }
+        },
+        "/{connectionId}/usageReports/serviceUsageRecords": {
+          "get": {
+            "operationId": "ListServiceUsageRecords",
+            "summary": "List daily service usage",
+            "description": "Delegated CopilotCostManagement-Reports.Read.All or CopilotCostManagement.Read.All. The API also supports those application permissions, but this connector remains delegated. Exactly one completed UTC day. Follow complete @odata.nextLink unchanged; this action returns one page and paging is not snapshot-consistent. Service categories, not individual agents.",
+            "tags": [
+              "Usage reports"
+            ],
+            "externalDocs": {
+              "url": "https://learn.microsoft.com/en-us/microsoft-365/copilot/extensibility/api/admin-settings/cost-management/costmanagementserviceusagerecord-list"
+            },
+            "parameters": [
+              {
+                "name": "connectionId",
+                "in": "path",
+                "required": true,
+                "x-ms-visibility": "internal",
+                "type": "string"
+              },
+              {
+                "$ref": "#/parameters/StartDate"
+              },
+              {
+                "$ref": "#/parameters/EndDate"
+              },
+              {
+                "$ref": "#/parameters/Select"
+              },
+              {
+                "$ref": "#/parameters/Count"
+              },
+              {
+                "$ref": "#/parameters/DailyReportTop"
+              },
+              {
+                "$ref": "#/parameters/ConsumptionOrderBy"
+              },
+              {
+                "name": "$filter",
+                "in": "query",
+                "type": "string",
+                "description": "Only serviceId eq with a string literal. Use governed service-category identifiers, not catalog entry IDs. No other operators, skip or search."
+              }
+            ],
+            "responses": {
+              "200": {
+                "description": "One page of daily service consumption.",
+                "schema": {
+                  "$ref": "#/definitions/ServiceUsageRecordCollection"
+                }
+              },
+              "default": {
+                "$ref": "#/responses/GraphError"
+              }
+            }
+          }
+        },
+        "/{connectionId}/usageReports/serviceUsageRecords/{serviceId}": {
+          "get": {
+            "operationId": "GetServiceUsageRecord",
+            "summary": "Get daily service usage",
+            "description": "Delegated CopilotCostManagement-Reports.Read.All or CopilotCostManagement.Read.All. The API also supports those application permissions, but this connector remains delegated. One completed UTC day. 404 usageDataUnavailable is not proof of zero usage; 503 sourceUnavailable is not zero.",
+            "tags": [
+              "Usage reports"
+            ],
+            "externalDocs": {
+              "url": "https://learn.microsoft.com/en-us/microsoft-365/copilot/extensibility/api/admin-settings/cost-management/costmanagementserviceusagerecord-get"
+            },
+            "parameters": [
+              {
+                "name": "connectionId",
+                "in": "path",
+                "required": true,
+                "x-ms-visibility": "internal",
+                "type": "string"
+              },
+              {
+                "$ref": "#/parameters/ServiceId"
+              },
+              {
+                "$ref": "#/parameters/StartDate"
+              },
+              {
+                "$ref": "#/parameters/EndDate"
+              },
+              {
+                "$ref": "#/parameters/Select"
+              }
+            ],
+            "responses": {
+              "200": {
+                "description": "Consumption for the named service and day.",
+                "schema": {
+                  "$ref": "#/definitions/ServiceUsageRecord"
+                }
+              },
+              "default": {
+                "$ref": "#/responses/GraphError"
+              }
+            }
+          }
+        },
+        "/{connectionId}/usageReports/fundingUsageRecords": {
+          "get": {
+            "operationId": "ListFundingUsageRecords",
+            "summary": "List monthly usage by funding class",
+            "description": "Delegated CopilotCostManagement-Reports.Read.All or CopilotCostManagement.Read.All. The API also supports those application permissions, but this connector remains delegated. Requires a calendar month, not date ranges. Complete unpaged funding-class collection, including unbilled overage and non-billable consumption. No currency, invoices, prices or settlement amounts. Freshness is snapshot sync time, not evidence that the month closed.",
+            "tags": [
+              "Usage reports"
+            ],
+            "externalDocs": {
+              "url": "https://learn.microsoft.com/en-us/microsoft-365/copilot/extensibility/api/admin-settings/cost-management/costmanagementfundingusagerecord-list"
+            },
+            "parameters": [
+              {
+                "name": "connectionId",
+                "in": "path",
+                "required": true,
+                "x-ms-visibility": "internal",
+                "type": "string"
+              },
+              {
+                "name": "month",
+                "in": "query",
+                "required": true,
+                "type": "string",
+                "pattern": "^\\d{4}-(0[1-9]|1[0-2])$",
+                "description": "UTC calendar month, YYYY-MM. No oldest permitted month is enforced by validation; this is not a retention guarantee. Date ranges, filter, top, skip and search are rejected."
+              },
+              {
+                "$ref": "#/parameters/Select"
+              },
+              {
+                "$ref": "#/parameters/Count"
+              },
+              {
+                "$ref": "#/parameters/ConsumptionOrderBy"
+              }
+            ],
+            "responses": {
+              "200": {
+                "description": "Unpaged consumption by funding class.",
+                "schema": {
+                  "$ref": "#/definitions/FundingUsageRecordCollection"
+                }
+              },
+              "default": {
+                "$ref": "#/responses/GraphError"
+              }
+            }
+          }
+        },
+        "/{connectionId}/usageReports/userUsageDetails/{userId}": {
+          "get": {
+            "operationId": "GetUserUsageDetail",
+            "summary": "Get raw user usage detail",
+            "description": "Delegated CopilotCostManagement-UserData.Read.All or CopilotCostManagement.Read.All; no application permission. Raw billable-flagged usage bounded to the processed watermark, not reprocessed daily rankings. Required UTC timestamp window: start before end, end not future, at most 24 hours, no crossing UTC month boundaries except an exclusive end at next month's midnight. Totals/session counts need not equal processed reports. Parent collection is not listable.",
+            "tags": [
+              "Usage reports"
+            ],
+            "externalDocs": {
+              "url": "https://learn.microsoft.com/en-us/microsoft-365/copilot/extensibility/api/admin-settings/cost-management/costmanagementuserusagedetail-get"
+            },
+            "parameters": [
+              {
+                "name": "connectionId",
+                "in": "path",
+                "required": true,
+                "x-ms-visibility": "internal",
+                "type": "string"
+              },
+              {
+                "$ref": "#/parameters/UserId"
+              },
+              {
+                "$ref": "#/parameters/StartDateTime"
+              },
+              {
+                "$ref": "#/parameters/EndDateTime"
+              },
+              {
+                "$ref": "#/parameters/Select"
+              },
+              {
+                "name": "$expand",
+                "in": "query",
+                "type": "string",
+                "description": "services, sessions, or services,sessions. Expanded sessions may include sessions@odata.nextLink; use ListUserUsageSessionDetails for direct session paging. No filter, orderby, top or count."
+              }
+            ],
+            "responses": {
+              "200": {
+                "description": "Raw user detail; 404 usageDataUnavailable is not zero or proof of user existence.",
+                "schema": {
+                  "$ref": "#/definitions/UserUsageDetail"
+                }
+              },
+              "default": {
+                "$ref": "#/responses/GraphError"
+              }
+            }
+          }
+        },
+        "/{connectionId}/usageReports/userUsageDetails/{userId}/services": {
+          "get": {
+            "operationId": "ListUserUsageServiceDetails",
+            "summary": "List raw user usage by service",
+            "description": "Delegated CopilotCostManagement-UserData.Read.All or CopilotCostManagement.Read.All; no application permission. Use the same required UTC timestamp window as parent detail: at most 24 hours, nonfuture end, no crossing a UTC month except an exclusive end at next month's midnight. Unpaged; independently rounded child rows need not sum to the parent. Service key is id, not serviceId.",
+            "tags": [
+              "Usage reports"
+            ],
+            "externalDocs": {
+              "url": "https://learn.microsoft.com/en-us/microsoft-365/copilot/extensibility/api/admin-settings/cost-management/costmanagementuserusageservicedetail-list"
+            },
+            "parameters": [
+              {
+                "name": "connectionId",
+                "in": "path",
+                "required": true,
+                "x-ms-visibility": "internal",
+                "type": "string"
+              },
+              {
+                "$ref": "#/parameters/UserId"
+              },
+              {
+                "$ref": "#/parameters/StartDateTime"
+              },
+              {
+                "$ref": "#/parameters/EndDateTime"
+              },
+              {
+                "$ref": "#/parameters/Select"
+              }
+            ],
+            "responses": {
+              "200": {
+                "description": "Complete raw service breakdown for the user/window.",
+                "schema": {
+                  "$ref": "#/definitions/UserUsageServiceDetailCollection"
+                }
+              },
+              "default": {
+                "$ref": "#/responses/GraphError"
+              }
+            }
+          }
+        },
+        "/{connectionId}/usageReports/userUsageDetails/{userId}/sessions": {
+          "get": {
+            "operationId": "ListUserUsageSessionDetails",
+            "summary": "List raw user usage sessions",
+            "description": "Delegated CopilotCostManagement-UserData.Read.All or CopilotCostManagement.Read.All; no application permission. Same required UTC timestamp window as parent detail: at most 24 hours, nonfuture end, no crossing a UTC month except an exclusive end at next month's midnight. Follow complete @odata.nextLink unchanged; this action returns one page, not snapshot-consistent. Activity without session identifiers can be omitted; rows need not sum to the parent. No single-session GET.",
+            "tags": [
+              "Usage reports"
+            ],
+            "externalDocs": {
+              "url": "https://learn.microsoft.com/en-us/microsoft-365/copilot/extensibility/api/admin-settings/cost-management/costmanagementuserusagesessiondetail-list"
+            },
+            "parameters": [
+              {
+                "name": "connectionId",
+                "in": "path",
+                "required": true,
+                "x-ms-visibility": "internal",
+                "type": "string"
+              },
+              {
+                "$ref": "#/parameters/UserId"
+              },
+              {
+                "$ref": "#/parameters/StartDateTime"
+              },
+              {
+                "$ref": "#/parameters/EndDateTime"
+              },
+              {
+                "$ref": "#/parameters/Select"
+              },
+              {
+                "name": "$top",
+                "in": "query",
+                "type": "integer",
+                "format": "int32",
+                "maximum": 100,
+                "default": 20,
+                "description": "Upper bound, not a guaranteed page size. Default 20, maximum 100; no undocumented lower bound is imposed. No filter, orderby, count or skip."
+              }
+            ],
+            "responses": {
+              "200": {
+                "description": "One page of raw session groupings.",
+                "schema": {
+                  "$ref": "#/definitions/UserUsageSessionDetailCollection"
+                }
+              },
+              "default": {
+                "$ref": "#/responses/GraphError"
+              }
+            }
+          }
         }
       },
       "parameters": {
@@ -1228,11 +1929,82 @@
           "type": "boolean",
           "description": "Request @odata.count.",
           "x-ms-visibility": "advanced"
+        },
+        "CreditRequestId": {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "string",
+          "description": "Credit request identifier, not a policy identifier."
+        },
+        "CreditRequestIfMatch": {
+          "name": "If-Match",
+          "in": "header",
+          "required": true,
+          "type": "string",
+          "pattern": "^\"[^\"\\r\\n]*\"(?![\\s\\S])",
+          "description": "Fresh credit request's quoted STRONG ETag from @odata.etag or ETag. Not a policy token. Weak W/ and wildcard tokens are rejected. Missing header returns 428; malformed returns 400; stale returns 412.",
+          "x-ms-summary": "Credit request strong ETag"
+        },
+        "CreditRequestSelect": {
+          "name": "$select",
+          "in": "query",
+          "type": "string",
+          "description": "Comma-separated allowlist: id,state,requestType,requestedBy,decisionBy,createdDateTime,lastModifiedDateTime,expirationDateTime,serviceId. Other structural properties return 400; @odata.etag is a response annotation.",
+          "x-ms-visibility": "advanced"
+        },
+        "StartDate": {
+          "name": "startDate",
+          "in": "query",
+          "required": true,
+          "type": "string",
+          "format": "date",
+          "description": "Inclusive start of exactly one completed UTC day, YYYY-MM-DD. No oldest date is enforced by validation; retention is not guaranteed."
+        },
+        "EndDate": {
+          "name": "endDate",
+          "in": "query",
+          "required": true,
+          "type": "string",
+          "format": "date",
+          "description": "Exclusive end, YYYY-MM-DD; must equal startDate plus one day, with UTC midnight not later than now. Current-day, future and multi-day ranges are rejected, not clamped."
+        },
+        "DailyReportTop": {
+          "name": "$top",
+          "in": "query",
+          "type": "integer",
+          "format": "int32",
+          "minimum": 1,
+          "maximum": 100,
+          "default": 10,
+          "description": "Upper bound 1-100, not a guaranteed page size. Invalid values are rejected, not capped."
+        },
+        "ConsumptionOrderBy": {
+          "name": "$orderby",
+          "in": "query",
+          "type": "string",
+          "description": "consumedQuantity only, optionally asc/desc; dimension-key ordering is unsupported. Ties are broken internally."
+        },
+        "StartDateTime": {
+          "name": "startDateTime",
+          "in": "query",
+          "required": true,
+          "type": "string",
+          "format": "date-time",
+          "description": "Inclusive UTC ISO 8601 timestamp, up to seven fractional digits. Must be earlier than endDateTime; window at most 24 hours and cannot cross a UTC month boundary."
+        },
+        "EndDateTime": {
+          "name": "endDateTime",
+          "in": "query",
+          "required": true,
+          "type": "string",
+          "format": "date-time",
+          "description": "Exclusive UTC ISO 8601 timestamp, up to seven fractional digits, not later than now. The end may equal midnight on the first day of the next month. Invalid windows are rejected, not clamped."
         }
       },
       "responses": {
         "GraphError": {
-          "description": "Standard Graph OData failure. Inspect error.code and innerError.code. Common statuses: 400 invalidRequest/unsupportedQuery, 403 Authorization_RequestDenied, 404 (including out-of-scope tenant resources), 409 conflict, 412 preconditionFailed, 429 tooManyRequests, 503 sourceUnavailable. Do not interpret omitted/failed data as zero.",
+          "description": "Standard Graph OData failure. Inspect error.code and innerError.code. Common statuses: 400 invalidRequest/unsupportedQuery, 403 Authorization_RequestDenied, 404 usageDataUnavailable/itemNotFound (also out-of-scope resources), 409 conflict, 412 preconditionFailed, 428 preconditionRequired for credit decisions, 429 tooManyRequests, 503 sourceUnavailable/serviceNotAvailable. Do not interpret omitted/failed data as zero. Batch decisions can return per-item failures in HTTP 200.",
           "schema": {
             "$ref": "#/definitions/GraphErrorEnvelope"
           },
@@ -1894,6 +2666,502 @@
             }
           }
         },
+        "CreditRequest": {
+          "type": "object",
+          "description": "Binary service-access request, not an amount. Approval records a decision but does not itself assign credits. Read enums/service IDs are open for future values. Users create requests outside Graph; no create/delete API. Expiration is service-managed: 90 days after creation or a state-changing decision.",
+          "properties": {
+            "@odata.context": {
+              "type": "string"
+            },
+            "@odata.etag": {
+              "type": "string",
+              "description": "Quoted strong request ETag, returned in the body as well as the header. Preserve quotes; not a weak policy ETag."
+            },
+            "id": {
+              "type": "string"
+            },
+            "state": {
+              "type": "string",
+              "description": "pending, approved, rejected, cancelled, unknownFutureValue. cancelled is historical; only a same-state no-op can target it."
+            },
+            "requestType": {
+              "type": "string",
+              "description": "unknown, firstTimeAccess, additionalCredits, unknownFutureValue."
+            },
+            "serviceId": {
+              "type": "string",
+              "description": "Open lowerCamelCase service-category identifier, for example cowork or workIQ. Not a fixed service catalog or agent ID."
+            },
+            "requestedBy": {
+              "$ref": "#/definitions/IdentitySet"
+            },
+            "decisionBy": {
+              "$ref": "#/definitions/CreditRequestDecisionIdentity"
+            },
+            "createdDateTime": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "lastModifiedDateTime": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "expirationDateTime": {
+              "type": "string",
+              "format": "date-time",
+              "x-nullable": true
+            }
+          }
+        },
+        "CreditRequestDecisionIdentity": {
+          "type": "object",
+          "x-nullable": true,
+          "description": "Only the user facet is populated. Null until a decision is recorded.",
+          "properties": {
+            "user": {
+              "$ref": "#/definitions/Identity"
+            }
+          }
+        },
+        "UpdateCreditRequest": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "state"
+          ],
+          "properties": {
+            "state": {
+              "type": "string",
+              "enum": [
+                "pending",
+                "approved",
+                "rejected",
+                "cancelled"
+              ],
+              "description": "Use approved/rejected for a pending request. A recognized current state, including pending/cancelled, can be sent only as a same-state no-op with a valid ETag; other transitions are rejected."
+            }
+          }
+        },
+        "BatchCreditRequestDecisions": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "requests"
+          ],
+          "properties": {
+            "requests": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 100,
+              "description": "Unique requestId values required; uniqueness is by ID, not whole object. Empty/over-100/duplicate-ID/malformed payloads, including explicit null state, fail the whole action before processing.",
+              "items": {
+                "$ref": "#/definitions/CreditRequestUpdateItem"
+              }
+            }
+          }
+        },
+        "CreditRequestUpdateItem": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "requestId",
+            "state",
+            "etag"
+          ],
+          "properties": {
+            "requestId": {
+              "type": "string",
+              "description": "Credit request identifier. Each ID must be unique within the batch."
+            },
+            "state": {
+              "type": "string",
+              "enum": [
+                "pending",
+                "approved",
+                "rejected",
+                "cancelled"
+              ],
+              "description": "Use approved/rejected for pending requests; recognized same-state no-ops still require a fresh ETag."
+            },
+            "etag": {
+              "type": "string",
+              "pattern": "^\"[^\"\\r\\n]*\"(?![\\s\\S])",
+              "description": "Current quoted strong request ETag, not a weak or wildcard token. Missing/malformed/stale tokens produce a per-item preconditionFailed result."
+            }
+          }
+        },
+        "CreditRequestUpdateResponse": {
+          "type": "object",
+          "properties": {
+            "succeededCount": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "failedCount": {
+              "type": "integer",
+              "format": "int32",
+              "description": "Count of all results other than succeeded; HTTP 200 does not mean every item succeeded."
+            },
+            "responses": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/CreditRequestUpdateResponseItem"
+              },
+              "description": "Results in input order; not atomic. Reread/review unresolved decisions before resubmitting."
+            }
+          }
+        },
+        "CreditRequestUpdateResponseItem": {
+          "type": "object",
+          "properties": {
+            "requestId": {
+              "type": "string",
+              "description": "Target ID; an omitted input ID is represented by the all-zero GUID."
+            },
+            "status": {
+              "type": "string",
+              "description": "succeeded, notFound, preconditionFailed, invalidStateTransition, failed, unknownFutureValue. Unknown statuses are not success."
+            },
+            "etag": {
+              "type": "string",
+              "description": "Updated strong token, present only for succeeded items."
+            },
+            "message": {
+              "type": "string",
+              "description": "Optional failure explanation."
+            }
+          }
+        },
+        "CreditRequestCollection": {
+          "type": "object",
+          "properties": {
+            "@odata.context": {
+              "type": "string"
+            },
+            "@odata.nextLink": {
+              "type": "string"
+            },
+            "@odata.count": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "value": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/CreditRequest"
+              }
+            }
+          }
+        },
+        "UserUsageRecord": {
+          "type": "object",
+          "description": "Processed billable consumption for one completed UTC day, distinct from raw user detail. No daily freshness field is documented.",
+          "properties": {
+            "userId": {
+              "type": "string"
+            },
+            "consumedQuantity": {
+              "type": "number",
+              "format": "double"
+            },
+            "unit": {
+              "type": "string",
+              "description": "copilotCredit; preserve unknown future units rather than convert to currency."
+            },
+            "sessionCount": {
+              "type": "integer",
+              "format": "int64",
+              "description": "Distinct non-null billable session identifiers subject to source filters/processing watermarks; need not equal raw detail sessionCount."
+            }
+          }
+        },
+        "GroupUsageRecord": {
+          "type": "object",
+          "description": "Processed billable consumption attributed to members of a security group. Not a balance, allocation, cost-center hierarchy or chargeback position.",
+          "properties": {
+            "groupId": {
+              "type": "string"
+            },
+            "consumedQuantity": {
+              "type": "number",
+              "format": "double"
+            },
+            "unit": {
+              "type": "string",
+              "description": "copilotCredit or a future unit."
+            },
+            "sessionCount": {
+              "type": "integer",
+              "format": "int64",
+              "description": "Distinct non-null billable sessions attributed to the group, subject to source filters/processing watermarks."
+            }
+          }
+        },
+        "ServiceUsageRecord": {
+          "type": "object",
+          "description": "Tenant-wide processed consumption for a governed service category and one completed UTC day. No sessionCount or separate id is documented.",
+          "properties": {
+            "serviceId": {
+              "type": "string",
+              "description": "Governed service category, not catalog entry or agent ID."
+            },
+            "consumedQuantity": {
+              "type": "number",
+              "format": "double"
+            },
+            "unit": {
+              "type": "string",
+              "description": "copilotCredit or a future unit."
+            }
+          }
+        },
+        "UsageDataStatus": {
+          "type": "object",
+          "x-nullable": true,
+          "description": "Null when raw source has no as-of timestamp; not the request time, an error, a completeness guarantee or evidence of month closure.",
+          "properties": {
+            "latestSourceDateTime": {
+              "type": "string",
+              "format": "date-time",
+              "description": "Snapshot sync time for funding reports; source enqueue watermark for raw detail. Later reads can include more rows or a later watermark."
+            }
+          }
+        },
+        "FundingUsageRecord": {
+          "type": "object",
+          "description": "Consumption attributed to a funding class for a calendar month, not rated currency amounts.",
+          "properties": {
+            "id": {
+              "type": "string",
+              "description": "Equals fundingClass."
+            },
+            "fundingClass": {
+              "type": "string",
+              "description": "prepaid, payAsYouGo, overage, nonBillable, unknownFutureValue. overage is unbilled consumption, not an invoiced excess charge. Distinct from billing-method enums."
+            },
+            "consumedQuantity": {
+              "type": "number",
+              "format": "double"
+            },
+            "unit": {
+              "type": "string",
+              "description": "copilotCredit or a future unit."
+            },
+            "dataStatus": {
+              "$ref": "#/definitions/UsageDataStatus"
+            }
+          }
+        },
+        "UserUsageDetail": {
+          "type": "object",
+          "description": "One user's raw billable-flagged usage in the requested timestamp window, bounded to the processed watermark. Distinct from processed daily rankings.",
+          "properties": {
+            "@odata.context": {
+              "type": "string"
+            },
+            "userId": {
+              "type": "string"
+            },
+            "consumedQuantity": {
+              "type": "number",
+              "format": "double"
+            },
+            "unit": {
+              "type": "string",
+              "description": "copilotCredit or a future unit."
+            },
+            "sessionCount": {
+              "type": "integer",
+              "format": "int64",
+              "description": "Billable-flagged activity sessions contributing to quantity; excludes non-billable activity and need not equal daily report counts."
+            },
+            "dataStatus": {
+              "$ref": "#/definitions/UsageDataStatus"
+            },
+            "services": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/UserUsageServiceDetail"
+              },
+              "description": "Complete unpaged breakdown when expanded; independently rounded child rows need not sum to parent."
+            },
+            "sessions": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/UserUsageSessionDetail"
+              },
+              "description": "Expanded session rows can be paged and need not sum to parent."
+            },
+            "sessions@odata.nextLink": {
+              "type": "string",
+              "description": "Nested session continuation URL; preserve unchanged."
+            }
+          }
+        },
+        "UserUsageServiceDetail": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "description": "Governed service-category key, named id here rather than serviceId."
+            },
+            "consumedQuantity": {
+              "type": "number",
+              "format": "double",
+              "description": "Independently rounded raw billable-flagged usage; child quantities need not sum to parent."
+            },
+            "unit": {
+              "type": "string",
+              "description": "copilotCredit or a future unit."
+            }
+          }
+        },
+        "UserUsageSessionDetail": {
+          "type": "object",
+          "description": "Native-source session grouping. Activity without session identifiers can be omitted. Not an agent record; no single-session GET.",
+          "properties": {
+            "id": {
+              "type": "string",
+              "description": "Opaque row ID scoped to user/detail window; stable for repeated identical requests, not a global persistent session ID."
+            },
+            "sourceSessionId": {
+              "type": "string",
+              "x-nullable": true,
+              "description": "Native source identifier preserved verbatim, including null; distinct from id."
+            },
+            "consumedQuantity": {
+              "type": "number",
+              "format": "double",
+              "description": "Raw billable-flagged session quantity; rows need not sum to parent."
+            },
+            "unit": {
+              "type": "string",
+              "description": "copilotCredit or a future unit."
+            },
+            "firstActivityDateTime": {
+              "type": "string",
+              "format": "date-time",
+              "x-nullable": true
+            },
+            "lastActivityDateTime": {
+              "type": "string",
+              "format": "date-time",
+              "x-nullable": true
+            }
+          }
+        },
+        "UserUsageRecordCollection": {
+          "type": "object",
+          "properties": {
+            "@odata.context": {
+              "type": "string"
+            },
+            "@odata.nextLink": {
+              "type": "string"
+            },
+            "@odata.count": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "value": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/UserUsageRecord"
+              }
+            }
+          }
+        },
+        "GroupUsageRecordCollection": {
+          "type": "object",
+          "properties": {
+            "@odata.context": {
+              "type": "string"
+            },
+            "@odata.nextLink": {
+              "type": "string"
+            },
+            "@odata.count": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "value": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/GroupUsageRecord"
+              }
+            }
+          }
+        },
+        "ServiceUsageRecordCollection": {
+          "type": "object",
+          "properties": {
+            "@odata.context": {
+              "type": "string"
+            },
+            "@odata.nextLink": {
+              "type": "string"
+            },
+            "@odata.count": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "value": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/ServiceUsageRecord"
+              }
+            }
+          }
+        },
+        "FundingUsageRecordCollection": {
+          "type": "object",
+          "properties": {
+            "@odata.context": {
+              "type": "string"
+            },
+            "@odata.count": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "value": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/FundingUsageRecord"
+              }
+            }
+          }
+        },
+        "UserUsageServiceDetailCollection": {
+          "type": "object",
+          "properties": {
+            "@odata.context": {
+              "type": "string"
+            },
+            "value": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/UserUsageServiceDetail"
+              }
+            }
+          }
+        },
+        "UserUsageSessionDetailCollection": {
+          "type": "object",
+          "properties": {
+            "@odata.context": {
+              "type": "string"
+            },
+            "@odata.nextLink": {
+              "type": "string"
+            },
+            "value": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/UserUsageSessionDetail"
+              }
+            }
+          }
+        },
         "GraphErrorEnvelope": {
           "type": "object",
           "properties": {
@@ -1957,7 +3225,7 @@
       }
     },
     "capabilities": [],
-    "description": "Microsoft Graph beta Copilot Cost Management: credit balances, spending policies, group assignments, service settings, notify-only alerts and user diagnostics. Beta APIs are not supported for production. Delegated work/school sign-in only. Existing-policy mutations require the current parent policy ETag. No currency costs, historical reporting or per-agent attribution.",
+    "description": "Microsoft Graph beta Copilot Cost Management: credit balances, policies, credit requests and usage reports. Delegated sign-in only. Beta APIs are not supported for production.",
     "policyTemplateInstances": [],
     "tier": "Standard",
     "publisher": "Rafael Lopez Alcaraz",

@@ -10,7 +10,7 @@ import { invalidateInventoryCache } from "../../data/inventory";
 
 export type Result<T> = { ok: true; data: T; raw: unknown } | { ok: false; error: string; raw?: unknown };
 
-async function call<T>(run: () => Promise<IOperationResult<T>>, expectBody = false): Promise<Result<T>> {
+export async function call<T>(run: () => Promise<IOperationResult<T>>, expectBody = false): Promise<Result<T>> {
   try {
     const raw = await run();
     if (!raw.success) return { ok: false, error: formatApiError(raw.error), raw };

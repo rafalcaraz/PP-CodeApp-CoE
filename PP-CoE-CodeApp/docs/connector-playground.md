@@ -85,10 +85,25 @@ reporting and management; this page remains an explicitly executed API playgroun
 
 The catalog comes from the registered `.power/schemas/` Swagger, resolves
 reusable parameter references, and checks app operation registration. It covers
-24 actions: all 22 documented operations and both read-only `$ref` list variants.
+38 actions: all 36 documented operations and both read-only `$ref` list variants.
 Every action has an explicit, typed generated-service dispatch; missing
 registration/dispatch is shown as unavailable rather than bypassed with a raw
 SDK/HTTP call. Power Apps supplies `connectionId` and authorization.
+
+The [standalone connector definition](../../connectors/CostControlsCustomConnector/README.md),
+registered catalog and regenerated SDK now include Wave 2's 14 additional
+usage-report/credit-request operations. All have direct typed dispatches. A
+registration refresh is not proof of permission consent or runtime access.
+The checked-in registration's OAuth scope metadata still advertises the earlier
+four grants; the broad Read.All grant covers usage reporting, but credit requests
+need CreditReq.Read.All/ReadWrite.All and decisions require the latter. Verify the
+actual connection scope and consent privately if these operations return 403;
+the application does not modify authentication settings.
+
+Complete multi-page reporting still requires verified connector-native nextLink
+replay. The refreshed SDK preserves nextLink but has no continuation method.
+First-page rankings and request queues are explicitly labeled, not presented as
+exhaustive tenant data.
 
 Category, name/route search and read-only filters do not execute requests.
 Request inputs reuse `SchemaField`; previews show the Graph URL, query, headers
@@ -97,8 +112,13 @@ and JSON body passed to the connector. Optional blank fields are omitted;
 a required parent `If-Match` header, including service creation, alert creation
 and reference edits. Policy creation itself has no `If-Match`. Copy the current
 parent ETag verbatim, not a child ETag or `*`; the page never fetches a token
-automatically. Request/schema checks include limited/unlimited quantities and
-percentage/absolute threshold rules. The service still validates supported
+automatically. Request/schema checks include limited/unlimited quantities,
+percentage/absolute threshold rules, completed UTC days, calendar months, exact
+seven-digit UTC raw windows, request strong ETags and unique 1-100-item batches.
+Credit-request decisions use request-specific strong ETags, not weak parent
+policy tokens; the batch action has no If-Match header. HTTP 200 can contain
+failed decisions: partial results are not displayed as an all-green success,
+and per-item raw results remain available. The service still validates supported
 query expressions, directory references, policy-unit matches and other
 tenant-dependent rules.
 
@@ -113,7 +133,7 @@ match navigation and wrapping; inputs/results are kept only in page memory.
 **Graph beta is unsupported for production.** List actions return one page;
 inspect `@odata.nextLink` rather than treating it as the full dataset. There is
 no opaque-URL continuation action in the registered SDK. These APIs expose credit
-snapshots/governance, not rated currency, history or per-agent costs.
+snapshots, historical usage and governance, not rated currency or per-agent costs.
 
 The generated SDK types `CreateSpendingPolicy` and `CreateServiceSetting`
 responses as `void` despite documented HTTP 201 bodies; the page discloses this
@@ -128,21 +148,38 @@ documents consent, runtime-role gaps and API contract caveats.
 ## Dedicated Cost Controls
 
 Open **Cost Controls** > **Credit reporting** (`#/cost-controls/reporting`) or
-**Policy management** (`#/cost-controls/management`). Both use the registered
+**Policies & requests** (`#/cost-controls/management`). Both use the registered
 `CostControsl_CustomConnService` directly, with no passthrough flow or raw HTTP
 client. The playground remains available independently.
 
-Reporting reads the tenant credit snapshot on entry and explicit refresh.
-Consumed and remaining credits are charted per billing method, with exact values,
+Reporting opens on **Usage**, which loads only after choosing a completed UTC day
+and submitting it. Services, Users and Groups show the returned top-100 ranking
+with a first-ten-row chart and accessible table; counts, loaded rows and nextLink
+warnings remain distinct, with no inferred tenant total. A user row can seed a
+matching raw user/window investigation; it does not automatically execute it.
+**Funding by month** is a separate unpaged report with per-class quantities and
+source watermarks. Overage means unbilled consumption, not invoiced spend.
+
+**User investigation** independently displays raw parent, service and session
+results, including partial child failures. Window row IDs and nullable native
+session IDs are distinct; omitted activity and independent rounding mean child
+rows need not reconcile to parents or daily rankings. **Current balances** reads
+the tenant snapshot when opened and on explicit refresh. Consumed and remaining
+credits are charted per billing method, with exact values,
 units and source freshness in an accessible table. Missing quantities are not
 zero, and remaining credits are never inferred by subtraction. Known-user
 diagnostics run only after submitting an Entra object ID: current-month service
 consumption, configured limits, effective capacity, selected policy and access
 decisions are shown alongside partial-evaluation and continuation notices.
-Reporting has no mutations, user-directory scan, stored history or currency,
-per-agent or per-environment attribution.
+New historical reports preserve the last successful selection after refresh
+failure, label its original period, and ignore superseded or unmounted requests.
+Reporting has no mutations, user-directory scan, locally collected history,
+currency, per-agent or per-environment attribution. MAC/Graph coverage is explicit;
+PPAC-managed Copilot Studio consumption remains a separate source, never added
+to these reports. Missing or unavailable sources are not reported as zero.
 
-Management reads the policy list on entry. Select a policy or open a known ID
+Management separates **Policies** and **Credit requests**. Policies reads its list
+on entry. Select a policy or open a known ID
 to inspect its limits, group audience, service categories and notifications.
 Guided forms support creating/deleting policies, editing limits and funding,
 adding/removing group references, adding or enabling/excluding services, and
@@ -167,6 +204,15 @@ success or failure. Failed/timed-out writes are not retried automatically; refre
 and re-review before trying again. Missing read bodies and Graph error payloads
 are surfaced as errors, not empty successful results. State and raw diagnostics
 remain in page memory only.
+
+Credit requests default to pending, with state/service filters and known-ID
+lookup. Only pending rows can be selected (up to 100). Review rereads each target,
+requires its body strong ETag and names the intended decision; explicit typed
+confirmation precedes another fresh token/state check and exactly one batch
+write. Unknown or changed states, missing/weak tokens and stale reviewed tokens
+block the change. Approval does not allocate credits. Batch outcomes are shown
+per item and partial HTTP-200 results are not all-green; failed items need a new
+read/review, not an automatic replay of successful decisions.
 
 Graph beta, delegated-consent/runtime-role requirements, one-page collections,
 and the SDK's void creation responses/header limitations still apply. Creation

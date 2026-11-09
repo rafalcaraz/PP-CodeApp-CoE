@@ -1,10 +1,11 @@
 import { CostControsl_CustomConnService as service } from "../../generated/services/CostControsl_CustomConnService";
 import type {
   CreateServiceSetting, CreateSpendingPolicy, GroupReference, UpdateAlertSetting,
-  UpdateServiceSetting, UpdateSpendingPolicy, UserReference,
+  UpdateServiceSetting, UpdateSpendingPolicy, UserReference, UpdateCreditRequest, BatchCreditRequestDecisions,
 } from "../../generated/models/CostControsl_CustomConnModel";
 import { invalidateInventoryCache } from "../../data/inventory";
-import { formatApiError } from "../../shared/api-explorer/schema";
+import { formatApiError, isJsonObject } from "../../shared/api-explorer/schema";
+import { validateBatchResponse } from "../../shared/cost-controls/wave2";
 import { costActions, schemaTools, validateParameters, type CostRequest } from "./catalog";
 
 type Parameters = Record<string, unknown>;
@@ -67,6 +68,20 @@ export const costDispatch = {
   GetUserBalance: (p: Parameters) => service.GetUserBalance(text(p, "userId"), optionalText(p, "$select"), expand(p)),
   ListUserServiceBalances: (p: Parameters) => service.ListUserServiceBalances(text(p, "userId"), optionalText(p, "$select"), top(p), count(p), optionalText(p, "$filter"), optionalText(p, "$orderby")),
   GetUserServiceBalance: (p: Parameters) => service.GetUserServiceBalance(text(p, "userId"), text(p, "serviceId"), optionalText(p, "$select")),
+  ListCreditRequests: (p: Parameters) => service.ListCreditRequests(optionalText(p, "$select"), count(p), top(p), optionalText(p, "$filter")),
+  GetCreditRequest: (p: Parameters) => service.GetCreditRequest(text(p, "id"), optionalText(p, "$select")),
+  UpdateCreditRequest: (p: Parameters) => service.UpdateCreditRequest(text(p, "id"), text(p, "If-Match"), body<UpdateCreditRequest>(p, "UpdateCreditRequest")),
+  BatchRecordCreditRequestDecisions: (p: Parameters) => service.BatchRecordCreditRequestDecisions(body<BatchCreditRequestDecisions>(p, "BatchCreditRequestDecisions")),
+  ListUserUsageRecords: (p: Parameters) => service.ListUserUsageRecords(text(p, "startDate"), text(p, "endDate"), optionalText(p, "$select"), count(p), top(p), optionalText(p, "$orderby"), optionalText(p, "$filter")),
+  GetUserUsageRecord: (p: Parameters) => service.GetUserUsageRecord(text(p, "userId"), text(p, "startDate"), text(p, "endDate"), optionalText(p, "$select")),
+  ListGroupUsageRecords: (p: Parameters) => service.ListGroupUsageRecords(text(p, "startDate"), text(p, "endDate"), optionalText(p, "$select"), count(p), top(p), optionalText(p, "$orderby"), optionalText(p, "$filter")),
+  GetGroupUsageRecord: (p: Parameters) => service.GetGroupUsageRecord(text(p, "groupId"), text(p, "startDate"), text(p, "endDate"), optionalText(p, "$select")),
+  ListServiceUsageRecords: (p: Parameters) => service.ListServiceUsageRecords(text(p, "startDate"), text(p, "endDate"), optionalText(p, "$select"), count(p), top(p), optionalText(p, "$orderby"), optionalText(p, "$filter")),
+  GetServiceUsageRecord: (p: Parameters) => service.GetServiceUsageRecord(text(p, "serviceId"), text(p, "startDate"), text(p, "endDate"), optionalText(p, "$select")),
+  ListFundingUsageRecords: (p: Parameters) => service.ListFundingUsageRecords(text(p, "month"), optionalText(p, "$select"), count(p), optionalText(p, "$orderby")),
+  GetUserUsageDetail: (p: Parameters) => service.GetUserUsageDetail(text(p, "userId"), text(p, "startDateTime"), text(p, "endDateTime"), optionalText(p, "$select"), optionalText(p, "$expand")),
+  ListUserUsageServiceDetails: (p: Parameters) => service.ListUserUsageServiceDetails(text(p, "userId"), text(p, "startDateTime"), text(p, "endDateTime"), optionalText(p, "$select")),
+  ListUserUsageSessionDetails: (p: Parameters) => service.ListUserUsageSessionDetails(text(p, "userId"), text(p, "startDateTime"), text(p, "endDateTime"), optionalText(p, "$select"), top(p)),
 };
 
 function hasDispatch(id: string): id is keyof typeof costDispatch {
@@ -81,7 +96,7 @@ export function unsupportedReason(id: string): string | undefined {
 
 export type CostResult =
   | { ok: true; data: unknown }
-  | { ok: false; error: string; data?: unknown };
+  | { ok: false; error: string; data?: unknown; partial?: boolean };
 
 export async function executeCostRequest(request: CostRequest, confirmedWrite = false): Promise<CostResult> {
   const action = costActions.find((entry) => entry.id === request.actionId);
@@ -94,6 +109,18 @@ export async function executeCostRequest(request: CostRequest, confirmedWrite = 
     attemptedWrite = !action.readOnly;
     const result = await costDispatch[request.actionId](request.parameters);
     if (!result.success) return { ok: false, error: formatApiError(result.error), data: result };
+    if (typeof result.data === "object" && result.data !== null && "error" in result.data) {
+      return { ok: false, error: formatApiError(result.data.error), data: result };
+    }
+    if (request.actionId === "BatchRecordCreditRequestDecisions") {
+      if (!isJsonObject(result.data)) return { ok: false, error: "The batch response body is unavailable; reread affected requests before any new review. Do not replay the batch.", data: result };
+      try { validateBatchResponse(result.data, body<BatchCreditRequestDecisions>(request.parameters, "BatchCreditRequestDecisions").requests); }
+      catch (cause) { return { ok: false, error: formatApiError(cause), data: result }; }
+      if (result.data.failedCount !== 0) return {
+        ok: false, partial: typeof result.data.succeededCount === "number" && result.data.succeededCount > 0,
+        error: "Batch decisions were not all confirmed successful. Inspect per-item results, reread unresolved requests and review again; do not replay the full batch.", data: result,
+      };
+    }
     return { ok: true, data: result };
   } catch (error) {
     return { ok: false, error: formatApiError(error), data: error };
