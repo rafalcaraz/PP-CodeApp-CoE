@@ -22,6 +22,21 @@ beforeEach(() => {
   vi.restoreAllMocks();
 });
 describe("ResourceTable interactions", () => {
+  it("uses the chosen numeric type for a custom column", () => {
+    render(table());
+    fireEvent.click(screen.getByText("Columns", { selector: "button" }));
+    fireEvent.click(screen.getByText("Add custom column"));
+    fireEvent.change(screen.getByLabelText("Custom property path"), { target: { value: "count" } });
+    fireEvent.change(screen.getByLabelText("Custom column title"), { target: { value: "Custom count" } });
+    fireEvent.click(screen.getByLabelText("Custom column value type"));
+    fireEvent.click(screen.getByText("Number", { exact: true }));
+    fireEvent.click(screen.getByText("Add column", { selector: "button" }));
+    fireEvent.click(screen.getByText("Done"));
+    fireEvent.click(screen.getByLabelText("Custom count column options"));
+    fireEvent.click(screen.getByText("Sort ascending"));
+    expect(screen.getAllByRole("row", { hidden: true })[1]).toHaveTextContent("Alpha");
+    expect(JSON.parse(localStorage.getItem("test-view")!).customColumns[0].kind).toBe("number");
+  });
   it("adds a custom raw property, filters it, restores its definition, and edits/removes it", async () => {
     const items = rows.map((row, index) => retainSourceRecord({ ...row }, { properties: { logicalName: index === 0 ? "fixture_alpha" : "fixture_beta" } }));
     const result = render(table(items));

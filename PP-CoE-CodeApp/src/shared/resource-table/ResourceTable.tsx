@@ -203,7 +203,7 @@ export function ResourceTable<T>(props: ResourceTableProps<T>) {
               onChange={(_e, data) => setCustomEditor({ ...customEditor, label: data.value })} />
           </Field>
           <Field label="Value type" hint="Controls sorting and filtering. Changing type clears this column's filter.">
-            <Dropdown aria-label="Custom column value type" value={kindLabels[customEditor.kind]}
+            <Dropdown inlinePopup aria-label="Custom column value type" value={kindLabels[customEditor.kind]}
               selectedOptions={[customEditor.kind]} onOptionSelect={(_e, data) => {
                 const kind = (["string", "number", "boolean", "date", "category"] as const).find((value) => value === data.optionValue);
                 if (kind) setCustomEditor({ ...customEditor, kind });
