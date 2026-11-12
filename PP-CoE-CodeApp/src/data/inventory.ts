@@ -8,6 +8,7 @@
  */
 
 import { PowerPlatformforAdminsV2Service } from "../generated";
+import { retainSourceRecord } from "../shared/record-properties";
 import {
   extractConnectorOperationEvidence,
   readConnectorEvidenceSource,
@@ -1264,7 +1265,7 @@ export async function getEnvironment(
 }
 
 export function toEnvironmentGroupRow(item: ResourceItem): EnvironmentGroupRow {
-  return {
+  return retainSourceRecord({
     id: item.name ?? "",
     displayName: propStr(item, "displayName"),
     description: propStr(item, "description"),
@@ -1272,12 +1273,12 @@ export function toEnvironmentGroupRow(item: ResourceItem): EnvironmentGroupRow {
     createdBy: propStr(item, "createdBy"),
     lastModifiedAt: propStr(item, "lastModifiedAt"),
     location: item.location ?? "",
-  };
+  }, item);
 }
 
 export function toEnvironmentRow(item: ResourceItem): EnvironmentRow {
   const raw = item as unknown as Record<string, unknown>;
-  return {
+  return retainSourceRecord({
     id: item.name ?? "",
     displayName: propStr(item, "displayName"),
     environmentType: propStr(item, "environmentType"),
@@ -1289,7 +1290,7 @@ export function toEnvironmentRow(item: ResourceItem): EnvironmentRow {
     environmentGroupId: propStr(item, "environmentGroupId"),
     environmentGroup: propStr(item, "environmentGroup"),
     tenantId: (raw.tenantId as string) ?? "",
-  };
+  }, item);
 }
 
 // ---------------------------------------------------------------------------
@@ -1844,7 +1845,7 @@ export function shortResourceType(type: string, subType?: string): string {
 
 export function toAppRow(item: ResourceItem): AppRow {
   const raw = item as unknown as Record<string, unknown>;
-  return {
+  return retainSourceRecord({
     id: item.name ?? "",
     type: item.type ?? "",
     displayName: propStr(item, "displayName"),
@@ -1870,7 +1871,7 @@ export function toAppRow(item: ResourceItem): AppRow {
     logicalName: propStr(item, "logicalName"),
     appModuleId: propStr(item, "appModuleId"),
     connectors: readConnectors(item),
-  };
+  }, item);
 }
 
 export function toFlowRow(item: ResourceItem): FlowRow {
@@ -1911,7 +1912,7 @@ export function toFlowRow(item: ResourceItem): FlowRow {
   // `state` / `flowState` are older or alternate names — kept as fallback.
   const status =
     propStr(item, "status") || propStr(item, "state") || propStr(item, "flowState");
-  return {
+  return retainSourceRecord({
     id: item.name ?? "",
     type: item.type ?? "",
     displayName: propStr(item, "displayName"),
@@ -1932,12 +1933,12 @@ export function toFlowRow(item: ResourceItem): FlowRow {
     trigger,
     workflowEntityId: propStr(item, "workflowEntityId"),
     connectors: readConnectors(item),
-  };
+  }, item);
 }
 
 export function toAgentRow(item: ResourceItem): AgentRow {
   const raw = item as unknown as Record<string, unknown>;
-  return {
+  return retainSourceRecord({
     id: item.name ?? "",
     type: item.type ?? "",
     displayName: propStr(item, "displayName"),
@@ -1991,7 +1992,7 @@ export function toAgentRow(item: ResourceItem): AgentRow {
     ),
     distinctFlows: propNestedNum(item, "capabilitiesCounts", "distinctFlows"),
     connectors: readConnectors(item),
-  };
+  }, item);
 }
 
 /** Build common where/orderBy clauses for a resource listing.

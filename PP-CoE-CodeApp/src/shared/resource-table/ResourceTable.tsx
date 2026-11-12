@@ -7,7 +7,7 @@ import {
 } from "@fluentui/react-components";
 import {
   allowedOperators, applyView, defaultView, validFilter, valueText, viewCsv,
-  type ColumnFilter, type FilterOperator, type TableView, type ViewColumn,
+  type ColumnFilter, type ColumnKind, type CustomColumnDefinition, type FilterOperator, type TableView, type ViewColumn,
 } from "./model";
 import { useTableView, type ViewPersistence } from "./useTableView";
 import { ChevronDownRegular } from "@fluentui/react-icons";
@@ -31,6 +31,9 @@ const operatorLabels: Record<FilterOperator, string> = {
   contains: "Contains", equals: "Equals", gt: "Greater than", lt: "Less than",
   from: "On or after (UTC)", through: "On or before (UTC)", in: "Any selected value",
   empty: "Is empty / not reported", notEmpty: "Is not empty",
+};
+const kindLabels: Record<ColumnKind, string> = {
+  string: "Text / JSON", number: "Number", boolean: "Boolean", date: "Date (UTC)", category: "Choice values",
 };
 function Header<T>({ column, rows, view, change }: {
   column: ViewColumn<T>; rows: T[]; view: TableView; change: (view: TableView) => void;
@@ -102,16 +105,19 @@ export interface ResourceTableProps<T> {
   pageSize?: number;
   pageResetKey?: string;
   exportDisabled?: boolean;
+  getCustomValue?: (row: T, path: string) => unknown;
 }
 export function ResourceTable<T>(props: ResourceTableProps<T>) {
-  const { columns, rows, label, pageSize } = props;
-  const { view, change, error } = useTableView(columns, props.persistence);
+  const { columns: baseColumns, rows, label, pageSize } = props;
+  const { view, change, error, columns } = useTableView(baseColumns, props.persistence, props.getCustomValue);
   const styles = useStyles();
   const [picker, setPicker] = useState(false);
   const [search, setSearch] = useState("");
   const [page, setPage] = useState({ index: 0, reset: props.pageResetKey });
   const [exportError, setExportError] = useState("");
   const [resize, setResize] = useState<{ id: string; x: number; width: number }>();
+  const [customEditor, setCustomEditor] = useState<{ id?: string; path: string; label: string; kind: ColumnKind }>();
+  const [customError, setCustomError] = useState("");
   const filtered = useMemo(() => applyView(rows, columns, { filters: view.filters, sort: view.sort }), [rows, columns, view.filters, view.sort]);
   const visible = view.columns.map((id) => columns.find((c) => c.id === id)).filter((c): c is ViewColumn<T> => !!c);
   const setPageIndex = (index: number) => setPage({ index, reset: props.pageResetKey });
@@ -134,6 +140,41 @@ export function ResourceTable<T>(props: ResourceTableProps<T>) {
     [order[index], order[target]] = [order[target], order[index]];
     update({ ...view, columns: order });
   };
+  const saveCustomColumn = () => {
+    if (!customEditor) return;
+    const path = customEditor.path.trim();
+    if (!path || path.split(".").some((part) => !part)) {
+      setCustomError("Enter a dot-separated property path, such as properties.logicalName.");
+      return;
+    }
+    if (view.customColumns?.some((column) => column.path === path && column.id !== customEditor.id)) {
+      setCustomError("This property already has a custom column. Edit that column instead.");
+      return;
+    }
+    const definition: CustomColumnDefinition = {
+      id: customEditor.id ?? `custom:${crypto.randomUUID()}`, path,
+      label: customEditor.label.trim() || path, kind: customEditor.kind,
+    };
+    const previous = view.customColumns?.find((column) => column.id === definition.id);
+    const filters = previous && previous.kind !== definition.kind
+      ? Object.fromEntries(Object.entries(view.filters).filter(([id]) => id !== definition.id)) : view.filters;
+    update({
+      ...view, filters,
+      customColumns: [...(view.customColumns ?? []).filter((column) => column.id !== definition.id), definition],
+      columns: view.columns.includes(definition.id) ? view.columns : [...view.columns, definition.id],
+    });
+    setCustomEditor(undefined); setCustomError(""); setSearch("");
+  };
+  const removeCustomColumn = (id: string) => {
+    update({
+      ...view, customColumns: view.customColumns?.filter((column) => column.id !== id),
+      columns: view.columns.filter((columnId) => columnId !== id),
+      widths: Object.fromEntries(Object.entries(view.widths).filter(([columnId]) => columnId !== id)),
+      filters: Object.fromEntries(Object.entries(view.filters).filter(([columnId]) => columnId !== id)),
+      sort: view.sort?.id === id ? undefined : view.sort,
+    });
+    if (customEditor?.id === id) setCustomEditor(undefined);
+  };
   const exportView = () => {
     try {
       const blob = new Blob(["\uFEFF", viewCsv(filtered, columns, view)], { type: "text/csv;charset=utf-8;" });
@@ -151,6 +192,33 @@ export function ResourceTable<T>(props: ResourceTableProps<T>) {
     <DialogSurface><DialogBody><DialogTitle>Columns</DialogTitle><DialogContent>
       <div className={styles.controls}>
         <Input aria-label="Search columns" value={search} placeholder="Search columns" onChange={(_e, data) => setSearch(data.value)} />
+        <Button onClick={() => { setCustomEditor({ path: "", label: "", kind: "string" }); setCustomError(""); }}>Add custom column</Button>
+        {customEditor && <div className={styles.controls}>
+          <Field label="Property path" hint="Use a returned property, for example properties.logicalName or properties.connectors.0.connectorId.">
+            <Input aria-label="Custom property path" value={customEditor.path} disabled={!!customEditor.id}
+              onChange={(_e, data) => setCustomEditor({ ...customEditor, path: data.value })} />
+          </Field>
+          <Field label="Column title" hint="Optional; defaults to the property path.">
+            <Input aria-label="Custom column title" value={customEditor.label}
+              onChange={(_e, data) => setCustomEditor({ ...customEditor, label: data.value })} />
+          </Field>
+          <Field label="Value type" hint="Controls sorting and filtering. Changing type clears this column's filter.">
+            <Dropdown aria-label="Custom column value type" value={kindLabels[customEditor.kind]}
+              selectedOptions={[customEditor.kind]} onOptionSelect={(_e, data) => {
+                const kind = (["string", "number", "boolean", "date", "category"] as const).find((value) => value === data.optionValue);
+                if (kind) setCustomEditor({ ...customEditor, kind });
+              }}>
+              <Option value="string">Text / JSON</Option><Option value="number">Number</Option>
+              <Option value="boolean">Boolean</Option><Option value="date">Date (UTC)</Option><Option value="category">Choice values</Option>
+            </Dropdown>
+          </Field>
+          <Text size={200}>Reads loaded source records only; missing properties stay Not reported. Reset view removes custom columns.</Text>
+          {customError && <Text role="alert">{customError}</Text>}
+          <div className={styles.toolbar}>
+            <Button appearance="primary" onClick={saveCustomColumn}>{customEditor.id ? "Save custom column" : "Add column"}</Button>
+            <Button onClick={() => { setCustomEditor(undefined); setCustomError(""); }}>Cancel custom column</Button>
+          </div>
+        </div>}
         <div className={styles.choices}>
           {[...visible, ...columns.filter((c) => !view.columns.includes(c.id))].filter((c) => c.label.toLowerCase().includes(search.toLowerCase())).map((column) => {
             const selected = view.columns.includes(column.id);
@@ -169,6 +237,13 @@ export function ResourceTable<T>(props: ResourceTableProps<T>) {
                 <Input className={styles.width} type="number" min={100} max={800} step={20} aria-label={`${column.label} width`} value={String(width(column))}
                   onChange={(_e, data) => { if (data.value && Number.isFinite(Number(data.value))) size(column.id, Number(data.value)); }} />
               </>}
+              {view.customColumns?.some((custom) => custom.id === column.id) && <>
+                <Button size="small" aria-label={`Edit ${column.label}`} onClick={() => {
+                  const definition = view.customColumns?.find((custom) => custom.id === column.id);
+                  if (definition) { setCustomEditor({ ...definition }); setCustomError(""); }
+                }}>Edit</Button>
+                <Button size="small" aria-label={`Remove column ${column.label}`} onClick={() => removeCustomColumn(column.id)}>Remove</Button>
+              </>}
             </div>;
           })}
         </div>
@@ -179,7 +254,7 @@ export function ResourceTable<T>(props: ResourceTableProps<T>) {
     <div className={styles.toolbar}>
       {columnPicker}
       <Button disabled={!Object.keys(view.filters).length} onClick={() => update({ ...view, filters: {} })}>Clear column filters</Button>
-      <Button onClick={() => { setPageIndex(0); change(defaultView(columns), true); }}>Reset view</Button>
+      <Button onClick={() => { setPageIndex(0); change(defaultView(baseColumns), true); }}>Reset view</Button>
       <Button disabled={!filtered.length || props.exportDisabled} onClick={exportView}>Export current view</Button>
       <Text role="status">{filtered.length.toLocaleString()} matching / {rows.length.toLocaleString()} loaded</Text>
     </div>

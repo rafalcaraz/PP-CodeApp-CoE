@@ -12,6 +12,22 @@ separator to resize, or focus it and use the Left/Right arrow keys. At least
 one data column remains visible; inspection and evidence actions remain
 available. Existing links and rich cells keep their normal behavior.
 
+**Add custom column** lets you enter a returned property path such as
+`properties.logicalName`, choose a title, and select its value type for sorting
+and filtering. Leave the title empty to use the path. Custom columns can be
+edited or removed in the chooser and use the same ordering, width, filter,
+and export controls as built-in columns. Paths support nested objects and
+array indexes (`properties.connectors.0.connectorId`); they never evaluate code
+or start extra API calls. Literal returned keys are checked before dotted
+traversal, so projected query aliases containing dots also work.
+
+Inventory lists read these paths from the original returned envelope, not
+only the flattened row model. Queries and deep inventory read their executed
+result/raw source records. A property absent from a loaded record remains
+**Not reported**; adding a column cannot fetch properties an API did not return.
+Cached connector catalog rows lack the original envelope: use **Refresh** to
+load raw properties when the table displays that notice.
+
 Open a column's options to sort ascending/descending or apply a filter.
 Text, numeric, date, boolean, and categorical fields have appropriate
 operators. Date bounds include the selected UTC day. Column filters combine
@@ -24,6 +40,7 @@ Active filters appear above the table and can be removed individually.
 **Clear column filters** preserves the columns and sort; **Reset view**
 restores the original columns, widths, sort, and column filters. Existing
 page search and server/source filters are separate and are not cleared.
+Reset also removes custom column definitions.
 
 ## Loaded rows are not the full inventory
 
@@ -44,6 +61,9 @@ Inventory lists remember configuration per page in this browser.
 Deep-inventory preferences are scoped by source. Queries preferences remain
 per-tab, separate from executed clauses and saved query definitions.
 Preferences do not store fetched records or result caches.
+Custom definitions store only the path, title, type and ordinary view settings.
+Retained raw inventory envelopes stay in memory and do not add fields to
+the existing loaded/all CSV or JSON serialization.
 
 Restored preferences are reconciled against the available columns.
 Unusable preferences and failed storage writes produce a visible warning;

@@ -44,6 +44,17 @@ function renderTable() {
 
 describe("ResultsTable", () => {
   beforeEach(() => localStorage.clear());
+  it("adds a custom path from the raw scan result rather than the normalized cells", () => {
+    renderTable();
+    fireEvent.click(screen.getByText("Columns", { selector: "button" }));
+    fireEvent.click(screen.getByText("Add custom column"));
+    fireEvent.change(screen.getByLabelText("Custom property path"), { target: { value: "components.records.0.name" } });
+    fireEvent.change(screen.getByLabelText("Custom column title"), { target: { value: "First component" } });
+    fireEvent.click(screen.getByText("Add column", { selector: "button" }));
+    fireEvent.click(screen.getByText("Done"));
+    expect(screen.getByText("Recurrence")).toBeInTheDocument();
+    expect(screen.getByLabelText("First component column options")).toBeInTheDocument();
+  });
   it("routes Copilot Studio matches to the agent detail in the correct environment", async () => {
     renderTable();
     await userEvent.click(screen.getByRole("button", { name: "Agent One" }));

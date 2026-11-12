@@ -6,6 +6,7 @@ import { UserChip } from "../../components/UserChip";
 import { DateWithRelative } from "../../components/detail/DateWithRelative";
 import { getFieldSuggestions } from "../../data/inventory.fields";
 import { ResourceTable, type ViewColumn } from "../../shared/resource-table";
+import { readPropertyPath } from "../../shared/record-properties";
 import { cellText, genericResultShape, getPath, resourceIdentity, resultViewKey } from "./workspace";
 import { getQueryResultHref } from "./routeResolver";
 import type { Execution } from "./execution";
@@ -119,6 +120,7 @@ export function QueryResults({ execution, columns, onError, exportDisabled = fal
         render: column.render ? (item: typeof tableRows[number]) => column.render!(item.row) : undefined,
       }))} rows={tableRows} getRowId={(item) => String(item.index)}
       persistence={{ key: viewKey, storage: "session" }} exportDisabled={exportDisabled}
+      getCustomValue={(item, path) => readPropertyPath(item.row, path)}
       scope={execution.complete ? "All results loaded. Sort and column filters apply to loaded rows only." : "Incomplete result. Sort and column filters apply to loaded rows only; use Load more or Load all results to fetch more."} />
     <Dialog open={selected !== undefined} onOpenChange={(_e, d) => { if (!d.open) setSelected(undefined); }}>
       <DialogSurface><DialogBody>

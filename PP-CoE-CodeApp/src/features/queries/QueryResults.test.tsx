@@ -18,6 +18,20 @@ beforeEach(() => {
 });
 afterEach(() => vi.unstubAllGlobals());
 describe("QueryResults presentation", () => {
+  it("reads custom fields from the actual projected result, including nested values", () => {
+    const execution = { ...createExecution("projection", [{ $type: "project" }], 50), rows: [{ Count: 3, details: { logicalName: "fixture_custom" } }], complete: true };
+    render(<FluentProvider theme={webLightTheme}><MemoryRouter>
+      <QueryResults execution={execution} columns={["Count"]} onError={vi.fn()} />
+    </MemoryRouter></FluentProvider>);
+    fireEvent.click(screen.getByText("Columns", { selector: "button" }));
+    fireEvent.click(screen.getByText("Add custom column"));
+    fireEvent.change(screen.getByLabelText("Custom property path"), { target: { value: "details.logicalName" } });
+    fireEvent.change(screen.getByLabelText("Custom column title"), { target: { value: "Custom schema" } });
+    fireEvent.click(screen.getByText("Add column", { selector: "button" }));
+    fireEvent.click(screen.getByText("Done"));
+    expect(screen.getByText("fixture_custom")).toBeInTheDocument();
+    expect(screen.getByLabelText("Custom schema column options")).toBeInTheDocument();
+  });
   it("sorts and filters friendly environment names while exporting original IDs", async () => {
     const user = userEvent.setup();
     const execution = {

@@ -28,6 +28,7 @@ import {
 import { useNavigate } from "react-router-dom";
 import { LoadingPane, ErrorPane } from "../../components/Status";
 import { ResourceTable, fromFluentColumns, type ViewColumn } from "../../shared/resource-table";
+import { hasSourceRecord } from "../../shared/record-properties";
 import { downloadCsv, rowsToCsv } from "../../utils/csv";
 import {
   loadCatalog,
@@ -424,6 +425,9 @@ export function ConnectorsList() {
             getRowId={(row) => row.connectorId} pageSize={PAGE_SIZE}
             persistence={{ key: "ppcoe.table.connectors.v1" }}
             scope={catalog.complete ? "Sort and column filters apply to the entire loaded catalog, before paging." : "Partial catalog: sort and column filters apply to loaded connectors only."} />
+          {allEntries.some((entry) => !hasSourceRecord(entry)) && <Text size={200}>
+            Cached catalog records do not include raw source properties. Refresh the catalog to load fields for custom property columns.
+          </Text>}
         </>
       )}
     </div>

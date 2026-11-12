@@ -22,6 +22,7 @@ import {
   classify,
   loadCatalog,
 } from "./catalog";
+import { readRowProperty } from "../record-properties";
 
 function inventoryConnector(
   connectorId: string,
@@ -70,6 +71,7 @@ describe("connector catalog inventory source", () => {
           inventoryConnector("shared_sql", "Premium", {
             releaseTag: "Preview",
             isDeprecated: true,
+            futureMetadata: { label: "fixture_custom_metadata" },
           }),
         ],
       },
@@ -84,6 +86,8 @@ describe("connector catalog inventory source", () => {
     expect(listConnectorsMock).not.toHaveBeenCalled();
 
     const sql = result.data.entries.get("shared_sql");
+    expect(readRowProperty(sql, "properties.futureMetadata.label")).toBe("fixture_custom_metadata");
+    expect(JSON.stringify(sql)).not.toContain("futureMetadata");
     expect(sql).toMatchObject({
       displayName: "SQL Server",
       description: "Connector description",

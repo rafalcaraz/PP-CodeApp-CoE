@@ -225,6 +225,9 @@ column selection, column ordering/resizing, sorting, and typed column filters.
 These are presentation controls over loaded rows, not query conditions;
 changing them does not mark an execution stale or change saved query clauses.
 Projected/aggregate results offer only fields returned by that execution.
+Use **Add custom column** for a returned dotted property path and your own
+title/type; nested values and literal projected aliases are supported without
+changing the executed query. Missing values remain Not reported.
 **Load all results** explicitly fetches remaining pages without exporting.
 **Export current view** exports matching loaded rows in visible column order;
 the existing loaded/complete/raw export actions retain their original scope.

@@ -19,12 +19,19 @@ export interface ColumnFilter {
   value: string;
   values?: string[];
 }
+export interface CustomColumnDefinition {
+  id: string;
+  path: string;
+  label: string;
+  kind: ColumnKind;
+}
 export interface TableView {
   version: 1;
   columns: string[];
   widths: Record<string, number>;
   filters: Record<string, ColumnFilter>;
   sort?: { id: string; direction: "ascending" | "descending" };
+  customColumns?: CustomColumnDefinition[];
 }
 const operators = new Set(["contains", "equals", "gt", "lt", "from", "through", "in", "empty", "notEmpty"]);
 export function isTableView(value: unknown): value is TableView {
@@ -34,6 +41,19 @@ export function isTableView(value: unknown): value is TableView {
     !v.widths || typeof v.widths !== "object" || Array.isArray(v.widths) ||
     !Object.values(v.widths).every((w) => typeof w === "number" && Number.isFinite(w) && w >= 100 && w <= 800) ||
     !v.filters || typeof v.filters !== "object" || Array.isArray(v.filters)) return false;
+  if (v.customColumns !== undefined) {
+    if (!Array.isArray(v.customColumns) || !v.customColumns.every((column: unknown) => {
+      if (!column || typeof column !== "object") return false;
+      const c = column as Record<string, unknown>;
+      return typeof c.id === "string" && c.id.startsWith("custom:") &&
+        typeof c.path === "string" && !!c.path.trim() && c.path.split(".").every(Boolean) &&
+        typeof c.label === "string" && !!c.label.trim() &&
+        ["string", "number", "boolean", "date", "category"].includes(String(c.kind));
+    })) return false;
+    const definitions = v.customColumns as CustomColumnDefinition[];
+    if (new Set(definitions.map((c) => c.id)).size !== definitions.length ||
+      new Set(definitions.map((c) => c.path)).size !== definitions.length) return false;
+  }
   if (!Object.values(v.filters).every((f: unknown) => {
     if (!f || typeof f !== "object") return false;
     const filter = f as Record<string, unknown>;
@@ -87,6 +107,7 @@ export function reconcileView<T>(view: TableView, columns: ViewColumn<T>[]): Tab
   });
   return {
     version: 1, columns: visible,
+    ...(view.customColumns ? { customColumns: view.customColumns } : {}),
     widths: Object.fromEntries(Object.entries(view.widths).filter(([id]) => ids.has(id))),
     filters: filters.length === Object.keys(view.filters).length ? view.filters : Object.fromEntries(filters),
     sort: columns.some((c) => c.id === view.sort?.id && !c.action) ? view.sort : undefined,

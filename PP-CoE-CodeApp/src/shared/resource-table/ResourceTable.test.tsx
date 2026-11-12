@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { FluentProvider, webLightTheme } from "@fluentui/react-components";
 import { ResourceTable } from "./ResourceTable";
 import type { ViewColumn } from "./model";
+import { retainSourceRecord } from "../record-properties";
 
 interface Row { id: string; name: string; count: number }
 const columns: ViewColumn<Row>[] = [
@@ -21,6 +22,53 @@ beforeEach(() => {
   vi.restoreAllMocks();
 });
 describe("ResourceTable interactions", () => {
+  it("adds a custom raw property, filters it, restores its definition, and edits/removes it", async () => {
+    const items = rows.map((row, index) => retainSourceRecord({ ...row }, { properties: { logicalName: index === 0 ? "fixture_alpha" : "fixture_beta" } }));
+    const result = render(table(items));
+    fireEvent.click(screen.getByText("Columns", { selector: "button" }));
+    fireEvent.click(screen.getByText("Add custom column"));
+    fireEvent.change(screen.getByLabelText("Custom property path"), { target: { value: "properties.logicalName" } });
+    fireEvent.change(screen.getByLabelText("Custom column title"), { target: { value: "Solution schema" } });
+    fireEvent.click(screen.getByText("Add column", { selector: "button" }));
+    fireEvent.click(screen.getByText("Done"));
+    expect(screen.getByText("fixture_alpha")).toBeInTheDocument();
+    expect(screen.getByText("fixture_beta")).toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText("Solution schema column options"));
+    fireEvent.change(screen.getByLabelText("Solution schema filter value"), { target: { value: "alpha" } });
+    fireEvent.click(screen.getByText("Apply filter"));
+    expect(screen.queryByText("fixture_beta")).not.toBeInTheDocument();
+    const stored = JSON.parse(localStorage.getItem("test-view")!);
+    expect(stored.customColumns).toEqual([expect.objectContaining({ path: "properties.logicalName", label: "Solution schema", kind: "string" })]);
+    expect(localStorage.getItem("test-view")).not.toContain("fixture_beta");
+    result.unmount();
+    render(table(items));
+    expect(screen.getByText("fixture_alpha")).toBeInTheDocument();
+    expect(screen.queryByText("fixture_beta")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByText("Columns", { selector: "button" }));
+    fireEvent.click(screen.getByLabelText("Edit Solution schema"));
+    fireEvent.change(screen.getByLabelText("Custom column title"), { target: { value: "Custom logical name" } });
+    fireEvent.click(screen.getByText("Save custom column"));
+    fireEvent.click(screen.getByLabelText("Remove column Custom logical name"));
+    fireEvent.click(screen.getByText("Done"));
+    expect(screen.queryByLabelText("Custom logical name column options")).not.toBeInTheDocument();
+    expect(screen.getByText("Zulu")).toBeInTheDocument();
+    expect(JSON.parse(localStorage.getItem("test-view")!).customColumns).toEqual([]);
+  });
+  it("reports invalid custom paths and duplicate paths without dropping existing custom columns", () => {
+    render(table());
+    fireEvent.click(screen.getByText("Columns", { selector: "button" }));
+    fireEvent.click(screen.getByText("Add custom column"));
+    fireEvent.change(screen.getByLabelText("Custom property path"), { target: { value: "properties..logicalName" } });
+    fireEvent.click(screen.getByText("Add column", { selector: "button" }));
+    expect(screen.getByText(/Enter a dot-separated property path/)).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Custom property path"), { target: { value: "properties.logicalName" } });
+    fireEvent.click(screen.getByText("Add column", { selector: "button" }));
+    fireEvent.click(screen.getByText("Add custom column"));
+    fireEvent.change(screen.getByLabelText("Custom property path"), { target: { value: "properties.logicalName" } });
+    fireEvent.click(screen.getByText("Add column", { selector: "button" }));
+    expect(screen.getByText(/This property already has a custom column/)).toBeInTheDocument();
+    expect(JSON.parse(localStorage.getItem("test-view")!).customColumns).toHaveLength(1);
+  });
   it("supports returned column aliases that collide with Object property names", async () => {
     const user = userEvent.setup();
     render(<FluentProvider theme={webLightTheme}>

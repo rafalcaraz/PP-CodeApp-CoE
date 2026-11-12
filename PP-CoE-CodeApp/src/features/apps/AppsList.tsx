@@ -189,6 +189,8 @@ export function AppsList() {
       lastModifiedAt: { kind: "date" },
     }),
     { id: "id", label: "App ID", value: (row) => row.id, defaultVisible: false },
+    { id: "logicalName", label: "Logical name", value: (row) => row.logicalName, defaultVisible: false },
+    { id: "appModuleId", label: "App module ID", value: (row) => row.appModuleId, defaultVisible: false },
     { id: "ownerId", label: "Owner ID", value: (row) => row.ownerId, defaultVisible: false },
     { id: "createdBy", label: "Creator ID", value: (row) => row.createdBy, defaultVisible: false },
     { id: "lastModifiedBy", label: "Modifier ID", value: (row) => row.lastModifiedBy, defaultVisible: false },

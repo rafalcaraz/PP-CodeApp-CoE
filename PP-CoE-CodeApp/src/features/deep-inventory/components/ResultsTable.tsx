@@ -35,6 +35,7 @@ import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { RawJsonAccordion } from "../../../components/RawJsonAccordion";
 import { ResourceTable, type ViewColumn } from "../../../shared/resource-table";
+import { readPropertyPath } from "../../../shared/record-properties";
 import type {
   CatalogGroup,
   DeepScanRow,
@@ -181,6 +182,7 @@ export function ResultsTable({
           columns={cols}
           getRowId={(row) => `${row.identity.environmentId}::${row.identity.id}`}
           persistence={{ key: `ppcoe.deep-inventory.results.v1:${sourceId}` }}
+          getCustomValue={(row, path) => readPropertyPath(row.raw, path)}
           scope={scope}
         />
       <Dialog
