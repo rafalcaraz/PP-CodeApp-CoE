@@ -26,6 +26,7 @@ import { ResourceListPage } from "../../components/ResourceListPage";
 import { EnvironmentPicker } from "../../components/EnvironmentPicker";
 import { useDebouncedValue } from "../../hooks/useDebouncedValue";
 import { useConnectorCatalog } from "../../shared/connector-catalog";
+import { fromFluentColumns, type ViewColumn } from "../../shared/resource-table";
 
 const useStyles = makeStyles({
   search: {
@@ -59,7 +60,7 @@ const SUBTYPE_OPTIONS = [
 export function AppsList() {
   const styles = useStyles();
   const navigate = useNavigate();
-  const { classify } = useConnectorCatalog();
+  const { classify, catalog } = useConnectorCatalog();
   const [types, setTypes] = useState<ResourceTypeValue[]>([]);
   const [subType, setSubType] = useState("");
   const [envId, setEnvId] = useState<string | undefined>(undefined);
@@ -91,6 +92,15 @@ export function AppsList() {
     (skipToken?: string, skip?: number) => listAppsPage(filters, skipToken, 500, skip ?? 0),
     [filters]
   );
+
+  const tier = useCallback((row: AppRow) => {
+    if (!catalog || !row.connectors.length) return "";
+    const classifications = row.connectors.map((c) => classify(c.connectorId));
+    if (classifications.some((c) => c.tier === "Premium")) return "Premium";
+    if (classifications.some((c) => c.reason === "not-found")) return "Premium (custom)";
+    if (classifications.some((c) => c.tier === "Unknown")) return "";
+    return "Standard";
+  }, [classify, catalog]);
 
   const columns: TableColumnDefinition<AppRow>[] = useMemo(
     () => [
@@ -137,34 +147,22 @@ export function AppsList() {
         columnId: "premium",
         renderHeaderCell: () => "Tier",
         renderCell: (row) => {
-          // Roll the row's connectors up to a single tier. Only a connector
-          // absent from a successfully loaded catalog is inferred custom.
-          // Catalog-unavailable and missing-tier states stay unassessed.
-          if (row.connectors.length === 0) return "—";
-          let sawPremium = false;
-          let sawInferredCustom = false;
-          let sawUnassessed = false;
-          for (const c of row.connectors) {
-            const classification = classify(c.connectorId);
-            if (classification.tier === "Premium") sawPremium = true;
-            else if (classification.reason === "not-found") sawInferredCustom = true;
-            else if (classification.tier === "Unknown") sawUnassessed = true;
-          }
-          if (sawPremium) {
+          const label = tier(row);
+          if (label === "Premium") {
             return (
               <Badge appearance="filled" color="warning">
                 Premium
               </Badge>
             );
           }
-          if (sawInferredCustom) {
+          if (label === "Premium (custom)") {
             return (
               <Badge appearance="outline" color="warning" title="Uses a connector absent from the complete catalog - likely custom (treated as Premium for licensing).">
                 Premium (custom)
               </Badge>
             );
           }
-          if (sawUnassessed) return "—";
+          if (!label) return "—";
           return (
             <Badge appearance="outline" color="informative">
               Standard
@@ -178,8 +176,33 @@ export function AppsList() {
         renderCell: (row) => formatDate(row.lastModifiedAt),
       }),
     ],
-    [navigate, classify]
+    [navigate, tier]
   );
+
+  const viewColumns = useMemo<ViewColumn<AppRow>[]>(() => [
+    ...fromFluentColumns(columns, {
+      displayName: { value: (row) => row.displayName || row.id },
+      type: { kind: "category", value: (row) => shortResourceType(row.type, row.subType), exportValue: (row) => row.type },
+      environment: { value: (row) => row.environmentName || row.environmentId, exportValue: (row) => row.environmentId },
+      owner: { value: (row) => row.ownerDisplayName || row.ownerId, exportValue: (row) => row.ownerId },
+      premium: { kind: "category", value: tier },
+      lastModifiedAt: { kind: "date" },
+    }),
+    { id: "id", label: "App ID", value: (row) => row.id, defaultVisible: false },
+    { id: "ownerId", label: "Owner ID", value: (row) => row.ownerId, defaultVisible: false },
+    { id: "createdBy", label: "Creator ID", value: (row) => row.createdBy, defaultVisible: false },
+    { id: "lastModifiedBy", label: "Modifier ID", value: (row) => row.lastModifiedBy, defaultVisible: false },
+    { id: "createdAt", label: "Created on", kind: "date", value: (row) => row.createdAt, render: (row) => formatDate(row.createdAt), defaultVisible: false },
+    { id: "lastLaunchedAt", label: "Last launched", kind: "date", value: (row) => row.lastLaunchedAt, render: (row) => formatDate(row.lastLaunchedAt), defaultVisible: false },
+    { id: "region", label: "Region", kind: "category", value: (row) => row.region, defaultVisible: false },
+    { id: "subType", label: "Sub-type", kind: "category", value: (row) => row.subType, defaultVisible: false },
+    { id: "isQuarantined", label: "Quarantined", kind: "boolean", value: (row) => row.isQuarantined, defaultVisible: false },
+    { id: "isFeatured", label: "Featured", kind: "boolean", value: (row) => row.isFeatured, defaultVisible: false },
+    { id: "bypassConsent", label: "Bypass consent", kind: "boolean", value: (row) => row.bypassConsent, defaultVisible: false },
+    { id: "sharedUsersCount", label: "Shared users", kind: "number", value: (row) => row.sharedUsersCount, defaultVisible: false },
+    { id: "sharedGroupsCount", label: "Shared groups", kind: "number", value: (row) => row.sharedGroupsCount, defaultVisible: false },
+    { id: "connectorCount", label: "Connectors", kind: "number", value: (row) => row.connectors.length, defaultVisible: false },
+  ], [columns, tier]);
 
   const onTypeSelect = (_e: unknown, data: { selectedOptions: string[] }) => {
     setTypes(data.selectedOptions as ResourceTypeValue[]);
@@ -201,6 +224,7 @@ export function AppsList() {
       filterKey={filterKey}
       fetchPage={fetchPage}
       columns={columns}
+      viewColumns={viewColumns}
       getRowId={(row) => row.id}
       emptyMessage={
         debouncedQuery || envId || types.length || subType

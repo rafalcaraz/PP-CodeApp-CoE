@@ -57,7 +57,7 @@ export function QueriesView() {
   const [notice, setNotice] = useState("");
   const [execution, setExecution] = useState<Execution | undefined>(recallExecution);
   const executionRef = useRef(execution);
-  const [busy, setBusy] = useState<"run" | "more" | "export" | undefined>();
+  const [busy, setBusy] = useState<"run" | "more" | "all" | "export" | undefined>();
   const [scanCount, setScanCount] = useState(0);
   const generation = useRef(0);
   const busyRef = useRef(false);
@@ -141,7 +141,8 @@ export function QueriesView() {
     try {
       const plan = draft.mode === "basic" ? buildQueryExecutionPlan(draft.spec, new Date()) : undefined;
       const snapshot = createExecution(key, plan?.clauses ?? clauses, draft.spec.limit);
-      snapshot.defaultColumns = defaults;
+      snapshot.defaultColumns = draft.columns?.length ? [...draft.columns] : defaults;
+      snapshot.resourceTypes = draft.mode === "basic" ? [...draft.spec.resourceTypes] : undefined;
       const result = await nextPage(snapshot);
       if (id !== generation.current) return;
       if (!result.ok) { setError(`Query failed: ${result.error}. Previous results are retained.`); return; }
@@ -173,6 +174,23 @@ export function QueriesView() {
       commitExecution(result.execution);
     } catch (e) { if (id === generation.current) setError(`Load more failed: ${message(e)}`); }
     finally { if (id === generation.current) { busyRef.current = false; setBusy(undefined); } }
+  };
+  const loadAll = async () => {
+    if (!execution?.token || stale || busyRef.current) return;
+    const id = ++generation.current;
+    busyRef.current = true; setBusy("all"); setError(""); setNotice(""); setPartial(undefined);
+    try {
+      const result = await drainExecution(execution, (progress) => {
+        if (id === generation.current) commitExecution(progress);
+      }, () => id !== generation.current);
+      if (id !== generation.current || result.cancelled) return;
+      commitExecution(result.execution);
+      if (result.error || !result.execution.complete) {
+        setError(`Load all results is incomplete: ${result.error?.replace(/^Export stopped(?::\s*|\s+)/, "") ?? "The connector could not prove completion."} Loaded rows are retained.`);
+      } else setNotice(`All ${result.execution.rows.length.toLocaleString()} results loaded. No CSV was downloaded.`);
+    } catch (e) {
+      if (id === generation.current) setError(`Load all results failed: ${message(e)}. Loaded rows are retained.`);
+    } finally { if (id === generation.current) { busyRef.current = false; setBusy(undefined); } }
   };
   const copy = async (value: string) => {
     try { await navigator.clipboard.writeText(value); setNotice("Copied to clipboard."); }
@@ -321,7 +339,7 @@ export function QueriesView() {
       </div>
       {draft.mode === "basic" && !paired && <details><summary>Generated clauses (read-only)</summary><pre className={styles.json}>{JSON.stringify(builderClauses, null, 2)}</pre></details>}
     </Card>
-    {busy && <div role="status" className={styles.row}><Spinner size="tiny" />{busy === "export" ? `Fetching export: ${execution?.rows.length.toLocaleString()} rows loaded...` : busy === "more" ? "Loading next page..." : paired ? `Scanning connector evidence: ${scanCount.toLocaleString()} candidate rows checked...` : "Running query..."}</div>}
+    {busy && <div role="status" className={styles.row}><Spinner size="tiny" />{busy === "export" ? `Fetching export: ${execution?.rows.length.toLocaleString()} rows loaded...` : busy === "all" ? `Loading all results: ${execution?.rows.length.toLocaleString()} rows loaded...` : busy === "more" ? "Loading next page..." : paired ? `Scanning connector evidence: ${scanCount.toLocaleString()} candidate rows checked...` : "Running query..."}</div>}
     {execution && <Card className={styles.section}>
       <div className={styles.row}><Text as="h2" weight="semibold">Results</Text>
         <Text>{execution.rows.length.toLocaleString()} loaded{execution.complete ? " - complete" : " - incomplete / more available"}; approximately {execution.total.toLocaleString()} reported</Text>
@@ -329,20 +347,25 @@ export function QueriesView() {
       <Text className={styles.muted}>Executed {new Date(execution.startedAt).toLocaleString()}. The continuation token, not the approximate total, determines completion.</Text>
       {stale && <Text role="status" className={styles.notice}>Query changed - run again. These results belong to the previous execution; continuation and export are disabled.</Text>}
       {execution.warning && <Text role="alert" className={styles.error}>{execution.warning}</Text>}
-      {!genericResultShape(execution.rows, execution.clauses) && <Field label="Result columns">
+      {!genericResultShape(execution.rows, execution.clauses) && <Field label="CSV selected fields (loaded / complete exports only)">
         <Dropdown className={styles.control} multiselect value={columns.map((path) => columnFields.find((f) => f.path === path)?.label ?? path).join(", ")} selectedOptions={columns} onOptionSelect={(_e, d) => changeDraft({ columns: d.selectedOptions.length ? d.selectedOptions : undefined }, false)}>
           {columnFields.map((f) => <Option key={f.path} value={f.path} text={f.label}>{f.label} - {f.path}</Option>)}
         </Dropdown>
       </Field>}
       <div className={styles.row}>
-        <Field label="CSV fields"><Dropdown className={styles.control} value={exportShape === "columns" ? "Displayed field paths (raw values)" : "All raw fields (flattened)"} selectedOptions={[exportShape]}
+        <Field label="CSV fields"><Dropdown className={styles.control} value={exportShape === "columns" ? "Selected field paths (raw values)" : "All raw fields (flattened)"} selectedOptions={[exportShape]}
           onOptionSelect={(_e, d) => changeDraft({ exportShape: d.optionValue as "raw" | "columns" }, false)}>
-          <Option value="columns">Displayed field paths (raw values)</Option><Option value="raw">All raw fields (flattened)</Option>
+          <Option value="columns">Selected field paths (raw values)</Option><Option value="raw">All raw fields (flattened)</Option>
         </Dropdown></Field>
         <Button icon={<ArrowDownloadRegular />} disabled={stale || !!busy || !execution.rows.length} onClick={() => download(execution, "loaded")}>Export loaded ({execution.rows.length})</Button>
         <Button icon={<ArrowDownloadRegular />} disabled={stale || !!busy || !execution.rows.length || (!execution.complete && !execution.token)}
           onClick={() => void exportAll()}>Export complete result</Button>
         {execution.token && <Button appearance="primary" disabled={stale || !!busy} onClick={() => void loadMore()}>Load more</Button>}
+        {execution.token && <Button disabled={stale || !!busy} onClick={() => void loadAll()}>Load all results</Button>}
+        {busy === "all" && <Button onClick={() => {
+          generation.current++; busyRef.current = false; setBusy(undefined);
+          setNotice("Loading cancelled. Results are partial; fetched rows are retained. No CSV was downloaded.");
+        }}>Cancel loading</Button>}
         {busy === "export" && <Button onClick={() => {
           generation.current++; busyRef.current = false; setBusy(undefined); setPartial(execution);
           setError("Export cancelled. No file was downloaded; fetched rows are retained.");
@@ -354,7 +377,9 @@ export function QueriesView() {
         <Button onClick={() => { download(partial, "partial"); setPartial(undefined); }}>Download partial CSV ({partial.rows.length})</Button>
         <Button onClick={() => setPartial(undefined)}>Keep results without downloading</Button>
       </div>}
-      {!execution.rows.length ? <Text>No matching rows.</Text> : <QueryResults execution={execution} columns={columns} onError={reportError} />}
+      {!execution.rows.length ? <Text>No matching rows.</Text> : <QueryResults execution={execution}
+        columns={resultColumns(execution.rows, execution.clauses, undefined, execution.defaultColumns ?? defaults)}
+        onError={reportError} exportDisabled={stale || !!busy} />}
     </Card>}
     <Dialog open={saveOpen} onOpenChange={(_e, d) => setSaveOpen(d.open)}>
       <DialogSurface><DialogBody><DialogTitle>Save as new query</DialogTitle>

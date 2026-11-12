@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { DEFAULT_SPEC, draftKey, getPath, parseClausesPayload, readWorkspace, resourceIdentity, resultColumns, writeWorkspace } from "./workspace";
+import { DEFAULT_SPEC, draftKey, getPath, parseClausesPayload, readWorkspace, resourceIdentity, resultColumns, resultViewKey, writeWorkspace } from "./workspace";
 import type { Clause } from "../../generated/models/PowerPlatformforAdminsV2Model";
 import { ResourceType } from "../../data/inventory";
 beforeEach(() => sessionStorage.clear());
@@ -43,5 +43,13 @@ describe("Queries workspace", () => {
     expect(resourceIdentity({ name: "shared-bot-id", type: ResourceType.CopilotStudioAgent })).toBeNull();
     expect(getPath({ properties: null }, "properties.ownerId")).toBeUndefined();
     expect(getPath({ "properties.displayName": "Projected name" }, "properties.displayName")).toBe("Projected name");
+  });
+  it("isolates result schemas without storing rows or changing keys for incoming data", () => {
+    const clauses = [{ $type: "project" } as Clause];
+    expect(resultViewKey([{ Score: 1, "properties.displayName": "One" }], clauses))
+      .toBe(resultViewKey([{ "properties.displayName": "Two", Score: 99 }], clauses));
+    expect(resultViewKey([{ Score: 1 }], clauses)).not.toBe(resultViewKey([{ Total: 1 }], clauses));
+    expect(resultViewKey([1, 2], clauses)).toBe(resultViewKey([3], clauses));
+    expect(resultViewKey([1], clauses)).not.toContain("rows");
   });
 });

@@ -3,12 +3,6 @@ import {
   makeStyles,
   tokens,
   Text,
-  DataGrid,
-  DataGridHeader,
-  DataGridHeaderCell,
-  DataGridBody,
-  DataGridRow,
-  DataGridCell,
   type TableColumnDefinition,
   createTableColumn,
   Link,
@@ -22,6 +16,7 @@ import { useNavigate } from "react-router-dom";
 import { listEnvironmentGroups, type EnvironmentGroupRow } from "./data";
 import { EmptyPane, ErrorPane, LoadingPane } from "../../components/Status";
 import { downloadCsv, rowsToCsv } from "../../utils/csv";
+import { ResourceTable, fromFluentColumns, type ViewColumn } from "../../shared/resource-table";
 
 const useStyles = makeStyles({
   root: {
@@ -129,6 +124,17 @@ export function EnvironmentGroupsList() {
     }),
   ];
 
+  const viewColumns: ViewColumn<EnvironmentGroupRow>[] = [
+    ...fromFluentColumns(columns, {
+      name: { value: (row) => row.displayName || row.id },
+      createdAt: { kind: "date" },
+      location: { kind: "category" },
+    }),
+    { id: "id", label: "Group ID", value: (row) => row.id, defaultVisible: false },
+    { id: "createdBy", label: "Creator ID", value: (row) => row.createdBy, defaultVisible: false },
+    { id: "lastModifiedAt", label: "Modified", kind: "date", value: (row) => row.lastModifiedAt, render: (row) => formatDate(row.lastModifiedAt), defaultVisible: false },
+  ];
+
   return (
     <div className={styles.root}>
       <div className={styles.header}>
@@ -177,28 +183,10 @@ export function EnvironmentGroupsList() {
             <EmptyPane message="No environment groups found in this tenant." />
           ) : filteredRows.length === 0 ? (
             <EmptyPane message={`No environment groups match "${query}".`} />
-          ) : (
-            <DataGrid
-              items={filteredRows}
-              columns={columns}
-              getRowId={(row) => row.id}
-              sortable={false}
-              focusMode="composite"
-            >
-              <DataGridHeader>
-                <DataGridRow>
-                  {({ renderHeaderCell }) => <DataGridHeaderCell>{renderHeaderCell()}</DataGridHeaderCell>}
-                </DataGridRow>
-              </DataGridHeader>
-              <DataGridBody<EnvironmentGroupRow>>
-                {({ item, rowId }) => (
-                  <DataGridRow<EnvironmentGroupRow> key={rowId}>
-                    {({ renderCell }) => <DataGridCell>{renderCell(item)}</DataGridCell>}
-                  </DataGridRow>
-                )}
-              </DataGridBody>
-            </DataGrid>
-          )}
+          ) : null}
+          <ResourceTable columns={viewColumns} rows={filteredRows} getRowId={(row) => row.id}
+            label="Environment groups" persistence={{ key: "ppcoe.table.environment-groups.v1" }}
+            scope="Sort and column filters apply to all loaded environment groups matching the search." />
         </>
       )}
     </div>

@@ -25,6 +25,7 @@ import { ResourceListPage } from "../../components/ResourceListPage";
 import { EnvironmentPicker } from "../../components/EnvironmentPicker";
 import { useDebouncedValue } from "../../hooks/useDebouncedValue";
 import { useConnectorCatalog } from "../../shared/connector-catalog";
+import { fromFluentColumns, type ViewColumn } from "../../shared/resource-table";
 
 const useStyles = makeStyles({
   search: {
@@ -81,7 +82,7 @@ function statusBadgeColor(
 export function FlowsList() {
   const styles = useStyles();
   const navigate = useNavigate();
-  const { classify } = useConnectorCatalog();
+  const { classify, catalog } = useConnectorCatalog();
   const [types, setTypes] = useState<ResourceTypeValue[]>([]);
   const [envId, setEnvId] = useState<string | undefined>(undefined);
   const [statusFilter, setStatusFilter] = useState<string>("");
@@ -116,6 +117,18 @@ export function FlowsList() {
     (skipToken?: string, skip?: number) => listFlowsPage(filters, skipToken, 500, skip ?? 0),
     [filters]
   );
+
+  const tier = useCallback((row: FlowRow) => {
+    if (!catalog) return "";
+    const ids = new Set(row.connectors.map((c) => c.connectorId).filter(Boolean));
+    if (row.trigger?.connectorId) ids.add(row.trigger.connectorId);
+    if (!ids.size) return "";
+    const classifications = [...ids].map(classify);
+    if (classifications.some((c) => c.tier === "Premium")) return "Premium";
+    if (classifications.some((c) => c.reason === "not-found")) return "Premium (custom)";
+    if (classifications.some((c) => c.tier === "Unknown")) return "";
+    return "Standard";
+  }, [classify, catalog]);
 
   const columns: TableColumnDefinition<FlowRow>[] = useMemo(
     () => [
@@ -193,39 +206,22 @@ export function FlowsList() {
         columnId: "premium",
         renderHeaderCell: () => "Tier",
         renderCell: (row) => {
-          // Roll the flow's connectors (and trigger) up to one tier. Only
-          // absence from a complete catalog is inferred custom; an unavailable
-          // catalog or a catalog row with no tier remains unassessed.
-          const ids = new Set<string>();
-          for (const c of row.connectors) {
-            if (c.connectorId) ids.add(c.connectorId);
-          }
-          if (row.trigger?.connectorId) ids.add(row.trigger.connectorId);
-          if (ids.size === 0) return "—";
-          let sawPremium = false;
-          let sawInferredCustom = false;
-          let sawUnassessed = false;
-          for (const id of ids) {
-            const classification = classify(id);
-            if (classification.tier === "Premium") sawPremium = true;
-            else if (classification.reason === "not-found") sawInferredCustom = true;
-            else if (classification.tier === "Unknown") sawUnassessed = true;
-          }
-          if (sawPremium) {
+          const label = tier(row);
+          if (label === "Premium") {
             return (
               <Badge appearance="filled" color="warning">
                 Premium
               </Badge>
             );
           }
-          if (sawInferredCustom) {
+          if (label === "Premium (custom)") {
             return (
               <Badge appearance="outline" color="warning" title="Uses a connector absent from the complete catalog - likely custom (treated as Premium for licensing).">
                 Premium (custom)
               </Badge>
             );
           }
-          if (sawUnassessed) return "—";
+          if (!label) return "—";
           return (
             <Badge appearance="outline" color="informative">
               Standard
@@ -239,8 +235,31 @@ export function FlowsList() {
         renderCell: (row) => formatDate(row.lastModifiedAt),
       }),
     ],
-    [navigate, classify]
+    [navigate, tier]
   );
+
+  const viewColumns = useMemo<ViewColumn<FlowRow>[]>(() => [
+    ...fromFluentColumns(columns, {
+      displayName: { value: (row) => row.displayName || row.id },
+      type: { kind: "category", value: (row) => shortResourceType(row.type), exportValue: (row) => row.type },
+      status: { kind: "category" },
+      trigger: { value: (row) => [row.trigger?.operationDisplayName || row.trigger?.operationId, row.flowTriggerType].filter(Boolean).join(" · ") },
+      environment: { value: (row) => row.environmentName || row.environmentId, exportValue: (row) => row.environmentId },
+      owner: { value: (row) => row.ownerDisplayName || row.ownerId, exportValue: (row) => row.ownerId },
+      premium: { kind: "category", value: tier },
+      lastModifiedAt: { kind: "date" },
+    }),
+    { id: "id", label: "Flow ID", value: (row) => row.id, defaultVisible: false },
+    { id: "ownerId", label: "Owner ID", value: (row) => row.ownerId, defaultVisible: false },
+    { id: "createdAt", label: "Created on", kind: "date", value: (row) => row.createdAt, render: (row) => formatDate(row.createdAt), defaultVisible: false },
+    { id: "state", label: "State", kind: "category", value: (row) => row.state, defaultVisible: false },
+    { id: "flowTriggerType", label: "Trigger type", kind: "category", value: (row) => row.flowTriggerType, defaultVisible: false },
+    { id: "region", label: "Region", kind: "category", value: (row) => row.region, defaultVisible: false },
+    { id: "createdBy", label: "Creator ID", value: (row) => row.createdBy, defaultVisible: false },
+    { id: "lastModifiedBy", label: "Modifier ID", value: (row) => row.lastModifiedBy, defaultVisible: false },
+    { id: "workflowEntityId", label: "Workflow entity ID", value: (row) => row.workflowEntityId, defaultVisible: false },
+    { id: "connectorCount", label: "Connectors", kind: "number", value: (row) => row.connectors.length, defaultVisible: false },
+  ], [columns, tier]);
 
   const onTypeSelect = (_e: unknown, data: { selectedOptions: string[] }) => {
     setTypes(data.selectedOptions as ResourceTypeValue[]);
@@ -258,6 +277,7 @@ export function FlowsList() {
       filterKey={filterKey}
       fetchPage={fetchPage}
       columns={columns}
+      viewColumns={viewColumns}
       getRowId={(row) => row.id}
       emptyMessage={
         debouncedQuery || envId || types.length || statusFilter || triggerFilter

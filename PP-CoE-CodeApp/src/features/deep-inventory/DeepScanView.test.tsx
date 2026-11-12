@@ -15,7 +15,7 @@
  *    list doesn't try to fetch.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { FluentProvider, webLightTheme } from "@fluentui/react-components";
@@ -148,6 +148,15 @@ describe("DeepScanView", () => {
       expect(screen.getByText(/Done.*1 matches/i)).toBeInTheDocument();
     });
 
+    expect(runDeepScanMock).toHaveBeenCalledTimes(1);
+    expect(screen.getByText(/Scan complete — all received matches loaded/)).toBeInTheDocument();
+
+    await user.click(screen.getAllByRole("combobox")[0]);
+    await user.click(await screen.findByRole("option", { name: /Copilot Studio agents \(Dataverse\)/i }));
+    const results = within(screen.getByRole("region", { name: "Deep scan results" }));
+    expect(results.getByRole("button", { name: "Embedded app type column options" })).toBeInTheDocument();
+    expect(results.queryByRole("button", { name: "Component count column options" })).not.toBeInTheDocument();
+    expect(results.getByRole("button", { name: "Trouble-shooting App" })).toBeInTheDocument();
     expect(runDeepScanMock).toHaveBeenCalledTimes(1);
   });
 

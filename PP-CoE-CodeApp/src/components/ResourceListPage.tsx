@@ -3,12 +3,6 @@ import {
   makeStyles,
   tokens,
   Text,
-  DataGrid,
-  DataGridHeader,
-  DataGridHeaderCell,
-  DataGridBody,
-  DataGridRow,
-  DataGridCell,
   type TableColumnDefinition,
   Spinner,
   Button,
@@ -17,6 +11,7 @@ import { ArrowDownloadRegular } from "@fluentui/react-icons";
 import type { DataResult } from "../data/inventory";
 import { EmptyPane, ErrorPane, LoadingPane } from "./Status";
 import { downloadCsv, rowsToCsv } from "../utils/csv";
+import { ResourceTable, fromFluentColumns, type ViewColumn } from "../shared/resource-table";
 
 const useStyles = makeStyles({
   root: {
@@ -81,6 +76,7 @@ export interface ResourceListPageProps<T> {
   fetchPage: (skipToken?: string, skip?: number) => Promise<DataResult<ResourcePage<T>>>;
   filterControls: ReactNode;
   columns: TableColumnDefinition<T>[];
+  viewColumns?: ViewColumn<T>[];
   getRowId: (row: T) => string;
   emptyMessage?: string;
   /** Override the default "Showing X of Y" footer text. */
@@ -103,6 +99,7 @@ export function ResourceListPage<T>({
   fetchPage,
   filterControls,
   columns,
+  viewColumns,
   getRowId,
   emptyMessage = "No matching items.",
   countLabel,
@@ -115,6 +112,8 @@ export function ResourceListPage<T>({
   const [phase, setPhase] = useState<"loading" | "ready" | "error">("loading");
   const [loadingMore, setLoadingMore] = useState<boolean>(false);
   const [errorMsg, setErrorMsg] = useState<string>("");
+  const [exporting, setExporting] = useState(false);
+  const generation = useRef(0);
 
   const fetchRef = useRef(fetchPage);
   useEffect(() => {
@@ -122,6 +121,7 @@ export function ResourceListPage<T>({
   }, [fetchPage]);
 
   useEffect(() => {
+    const request = ++generation.current;
     let cancelled = false;
     (async () => {
       setPhase("loading");
@@ -129,6 +129,8 @@ export function ResourceListPage<T>({
       setSkipToken(undefined);
       setTotalRecords(0);
       setErrorMsg("");
+      setLoadingMore(false);
+      setExporting(false);
       const res = await fetchRef.current(undefined, 0);
       if (cancelled) return;
       if (!res.ok) {
@@ -143,13 +145,17 @@ export function ResourceListPage<T>({
     })();
     return () => {
       cancelled = true;
+      generation.current = request + 1;
     };
   }, [filterKey]);
 
   const loadMore = async () => {
     if (!skipToken || loadingMore) return;
+    const request = generation.current;
     setLoadingMore(true);
+    setErrorMsg("");
     const res = await fetchRef.current(skipToken, rows.length);
+    if (request !== generation.current) return;
     setLoadingMore(false);
     if (!res.ok) {
       setErrorMsg(res.error);
@@ -162,12 +168,22 @@ export function ResourceListPage<T>({
 
   const loadAll = async () => {
     if (!skipToken || loadingMore) return;
+    const request = generation.current;
+    const fetch = fetchRef.current;
     setLoadingMore(true);
+    setErrorMsg("");
     let token: string | undefined = skipToken;
     let safety = 100;
     const collected: T[] = [];
+    const seen = new Set<string>();
     while (token && safety-- > 0) {
-      const res = await fetchRef.current(token, rows.length + collected.length);
+      if (seen.has(token)) {
+        setErrorMsg("Loading stopped because pagination repeated. Loaded rows are incomplete; change filters or reload to retry.");
+        break;
+      }
+      seen.add(token);
+      const res = await fetch(token, rows.length + collected.length);
+      if (request !== generation.current) return;
       if (!res.ok) {
         setErrorMsg(res.error);
         break;
@@ -175,8 +191,12 @@ export function ResourceListPage<T>({
       collected.push(...res.data.rows);
       token = res.data.skipToken;
       if (res.data.totalRecords) setTotalRecords(res.data.totalRecords);
-      if (res.data.rows.length === 0) break;
+      if (res.data.rows.length === 0 && token) {
+        setErrorMsg("Loading stopped because the connector returned no additional rows. Results are incomplete.");
+        break;
+      }
     }
+    if (token && safety < 0) setErrorMsg("Load-all safety limit reached. Results are incomplete; more rows remain.");
     if (collected.length > 0) setRows((prev) => prev.concat(collected));
     setSkipToken(token);
     setLoadingMore(false);
@@ -193,7 +213,6 @@ export function ResourceListPage<T>({
     return `Showing ${rows.length.toLocaleString()} of ${totalLabel}`;
   };
 
-  const [exporting, setExporting] = useState(false);
   const stem = exportFilenameStem ?? title.toLowerCase().replace(/\s+/g, "-");
 
   const exportLoaded = () => {
@@ -203,21 +222,43 @@ export function ResourceListPage<T>({
 
   const exportAll = async () => {
     if (rows.length === 0) return;
+    const request = generation.current;
+    const fetch = fetchRef.current;
     setExporting(true);
+    setErrorMsg("");
     const all: T[] = rows.slice();
     let token: string | undefined = skipToken;
     let safety = 200;
+    let incomplete = false;
+    const seen = new Set<string>();
     while (token && safety-- > 0) {
-      const res = await fetchRef.current(token, all.length);
+      if (seen.has(token)) {
+        setErrorMsg("Export stopped because pagination repeated. No complete CSV was downloaded.");
+        incomplete = true;
+        break;
+      }
+      seen.add(token);
+      const res = await fetch(token, all.length);
+      if (request !== generation.current) return;
       if (!res.ok) {
         setErrorMsg(res.error);
+        incomplete = true;
         break;
       }
       for (const r of res.data.rows) all.push(r);
       token = res.data.skipToken;
-      if (res.data.rows.length === 0) break;
+      if (res.data.rows.length === 0 && token) {
+        setErrorMsg("Export stopped because pagination made no progress. No complete CSV was downloaded.");
+        incomplete = true;
+        break;
+      }
+    }
+    if (token && !incomplete) {
+      setErrorMsg("Export safety limit reached. No complete CSV was downloaded.");
+      incomplete = true;
     }
     setExporting(false);
+    if (incomplete) return;
     downloadCsv(`${stem}-all`, rowsToCsv(all));
   };
 
@@ -274,28 +315,14 @@ export function ResourceListPage<T>({
           {rows.length === 0 ? (
             <EmptyPane message={emptyMessage} />
           ) : (
-            <DataGrid
-              items={rows}
-              columns={columns}
+            <ResourceTable
+              label={title}
+              rows={rows}
+              columns={viewColumns ?? fromFluentColumns(columns)}
               getRowId={getRowId}
-              sortable={false}
-              focusMode="composite"
-            >
-              <DataGridHeader>
-                <DataGridRow>
-                  {({ renderHeaderCell }) => (
-                    <DataGridHeaderCell>{renderHeaderCell()}</DataGridHeaderCell>
-                  )}
-                </DataGridRow>
-              </DataGridHeader>
-              <DataGridBody<T>>
-                {({ item, rowId }) => (
-                  <DataGridRow<T> key={rowId}>
-                    {({ renderCell }) => <DataGridCell>{renderCell(item)}</DataGridCell>}
-                  </DataGridRow>
-                )}
-              </DataGridBody>
-            </DataGrid>
+              persistence={{ key: `ppcoe.table.${stem}.v1` }}
+              scope={skipToken ? "Sort and column filters apply to loaded rows only. Load all remaining to include the rest." : "Sort and column filters apply to all loaded results."}
+            />
           )}
 
           {skipToken && (

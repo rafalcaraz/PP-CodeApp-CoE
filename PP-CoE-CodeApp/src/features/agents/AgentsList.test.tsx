@@ -19,6 +19,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Routes, Route } from "react-router-dom";
 import { FluentProvider, webLightTheme } from "@fluentui/react-components";
 import { UserLookupProvider } from "../../components/UserLookupProvider";
+import userEvent from "@testing-library/user-event";
 
 // Mock the feature's data layer. Vitest hoists vi.mock() above imports,
 // so this runs before AgentsList is loaded.
@@ -80,6 +81,7 @@ vi.mock("../../components/EnvironmentPicker", () => ({
 
 // Import AFTER vi.mock calls so the mocks take effect.
 import { AgentsList } from "../../features/agents/AgentsList";
+import { listAgentsPage } from "./data";
 
 function renderAgentsList() {
   return render(
@@ -98,6 +100,47 @@ function renderAgentsList() {
 describe("AgentsList smoke", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    localStorage.clear();
+  });
+
+  it("adds and filters the schema name without a server refetch", async () => {
+    renderAgentsList();
+    await screen.findByText("Customer Service Bot");
+    await userEvent.click(screen.getByRole("button", { name: "Columns" }));
+    await userEvent.click(await screen.findByLabelText("Schema name"));
+    await userEvent.click(screen.getByText("Done"));
+    expect(screen.getByText("new_customer_service")).toBeInTheDocument();
+    await userEvent.click(await screen.findByRole("button", { name: "Schema name column options" }));
+    await userEvent.type(screen.getByRole("textbox", { name: "Schema name filter value" }), "missing");
+    await userEvent.click(screen.getByRole("button", { name: "Apply filter" }));
+    expect(screen.queryByText("Customer Service Bot")).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Clear column filters" }));
+    expect(screen.getByText("Customer Service Bot")).toBeInTheDocument();
+    expect(listAgentsPage).toHaveBeenCalledTimes(1);
+  }, 15_000);
+
+  it("keeps agent row keys distinct when a bot is deployed to two environments", async () => {
+    const result = await vi.mocked(listAgentsPage)({});
+    if (!result.ok) throw new Error(result.error);
+    vi.mocked(listAgentsPage).mockResolvedValueOnce({
+      ok: true,
+      data: {
+        rows: [
+          result.data.rows[0],
+          { ...result.data.rows[0], environmentId: "env-2", environmentName: "Development" },
+        ],
+        totalRecords: 2,
+      },
+    });
+    const errors = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      renderAgentsList();
+      await waitFor(() => expect(screen.getAllByText("Customer Service Bot")).toHaveLength(2));
+      expect(screen.getByText("Development")).toBeInTheDocument();
+      expect(errors.mock.calls.flat().some((value) => String(value).includes("same key"))).toBe(false);
+    } finally {
+      errors.mockRestore();
+    }
   });
 
   it("renders without throwing and surfaces the mocked agent row", async () => {

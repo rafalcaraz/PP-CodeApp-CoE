@@ -15,7 +15,7 @@
  *     `listEnvironmentsPage(token, 500, rows.length)`.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Routes, Route } from "react-router-dom";
 import { FluentProvider, webLightTheme } from "@fluentui/react-components";
@@ -32,6 +32,12 @@ vi.mock("../../features/environments/data", async () => {
 
 import { EnvironmentsList } from "../../features/environments/EnvironmentsList";
 import { listEnvironmentsPage } from "../../features/environments/data";
+import { downloadCsv } from "../../utils/csv";
+
+vi.mock("../../utils/csv", async (importOriginal) => ({
+  ...await importOriginal<typeof import("../../utils/csv")>(),
+  downloadCsv: vi.fn(),
+}));
 
 function makeRow(overrides: Partial<Record<string, unknown>> = {}) {
   return {
@@ -67,6 +73,57 @@ function renderEnvList() {
 describe("EnvironmentsList smoke", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    localStorage.clear();
+  });
+
+  it("sorts by the displayed name and keeps column controls after filtering to zero", async () => {
+    vi.mocked(listEnvironmentsPage).mockResolvedValue({
+      ok: true,
+      data: { rows: [makeRow({ displayName: "Zulu" }), makeRow({ id: "env-2", displayName: "Alpha" })] as never, totalRecords: 2 },
+    });
+    renderEnvList();
+    await screen.findByText("Zulu");
+    await userEvent.click(screen.getByRole("button", { name: "Name column options" }));
+    await userEvent.click(screen.getByRole("button", { name: "Sort ascending" }));
+    const gridRows = within(screen.getByRole("region", { name: "Environments" })).getAllByRole("row");
+    expect(within(gridRows[1]).getByText("Alpha")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Name column options" }));
+    await userEvent.type(screen.getByRole("textbox", { name: "Name filter value" }), "missing");
+    await userEvent.click(screen.getByRole("button", { name: "Apply filter" }));
+    expect(screen.queryByText("Alpha")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Columns" })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Clear column filters" }));
+    expect(screen.getByText("Alpha")).toBeInTheDocument();
+    expect(listEnvironmentsPage).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not export an incomplete all-results download", async () => {
+    vi.mocked(listEnvironmentsPage)
+      .mockResolvedValueOnce({ ok: true, data: { rows: [makeRow()] as never, totalRecords: 2, skipToken: "next" } })
+      .mockResolvedValueOnce({ ok: true, data: { rows: [], totalRecords: 2, skipToken: "next" } });
+    renderEnvList();
+    await screen.findByText("Production");
+    await userEvent.click(screen.getByRole("button", { name: "Export all" }));
+    expect(await screen.findByText(/Loading incomplete:.*empty page/)).toBeInTheDocument();
+    expect(downloadCsv).not.toHaveBeenCalled();
+    expect(screen.getByText("Production")).toBeInTheDocument();
+  });
+
+  it("stops an obsolete load-all request after the view unmounts", async () => {
+    let resolvePage!: (result: Awaited<ReturnType<typeof listEnvironmentsPage>>) => void;
+    vi.mocked(listEnvironmentsPage)
+      .mockResolvedValueOnce({ ok: true, data: { rows: [makeRow()] as never, totalRecords: 3, skipToken: "next" } })
+      .mockImplementationOnce(() => new Promise((resolve) => { resolvePage = resolve; }));
+    const view = renderEnvList();
+    await screen.findByText("Production");
+    await userEvent.click(screen.getByRole("button", { name: "Load all remaining" }));
+    await waitFor(() => expect(listEnvironmentsPage).toHaveBeenCalledTimes(2));
+    view.unmount();
+    await act(async () => resolvePage({
+      ok: true,
+      data: { rows: [makeRow({ id: "env-2" })] as never, totalRecords: 3, skipToken: "next-2" },
+    }));
+    expect(listEnvironmentsPage).toHaveBeenCalledTimes(2);
   });
 
   it("renders the mocked environment rows", async () => {

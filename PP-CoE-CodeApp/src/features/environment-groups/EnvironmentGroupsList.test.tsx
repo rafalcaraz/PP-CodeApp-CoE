@@ -54,7 +54,28 @@ function renderList() {
 describe("EnvironmentGroupsList smoke", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    localStorage.clear();
   });
+
+  it("adds a group ID column and filters by its raw value without fetching", async () => {
+    vi.mocked(listEnvironmentGroups).mockResolvedValue({
+      ok: true,
+      data: [makeGroupRow()] as never,
+    });
+    renderList();
+    await screen.findByText("Production Pillar");
+    await userEvent.click(screen.getByRole("button", { name: "Columns" }));
+    await userEvent.click(await screen.findByLabelText("Group ID"));
+    await userEvent.click(screen.getByText("Done"));
+    expect(screen.getByText("grp-1")).toBeInTheDocument();
+    await userEvent.click(await screen.findByRole("button", { name: "Group ID column options" }));
+    await userEvent.type(screen.getByRole("textbox", { name: "Group ID filter value" }), "missing");
+    await userEvent.click(screen.getByRole("button", { name: "Apply filter" }));
+    expect(screen.queryByText("Production Pillar")).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Clear column filters" }));
+    expect(screen.getByText("Production Pillar")).toBeInTheDocument();
+    expect(listEnvironmentGroups).toHaveBeenCalledTimes(1);
+  }, 15_000);
 
   it("renders the mocked group rows", async () => {
     vi.mocked(listEnvironmentGroups).mockResolvedValue({
@@ -125,5 +146,6 @@ describe("EnvironmentGroupsList smoke", () => {
         screen.getByText(/No environment groups match "nonexistent"/),
       ).toBeInTheDocument();
     });
+    expect(screen.getByRole("button", { name: "Columns" })).toBeInTheDocument();
   });
 });
