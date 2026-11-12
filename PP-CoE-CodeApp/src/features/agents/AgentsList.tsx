@@ -36,6 +36,7 @@ import { ResourceListPage } from "../../components/ResourceListPage";
 import { EnvironmentPicker } from "../../components/EnvironmentPicker";
 import { UserChip } from "../../components/UserChip";
 import { useDebouncedValue } from "../../hooks/useDebouncedValue";
+import { fromFluentColumns, type ViewColumn } from "../../shared/resource-table";
 
 const useStyles = makeStyles({
   search: {
@@ -220,6 +221,31 @@ export function AgentsList() {
     [navigate]
   );
 
+  const viewColumns = useMemo<ViewColumn<AgentRow>[]>(() => [
+    ...fromFluentColumns(columns, {
+      displayName: { value: (row) => row.displayName || row.id },
+      type: { kind: "category", value: (row) => shortResourceType(row.type), exportValue: (row) => row.type },
+      environment: { value: (row) => row.environmentName || row.environmentId, exportValue: (row) => row.environmentId },
+      owner: { value: (row) => row.ownerDisplayName || row.ownerId, exportValue: (row) => row.ownerId },
+      lastPublishedAt: { kind: "date" },
+    }),
+    { id: "id", label: "Agent ID", value: (row) => row.id, defaultVisible: false },
+    { id: "ownerId", label: "Owner ID", value: (row) => row.ownerId, defaultVisible: false },
+    { id: "createdBy", label: "Creator ID", value: (row) => row.createdBy, defaultVisible: false },
+    { id: "schemaName", label: "Schema name", value: (row) => row.schemaName, defaultVisible: false },
+    { id: "createdAt", label: "Created on", kind: "date", value: (row) => row.createdAt, render: (row) => formatDate(row.createdAt), defaultVisible: false },
+    { id: "region", label: "Region", kind: "category", value: (row) => row.region, defaultVisible: false },
+    { id: "authentication", label: "Authentication", kind: "category", value: (row) => row.authentication, defaultVisible: false },
+    { id: "model", label: "Model", kind: "category", value: (row) => row.model, defaultVisible: false },
+    { id: "orchestration", label: "Orchestration", kind: "category", value: (row) => row.orchestration, defaultVisible: false },
+    { id: "isManaged", label: "Managed", kind: "boolean", value: (row) => row.isManaged, defaultVisible: false },
+    { id: "isQuarantined", label: "Quarantined", kind: "boolean", value: (row) => row.isQuarantined, defaultVisible: false },
+    { id: "isCLIAgent", label: "CLI agent", kind: "boolean", value: (row) => row.isCLIAgent, defaultVisible: false },
+    { id: "distinctConnectors", label: "Connectors", kind: "number", value: (row) => row.distinctConnectors, defaultVisible: false },
+    { id: "distinctFlows", label: "Flows", kind: "number", value: (row) => row.distinctFlows, defaultVisible: false },
+    { id: "channels", label: "Channels", value: (row) => row.channels.join(", "), defaultVisible: false },
+  ], [columns]);
+
   return (
     <ResourceListPage<AgentRow>
       title="Agents"
@@ -227,7 +253,8 @@ export function AgentsList() {
       filterKey={filterKey}
       fetchPage={fetchPage}
       columns={columns}
-      getRowId={(row) => row.id}
+      viewColumns={viewColumns}
+      getRowId={(row) => `${row.environmentId}::${row.id}`}
       emptyMessage={
         debouncedQuery || envId
           ? "No agents match the current filters."

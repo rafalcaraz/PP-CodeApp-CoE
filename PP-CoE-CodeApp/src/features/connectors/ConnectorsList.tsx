@@ -11,12 +11,6 @@ import {
   Badge,
   Button,
   Caption1,
-  DataGrid,
-  DataGridBody,
-  DataGridCell,
-  DataGridHeader,
-  DataGridHeaderCell,
-  DataGridRow,
   Input,
   Link,
   Text,
@@ -30,11 +24,11 @@ import {
 import {
   ArrowClockwiseRegular,
   ArrowDownloadRegular,
-  ChevronLeftRegular,
-  ChevronRightRegular,
 } from "@fluentui/react-icons";
 import { useNavigate } from "react-router-dom";
-import { LoadingPane, ErrorPane, EmptyPane } from "../../components/Status";
+import { LoadingPane, ErrorPane } from "../../components/Status";
+import { ResourceTable, fromFluentColumns, type ViewColumn } from "../../shared/resource-table";
+import { hasSourceRecord } from "../../shared/record-properties";
 import { downloadCsv, rowsToCsv } from "../../utils/csv";
 import {
   loadCatalog,
@@ -128,36 +122,6 @@ const useStyles = makeStyles({
     overflow: "hidden",
     textOverflow: "ellipsis",
     whiteSpace: "nowrap",
-  },
-  gridScroll: {
-    overflowX: "auto",
-  },
-  grid: {
-    display: "block",
-    minWidth: "1200px",
-  },
-  gridGroup: {
-    display: "block",
-  },
-  gridRow: {
-    display: "grid",
-    gridTemplateColumns: "minmax(280px, 2fr) 120px 110px 110px 110px minmax(150px, 1fr) minmax(220px, 1fr)",
-  },
-  gridCell: {
-    minWidth: 0,
-    overflow: "hidden",
-    overflowWrap: "anywhere",
-  },
-  pager: {
-    display: "flex",
-    flexWrap: "wrap",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: tokens.spacingHorizontalM,
-  },
-  pagerButtons: {
-    display: "flex",
-    gap: tokens.spacingHorizontalS,
   },
 });
 
@@ -268,6 +232,17 @@ const COLUMNS: TableColumnDefinition<ConnectorEntry>[] = [
   }),
 ];
 
+const VIEW_COLUMNS: ViewColumn<ConnectorEntry>[] = [
+  ...fromFluentColumns(COLUMNS, {
+    releaseTag: { kind: "category" },
+    isDeprecated: { kind: "category", value: (row) => row.isDeprecated ? "Deprecated" : "Active", exportValue: (row) => row.isDeprecated },
+    tier: { kind: "category" },
+    operations: { kind: "number", value: (row) => row.operations.length },
+    publisher: { kind: "category" },
+  }),
+  { id: "description", label: "Description", value: (row) => row.description, defaultVisible: false, width: 320 },
+];
+
 function formatAge(fetchedAt: number): string {
   const minutes = Math.floor((Date.now() - fetchedAt) / 60000);
   if (minutes < 1) return "just now";
@@ -282,14 +257,8 @@ export function ConnectorsList() {
   const { catalog, status, error } = useConnectorCatalog();
   const [filterText, setFilterText] = useState("");
   const [refreshing, setRefreshing] = useState(false);
-  const [pageIndex, setPageIndex] = useState(0);
-  const [sortState, setSortState] = useState<{
-    sortColumn: string;
-    sortDirection: "ascending" | "descending";
-  }>({ sortColumn: "displayName", sortDirection: "ascending" });
 
   const onRefresh = useCallback(async () => {
-    setPageIndex(0);
     setRefreshing(true);
     try {
       await loadCatalog({ force: true });
@@ -320,20 +289,6 @@ export function ConnectorsList() {
         r.releaseTag.toLowerCase().includes(q),
     );
   }, [allEntries, filterText]);
-
-  const sortedEntries = useMemo(() => {
-    const column = COLUMNS.find((item) => item.columnId === sortState.sortColumn);
-    const direction = sortState.sortDirection === "ascending" ? 1 : -1;
-    return [...filteredEntries].sort(
-      (a, b) => direction * (
-        (column?.compare(a, b) ?? 0) || a.connectorId.localeCompare(b.connectorId)
-      ),
-    );
-  }, [filteredEntries, sortState]);
-  const pageCount = Math.max(1, Math.ceil(sortedEntries.length / PAGE_SIZE));
-  const currentPage = Math.min(pageIndex, pageCount - 1);
-  const pageStart = currentPage * PAGE_SIZE;
-  const pageEntries = sortedEntries.slice(pageStart, pageStart + PAGE_SIZE);
 
   const premiumCount = useMemo(
     () => allEntries.filter((r) => r.tier.toLowerCase() === "premium").length,
@@ -393,7 +348,6 @@ export function ConnectorsList() {
             disabled={!catalog}
             onChange={(_e, data: InputOnChangeData) => {
               setFilterText(data.value);
-              setPageIndex(0);
             }}
           />
         </div>
@@ -467,67 +421,13 @@ export function ConnectorsList() {
             )}
           </div>
 
-          {filteredEntries.length === 0 ? (
-            <EmptyPane message="No connectors match the current filter." />
-          ) : (
-            <>
-              <div className={styles.gridScroll} role="region" aria-label="Connector catalog" tabIndex={0}>
-                <DataGrid
-                  className={styles.grid}
-                  items={pageEntries}
-                  columns={COLUMNS}
-                  sortable
-                  sortState={sortState}
-                  onSortChange={(_event, data) => {
-                    setSortState({
-                      sortColumn: String(data.sortColumn ?? "displayName"),
-                      sortDirection: data.sortDirection,
-                    });
-                    setPageIndex(0);
-                  }}
-                  getRowId={(row) => row.connectorId}
-                  focusMode="composite"
-                >
-                  <DataGridHeader className={styles.gridGroup}>
-                    <DataGridRow className={styles.gridRow}>
-                      {({ renderHeaderCell }) => (
-                        <DataGridHeaderCell className={styles.gridCell}>
-                          {renderHeaderCell()}
-                        </DataGridHeaderCell>
-                      )}
-                    </DataGridRow>
-                  </DataGridHeader>
-                  <DataGridBody<ConnectorEntry> className={styles.gridGroup}>
-                    {({ item, rowId }) => (
-                      <DataGridRow<ConnectorEntry> key={rowId} className={styles.gridRow}>
-                        {({ renderCell }) => (
-                          <DataGridCell className={styles.gridCell}>{renderCell(item)}</DataGridCell>
-                        )}
-                      </DataGridRow>
-                    )}
-                  </DataGridBody>
-                </DataGrid>
-              </div>
-              <div className={styles.pager}>
-                <Text aria-live="polite">
-                  Page {currentPage + 1} of {pageCount} · {pageStart + 1}–
-                  {Math.min(pageStart + PAGE_SIZE, sortedEntries.length)} of{" "}
-                  {sortedEntries.length.toLocaleString()} connectors
-                </Text>
-                <div className={styles.pagerButtons}>
-                  <Button icon={<ChevronLeftRegular />} disabled={currentPage === 0}
-                    onClick={() => setPageIndex(currentPage - 1)}>
-                    Previous
-                  </Button>
-                  <Button icon={<ChevronRightRegular />} iconPosition="after"
-                    disabled={currentPage >= pageCount - 1}
-                    onClick={() => setPageIndex(currentPage + 1)}>
-                    Next
-                  </Button>
-                </div>
-              </div>
-            </>
-          )}
+          <ResourceTable pageResetKey={filterText} label="Connectors" rows={filteredEntries} columns={VIEW_COLUMNS}
+            getRowId={(row) => row.connectorId} pageSize={PAGE_SIZE}
+            persistence={{ key: "ppcoe.table.connectors.v1" }}
+            scope={catalog.complete ? "Sort and column filters apply to the entire loaded catalog, before paging." : "Partial catalog: sort and column filters apply to loaded connectors only."} />
+          {allEntries.some((entry) => !hasSourceRecord(entry)) && <Text size={200}>
+            Cached catalog records do not include raw source properties. Refresh the catalog to load fields for custom property columns.
+          </Text>}
         </>
       )}
     </div>

@@ -239,6 +239,21 @@ export function DeepScanView() {
     () => groupCatalog(catalog, { alwaysIncludeObservedGroup: true }),
     [catalog]
   );
+  const resultSourceId = snapshot.kind === "idle" ? sourceId : snapshot.spec.source;
+  const resultSource = getSource(resultSourceId);
+  const resultCatalogGroups = useMemo(() => {
+    const hidePrefixes = resultSourceId === "admin-apps"
+      ? ADMIN_APPS_EXCLUDE_PREFIXES : COPILOT_AGENT_OBSERVED_HIDE_PREFIXES;
+    return groupCatalog(mergePropertyCatalog(curatedForSource(resultSourceId), loadObservedSchema(resultSourceId), { hidePrefixes }), { alwaysIncludeObservedGroup: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resultSourceId, finishedAt]);
+  const resultColumns = snapshot.kind === "idle" ? [] : snapshot.spec.columns;
+  const resultScope = snapshot.kind === "running"
+    ? "Scan ongoing — partial matches received so far. Sort and column filters apply to loaded matches only."
+    : snapshot.kind === "ready" && (snapshot.summary.cancelled || snapshot.summary.scopeUnitsErrored > 0 ||
+      snapshot.scopeErrors.length > 0 || snapshot.summary.scopeUnitsDone < snapshot.summary.scopeUnitsTotal)
+      ? "Scan partial — cancelled, incomplete or some environments failed. Sort and column filters apply to loaded matches only."
+      : "Scan complete — all received matches loaded. Sort and column filters apply to loaded matches only.";
   const candidateCatalog = useMemo(() => getAgentCandidateCatalog(), []);
   const candidateCatalogGroups = useMemo(
     () => groupCatalog(mergePropertyCatalog(candidateCatalog, undefined)),
@@ -358,7 +373,7 @@ export function DeepScanView() {
 
   const onExportCsv = (): void => {
     if (rows.length === 0) return;
-    const csvRows = rowsForCsv(catalogGroups, columns, source.defaultColumns ?? [], rows);
+    const csvRows = rowsForCsv(resultCatalogGroups, resultColumns, resultSource.defaultColumns ?? [], rows);
     downloadCsv("deep-scan", rowsToCsv(csvRows));
   };
 
@@ -677,10 +692,12 @@ export function DeepScanView() {
           <Divider />
           <div className={styles.cardBody}>
             <ResultsTable
-              catalogGroups={catalogGroups}
-              columns={columns}
-              defaultColumns={source.defaultColumns ?? []}
+              catalogGroups={resultCatalogGroups}
+              columns={resultColumns}
+              defaultColumns={resultSource.defaultColumns ?? []}
               rows={rows}
+              sourceId={resultSourceId}
+              scope={resultScope}
             />
           </div>
         </Card>

@@ -1,4 +1,4 @@
-import { runRawQuery } from "../../data/inventory";
+import { runRawQuery, type ResourceTypeValue } from "../../data/inventory";
 import type { Clause } from "../../generated/models/PowerPlatformforAdminsV2Model";
 import { isProjected, resourceIdentity } from "./workspace";
 
@@ -15,6 +15,7 @@ export interface Execution {
   warning?: string;
   startedAt: string;
   defaultColumns?: string[];
+  resourceTypes?: ResourceTypeValue[];
 }
 export function appendPage(execution: Execution, page: { items: unknown[]; skipToken?: string; totalRecords: number }): Execution {
   const identityFor = (row: unknown) => isProjected(execution.clauses) ? null : resourceIdentity(row);

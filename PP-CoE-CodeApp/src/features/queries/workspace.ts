@@ -105,3 +105,9 @@ export function resultColumns(rows: unknown[], clauses: Clause[], selected?: str
   }
   return selected?.length ? selected : defaults;
 }
+export function resultViewKey(rows: unknown[], clauses: Clause[], resourceTypes?: string[]): string {
+  const shape = genericResultShape(rows, clauses)
+    ? ["returned", ...resultColumns(rows, clauses).sort()]
+    : ["inventory", ...(resourceTypes ?? []).slice().sort()];
+  return `ppcoe.queries.results.v1:${JSON.stringify(shape)}`;
+}

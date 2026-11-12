@@ -10,7 +10,7 @@
  * `DataResult<ResourcePage<T>>` shapes.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { FluentProvider, webLightTheme } from "@fluentui/react-components";
 import { createTableColumn, type TableColumnDefinition } from "@fluentui/react-components";
@@ -19,6 +19,8 @@ import {
   type ResourcePage,
 } from "./ResourceListPage";
 import type { DataResult } from "../data/inventory";
+
+beforeEach(() => localStorage.clear());
 
 interface Row {
   id: string;
@@ -328,10 +330,59 @@ describe("ResourceListPage — count label", () => {
         makePage([{ id: "1", name: "Alpha" }], { totalRecords: 1 }),
       );
     const { container } = renderShell({ fetchPage });
-
     await waitFor(() => {
       expect(screen.getByText("Alpha")).toBeInTheDocument();
     });
     expect(within(container).getByText("Showing 1 of 1")).toBeInTheDocument();
   });
+});
+
+describe("ResourceListPage — table view pagination", () => {
+      it("keeps loading actions available with no column matches and transforms later pages", async () => {
+        const fetchPage = vi.fn()
+          .mockResolvedValueOnce(makePage([{ id: "1", name: "Alpha" }], { skipToken: "next" }))
+          .mockResolvedValueOnce(makePage([{ id: "2", name: "Zulu" }]));
+        renderShell({ fetchPage });
+        await screen.findByText("Alpha");
+        await userEvent.click(screen.getByRole("button", { name: "Name column options" }));
+        await userEvent.type(screen.getByRole("textbox", { name: "Name filter value" }), "zulu");
+        await userEvent.click(screen.getByRole("button", { name: "Apply filter" }));
+        expect(screen.queryByText("Alpha")).not.toBeInTheDocument();
+        expect(screen.getByText(/loaded rows only/)).toBeInTheDocument();
+        await userEvent.click(screen.getByRole("button", { name: "Load more" }));
+        expect(await screen.findByText("Zulu")).toBeInTheDocument();
+        expect(screen.queryByText("Alpha")).not.toBeInTheDocument();
+        expect(fetchPage).toHaveBeenLastCalledWith("next", 1);
+      });
+      it("ignores an obsolete continuation after the server filters change", async () => {
+        let resolveOld!: (page: DataResult<ResourcePage<Row>>) => void;
+        const fetchPage = vi.fn()
+          .mockResolvedValueOnce(makePage([{ id: "1", name: "Alpha" }], { skipToken: "next" }))
+          .mockImplementationOnce(() => new Promise<DataResult<ResourcePage<Row>>>((resolve) => { resolveOld = resolve; }))
+          .mockResolvedValueOnce(makePage([{ id: "3", name: "Fresh" }]));
+        const shell = (filterKey: string) => <FluentProvider theme={webLightTheme}>
+          <ResourceListPage title="Widgets" columns={columns} filterKey={filterKey} fetchPage={fetchPage}
+            getRowId={(row) => row.id} filterControls={null} />
+        </FluentProvider>;
+        const view = render(shell("first"));
+        await screen.findByText("Alpha");
+        await userEvent.click(screen.getByRole("button", { name: "Load more" }));
+        view.rerender(shell("second"));
+        await screen.findByText("Fresh");
+        await act(async () => { resolveOld(makePage([{ id: "2", name: "Obsolete" }])); });
+        expect(screen.queryByText("Obsolete")).not.toBeInTheDocument();
+        expect(screen.getByText("Fresh")).toBeInTheDocument();
+      });
+      it("stops a repeated continuation explicitly rather than claiming load-all completed", async () => {
+        const fetchPage = vi.fn()
+          .mockResolvedValueOnce(makePage([{ id: "1", name: "Alpha" }], { skipToken: "next" }))
+          .mockResolvedValueOnce(makePage([{ id: "2", name: "Bravo" }], { skipToken: "next" }));
+        renderShell({ fetchPage });
+        await screen.findByText("Alpha");
+        await userEvent.click(screen.getByRole("button", { name: "Load all remaining" }));
+        expect(await screen.findByText(/Loading stopped because pagination repeated/)).toBeInTheDocument();
+        expect(fetchPage).toHaveBeenCalledTimes(2);
+        expect(screen.getByText("Bravo")).toBeInTheDocument();
+        expect(screen.getByRole("button", { name: "Load more" })).toBeEnabled();
+      });
 });

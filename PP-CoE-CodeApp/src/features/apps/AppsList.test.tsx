@@ -67,7 +67,22 @@ function renderAppsList() {
 describe("AppsList smoke", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    localStorage.clear();
   });
+
+  it("filters by the displayed owner and adds an optional column without fetching", async () => {
+    renderAppsList();
+    await screen.findByText("Onboarding App");
+    await userEvent.click(screen.getByRole("button", { name: "Owner column options" }));
+    await userEvent.type(screen.getByRole("textbox", { name: "Owner filter value" }), "Alice");
+    await userEvent.click(screen.getByRole("button", { name: "Apply filter" }));
+    expect(screen.getByText("Onboarding App")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Columns" }));
+    await userEvent.click(await screen.findByLabelText("App ID"));
+    await userEvent.click(screen.getByText("Done"));
+    expect(screen.getByText("app-1", { exact: true })).toBeInTheDocument();
+    expect(listAppsPage).toHaveBeenCalledTimes(1);
+  }, 15_000);
 
   it("renders the mocked app row", async () => {
     renderAppsList();

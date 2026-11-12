@@ -13,6 +13,7 @@
 
 import { useEffect, useReducer } from "react";
 import { PowerPlatformforAdminsV2Service } from "../../generated";
+import { retainSourceRecord } from "../record-properties";
 import type {
   Clause,
   ResourceItem,
@@ -270,7 +271,7 @@ function toConnectorEntry(item: ResourceItem): ConnectorEntry | null {
       "",
   );
   if (!connectorId) return null;
-  return {
+  return retainSourceRecord({
     connectorId,
     displayName:
       readString(properties, "displayName") ||
@@ -282,7 +283,7 @@ function toConnectorEntry(item: ResourceItem): ConnectorEntry | null {
     releaseTag: readString(properties, "releaseTag"),
     isDeprecated: readBoolean(properties, "isDeprecated"),
     operations: readOperations(properties.operations),
-  };
+  }, item);
 }
 
 function formatError(error: unknown): string {

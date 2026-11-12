@@ -74,6 +74,7 @@ function renderView() {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  localStorage.clear();
 });
 
 describe("ConnectorsList", () => {
@@ -113,7 +114,8 @@ describe("ConnectorsList", () => {
     manyConnectors();
     renderView();
     await userEvent.click(screen.getByRole("button", { name: "Next" }));
-    await userEvent.click(screen.getByRole("columnheader", { name: /Display name/i }));
+    await userEvent.click(screen.getByRole("button", { name: "Display name column options" }));
+    await userEvent.click(screen.getByRole("button", { name: "Sort descending" }));
     expect(screen.getByText(/Page 1 of 3/)).toBeInTheDocument();
     expect(screen.getByText("Connector 060")).toBeInTheDocument();
     expect(screen.queryByText("Connector 000")).not.toBeInTheDocument();

@@ -63,7 +63,7 @@ beforeEach(() => {
   runRawQuery.mockReset(); downloadCsv.mockReset();
   localStorage.clear(); sessionStorage.clear(); rememberExecution(undefined);
 });
-afterEach(() => { cleanup(); vi.restoreAllMocks(); });
+afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 describe("Queries investigation workspace", () => {
   it("marks edits stale and never uses an old token with edited clauses/options", async () => {
     mount(); await runFirst("next");
@@ -118,6 +118,72 @@ describe("Queries investigation workspace", () => {
     expect(downloadCsv.mock.calls[0][1]).toContain("App two");
     expect(screen.getByText(/2 loaded - complete/)).toBeInTheDocument();
   });
+  it("loads all results explicitly without downloading a CSV", async () => {
+    mount(); await runFirst("next");
+    runRawQuery.mockResolvedValueOnce(success([item("two")], "last"))
+      .mockResolvedValueOnce(success([item("three")]));
+    fireEvent.click(screen.getByRole("button", { name: "Load all results" }));
+    await waitFor(() => expect(screen.getByText(/3 loaded - complete/)).toBeInTheDocument());
+    expect(runRawQuery.mock.calls[2][1]).toEqual({ Top: 50, Skip: 2, SkipToken: "last" });
+    expect(downloadCsv).not.toHaveBeenCalled();
+    expect(screen.getByRole("link", { name: "App three" })).toBeInTheDocument();
+  });
+  it("retains partial load-all progress and rejects responses after cancellation", async () => {
+    mount(); await runFirst("next");
+    runRawQuery.mockResolvedValueOnce(success([item("two")], "last"))
+      .mockResolvedValueOnce({ ok: false, error: "Unavailable" });
+    fireEvent.click(screen.getByRole("button", { name: "Load all results" }));
+    await waitFor(() => expect(screen.getByText(/Load all results is incomplete: Unavailable/)).toBeInTheDocument());
+    expect(screen.getByRole("link", { name: "App two" })).toBeInTheDocument();
+    let resolve!: (value: ReturnType<typeof success>) => void;
+    runRawQuery.mockReturnValueOnce(new Promise((done) => { resolve = done; }));
+    fireEvent.click(screen.getByRole("button", { name: "Load all results" }));
+    fireEvent.click(screen.getByRole("button", { name: "Cancel loading" }));
+    await act(async () => resolve(success([item("late")])));
+    expect(screen.queryByRole("link", { name: "App late" })).not.toBeInTheDocument();
+    expect(downloadCsv).not.toHaveBeenCalled();
+    expect(screen.getByText(/Results are partial/)).toBeInTheDocument();
+  });
+  it("keeps loaded-only presentation filters editable without changing the execution", async () => {
+    mount(); await runFirst("next");
+    fireEvent.click(screen.getByRole("button", { name: "Display name column options" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Display name filter value" }), { target: { value: "absent" } });
+    fireEvent.click(screen.getByRole("button", { name: "Apply filter" }));
+    expect(screen.queryByRole("link", { name: "App one" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Load more" })).toBeEnabled();
+    expect(screen.queryByText(/Query changed - run again/)).not.toBeInTheDocument();
+    expect(runRawQuery).toHaveBeenCalledTimes(1);
+    const viewKey = Object.keys(sessionStorage).find((key) => key.startsWith("ppcoe.queries.results.v1:"));
+    expect(viewKey).toBeDefined();
+    expect(sessionStorage.getItem(viewKey!)).not.toContain("App one");
+    fireEvent.click(screen.getByRole("button", { name: "Clear column filters" }));
+    expect(screen.getByRole("link", { name: "App one" })).toBeInTheDocument();
+  });
+  it("exports current-view raw identity values while retaining the existing loaded CSV field contract", async () => {
+    let csvParts: BlobPart[] = [];
+    const NativeBlob = Blob;
+    vi.stubGlobal("Blob", class extends NativeBlob {
+      constructor(parts: BlobPart[], options?: BlobPropertyBag) {
+        super(parts, options); csvParts = parts;
+      }
+    });
+    vi.stubGlobal("URL", { createObjectURL: vi.fn(() => "blob:view"), revokeObjectURL: vi.fn() });
+    vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => undefined);
+    mount(); await runFirst();
+    await waitFor(() => expect(screen.getByText("Production")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "Export current view" }));
+    const csv = csvParts.join("");
+    expect(csv).toContain(ResourceType.CanvasApp);
+    expect(csv).toContain("owner");
+    expect(csv).toContain("env");
+    expect(csv).not.toContain("Production");
+    expect(csv).not.toContain("Owner owner");
+    expect(csv).not.toContain("Inspect");
+    expect(downloadCsv).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Export loaded (1)" }));
+    expect(downloadCsv.mock.calls[0][0]).toBe("inventory-query-loaded-columns");
+    expect(downloadCsv.mock.calls[0][1]).toContain("properties.ownerId");
+  });
   it("restores unsaved draft, mode, view settings and memory results after leaving and returning", async () => {
     const first = mount(); await runFirst("next");
     fireEvent.change(screen.getByLabelText("Page size (1-500)"), { target: { value: "77" } });
@@ -170,11 +236,27 @@ describe("Queries investigation workspace", () => {
     fireEvent.change(screen.getByLabelText("Advanced clauses JSON"), { target: { value: '[{"$type":"count"}]' } });
     runRawQuery.mockResolvedValueOnce(success([{ Count: 7 }, { Count: 8 }]));
     fireEvent.click(screen.getByRole("button", { name: "Run query" }));
-    await waitFor(() => expect(screen.getByRole("columnheader", { name: "Count" })).toBeInTheDocument());
-    expect(screen.getByRole("cell", { name: "7" })).toBeInTheDocument();
-    expect(screen.getByRole("cell", { name: "8" })).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByRole("button", { name: "Count column options" })).toBeInTheDocument());
+    expect(screen.getByRole("gridcell", { name: "7" })).toBeInTheDocument();
+    expect(screen.getByRole("gridcell", { name: "8" })).toBeInTheDocument();
     expect(screen.queryByRole("link")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Result columns")).not.toBeInTheDocument();
+  });
+  it("uses only returned projection keys, including exact dotted aliases and duplicate scalar rows", async () => {
+    mount();
+    fireEvent.click(screen.getByRole("tab", { name: "Advanced" }));
+    fireEvent.change(screen.getByLabelText("Advanced clauses JSON"), { target: { value: '[{"$type":"project"}]' } });
+    runRawQuery.mockResolvedValueOnce(success([{ "properties.displayName": "Exact alias", properties: { displayName: "Nested value" }, __inspect: "Payload marker" }]));
+    fireEvent.click(screen.getByRole("button", { name: "Run query" }));
+    await waitFor(() => expect(screen.getByRole("gridcell", { name: "Exact alias" })).toBeInTheDocument());
+    expect(screen.getByRole("gridcell", { name: "Payload marker" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "View raw row" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Display name column options" })).not.toBeInTheDocument();
+    runRawQuery.mockResolvedValueOnce(success([7, 7]));
+    fireEvent.click(screen.getByRole("button", { name: "Run query" }));
+    await waitFor(() => expect(screen.getAllByRole("gridcell", { name: "7" })).toHaveLength(2));
+    expect(screen.getByRole("button", { name: "Value column options" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "properties.displayName column options" })).not.toBeInTheDocument();
   });
   it("does not silently omit incomplete typed filters", () => {
     mount();

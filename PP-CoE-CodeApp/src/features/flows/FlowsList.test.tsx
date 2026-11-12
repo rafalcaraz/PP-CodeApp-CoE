@@ -68,7 +68,22 @@ function renderFlowsList() {
 describe("FlowsList smoke", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    localStorage.clear();
   });
+
+  it("filters the derived trigger text and adds the created date without fetching", async () => {
+    renderFlowsList();
+    await screen.findByText("Weekly Reminder");
+    await userEvent.click(screen.getByRole("button", { name: "Trigger column options" }));
+    await userEvent.type(screen.getByRole("textbox", { name: "Trigger filter value" }), "Recurrence");
+    await userEvent.click(screen.getByRole("button", { name: "Apply filter" }));
+    expect(screen.getByText("Weekly Reminder")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Columns" }));
+    await userEvent.click(await screen.findByLabelText("Created on"));
+    await userEvent.click(screen.getByText("Done"));
+    expect(await screen.findByRole("button", { name: "Created on column options" })).toBeInTheDocument();
+    expect(listFlowsPage).toHaveBeenCalledTimes(1);
+  }, 15_000);
 
   it("renders the mocked flow row", async () => {
     renderFlowsList();

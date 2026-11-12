@@ -1,14 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   makeStyles,
   tokens,
   Text,
-  DataGrid,
-  DataGridHeader,
-  DataGridHeaderCell,
-  DataGridBody,
-  DataGridRow,
-  DataGridCell,
   type TableColumnDefinition,
   createTableColumn,
   Link,
@@ -24,6 +18,7 @@ import { listEnvironmentsPage, type EnvironmentRow } from "./data";
 import { EmptyPane, ErrorPane, LoadingPane } from "../../components/Status";
 import { ArrowDownloadRegular } from "@fluentui/react-icons";
 import { downloadCsv, rowsToCsv } from "../../utils/csv";
+import { ResourceTable, fromFluentColumns, type ViewColumn } from "../../shared/resource-table";
 
 const useStyles = makeStyles({
   root: {
@@ -88,8 +83,11 @@ export function EnvironmentsList() {
   const [loadingMore, setLoadingMore] = useState<boolean>(false);
   const [errorMsg, setErrorMsg] = useState<string>("");
   const [query, setQuery] = useState("");
+  const generation = useRef(0);
+  const paging = useRef(false);
 
   useEffect(() => {
+    const request = ++generation.current;
     let cancelled = false;
     (async () => {
       setPhase("loading");
@@ -111,6 +109,7 @@ export function EnvironmentsList() {
     })();
     return () => {
       cancelled = true;
+      generation.current = request + 1;
     };
   }, []);
 
@@ -130,69 +129,86 @@ export function EnvironmentsList() {
   const onSearchChange = (_e: SearchBoxChangeEvent, data: InputOnChangeData) => setQuery(data.value);
 
   const loadMore = async () => {
-    if (!skipToken || loadingMore) return;
+    if (!skipToken || paging.current) return;
+    const request = generation.current;
+    paging.current = true;
     setLoadingMore(true);
-    const res = await listEnvironmentsPage(skipToken, 500, rows.length);
-    setLoadingMore(false);
-    if (!res.ok) {
-      setErrorMsg(res.error);
-      return;
-    }
-    setRows((prev) => prev.concat(res.data.rows));
-    setSkipToken(res.data.skipToken);
-    if (res.data.totalRecords) setTotalRecords(res.data.totalRecords);
-  };
-
-  const loadAll = async () => {
-    if (!skipToken || loadingMore) return;
-    setLoadingMore(true);
-    let token: string | undefined = skipToken;
-    let loaded = rows.length;
-    let safety = 50;
-    const collected: EnvironmentRow[] = [];
-    while (token && safety-- > 0) {
-      const res = await listEnvironmentsPage(token, 500, loaded + collected.length);
+    setErrorMsg("");
+    try {
+      const res = await listEnvironmentsPage(skipToken, 500, rows.length);
+      if (request !== generation.current) return;
       if (!res.ok) {
         setErrorMsg(res.error);
-        break;
+        return;
       }
-      collected.push(...res.data.rows);
-      token = res.data.skipToken;
+      setRows((prev) => prev.concat(res.data.rows));
+      setSkipToken(res.data.skipToken);
       if (res.data.totalRecords) setTotalRecords(res.data.totalRecords);
-      if (res.data.rows.length === 0) break;
+      if (!res.data.rows.length && res.data.skipToken) {
+        setErrorMsg("Loading stopped because the connector returned an empty page with more results pending.");
+      }
+    } catch (cause) {
+      if (request === generation.current) setErrorMsg(`Loading failed: ${String(cause)}`);
+    } finally {
+      if (request === generation.current) {
+        paging.current = false;
+        setLoadingMore(false);
+      }
     }
-    if (collected.length > 0) setRows((prev) => prev.concat(collected));
-    setSkipToken(token);
-    setLoadingMore(false);
-    loaded += collected.length;
-    void loaded;
+  };
+
+  const loadRemaining = async (exportAfter: boolean) => {
+    if (!skipToken || paging.current) return;
+    const request = generation.current;
+    paging.current = true;
+    setLoadingMore(true);
+    setErrorMsg("");
+    let token: string | undefined = skipToken;
+    let safety = exportAfter ? 200 : 50;
+    const all = rows.slice();
+    let failure = "";
+    const seen = new Set<string>();
+    try {
+      while (token && safety-- > 0) {
+        if (seen.has(token)) {
+          failure = "The connector repeated a continuation token.";
+          break;
+        }
+        seen.add(token);
+        const res = await listEnvironmentsPage(token, 500, all.length);
+        if (request !== generation.current) return;
+        if (!res.ok) {
+          failure = res.error;
+          break;
+        }
+        all.push(...res.data.rows);
+        token = res.data.skipToken;
+        if (res.data.totalRecords) setTotalRecords(res.data.totalRecords);
+        if (!res.data.rows.length && token) {
+          failure = "The connector returned an empty page with more results pending.";
+          break;
+        }
+      }
+      if (token && !failure) failure = "The safety page limit was reached with more results pending.";
+    } catch (cause) {
+      failure = String(cause);
+    } finally {
+      if (request === generation.current) {
+        setRows(all);
+        setSkipToken(token);
+        paging.current = false;
+        setLoadingMore(false);
+        if (failure) setErrorMsg(`Loading incomplete: ${failure}${exportAfter ? " Export all was not downloaded." : ""}`);
+      }
+    }
+    if (request === generation.current && exportAfter && !failure) {
+      downloadCsv("environments-all", rowsToCsv(all));
+    }
   };
 
   const exportLoaded = () => {
     if (rows.length === 0) return;
     downloadCsv("environments", rowsToCsv(filteredRows));
-  };
-
-  const exportAll = async () => {
-    if (rows.length === 0 || !skipToken || loadingMore) return;
-    setLoadingMore(true);
-    const all: EnvironmentRow[] = rows.slice();
-    let token: string | undefined = skipToken;
-    let safety = 200;
-    while (token && safety-- > 0) {
-      const res = await listEnvironmentsPage(token, 500, all.length);
-      if (!res.ok) {
-        setErrorMsg(res.error);
-        break;
-      }
-      for (const r of res.data.rows) all.push(r);
-      token = res.data.skipToken;
-      if (res.data.rows.length === 0) break;
-    }
-    setRows(all);
-    setSkipToken(token);
-    setLoadingMore(false);
-    downloadCsv("environments-all", rowsToCsv(all));
   };
 
   const columns: TableColumnDefinition<EnvironmentRow>[] = [
@@ -250,6 +266,20 @@ export function EnvironmentsList() {
     }),
   ];
 
+  const viewColumns: ViewColumn<EnvironmentRow>[] = [
+    ...fromFluentColumns(columns, {
+      name: { value: (row) => row.displayName || row.id },
+      environmentType: { kind: "category" },
+      region: { kind: "category" },
+      isManaged: { kind: "boolean" },
+      environmentGroup: { value: (row) => row.environmentGroup || row.environmentGroupId, exportValue: (row) => row.environmentGroupId },
+      createdAt: { kind: "date" },
+    }),
+    { id: "id", label: "Environment ID", value: (row) => row.id, defaultVisible: false },
+    { id: "createdBy", label: "Creator ID", value: (row) => row.createdBy, defaultVisible: false },
+    { id: "lastModifiedAt", label: "Modified", kind: "date", value: (row) => row.lastModifiedAt, render: (row) => formatDate(row.lastModifiedAt), defaultVisible: false },
+  ];
+
   return (
     <div className={styles.root}>
       <div className={styles.header}>
@@ -304,7 +334,7 @@ export function EnvironmentsList() {
                 size="small"
                 appearance="subtle"
                 icon={<ArrowDownloadRegular />}
-                onClick={exportAll}
+                onClick={() => void loadRemaining(true)}
                 disabled={loadingMore}
               >
                 {loadingMore ? "Fetching all…" : "Export all"}
@@ -322,28 +352,12 @@ export function EnvironmentsList() {
                   : `No environments match "${query}".`
               }
             />
-          ) : (
-            <DataGrid
-              items={filteredRows}
-              columns={columns}
-              getRowId={(row) => row.id}
-              sortable={false}
-              focusMode="composite"
-            >
-              <DataGridHeader>
-                <DataGridRow>
-                  {({ renderHeaderCell }) => <DataGridHeaderCell>{renderHeaderCell()}</DataGridHeaderCell>}
-                </DataGridRow>
-              </DataGridHeader>
-              <DataGridBody<EnvironmentRow>>
-                {({ item, rowId }) => (
-                  <DataGridRow<EnvironmentRow> key={rowId}>
-                    {({ renderCell }) => <DataGridCell>{renderCell(item)}</DataGridCell>}
-                  </DataGridRow>
-                )}
-              </DataGridBody>
-            </DataGrid>
-          )}
+          ) : null}
+          <ResourceTable columns={viewColumns} rows={filteredRows} getRowId={(row) => row.id}
+            label="Environments" persistence={{ key: "ppcoe.table.environments.v1" }}
+            exportDisabled={loadingMore}
+            scope="Sort and column filters apply to loaded environments matching the search. Load remaining results to include more environments." />
+          {errorMsg && <ErrorPane title="Couldn't load all environments" message={errorMsg} />}
 
           {skipToken && (
             <div className={styles.footer}>
@@ -357,7 +371,7 @@ export function EnvironmentsList() {
                   <Button appearance="primary" onClick={loadMore}>
                     Load more
                   </Button>
-                  <Button appearance="subtle" onClick={loadAll}>
+                  <Button appearance="subtle" onClick={() => void loadRemaining(false)}>
                     Load all remaining
                   </Button>
                 </>
