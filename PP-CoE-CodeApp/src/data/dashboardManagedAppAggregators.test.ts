@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ResourceType, toAppRow } from "./inventory";
+import { ResourceType, readAppOrigin, toAppRow } from "./inventory";
 import { managedAppsEstateMetric as metric } from "./dashboardManagedAppAggregators";
 import type { EstateManagedApp } from "./dashboardManagedAppSource";
 
@@ -62,6 +62,15 @@ describe("Managed Apps Estate aggregations", () => {
     ]));
     expect(origins.reduce((sum, bucket) => sum + bucket.value, 0)).toBe(8);
     expect(table(eight(), "coverage")).toContainEqual({ field: "Environment mapping unavailable", apps: 2 });
+  });
+  it("counts createdIn-only and existing origin apps in one known-origin bucket", () => {
+    const rows = [
+      app(0, { origin: readAppOrigin({ properties: { createdIn: "Copilot Studio" } }) }),
+      app(1, { origin: readAppOrigin({ properties: { origin: "CopilotStudio" } }) }),
+      app(2, { origin: readAppOrigin({ properties: { origin: "FutureSurface", createdIn: "Copilot Studio" } }) }),
+    ];
+    expect(buckets(rows, "origins")).toEqual([{ name: "Copilot Studio", value: 2 }, { name: "FutureSurface", value: 1 }]);
+    expect(table(rows, "coverage")).toContainEqual({ field: "Origin unavailable", apps: 0 });
   });
   it("counts unique app-connector usage, includes no-connector apps and does not zero malformed metadata", () => {
     const connectors = buckets(eight(), "connectors");

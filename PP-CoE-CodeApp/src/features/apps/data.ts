@@ -19,6 +19,9 @@ export {
   ResourceType,
   shortResourceType,
   friendlyResourceType,
+  isManagedApp,
+  readAppOrigin,
+  appOriginLabel,
 } from "../../data/inventory";
 
 export type {

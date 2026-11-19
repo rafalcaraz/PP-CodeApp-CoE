@@ -7,7 +7,7 @@ import { loadEmptyGroupMembership, loadPolicy, membershipId, readCancelled, type
 import { loadGroupEvidenceBatch } from "./governance";
 import {
   boundedCloneRequest, canonical, jsonObject, planGroupClone,
-  type CloneBackend, type CloneOperation, type ClonePlan, type CloneSnapshot, type CloneStore,
+  type CloneBackend, type CloneOperation, type ClonePlan, type CloneSnapshot, type CloneStore, type ManagedAppSharingValues,
 } from "./groupClone";
 
 const APPLIED_SETTINGS_EVIDENCE =
@@ -159,7 +159,8 @@ export function updateGroupRule(ruleSetId: string, body: RuleSetDto): Promise<Da
   return call("UpdateRuleSet", { ruleSetId, body });
 }
 
-export async function prepareGroupClone(id: string, name: string, signal?: AbortSignal, description?: string): Promise<DataResult<ClonePlan>> {
+export async function prepareGroupClone(id: string, name: string, signal?: AbortSignal, description?: string,
+  managedAppSharing?: ManagedAppSharingValues): Promise<DataResult<ClonePlan>> {
   const cancelled = readCancelled(signal);
   if (cancelled) return cancelled;
   try {
@@ -167,7 +168,7 @@ export async function prepareGroupClone(id: string, name: string, signal?: Abort
     const afterRead = readCancelled(signal);
     if (afterRead) return afterRead;
     if (!source.ok) return source;
-    const plan = await planGroupClone(source.data, name, description);
+    const plan = await planGroupClone(source.data, name, description, Date.now(), { managedAppSharing });
     plan.blockers = [...new Set([...plan.blockers, ...groupCloneBackend.executionBlockers(plan)])];
     return readCancelled(signal) ?? { ok: true, data: plan };
   } catch (error) {
@@ -179,10 +180,19 @@ const STORE_PREFIX = "ppcoe:managed-apps:group-clone:v1:";
 
 function operationRecord(value: unknown): value is CloneOperation {
   if (!jsonObject(value)) return false;
-  const allowed = ["version", "id", "sourceId", "sourceFingerprint", "planFingerprint", "phase", "destinationId", "policyId", "rules", "steps", "skipped", "updatedAt"];
-  return Object.keys(value).every((key) => allowed.includes(key)) && value.version === 1
+  const allowed = ["version", "id", "sourceId", "sourceFingerprint", "planFingerprint", "destinationFingerprint", "phase", "destinationId", "policyId", "rules", "steps", "skipped", "independentRules", "trialRules", "updatedAt"];
+  return Object.keys(value).every((key) => allowed.includes(key)) && (value.version === 1 || value.version === 2)
+    && (value.version === 2 ? typeof value.destinationFingerprint === "string" && /^[a-f0-9]{64}$/.test(value.destinationFingerprint)
+      : value.destinationFingerprint === undefined)
     && ["id", "sourceId", "sourceFingerprint", "planFingerprint"].every((key) => typeof value[key] === "string")
     && ["planned", "blocked", "running", "failed", "indeterminate", "publication-pending", "verified", "created-with-omissions"].includes(String(value.phase))
+    && (value.trialRules === undefined || (Array.isArray(value.trialRules) && value.trialRules.every((entry) =>
+      jsonObject(entry) && Object.keys(entry).every((key) => ["sourceRuleId", "bucket", "sourceManagedBy"].includes(key))
+      && typeof entry.sourceRuleId === "string" && !!membershipId(entry.sourceRuleId)
+      && entry.bucket === "Sharing/MicrosoftApp" && (entry.sourceManagedBy === undefined || entry.sourceManagedBy === "IT"))))
+    && (value.independentRules === undefined || (Array.isArray(value.independentRules) && value.independentRules.every((entry) =>
+      jsonObject(entry) && Object.keys(entry).every((key) => ["id", "sourceManagedBy"].includes(key))
+      && typeof entry.id === "string" && !!entry.id && (entry.sourceManagedBy === "Microsoft" || entry.sourceManagedBy === "IT"))))
     && (value.skipped === undefined || (Array.isArray(value.skipped) && value.skipped.every((entry) =>
       jsonObject(entry) && Object.keys(entry).every((key) => ["kind", "id", "reasons"].includes(key))
       && ["group-rule", "policy-module"].includes(String(entry.kind)) && typeof entry.id === "string"
@@ -214,15 +224,27 @@ export const groupCloneStore: CloneStore = {
     localStorage.setItem(`${STORE_PREFIX}${operation.id}`, JSON.stringify(operation));
     window.dispatchEvent(new Event("ppcoe:managed-apps:group-clone:changed"));
   },
+  list: () => {
+    const records: CloneOperation[] = [];
+    for (let index = 0; index < localStorage.length; index++) {
+      const key = localStorage.key(index);
+      if (!key?.startsWith(STORE_PREFIX)) continue;
+      const operation = groupCloneStore.read(key.slice(STORE_PREFIX.length));
+      if (operation) records.push(operation);
+    }
+    return records;
+  },
 };
 
 export function loadCloneOperations(sourceId: string): CloneOperation[] {
-  const records: CloneOperation[] = [];
-  for (let index = 0; index < localStorage.length; index++) {
-    const key = localStorage.key(index);
-    if (!key?.startsWith(STORE_PREFIX)) continue;
-    const operation = groupCloneStore.read(key.slice(STORE_PREFIX.length));
-    if (operation && membershipId(operation.sourceId) === membershipId(sourceId)) records.push(operation);
-  }
-  return records.sort((a, b) => b.updatedAt - a.updatedAt);
+  return groupCloneStore.list().filter((operation) => membershipId(operation.sourceId) === membershipId(sourceId))
+    .sort((a, b) => b.updatedAt - a.updatedAt);
+}
+
+export async function withGroupCloneLock<T>(action: () => Promise<T>): Promise<T> {
+  if (typeof navigator.locks?.request !== "function") throw new Error("This browser cannot serialize group copies across tabs. Use a secure browser with Web Locks support.");
+  return navigator.locks.request("ppcoe:managed-apps:group-clone", { mode: "exclusive", ifAvailable: true }, async (lock) => {
+    if (!lock) throw new Error("Another group copy is active in this browser. Wait for it to stop, then review again. Historical incomplete copies are not active locks.");
+    return action();
+  });
 }

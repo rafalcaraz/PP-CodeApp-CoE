@@ -5,6 +5,7 @@ import {
   Badge,
   Link,
   Input,
+  Text,
   type TableColumnDefinition,
   createTableColumn,
   makeStyles,
@@ -27,6 +28,7 @@ import { EnvironmentPicker } from "../../components/EnvironmentPicker";
 import { useDebouncedValue } from "../../hooks/useDebouncedValue";
 import { useConnectorCatalog } from "../../shared/connector-catalog";
 import { fromFluentColumns, type ViewColumn } from "../../shared/resource-table";
+import { managedAppPackageLabel, managedAppPackageText } from "./managedAppProperties";
 
 const useStyles = makeStyles({
   search: {
@@ -204,6 +206,8 @@ export function AppsList() {
     { id: "sharedUsersCount", label: "Shared users", kind: "number", value: (row) => row.sharedUsersCount, defaultVisible: false },
     { id: "sharedGroupsCount", label: "Shared groups", kind: "number", value: (row) => row.sharedGroupsCount, defaultVisible: false },
     { id: "connectorCount", label: "Connectors", kind: "number", value: (row) => row.connectors.length, defaultVisible: false },
+    { id: "managedAppPackages", label: "Packages", value: managedAppPackageText, render: managedAppPackageLabel,
+      exportValue: (row) => managedAppPackageText(row) || managedAppPackageLabel(row), defaultVisible: false },
   ], [columns, tier]);
 
   const onTypeSelect = (_e: unknown, data: { selectedOptions: string[] }) => {
@@ -273,6 +277,7 @@ export function AppsList() {
             onChange={(_e, data: InputOnChangeData) => setQueryInput(data.value)}
             contentBefore={<SearchIcon />}
           />
+          <Text size={200}>Find apps by package: add Packages in Columns, then filter by name or version. Column filters cover loaded apps only.</Text>
         </>
       }
     />

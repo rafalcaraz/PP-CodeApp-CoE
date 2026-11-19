@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { StrictMode } from "react";
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { FluentProvider, Tab, TabList, webLightTheme } from "@fluentui/react-components";
-import { Link, MemoryRouter, Route, Routes } from "react-router-dom";
+import { Link, MemoryRouter, Route, Routes, useLocation, useParams } from "react-router-dom";
 import type { MoveOutcome, MoveProgress, MoveRecord } from "./pdeMoves";
 import type { DragEndEvent } from "@dnd-kit/core";
 const { drag } = vi.hoisted(() => ({ drag: { end: undefined as ((event: DragEndEvent) => void) | undefined } }));
@@ -21,16 +21,16 @@ vi.mock("./pdeMoveData", async () => ({
   executeLivePdeMoves, reconcileLivePdeMove, checkPreviousPdeMoves,
 }));
 
-const { loadManagedApps, loadGroupPolicies, loadPdeApps, loadGroupEvidenceBatch, preparePdeMoves, prepareGroupClone, executeGroupClone, newCloneOperation } = vi.hoisted(() => ({
+const { loadManagedApps, loadGroupPolicies, loadPdeApps, loadGroupEvidenceBatch, preparePdeMoves, prepareGroupClone, executeGroupClone, newCloneOperation, withGroupCloneLock } = vi.hoisted(() => ({
   loadManagedApps: vi.fn(), loadGroupPolicies: vi.fn(), loadPdeApps: vi.fn(),
   loadGroupEvidenceBatch: vi.fn(), preparePdeMoves: vi.fn(), prepareGroupClone: vi.fn(),
-  executeGroupClone: vi.fn(), newCloneOperation: vi.fn(),
+  executeGroupClone: vi.fn(), newCloneOperation: vi.fn(), withGroupCloneLock: vi.fn(),
 }));
 vi.mock("./groupClone", async () => ({
   ...await vi.importActual<typeof import("./groupClone")>("./groupClone"), executeGroupClone, newCloneOperation,
 }));
 vi.mock("./groupCloneData", async () => ({
-  ...await vi.importActual<typeof import("./groupCloneData")>("./groupCloneData"), prepareGroupClone,
+  ...await vi.importActual<typeof import("./groupCloneData")>("./groupCloneData"), prepareGroupClone, withGroupCloneLock,
 }));
 vi.mock("./governance", async () => ({
   ...await vi.importActual<typeof import("./governance")>("./governance"),
@@ -77,6 +77,7 @@ beforeEach(() => {
   pendingMoveNotice.dismiss("");
   vi.clearAllMocks();
   localStorage.clear();
+  withGroupCloneLock.mockImplementation((action: () => Promise<unknown>) => action());
   prepareGroupClone.mockImplementation(async (id, name) => ({ ok: true, data: {
     sourceId: id, sourcePolicyId: "source-acp", sourceRuleIds: [], sourceFingerprint: "synthetic",
     preparedAt: Date.now(), group: { displayName: name, description: "" }, rules: [],
@@ -238,6 +239,83 @@ describe("ManagedAppsView", () => {
     expect(screen.getAllByRole("checkbox", { name: "Select PDE Personal workspace" })).toHaveLength(1);
     expect(screen.queryByText(/PDE moves require fresh whole-PDE/)).not.toBeInTheDocument();
     expect(loadGroupPolicies).not.toHaveBeenCalled();
+  });
+  it("opens this app's full detail route with encoded app and environment identity, without a move or inventory refresh", async () => {
+    const app = { ...apps[0], id: "app/with?characters", environmentId: "env space&scope" };
+    loadManagedApps.mockResolvedValue({ ok: true, data: {
+      ...inventory, apps: [app], environments: [{ ...environment, id: app.environmentId }],
+    } });
+    function DetailDestination() {
+      const { appId } = useParams();
+      const location = useLocation();
+      return <><h1>Full app detail destination</h1><p>{appId}</p><p>{location.search}</p></>;
+    }
+    render(<FluentProvider theme={webLightTheme}><MemoryRouter initialEntries={["/managed-apps"]}>
+      <Routes>
+        <Route path="/managed-apps" element={<ManagedAppsView />} />
+        <Route path="/apps/:appId" element={<DetailDestination />} />
+      </Routes>
+    </MemoryRouter></FluentProvider>);
+    fireEvent.click(await screen.findByRole("button", { name: "Inspect Budget planner and connectors" }));
+    expect(await screen.findByRole("dialog")).toBeVisible();
+    expect(screen.getByRole("button", { name: "Close" })).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "View full app details" }));
+    expect(await screen.findByRole("heading", { name: "Full app detail destination" })).toBeVisible();
+    expect(screen.getByText(app.id)).toBeVisible();
+    expect(screen.getByText("?envId=env+space%26scope")).toBeVisible();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(loadManagedApps).toHaveBeenCalledTimes(1);
+    expect(executeLivePdeMoves).not.toHaveBeenCalled();
+    expect(preparePdeMoves).not.toHaveBeenCalled();
+  });
+  it.each([
+    { id: "", environmentId: "pde-one" },
+    { id: "   ", environmentId: "pde-one" },
+    { id: "00000000-0000-0000-0000-000000000000", environmentId: "pde-one" },
+    { id: "app", environmentId: "" },
+  ])("does not offer a broken full-detail route for missing identity %j", async (identity) => {
+    loadManagedApps.mockResolvedValue({ ok: true, data: { ...inventory, apps: [{ ...apps[0], ...identity }] } });
+    renderView();
+    fireEvent.click(await screen.findByRole("button", { name: "Inspect Budget planner and connectors" }));
+    if (!identity.environmentId) {
+      expect(await screen.findByText("Environment identity is unavailable. Refresh inventory before opening its details.")).toBeInTheDocument();
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "View full app details" })).not.toBeInTheDocument();
+      return;
+    }
+    expect(await screen.findByRole("dialog")).toBeVisible();
+    expect(screen.queryByRole("button", { name: "View full app details" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Close" })).toBeEnabled();
+  });
+  it("shows createdIn-only origins in board details, search and one shared origin filter category", async () => {
+    const originApps = [
+      { name: "From createdIn", fields: { createdIn: "Copilot Studio" } },
+      { name: "From origin", fields: { origin: "CopilotStudio" } },
+      { name: "From CLI", fields: { origin: "managed-apps-cli", createdIn: "Copilot Studio" } },
+    ].map(({ name, fields }) => readManagedApp({
+      name, type: "microsoft.powerapps/apps", properties: {
+        displayName: name, environmentId: environment.id, subType: "microsoftApp", ...fields,
+      },
+    }));
+    loadManagedApps.mockResolvedValue({ ok: true, data: { ...inventory, apps: originApps } });
+    renderView();
+    await screen.findByText("From createdIn");
+    const board = within(screen.getByRole("region", { name: "Managed apps by environment group" }));
+    expect(board.getAllByText("Copilot Studio")).toHaveLength(2);
+    expect(board.getByText("managed-apps-cli")).toBeVisible();
+    fireEvent.change(screen.getByRole("searchbox"), { target: { value: "copilot studio" } });
+    expect(board.getByText("From createdIn")).toBeVisible();
+    expect(board.getByText("From origin")).toBeVisible();
+    expect(board.queryByText("From CLI")).not.toBeInTheDocument();
+    fireEvent.change(screen.getByRole("searchbox"), { target: { value: "" } });
+    fireEvent.click(screen.getByRole("button", { name: "Filters" }));
+    fireEvent.click(screen.getByRole("combobox", { name: "Origin" }));
+    expect(await screen.findAllByRole("option", { name: "Copilot Studio" })).toHaveLength(1);
+    fireEvent.click(screen.getByRole("option", { name: "Copilot Studio" }));
+    expect(board.getAllByText("Copilot Studio")).toHaveLength(2);
+    expect(board.queryByText("From CLI")).not.toBeInTheDocument();
+    fireEvent.click(board.getByRole("button", { name: "Inspect From createdIn and connectors" }));
+    expect(within(await screen.findByRole("dialog")).getByText("Copilot Studio")).toBeVisible();
   });
   it("searches makers and keeps unfiltered PDE/app counts", async () => {
     renderView();

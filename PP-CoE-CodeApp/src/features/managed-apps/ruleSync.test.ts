@@ -64,6 +64,43 @@ beforeEach(async () => {
 });
 
 describe("selective one-time rule sync (synthetic only)", () => {
+  it.each([true, false])("does not enable MicrosoftApp sharing for selective settings sync (source attribution: %s)", async (attributed) => {
+    const h = await harness();
+    h.source.rules[0].parameters!.unshift({
+      type: "Sharing", resourceType: "MicrosoftApp", value: [{ id: "MaximumShareLimit", value: "-1" }], ...(attributed ? { managedBy: "IT" } : {}),
+    });
+    const catalog = await ruleSyncCatalog(h.source);
+    expect(catalog.rules.some((rule) => rule.kind === "setting")).toBe(false);
+    expect(catalog.exclusions.map((entry) => entry.reason).join()).toContain("selective sync remain unsupported");
+    const target = await harness();
+    target.first.rules[0].parameters!.unshift({
+      type: "Sharing", resourceType: "MicrosoftApp", value: [{ id: "MaximumShareLimit", value: "-1" }], ...(attributed ? { managedBy: "IT" } : {}),
+    });
+    const plan = await planRuleSync(target.source, [target.setting], [target.first]);
+    expect(plan.targets[0].blockers.join()).toContain("losslessly writable resource");
+  });
+  it("retains explicit connection-mode requirements for selective source and target validation", async () => {
+    const h = await harness();
+    const missingMode = [{ AllowedConnector: "/providers/Microsoft.PowerApps/apis/shared_example", AllowedActionsMode: "AllAllowed" }];
+    h.source.policy.ruleSets![0].inputs!.AllowedConnectorList = missingMode;
+    expect((await ruleSyncCatalog(h.source)).blockers.join()).toContain("ambiguous action/connection-type restrictions");
+    h.source.policy.ruleSets![0].inputs!.AllowedConnectorList = [];
+    h.first.policy.ruleSets![0].inputs!.AllowedConnectorList = missingMode;
+    expect((await planRuleSync(h.source, [h.setting], [h.first])).targets[0].blockers.join()).toContain("ambiguous action/connection-type restrictions");
+    h.first.policy.ruleSets![0].inputs!.AllowedConnectorList = [];
+    Object.assign(h.source.policy.ruleSets![0], { managedBy: "IT" });
+    expect((await ruleSyncCatalog(h.source)).blockers.join()).toContain("ConnectorManagement.managedBy");
+  });
+  it("does not enable independent-management recreation in selective sync", async () => {
+    const h = await harness();
+    h.source.policy.ruleSets!.push({
+      id: "MicrosoftAppsContentSecurityPolicy", version: "1.0",
+      inputs: { IsMicrosoftAppsContentSecurityPolicyEnabled: true }, ...{ managedBy: "Microsoft" },
+    });
+    const catalog = await ruleSyncCatalog(h.source);
+    expect(catalog.rules.some((rule) => rule.kind === "policy" && rule.module.id === "MicrosoftAppsContentSecurityPolicy")).toBe(false);
+    expect(catalog.exclusions.find((entry) => entry.label === "MicrosoftAppsContentSecurityPolicy")?.reason).toContain("managedBy");
+  });
   it("requires individual rules and destinations, with no implicit all selection", async () => {
     const h = await harness();
     expect((await planRuleSync(h.source, [], [h.first])).blockers).not.toEqual([]);

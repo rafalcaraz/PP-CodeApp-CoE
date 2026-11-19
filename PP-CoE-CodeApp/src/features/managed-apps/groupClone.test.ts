@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Policy, RuleAssignment, RuleSetDto } from "../../generated/models/PowerPlatformforAdminsV2Model";
 import {
-  CLONE_REQUEST_TIMEOUT_MS, executeGroupClone, newCloneOperation, planGroupClone, reconcileGroupClone, ruleCreateBody,
-  type CloneBackend, type CloneOperation, type ClonePlan, type CloneSnapshot, type CloneStore,
+  CLONE_REQUEST_TIMEOUT_MS, cloneHistory, cloneIntent, executeGroupClone, inspectGroupClone, newCloneOperation, planGroupClone, reconcileGroupClone, ruleCreateBody,
+  type CloneBackend, type CloneOperation, type ClonePlan, type CloneSnapshot, type CloneStore, type ManagedAppSharingValues,
 } from "./groupClone";
 
 beforeEach(async () => {
@@ -39,11 +39,40 @@ function partialSource(): CloneSnapshot {
   return snapshot;
 }
 
-async function harness(description?: string, initialSnapshot = source()) {
+function microsoftAppTrialSource(): CloneSnapshot {
+  const snapshot = source();
+  snapshot.rules[0].parameters = [
+    { type: "Sharing", resourceType: "MicrosoftApp", ...{ managedBy: "IT", lastModifiedDate: "2026-07-06T17:51:31Z" }, value: [
+      { id: "MaximumShareLimit", value: "-1" }, { id: "IsGroupSharingDisabled", value: "false" },
+      { id: "IsGuestSharingDisabled", value: "true" }, { id: "IsViralSharingDisabled", value: "false" },
+    ] },
+    { type: "Sharing", resourceType: "AuthoringBot", ...{ lastModifiedDate: "2026-08-13T15:21:54Z" },
+      value: [{ id: "CanShareWithSecurityGroups", value: "noLimit" }] },
+    { type: "Sharing", resourceType: "UsersBot", ...{ lastModifiedDate: "2026-08-13T15:21:54Z" },
+      value: [{ id: "CanShareWithSecurityGroups", value: "noLimit" }, { id: "MaximumShareLimit", value: "-1" }] },
+  ];
+  return snapshot;
+}
+
+function microsoftManagedSource(id = "MicrosoftAppsContentSecurityPolicy"): CloneSnapshot {
+  const snapshot = source();
+  snapshot.policy.ruleSets![2] = {
+    id, version: "1.0", inputs: id === "MicrosoftAppsContentSecurityPolicy" ? {
+      IsMicrosoftAppsContentSecurityPolicyEnabled: true,
+      MicrosoftAppsContentSecurityPolicyConfiguration: "{}",
+      MicrosoftAppsContentSecurityPolicyReportingEndpoint: null,
+    } : { MicrosoftApps_AppCreationFromCLI: false },
+    ...{ managedBy: "Microsoft", lastModifiedDate: "2026-09-23T22:40:08.4416781Z" },
+  };
+  return snapshot;
+}
+
+async function harness(description?: string, initialSnapshot = source(), managedAppSharing?: ManagedAppSharingValues) {
   let snapshot = initialSnapshot;
-  const plan = await planGroupClone(snapshot, "Independent test group", description);
+  const plan = await planGroupClone(snapshot, "Independent test group", description, Date.now(), { managedAppSharing });
   const records = new Map<string, CloneOperation>();
-  const store: CloneStore = { read: (id) => records.get(id), save: (record) => records.set(record.id, structuredClone(record)) };
+  const store: CloneStore = { read: (id) => records.get(id), save: (record) => records.set(record.id, structuredClone(record)),
+    list: () => [...records.values()].map((record) => structuredClone(record)) };
   const state = { group: { id: "new-group-id", ...plan.group }, rules: [] as RuleSetDto[], policy: undefined as Policy | undefined, assignments: [] as RuleAssignment[] };
   const backend: CloneBackend = {
     readSource: vi.fn<CloneBackend["readSource"]>(async () => ({ ok: true, data: structuredClone(snapshot) })),
@@ -73,9 +102,555 @@ async function harness(description?: string, initialSnapshot = source()) {
     readPublication: vi.fn<CloneBackend["readPublication"]>(async () => ({ ok: true, data: "published" })),
   };
   const operation = await newCloneOperation(plan);
-  const run = (omissionsConfirmed = false) => executeGroupClone(plan, operation, backend, store, true, omissionsConfirmed);
+  const run = (omissionsConfirmed = false, trialConfirmed = false, separateConfirmed = false) => executeGroupClone(plan, operation, backend, store, true, omissionsConfirmed, trialConfirmed, separateConfirmed);
   return { plan, store, records, state, backend, operation, run, changeSource: (next: CloneSnapshot) => { snapshot = next; } };
 }
+
+describe("scoped incomplete-copy intents and ID-only inspection", () => {
+  async function earlier(h: Awaited<ReturnType<typeof harness>>, name: string, legacy = false) {
+    const record = await newCloneOperation({ ...h.plan, group: { ...h.plan.group, displayName: name } });
+    record.phase = "indeterminate"; record.destinationId = "earlier-group-id";
+    record.steps = [{ key: "create-group", outcome: "returned", returnedId: "earlier-group-id" }];
+    if (legacy) { record.version = 1; delete record.destinationFingerprint; record.planFingerprint = "obsolete-plan"; }
+    h.store.save(record);
+    return record;
+  }
+  it.each([false, true])("allows an explicitly separate new copy without clearing earlier evidence (legacy: %s)", async (legacy) => {
+    const h = await harness(), prior = await earlier(h, "A different earlier request", legacy);
+    expect((await h.run()).message).toContain("Confirm a separate new copy");
+    expect(h.backend.createGroup).not.toHaveBeenCalled();
+    const next = await newCloneOperation(h.plan);
+    const result = await executeGroupClone(h.plan, next, h.backend, h.store, true, false, false, true);
+    expect(result.operation.phase).toBe("verified");
+    expect(h.store.read(prior.id)).toEqual(prior);
+    expect(h.backend.createGroup).toHaveBeenCalledTimes(1);
+  });
+  it.each([false, true])("never lets separate-copy consent retry the same uncertain intent (legacy exact plan: %s)", async (legacy) => {
+    const h = await harness(), prior = await earlier(h, h.plan.group.displayName!);
+    if (legacy) { prior.version = 1; delete prior.destinationFingerprint; h.store.save(prior); }
+    expect((await h.run(false, false, true)).message).toContain("already has this destination intent");
+    expect(h.backend.createGroup).not.toHaveBeenCalled();
+    const changedDescription = { ...h.plan, group: { ...h.plan.group, description: "Different description" } };
+    if (!legacy) expect(cloneHistory([prior], h.plan.sourceId, await cloneIntent(changedDescription)).same).toHaveLength(1);
+  });
+  it("does not mistake verified history or pre-write failures for unresolved writes", async () => {
+    const h = await harness(), prior = await earlier(h, h.plan.group.displayName!);
+    prior.phase = "verified"; prior.policyId = "earlier-policy-id"; h.store.save(prior);
+    h.store.save({ ...prior, id: "preflight-only", phase: "failed", destinationId: undefined, policyId: undefined, steps: [] });
+    expect((await h.run()).operation.phase).toBe("verified");
+  });
+  it.each(["group", "rule", "policy"])("does not adopt an earlier %s ID even for a separately acknowledged request", async (kind) => {
+    const h = await harness(), prior = await earlier(h, "Another request");
+    if (kind === "group") prior.destinationId = "new-group-id";
+    if (kind === "rule") prior.rules = [{ sourceId: "old-rule", destinationId: "new-rule-id-0" }];
+    if (kind === "policy") prior.policyId = "new-policy-id";
+    h.store.save(prior);
+    const result = await h.run(false, false, true);
+    expect(result.message).toContain("earlier operation's resource ID");
+    expect(h.backend.assign).not.toHaveBeenCalled();
+    expect(h.backend.patchPolicy).not.toHaveBeenCalled();
+  });
+  it("inspects known IDs without the obsolete override plan, writes or a completion claim", async () => {
+    const h = await harness(), prior = await earlier(h, "Old overridden copy", true);
+    vi.mocked(h.backend.readGroup).mockResolvedValue({ ok: true, data: { id: prior.destinationId, displayName: "Old copy" } });
+    vi.mocked(h.backend.readEmptyMembership).mockResolvedValue({ ok: true, data: false });
+    const save = vi.spyOn(h.store, "save");
+    const result = await inspectGroupClone(prior, h.backend, h.store);
+    expect(result.destinationUrl).toContain("earlier-group-id");
+    expect(result.message).toContain("not exact equivalence or completed-copy verification");
+    expect(result.observations.find((entry) => entry.resource === "Membership")?.detail).toContain("not established");
+    expect(h.backend.readGroup).toHaveBeenCalledWith("earlier-group-id");
+    expect(h.backend.readPolicy).not.toHaveBeenCalled();
+    expect(h.backend.readSource).not.toHaveBeenCalled();
+    expect(h.backend.createGroup).not.toHaveBeenCalled();
+    expect(save).not.toHaveBeenCalled();
+    expect(h.store.read(prior.id)).toEqual(prior);
+  });
+  it("reports failed inspection reads and never locates or adopts an unrecorded resource by name", async () => {
+    const h = await harness(), prior = await earlier(h, "Old copy", true);
+    prior.policyId = "earlier-policy-id"; h.store.save(prior);
+    vi.mocked(h.backend.readGroup).mockResolvedValue({ ok: false, error: "404 group missing" });
+    vi.mocked(h.backend.readPolicy).mockResolvedValue({ ok: false, error: "403 policy read denied" });
+    const result = await inspectGroupClone(prior, h.backend, h.store);
+    expect(result.destinationUrl).toBeUndefined();
+    expect(result.observations.map((entry) => entry.detail).join()).toContain("403 policy read denied");
+    expect(h.backend.readAssignments).not.toHaveBeenCalled();
+    const unknown = { ...prior, id: "unknown", destinationId: undefined, policyId: undefined,
+      steps: [{ key: "create-group", outcome: "indeterminate" as const }] };
+    expect((await inspectGroupClone(unknown, h.backend, h.store)).message).toContain("No resource IDs were recorded");
+    expect(h.backend.createGroup).not.toHaveBeenCalled();
+  });
+});
+
+describe("independently authored Microsoft-attributed rules (mocked writes, not tenant evidence)", () => {
+  it.each(["MicrosoftAppsContentSecurityPolicy", "MicrosoftAppsAppCreationFromCLI"])("recreates %s with exact inputs and disclosed independent management", async (id) => {
+    const snapshot = microsoftManagedSource(id), original = structuredClone(snapshot);
+    const h = await harness(undefined, snapshot);
+    expect(h.plan.blockers).toEqual([]);
+    expect(h.plan.skipped).toBeUndefined();
+    expect(h.plan.independentRules).toEqual([{ id, sourceManagedBy: "Microsoft" }]);
+    expect(h.plan.policy.ruleSets![2]).toEqual({ id, version: "1.0", inputs: original.policy.ruleSets![2].inputs });
+    expect(h.plan.policy.ruleSets![2]).not.toHaveProperty("managedBy");
+    expect(h.plan.policy.ruleSets![2]).not.toHaveProperty("lastModifiedDate");
+    const result = await h.run();
+    expect(result.operation.phase).toBe("verified");
+    expect(result.message).toContain("Source management attribution and future source-managed updates are not carried over");
+    expect(h.state.policy?.ruleSets![2].inputs).toEqual(original.policy.ruleSets![2].inputs);
+    expect(h.backend.patchPolicy).not.toHaveBeenCalled();
+    expect(h.store.read(result.operation.id)?.independentRules).toEqual(h.plan.independentRules);
+    expect(snapshot).toEqual(original);
+    expect((await reconcileGroupClone(h.plan, result.operation, h.backend, h.store)).message).toContain("independently managed settings");
+  });
+  it("preserves nested managedBy and timestamps as inputs, not envelope metadata", async () => {
+    const snapshot = microsoftManagedSource();
+    Object.assign(snapshot.policy.ruleSets![2].inputs!, {
+      managedBy: "actual-input", nested: { managedBy: [false, null, "Microsoft"], lastModifiedDate: "actual-input-date" },
+    });
+    const plan = await planGroupClone(snapshot, "Independent");
+    expect(plan.policy.ruleSets![2].inputs).toEqual(snapshot.policy.ruleSets![2].inputs);
+    expect(plan.policy.ruleSets![2].inputs).not.toBe(snapshot.policy.ruleSets![2].inputs);
+  });
+  it("preserves an omitted CSP endpoint rather than manufacturing null or a management transition", async () => {
+    const snapshot = microsoftManagedSource();
+    delete snapshot.policy.ruleSets![2].inputs!.MicrosoftAppsContentSecurityPolicyReportingEndpoint;
+    const module = { id: "MicrosoftAppsContentSecurityPolicy", version: "1.0", inputs: snapshot.policy.ruleSets![2].inputs };
+    snapshot.policy.ruleSets![2] = module;
+    const h = await harness(undefined, snapshot);
+    expect(h.plan.independentRules).toBeUndefined();
+    expect(h.plan.policy.ruleSets![2].inputs).not.toHaveProperty("MicrosoftAppsContentSecurityPolicyReportingEndpoint");
+    expect((await h.run()).operation.phase).toBe("verified");
+  });
+  it.each(["unknown-module", "unknown-version", "unknown-owner", "null-owner", "extra-envelope"])("retains narrow omissions for %s", async (kind) => {
+    const snapshot = microsoftManagedSource(), module = snapshot.policy.ruleSets![2];
+    if (kind === "unknown-module") module.id = "FutureMicrosoftManagedRule";
+    if (kind === "unknown-version") module.version = "2.0";
+    if (kind === "unknown-owner") Object.assign(module, { managedBy: "Tenant" });
+    if (kind === "null-owner") Object.assign(module, { managedBy: null });
+    if (kind === "extra-envelope") Object.assign(module, { ownershipMode: "future" });
+    const plan = await planGroupClone(snapshot, "Independent");
+    expect(plan.blockers).toEqual([]);
+    expect(plan.independentRules).toBeUndefined();
+    expect(plan.skipped).toHaveLength(1);
+    expect(plan.policy.ruleSets?.some((rule) => rule.id === module.id)).toBe(false);
+    expect(plan.skippedEvidence?.[0].value).toEqual(module);
+  });
+  it("binds source attribution and independent-management disclosure to preview and recovery", async () => {
+    const h = await harness(undefined, microsoftManagedSource());
+    const changed = microsoftManagedSource();
+    Object.assign(changed.policy.ruleSets![2], { managedBy: "Other" });
+    expect((await planGroupClone(changed, "Independent test group")).sourceFingerprint).not.toBe(h.plan.sourceFingerprint);
+    h.changeSource(changed);
+    expect((await h.run()).message).toContain("Source changed");
+    expect(h.backend.createGroup).not.toHaveBeenCalled();
+    const another = await harness(undefined, microsoftManagedSource());
+    another.plan.independentRules = [];
+    expect((await another.run()).message).toContain("does not match");
+    expect(another.backend.createGroup).not.toHaveBeenCalled();
+  });
+  it.each(["Microsoft", "Other", null])("rejects unexpected destination management attribution %j without ownership repair", async (managedBy) => {
+    const h = await harness(undefined, microsoftManagedSource());
+    const create = h.backend.createPolicy;
+    h.backend.createPolicy = async (body) => {
+      const result = await create(body);
+      Object.assign(h.state.policy!.ruleSets![2], { managedBy });
+      return result;
+    };
+    const result = await h.run();
+    expect(result.operation.phase).toBe("failed");
+    expect(result.message).toContain("unexpected management attribution");
+    expect(result.destinationUrl).toBeUndefined();
+    expect(result.operation.policyId).toBe("new-policy-id");
+    expect(h.backend.patchPolicy).not.toHaveBeenCalled();
+    expect(h.backend.assign).not.toHaveBeenCalled();
+  });
+  it("rejects changed CSP inputs and lost null endpoint in destination readback", async () => {
+    const h = await harness(undefined, microsoftManagedSource());
+    const read = h.backend.readPolicy;
+    h.backend.readPolicy = async (id) => {
+      const result = await read(id);
+      if (result.ok) {
+        const clone = structuredClone(result.data);
+        delete clone.ruleSets![2].inputs!.MicrosoftAppsContentSecurityPolicyReportingEndpoint;
+        return { ok: true, data: clone };
+      }
+      return result;
+    };
+    expect((await h.run()).message).toContain("full-fidelity");
+    expect(h.backend.assign).not.toHaveBeenCalled();
+  });
+  it("rejects attribution introduced after assignment and on read-only reconciliation", async () => {
+    const h = await harness(undefined, microsoftManagedSource());
+    const assign = h.backend.assign;
+    h.backend.assign = async (policyId, groupId) => {
+      const result = await assign(policyId, groupId);
+      Object.assign(h.state.policy!.ruleSets![2], { managedBy: "Microsoft" });
+      return result;
+    };
+    const outcome = await h.run();
+    expect(outcome.operation.phase).toBe("failed");
+    expect(outcome.destinationUrl).toBeUndefined();
+    expect(outcome.message).toContain("unexpected management attribution");
+    const reconciled = await reconcileGroupClone(h.plan, outcome.operation, h.backend, h.store);
+    expect(reconciled.message).toContain("did not establish completion");
+    expect(reconciled.destinationUrl).toBeUndefined();
+    expect(h.backend.createPolicy).toHaveBeenCalledTimes(1);
+    expect(assign).toHaveBeenCalledTimes(1);
+    expect(h.backend.patchPolicy).not.toHaveBeenCalled();
+  });
+});
+
+describe("observed management variants and optional connection-type modes (sanitized, mocked writes)", () => {
+  const connectors = () => [
+    { AllowedConnector: "/providers/Microsoft.PowerApps/apis/shared_sql", AllowedActionsMode: "SomeAllowed",
+      AllowedActions: ["GetItems_V2"], AllowedConnectionTypesMode: "SomeAllowed", AllowedConnectionTypes: ["SqlAuthentication"] },
+    { AllowedConnector: "/providers/Microsoft.PowerApps/apis/shared_example", AllowedActionsMode: "AllAllowed" },
+    { AllowedConnector: "/providers/Microsoft.PowerApps/apis/shared_other", AllowedActionsMode: "AllAllowed", AllowedConnectionTypesMode: "AllAllowed" },
+  ];
+  function observedSource(): CloneSnapshot {
+    const snapshot = microsoftManagedSource();
+    Object.assign(snapshot.policy.ruleSets![0], { managedBy: "IT" });
+    snapshot.policy.ruleSets![0].inputs = { AllowedConnectorList: connectors() };
+    snapshot.policy.ruleSets![1] = {
+      id: "ManagedAppsAssetProfile", version: "1.0", inputs: {
+        Tiers: [1, 2, 3], ConnectorSourceAndAuthentication: { Enabled: true, Assignments: [{ Source: "Custom", Authentication: "Anonymous", Tier: 3 }] },
+        Packages: { Enabled: true, Assignments: [{ Severity: "Critical", Tier: 3 }] },
+        managedBy: "actual-input", nested: { managedBy: [false, null, "IT"] },
+      }, ...{ managedBy: "Microsoft" },
+    };
+    Object.assign(snapshot.policy.ruleSets![2], { managedBy: "IT" });
+    return snapshot;
+  }
+  it("authors all three observed modules independently while preserving mixed connection restrictions and every input", async () => {
+    const snapshot = observedSource(), original = structuredClone(snapshot);
+    const h = await harness(undefined, snapshot);
+    expect(h.plan.blockers).toEqual([]);
+    expect(h.plan.skipped).toBeUndefined();
+    expect(h.plan.independentRules).toEqual([
+      { id: "ConnectorManagement", sourceManagedBy: "IT" },
+      { id: "ManagedAppsAssetProfile", sourceManagedBy: "Microsoft" },
+      { id: "MicrosoftAppsContentSecurityPolicy", sourceManagedBy: "IT" },
+    ]);
+    expect(h.plan.connectionTypeModes).toEqual({ omitted: 1, total: 3 });
+    const outcome = await h.run();
+    expect(outcome.operation.phase).toBe("verified");
+    expect(h.backend.createPolicy).toHaveBeenCalledWith(h.plan.policy);
+    expect(h.state.policy?.ruleSets?.map((rule) => rule.inputs)).toEqual(original.policy.ruleSets?.map((rule) => rule.inputs));
+    expect(snapshot).toEqual(original);
+    expect(outcome.operation.independentRules).toEqual(h.plan.independentRules);
+  });
+  it("preserves the observed 1370/1394 omitted-mode distribution without inventing AllAllowed", async () => {
+    const snapshot = observedSource();
+    const list = Array.from({ length: 1394 }, (_, index) => ({
+      AllowedConnector: `/providers/Microsoft.PowerApps/apis/shared_synthetic${index}`, AllowedActionsMode: "AllAllowed",
+      ...(index < 24 ? { AllowedConnectionTypesMode: "AllAllowed" } : {}),
+    }));
+    snapshot.policy.ruleSets![0].inputs = { AllowedConnectorList: list };
+    const plan = await planGroupClone(snapshot, "Independent");
+    expect(plan.blockers).toEqual([]);
+    expect(plan.connectionTypeModes).toEqual({ omitted: 1370, total: 1394 });
+    const copied = plan.policy.ruleSets![0].inputs!.AllowedConnectorList as Record<string, unknown>[];
+    expect(copied).toEqual(list);
+    expect(copied.filter((entry) => Object.hasOwn(entry, "AllowedConnectionTypesMode"))).toHaveLength(24);
+  });
+  it.each([null, "Unknown", "", false, [], ["AllAllowed"], { mode: "AllAllowed" }])("blocks explicit invalid connection mode %j rather than treating it as absent", async (mode) => {
+    const snapshot = observedSource();
+    Object.assign((snapshot.policy.ruleSets![0].inputs!.AllowedConnectorList as object[])[1], { AllowedConnectionTypesMode: mode });
+    const h = await harness(undefined, snapshot);
+    expect((await h.run()).operation.phase).toBe("blocked");
+    expect(h.backend.createGroup).not.toHaveBeenCalled();
+  });
+  it.each([[], ["SqlAuthentication"], null])("blocks a missing mode with a connection-type list %j", async (list) => {
+    const snapshot = observedSource();
+    Object.assign((snapshot.policy.ruleSets![0].inputs!.AllowedConnectorList as object[])[1], { AllowedConnectionTypes: list });
+    expect((await planGroupClone(snapshot, "Independent")).blockers.join(" ")).toContain("restriction semantics are ambiguous");
+  });
+  it.each([{ AllowedConnectionTypesMode: "SomeAllowed" }, { AllowedConnectionTypesMode: "SomeAllowed", AllowedConnectionTypes: [42] },
+    { AllowedActionsMode: null }, { AllowedActionsMode: ["AllAllowed"] }, { AllowedActionsMode: "SomeAllowed" }])("retains explicit list and action-mode guards for %j", async (change) => {
+    const snapshot = observedSource();
+    Object.assign((snapshot.policy.ruleSets![0].inputs!.AllowedConnectorList as object[])[1], change);
+    expect((await planGroupClone(snapshot, "Independent")).blockers.join(" ")).toContain("ambiguous action/connection-type restrictions");
+  });
+  it("does not interpret missing connection mode as unrestricted when actions are explicitly restricted", async () => {
+    const snapshot = observedSource(), list = connectors();
+    delete list[0].AllowedConnectionTypesMode;
+    delete list[0].AllowedConnectionTypes;
+    snapshot.policy.ruleSets![0].inputs = { AllowedConnectorList: list };
+    const plan = await planGroupClone(snapshot, "Independent");
+    expect(plan.blockers).toEqual([]);
+    expect(plan.policy.ruleSets![0].inputs!.AllowedConnectorList).toEqual(list);
+    expect(list[0].AllowedActions).toEqual(["GetItems_V2"]);
+  });
+  it("retains the whole MicrosoftApp rule omission for an unreviewed manager, not App remapping", async () => {
+    const snapshot = observedSource();
+    snapshot.rules[0].parameters!.unshift({
+      type: "Sharing", resourceType: "MicrosoftApp", value: [{ id: "MaximumShareLimit", value: "-1" }],
+      ...{ managedBy: "Unreviewed", lastModifiedDate: "2026-07-06T17:51:31Z" },
+    });
+    const h = await harness(undefined, snapshot);
+    expect(h.plan.blockers).toEqual([]);
+    expect(h.plan.rules).toEqual([]);
+    expect(h.plan.skipped).toHaveLength(1);
+    expect(h.plan.skipped![0].reasons.join(" ")).toContain("enabled only for confirmed independent duplication");
+    expect(h.plan.skippedEvidence![0].value).toEqual(snapshot.rules[0]);
+    expect((await h.run(true)).operation.phase).toBe("created-with-omissions");
+    expect(h.backend.createRule).not.toHaveBeenCalled();
+    expect(h.state.policy?.ruleSets).toHaveLength(3);
+  });
+  it.each(["Tenant", "it", "IT ", null, { owner: "IT" }])("does not expand ConnectorManagement management to %j", async (manager) => {
+    const snapshot = observedSource();
+    Object.assign(snapshot.policy.ruleSets![0], { managedBy: manager });
+    const plan = await planGroupClone(snapshot, "Independent");
+    expect(plan.blockers.join(" ")).toContain("ConnectorManagement.managedBy");
+  });
+  it("invalidates preview when a supported attribution changes to another supported attribution", async () => {
+    const snapshot = observedSource(), h = await harness(undefined, snapshot);
+    const changed = structuredClone(snapshot);
+    Object.assign(changed.policy.ruleSets![2], { managedBy: "Microsoft" });
+    h.changeSource(changed);
+    expect((await h.run()).message).toContain("Source changed");
+    expect(h.backend.createGroup).not.toHaveBeenCalled();
+  });
+  it.each(["server-default", "removed-restriction", "changed-list"])("never verifies %s as equivalent connection restrictions", async (kind) => {
+    const h = await harness(undefined, observedSource()), read = h.backend.readPolicy;
+    h.backend.readPolicy = async (id) => {
+      const result = await read(id);
+      if (!result.ok) return result;
+      const policy = structuredClone(result.data), list = policy.ruleSets![0].inputs!.AllowedConnectorList as Record<string, unknown>[];
+      if (kind === "server-default") list[1].AllowedConnectionTypesMode = "AllAllowed";
+      if (kind === "removed-restriction") delete list[0].AllowedConnectionTypes;
+      if (kind === "changed-list") list[0].AllowedConnectionTypes = ["OtherAuthentication"];
+      return { ok: true, data: policy };
+    };
+    const outcome = await h.run();
+    expect(outcome.operation.phase).toBe("failed");
+    expect(outcome.message).toContain("full-fidelity");
+    expect(outcome.destinationUrl).toBeUndefined();
+    expect(h.backend.assign).not.toHaveBeenCalled();
+  });
+  it("refuses destination attribution on the newly supported ConnectorManagement module without repair", async () => {
+    const h = await harness(undefined, observedSource()), create = h.backend.createPolicy;
+    h.backend.createPolicy = async (body) => {
+      const result = await create(body);
+      Object.assign(h.state.policy!.ruleSets![0], { managedBy: "IT" });
+      return result;
+    };
+    expect((await h.run()).message).toContain("unexpected management attribution");
+    expect(h.backend.patchPolicy).not.toHaveBeenCalled();
+    expect(h.backend.assign).not.toHaveBeenCalled();
+  });
+});
+
+describe("MicrosoftApp sharing trial (mocked writes, not server compatibility evidence)", () => {
+  it("copies the user-reported unattributed returned bucket without adding source ownership", async () => {
+    const snapshot = microsoftAppTrialSource(), bucket = snapshot.rules[0].parameters![0];
+    snapshot.rules[0].parameters![0] = { type: bucket.type, resourceType: bucket.resourceType, value: bucket.value };
+    const h = await harness(undefined, snapshot);
+    expect(h.plan.trialRules).toEqual([{ sourceRuleId: "source-rule-id", bucket: "Sharing/MicrosoftApp" }]);
+    expect((await h.run(false, true)).operation.phase).toBe("verified");
+  });
+  it("changes only selected new-copy settings, with original source values/fingerprint and siblings intact", async () => {
+    const snapshot = microsoftAppTrialSource(), original = structuredClone(snapshot);
+    const unchanged = await planGroupClone(snapshot, "Unchanged");
+    const requested: ManagedAppSharingValues = { MaximumShareLimit: "0", IsGuestSharingDisabled: "false" };
+    const h = await harness(undefined, snapshot, requested);
+    expect(h.plan.sourceFingerprint).toBe(unchanged.sourceFingerprint);
+    expect(h.plan.managedAppSharing).toEqual({
+      present: true, configurable: true, values: { MaximumShareLimit: "-1", IsGroupSharingDisabled: "false",
+        IsGuestSharingDisabled: "true", IsViralSharingDisabled: "false" }, requested,
+    });
+    expect(h.plan.rules[0].parameters![0].value).toEqual([
+      { id: "MaximumShareLimit", value: "0" }, { id: "IsGroupSharingDisabled", value: "false" },
+      { id: "IsGuestSharingDisabled", value: "false" }, { id: "IsViralSharingDisabled", value: "false" },
+    ]);
+    expect(h.plan.rules[0].parameters!.slice(1)).toEqual(original.rules[0].parameters!.slice(1).map(({ type, resourceType, value }) => ({ type, resourceType, value })));
+    expect(h.plan.copied.find((entry) => entry.path === "ModelA.Sharing/MicrosoftApp/MaximumShareLimit")?.value).toBe("0");
+    expect((await h.run(false, true)).operation.phase).toBe("verified");
+    expect(snapshot).toEqual(original);
+  });
+  it.each([false, true])("adds absent sharing only with four explicit values, reusing one resource (no existing resource: %s)", async (noResource) => {
+    const snapshot = source();
+    if (noResource) snapshot.rules = [];
+    const original = structuredClone(snapshot);
+    const unchanged = await planGroupClone(snapshot, "Unchanged");
+    expect(unchanged.rules).toHaveLength(noResource ? 0 : 1);
+    expect(unchanged.rules.flatMap((rule) => rule.parameters ?? []).some((bucket) => bucket.resourceType === "MicrosoftApp")).toBe(false);
+    expect(unchanged.managedAppSharing).toEqual({ present: false, configurable: true, values: {} });
+    const requested: ManagedAppSharingValues = { MaximumShareLimit: "-1", IsGroupSharingDisabled: "false",
+      IsGuestSharingDisabled: "true", IsViralSharingDisabled: "false" };
+    const h = await harness(undefined, snapshot, requested);
+    expect(h.plan.blockers).toEqual([]);
+    expect(h.plan.rules).toHaveLength(1);
+    expect(h.plan.sourceRuleIds).toEqual(original.rules.map((rule) => rule.id));
+    if (noResource) expect(h.plan.rules[0]).toHaveProperty("added", true);
+    else expect(h.plan.rules[0].parameters![0]).toEqual(original.rules[0].parameters![0]);
+    expect(h.plan.rules[0].parameters!.at(-1)).toEqual({ type: "Sharing", resourceType: "MicrosoftApp",
+      value: Object.entries(requested).map(([id, value]) => ({ id, value })) });
+    expect((await h.run(false, true)).operation.phase).toBe("verified");
+    expect(h.backend.createRule).toHaveBeenCalledTimes(1);
+    expect(snapshot).toEqual(original);
+  });
+  it.each([
+    { MaximumShareLimit: "-2" }, { MaximumShareLimit: "1.5" }, { MaximumShareLimit: "1e3" },
+    { MaximumShareLimit: " 2" }, { MaximumShareLimit: "" }, { IsGroupSharingDisabled: true },
+    { IsGuestSharingDisabled: "False" }, { IsViralSharingDisabled: null }, { unknownOption: "true" },
+  ])("blocks invalid customization %j before writes", async (invalid) => {
+    const values: ManagedAppSharingValues = {};
+    Object.assign(values, invalid);
+    const h = await harness(undefined, microsoftAppTrialSource(), values);
+    expect(h.plan.blockers.join()).toMatch(/sharing|share limit/i);
+    expect((await h.run(false, true)).operation.phase).toBe("blocked");
+    expect(h.backend.createGroup).not.toHaveBeenCalled();
+  });
+  it("requires all four values for absent sharing and refuses to replace omitted or ambiguous source resources", async () => {
+    const missing = await harness(undefined, source(), { MaximumShareLimit: "-1" });
+    expect(missing.plan.blockers.join()).toContain("required when adding managed app sharing");
+    expect(missing.plan.rules[0].parameters!.some((bucket) => bucket.resourceType === "MicrosoftApp")).toBe(false);
+    const snapshot = microsoftAppTrialSource();
+    Object.assign(snapshot.rules[0], { unknownRuleProperty: "preserve me" });
+    const omitted = await harness(undefined, snapshot, { MaximumShareLimit: "4" });
+    expect(omitted.plan.managedAppSharing?.configurable).toBe(false);
+    expect(omitted.plan.blockers.join()).toContain("omitted, duplicated or have ambiguous resource identity");
+    expect(omitted.plan.rules).toEqual([]);
+    const duplicated = microsoftAppTrialSource();
+    duplicated.rules.push({ ...structuredClone(duplicated.rules[0]), id: "other-rule-id" });
+    expect((await harness(undefined, duplicated, { MaximumShareLimit: "4" })).plan.blockers.join()).toContain("ambiguous resource identity");
+  });
+  it("binds overrides separately from fresh source checks and rejects a destination that retains the old value", async () => {
+    const snapshot = microsoftAppTrialSource();
+    const changed = await harness(undefined, snapshot, { MaximumShareLimit: "4" });
+    const fresh = structuredClone(snapshot);
+    fresh.rules[0].parameters![0].value![0].value = "12";
+    changed.changeSource(fresh);
+    expect((await changed.run(false, true)).message).toContain("Source changed");
+    expect(changed.backend.createGroup).not.toHaveBeenCalled();
+    const tampered = await harness(undefined, snapshot, { MaximumShareLimit: "4" });
+    tampered.plan.managedAppSharing!.requested!.MaximumShareLimit = "5";
+    expect((await tampered.run(false, true)).message).toContain("does not match");
+    const mismatch = await harness(undefined, snapshot, { MaximumShareLimit: "4" }), create = mismatch.backend.createRule;
+    mismatch.backend.createRule = async (id, body) => {
+      const result = await create(id, body);
+      mismatch.state.rules[0].parameters![0].value![0].value = "-1";
+      return result;
+    };
+    expect((await mismatch.run(false, true)).operation.phase).toBe("failed");
+    expect(mismatch.backend.createPolicy).not.toHaveBeenCalled();
+  });
+  it("requires separate trial consent before creating any resources", async () => {
+    const h = await harness(undefined, microsoftAppTrialSource());
+    const outcome = await h.run();
+    expect(outcome.message).toContain("Confirm independent managed app sharing settings");
+    expect(h.backend.createGroup).not.toHaveBeenCalled();
+    expect(h.backend.createRule).not.toHaveBeenCalled();
+  });
+  it("keeps literal MicrosoftApp, all seven string settings and both sibling buckets with fresh destination identity and scope", async () => {
+    const snapshot = microsoftAppTrialSource(), original = structuredClone(snapshot);
+    const h = await harness(undefined, snapshot);
+    expect(h.plan.blockers).toEqual([]);
+    expect(h.plan.skipped).toBeUndefined();
+    expect(h.plan.trialRules).toEqual([{ sourceRuleId: "source-rule-id", bucket: "Sharing/MicrosoftApp", sourceManagedBy: "IT" }]);
+    const expected = original.rules[0].parameters!.map(({ type, resourceType, value }) => ({ type, resourceType, value }));
+    expect(h.plan.rules[0].parameters).toEqual(expected);
+    expect(h.plan.copied.filter((entry) => entry.path.startsWith("ModelA."))).toHaveLength(7);
+    const outcome = await h.run(false, true);
+    expect(outcome.operation.phase).toBe("verified");
+    expect(outcome.message).toContain("Managed app sharing matched this operation");
+    expect(outcome.message).toContain("Source management attribution and future source-managed updates are not carried over");
+    expect(h.state.rules[0].parameters).toEqual(expected);
+    expect(h.state.rules[0].id).not.toBe(snapshot.rules[0].id);
+    expect(h.state.rules[0].environmentFilter).toEqual({ type: "Include", values: [{ id: "new-group-id", type: "EnvironmentGroup" }] });
+    expect(outcome.operation.trialRules).toEqual(h.plan.trialRules);
+    expect(h.store.read(outcome.operation.id)?.trialRules).toEqual(h.plan.trialRules);
+    expect(snapshot).toEqual(original);
+    const reconciled = await reconcileGroupClone(h.plan, outcome.operation, h.backend, h.store);
+    expect(reconciled.operation.phase).toBe("verified");
+    expect(h.backend.createRule).toHaveBeenCalledTimes(1);
+  });
+  it("preserves same-named setting IDs and JSON strings instead of recursively removing managedBy", async () => {
+    const snapshot = microsoftAppTrialSource();
+    snapshot.rules[0].parameters![0].value!.push({ id: "managedBy", value: '{"managedBy":"nested-value","false":false}' });
+    const h = await harness(undefined, snapshot);
+    expect(h.plan.rules[0].parameters![0].value).toEqual(snapshot.rules[0].parameters![0].value);
+    expect((await h.run(false, true)).operation.phase).toBe("verified");
+  });
+  it.each(["Microsoft", "it", "IT ", null, { owner: "IT" }, ["IT"]])("retains whole-resource omission for unreviewed manager %j", async (managedBy) => {
+    const snapshot = microsoftAppTrialSource();
+    Object.assign(snapshot.rules[0].parameters![0], { managedBy });
+    const plan = await planGroupClone(snapshot, "Independent");
+    expect(plan.rules).toEqual([]);
+    expect(plan.trialRules).toBeUndefined();
+    expect(plan.skipped).toHaveLength(1);
+    expect(plan.skippedEvidence![0].value).toEqual(snapshot.rules[0]);
+  });
+  it.each(["extra-field", "unknown-type", "unknown-resource", "sibling-manager"])("does not widen the trial to %s", async (change) => {
+    const snapshot = microsoftAppTrialSource(), bucket = snapshot.rules[0].parameters![0];
+    if (change === "extra-field") Object.assign(bucket, { unknownMode: true });
+    if (change === "unknown-type") bucket.type = "FutureType";
+    if (change === "unknown-resource") bucket.resourceType = "FutureResource";
+    if (change === "sibling-manager") Object.assign(snapshot.rules[0].parameters![1], { managedBy: "IT" });
+    const plan = await planGroupClone(snapshot, "Independent");
+    expect(plan.rules).toEqual([]);
+    expect(plan.trialRules).toBeUndefined();
+    expect(plan.skipped).toHaveLength(1);
+  });
+  it("retains source/plan/journal bindings and does not enable this rule in sync validation", async () => {
+    const snapshot = microsoftAppTrialSource(), h = await harness(undefined, snapshot);
+    const checked = await planGroupClone(snapshot, "Validation", undefined, Date.now(), { purpose: "selective-sync" });
+    expect(checked.rules).toEqual([]);
+    expect(checked.trialRules).toBeUndefined();
+    const changed = structuredClone(snapshot);
+    Object.assign(changed.rules[0].parameters![0], { managedBy: "Microsoft" });
+    h.changeSource(changed);
+    expect((await h.run(false, true)).message).toContain("Source changed");
+    expect(h.backend.createGroup).not.toHaveBeenCalled();
+    const tampered = await harness(undefined, snapshot);
+    tampered.operation.trialRules = [];
+    expect((await tampered.run(false, true)).message).toContain("does not match");
+    expect(tampered.backend.createGroup).not.toHaveBeenCalled();
+  });
+  it.each(["settings", "bucket-count", "resource-type", "scope", "ownership"])("rejects destination %s mismatch before ACP creation", async (change) => {
+    const h = await harness(undefined, microsoftAppTrialSource()), create = h.backend.createRule;
+    h.backend.createRule = async (groupId, body) => {
+      const result = await create(groupId, body), rule = h.state.rules[0];
+      if (change === "settings") rule.parameters![0].value![0].value = "0";
+      if (change === "bucket-count") rule.parameters!.pop();
+      if (change === "resource-type") rule.parameters![0].resourceType = "App";
+      if (change === "scope") rule.environmentFilter!.values![0].id = "foreign-group";
+      if (change === "ownership") Object.assign(rule.parameters![0], { managedBy: "IT" });
+      return result;
+    };
+    const outcome = await h.run(false, true);
+    expect(outcome.operation.phase).toBe("failed");
+    expect(outcome.destinationUrl).toBeUndefined();
+    expect(outcome.operation.rules).toHaveLength(1);
+    expect(h.backend.createPolicy).not.toHaveBeenCalled();
+    if (change === "ownership") expect(outcome.message).toContain("unexpected management attribution");
+  });
+  it("uses a unique exact new-group readback for a bodyless create, without retrying", async () => {
+    const h = await harness(undefined, microsoftAppTrialSource()), create = h.backend.createRule;
+    h.backend.createRule = vi.fn<CloneBackend["createRule"]>(async (id, body) => { await create(id, body); return { ok: true, data: undefined }; });
+    expect((await h.run(false, true)).operation.phase).toBe("verified");
+    expect(h.backend.createRule).toHaveBeenCalledTimes(1);
+  });
+  it.each(["bodyless-ambiguous", "asynchronous", "gateway-rejected"])("retains uncertainty/error and never retries creation for %s", async (kind) => {
+    const h = await harness(undefined, microsoftAppTrialSource()), create = h.backend.createRule;
+    h.backend.createRule = vi.fn<CloneBackend["createRule"]>(async (id, body) => {
+      if (kind === "gateway-rejected") return { ok: false, error: "400 InvalidResourceType MicrosoftApp" };
+      if (kind === "asynchronous") return { ok: true, data: { statusCode: 202, operationId: "pending-trial" } };
+      await create(id, body);
+      h.state.rules.push({ ...structuredClone(h.state.rules[0]), id: "another-new-rule" });
+      return { ok: true, data: undefined };
+    });
+    const outcome = await h.run(false, true);
+    expect(outcome.operation.phase).toBe("indeterminate");
+    expect(outcome.destinationUrl).toBeUndefined();
+    if (kind === "gateway-rejected") expect(outcome.message).toContain("400 InvalidResourceType MicrosoftApp");
+    expect(h.store.read(outcome.operation.id)?.trialRules).toEqual(h.plan.trialRules);
+    expect((await h.run(false, true)).message).toContain("Creation is never retried");
+    expect((await reconcileGroupClone(h.plan, outcome.operation, h.backend, h.store)).destinationUrl).toBeUndefined();
+    expect(h.backend.createRule).toHaveBeenCalledTimes(1);
+    expect(h.backend.createPolicy).not.toHaveBeenCalled();
+  });
+});
 
 describe("explicit partial governance copies (synthetic responses only)", () => {
   it("requires separate omission acknowledgement before any write", async () => {
@@ -658,8 +1233,11 @@ describe("guarded creation orchestration (synthetic backend contracts)", () => {
     // Allow asynchronous fingerprint validation to reach the source read.
     await vi.waitFor(() => expect(h.backend.readSource).toHaveBeenCalled());
     expect((await h.run()).message).toContain("already running");
+    const other = await harness(), concurrent = await other.run();
     finish({ ok: true, data: source() });
     expect((await first).operation.phase).toBe("verified");
+    expect(concurrent.message).toContain("Another group copy is actively running");
+    expect(other.backend.createGroup).not.toHaveBeenCalled();
     expect(h.backend.createGroup).toHaveBeenCalledTimes(1);
   });
 });

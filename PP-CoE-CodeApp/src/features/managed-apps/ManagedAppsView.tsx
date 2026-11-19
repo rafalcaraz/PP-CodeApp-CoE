@@ -600,6 +600,7 @@ const PdeCard = memo(function PdeCard({ apps, totalApps, environment, environmen
 
 function InspectionDialog({ inspection, groupName, onClose }: { inspection: Inspection; groupName?: string; onClose: () => void }) {
   const styles = useStyles();
+  const navigate = useNavigate();
   const [apps, setApps] = useState<Slot<AppRow[]>>({ kind: "loading" });
   useEffect(() => {
     let cancelled = false;
@@ -608,6 +609,9 @@ function InspectionDialog({ inspection, groupName, onClose }: { inspection: Insp
     return () => { cancelled = true; controller.abort(); };
   }, [inspection]);
   const app = inspection.app;
+  const appDetailsPath = app && membershipId(app.id) && membershipId(app.environmentId)
+    ? `/apps/${encodeURIComponent(app.id.trim())}?${new URLSearchParams({ envId: app.environmentId.trim() })}`
+    : null;
   const siblings = apps.kind === "ready" ? apps.data.filter((entry) => !app || membershipId(entry.id) !== membershipId(app.id) || entry.type.toLowerCase() !== app.type.toLowerCase()) : [];
   const group = !inspection.environment ? "Membership unavailable" : membershipId(inspection.environment.environmentGroupId) ? groupName || "Group name unavailable" : "No environment group";
   const siblingList = <div className={styles.detailSection}>
@@ -647,7 +651,10 @@ function InspectionDialog({ inspection, groupName, onClose }: { inspection: Insp
                 </div></details>
                 {app && <RawInventoryRecord app={app} />}
           </DialogContent>
-          <DialogActions><Button appearance="primary" onClick={onClose}>Close</Button></DialogActions>
+          <DialogActions>
+            {appDetailsPath && <Button onClick={() => { onClose(); navigate(appDetailsPath); }}>View full app details</Button>}
+            <Button appearance="primary" onClick={onClose}>Close</Button>
+          </DialogActions>
         </DialogBody>
       </DialogSurface>
     </Dialog>

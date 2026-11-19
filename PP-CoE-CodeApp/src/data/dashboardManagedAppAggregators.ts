@@ -1,11 +1,11 @@
 import { registerAggregators, type Aggregator, type AggregatorOutput, type ChartBucket } from "./dashboardAggregators";
-import { friendlyConnectorName } from "./inventory";
+import { appOriginLabel, friendlyConnectorName } from "./inventory";
 import type { EstateManagedApp } from "./dashboardManagedAppSource";
 
 type Rows = EstateManagedApp[];
 const DAY = 86_400_000;
 const unique = (values: string[]) => new Set(values.filter(Boolean)).size;
-const origin = (app: EstateManagedApp) => app.origin === "CopilotStudio" ? "Copilot Studio" : app.origin || "Origin unavailable";
+const origin = (app: EstateManagedApp) => appOriginLabel(app.origin);
 const groupLabel = (app: EstateManagedApp) => !app.membershipKnown ? "Membership unresolved"
   : !app.groupId ? "Ungrouped" : app.groupName || "Group details unavailable";
 const creatorLabel = (app: EstateManagedApp) => app.creatorName

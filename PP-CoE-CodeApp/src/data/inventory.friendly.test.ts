@@ -11,7 +11,31 @@ import {
   ResourceType,
   isManagedApp,
   MANAGED_APP_SUBTYPE,
+  readAppOrigin,
+  appOriginLabel,
 } from "./inventory";
+
+describe("app origin metadata", () => {
+  it.each<[Record<string, unknown>, string]>([
+    [{ createdIn: "Copilot Studio" }, "CopilotStudio"],
+    [{ origin: "CopilotStudio" }, "CopilotStudio"],
+    [{ origin: "Copilot Studio" }, "CopilotStudio"],
+    [{ origin: "managed-apps-cli", createdIn: "Copilot Studio" }, "managed-apps-cli"],
+    [{ origin: "FutureSurface", createdIn: "DifferentFutureSurface" }, "FutureSurface"],
+    [{ origin: " ", createdIn: " FutureSurface " }, "FutureSurface"],
+    ...[undefined, null, false, 1, [], {}].map<[Record<string, unknown>, string]>((origin) =>
+      [{ origin, createdIn: "Copilot Studio" }, "CopilotStudio"]),
+    ...[undefined, null, false, 1, [], {}, " "].map<[Record<string, unknown>, string]>((createdIn) =>
+      [{ createdIn }, ""]),
+    [{}, ""],
+  ])("resolves %j without changing the returned properties", (properties, expected) => {
+    const raw = { properties }, before = structuredClone(raw);
+    const origin = readAppOrigin(raw);
+    expect(origin).toBe(expected);
+    expect(appOriginLabel(origin)).toBe(expected === "CopilotStudio" ? "Copilot Studio" : expected || "Origin unavailable");
+    expect(raw).toEqual(before);
+  });
+});
 
 describe("friendlyResourceType", () => {
   it("returns a human label for each known resource type", () => {

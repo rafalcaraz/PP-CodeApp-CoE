@@ -110,11 +110,24 @@ inputs: {
     AllowedConnector: string;                  // ARM path: /providers/Microsoft.PowerApps/apis/shared_<slug>
     AllowedActions?: string[];                 // operation IDs (only when AllowedActionsMode === "SomeAllowed")
     AllowedActionsMode: "AllAllowed" | "SomeAllowed";
-    AllowedConnectionTypesMode: "AllAllowed" | "SomeAllowed";
-    // AllowedConnectionTypes?: string[];      // expected sibling for SomeAllowed; not captured yet
+    AllowedConnectionTypesMode?: "AllAllowed" | "SomeAllowed";
+    AllowedConnectionTypes?: string[];         // required by copy guards for SomeAllowed
   }>;
 }
 ```
+
+Later returned inventories also omit `AllowedConnectionTypesMode` on some
+entries. Absence is preserved as absence during independent duplication when no
+connection-type list is present; it is not interpreted as `AllAllowed`. Explicit
+modes and lists are retained, and destination read-back must match exactly.
+A connection-type list without a mode remains ambiguous and blocks copying.
+Selective sync still requires an explicit mode. See
+[`managed-apps-governance.md`](managed-apps-governance.md) for the narrow
+module-level management-attribution recreation rules and the separately
+confirmed Model A `Sharing/MicrosoftApp` source-settings duplication (the sharing
+editor is withheld). A user-reported
+successful returned configuration is scoped evidence, not proof of all service
+variants; local verification alone does not establish server compatibility.
 
 ```json
 {

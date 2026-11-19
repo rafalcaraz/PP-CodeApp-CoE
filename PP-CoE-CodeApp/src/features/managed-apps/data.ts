@@ -2,6 +2,8 @@ import {
   ALL_APP_TYPES,
   MANAGED_APP_SUBTYPE,
   isManagedApp,
+  readAppOrigin,
+  appOriginLabel as originLabel,
   CONNECTOR_USAGE_RESOURCE_TYPES,
   ResourceType,
   buildClausesFromSpec,
@@ -21,6 +23,7 @@ import { peekUser, resolveUsers } from "../../data/userEnrichment";
 import type { Clause, Policy, ResourceItem } from "../../generated/models/PowerPlatformforAdminsV2Model";
 
 export { getCacheVersion, subscribeCacheVersion, peekUser } from "../../data/userEnrichment";
+export { originLabel };
 export type { AppRow, DataResult, EnvironmentGroupRow, EnvironmentRow };
 
 export function readCancelled(signal?: AbortSignal): DataResult<never> | undefined {
@@ -124,7 +127,7 @@ export function readManagedApp(item: Parameters<typeof toAppRow>[0]): ManagedApp
     ...row,
     raw: item,
     ownerDisplayName: text(props.ownerDisplayName) || text(owner.displayName) || text(owner.email),
-    origin: text(props.origin).trim(),
+    origin: readAppOrigin(item),
     makerId: text(props.createdBy) || text(maker.id),
     makerName: text(maker.displayName) || text(maker.email),
     connectorIds: readAppConnectors(props.powerPlatformConnectors),
@@ -149,10 +152,6 @@ export function matchesContext(app: ManagedApp, environment: EnvironmentRow | un
     && match(`${app.displayName} ${app.id}`, fields.app)
     && match(environmentText, fields.environment) && match(groupText, fields.group);
 }
-export function originLabel(origin: string): string {
-  return origin === "CopilotStudio" ? "Copilot Studio" : origin || "Origin unavailable";
-}
-
 export function personSearchText(app: ManagedApp): string {
   return [app.ownerId, app.ownerDisplayName, app.makerId, app.makerName]
     .flatMap((value) => {

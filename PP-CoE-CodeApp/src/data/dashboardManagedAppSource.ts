@@ -2,7 +2,7 @@ import { PowerPlatformforAdminsV2Service } from "../generated";
 import type { Clause, ResourceItem } from "../generated/models/PowerPlatformforAdminsV2Model";
 import {
   buildClausesFromSpec, isManagedApp, MANAGED_APP_SUBTYPE, normalizeConnectorId,
-  ResourceType, runRawQuery, toAppRow, type AppRow, type DataResult, type ResourceTypeValue,
+  ResourceType, readAppOrigin, runRawQuery, toAppRow, type AppRow, type DataResult, type ResourceTypeValue,
 } from "./inventory";
 import { formatApiError } from "../shared/api-explorer/schema";
 import { peekUser } from "./userEnrichment";
@@ -140,7 +140,7 @@ export async function readManagedAppsEstate(signal: AbortSignal, forceFresh = fa
       ...app, environmentId: envId, environmentName: text(env.displayName) || app.environmentName,
       createdBy: creatorId ? id(creatorId) : "", creatorName: text(creator.displayName)
         || (cachedCreator.status === "resolved" ? cachedCreator.user.displayName : ""),
-      origin: text(props.origin), connectorIds: managedAppConnectorIds(props),
+      origin: readAppOrigin(raw), connectorIds: managedAppConnectorIds(props),
       environmentType: text(env.environmentType), environmentManaged: typeof env.isManaged === "boolean" ? env.isManaged : null,
       environmentMapped: !!environment, groupId, groupName: groups.get(groupId) || "",
       membershipKnown,

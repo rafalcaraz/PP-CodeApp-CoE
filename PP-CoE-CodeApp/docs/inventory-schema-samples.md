@@ -571,6 +571,40 @@ createdBy, location, lastModifiedAt (list/detail data; shown on detail).
 - The same resource type also includes managed apps with
   `subType: "microsoftApp"`; both are included in app inventory.
 
+**Managed-app origin:** observed responses use either `properties.origin`
+(`"CopilotStudio"`, for example) or `properties.createdIn`
+(`"Copilot Studio"`). The shared origin reader prefers a nonempty string origin,
+then a nonempty string createdIn; blank or non-string values do not suppress a
+valid fallback. Only those two known Copilot Studio spellings are grouped under
+one display/category. Unknown strings remain distinct, and neither original
+field is modified, including when both fields conflict. No origin is inferred
+from package inventory, subtype or identity metadata.
+
+**Apps-page managed-app details:** the existing `microsoftApp` classifier enables
+the managed-app properties and Packages sections. They read the original
+inventory properties, with no supplemental or registry lookup. Runtime metadata
+includes `hasCustomMiddleTier`; edit/run sharing displays returned user, group,
+guest and service-principal counts and `entireTenant`, without zero-filling
+absent counts. Generic app sharing totals are not substituted for these scopes.
+
+`npmPackages` contains returned `{ name, version }` entries. The detail's
+**Search packages** matches names and versions in this list only. Missing list,
+explicit empty list and malformed list/entries remain distinct. Coverage shows
+the declared `npmPackageCount` separately from returned entries; truncation,
+unresolved packages and inconsistent/malformed metadata remain visible.
+`directProduction` is labeled **direct production dependencies**, not full
+transitive coverage. Only internally consistent version-1 direct-production
+metadata with explicit nontruncation and zero unresolved packages is labeled
+reported complete; future scope/version values remain readable without that
+claim. This is not a dependency execution or vulnerability assessment.
+
+On **Apps**, add **Packages** through **Columns**, then use its column filter
+to find managed apps by a returned package name or version. This reuses loaded-row
+filtering, saved views and CSV export, not a new server-side package query.
+Load more apps to expand that search scope. Ordinary **Search by name** and
+non-managed app behavior are unchanged. A missing package match does not prove
+the dependency is absent when inventory is incomplete or unreported.
+
 **Managed Apps Estate reporting contract:** for `microsoftApp` inventory rows,
 absent `properties.powerPlatformConnectors` means **No connectors used**, the same
 as an empty array. A present malformed list/entry remains unknown, and an inventory

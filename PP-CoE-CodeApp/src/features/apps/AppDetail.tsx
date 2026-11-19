@@ -12,7 +12,8 @@ import {
   Divider,
 } from "@fluentui/react-components";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { getApp, shortResourceType, type AppRow } from "./data";
+import { getApp, isManagedApp, shortResourceType, type AppRow } from "./data";
+import { ManagedAppDetails } from "./ManagedAppDetails";
 import {
   getAppAdminDetails,
   isAppAdminDetailsSupported,
@@ -132,6 +133,7 @@ function ReadyView({
   const entityKind = resourceTypeToEntityKind(row.type);
   const hasConfig = !!(row.appType || row.subType || row.logicalName || row.appModuleId);
   const adminSupported = isAppAdminDetailsSupported(row.type);
+  const managed = isManagedApp(row);
 
   return (
     <>
@@ -238,6 +240,8 @@ function ReadyView({
         </Card>
       )}
 
+      {managed && <ManagedAppDetails key={`${row.environmentId}::${row.id}`} raw={raw} />}
+
       {/* 3. Connectors & actions */}
       <div className={styles.colFull}>
         <ConnectorsCard connectors={row.connectors} />
@@ -278,8 +282,10 @@ function ReadyView({
             <Meta label="Last modified by">
               {row.lastModifiedBy ? <UserChip id={row.lastModifiedBy} /> : "—"}
             </Meta>
-            <Meta label="Shared users">{row.sharedUsersCount.toLocaleString()}</Meta>
-            <Meta label="Shared groups">{row.sharedGroupsCount.toLocaleString()}</Meta>
+            {!managed && <>
+              <Meta label="Shared users">{row.sharedUsersCount.toLocaleString()}</Meta>
+              <Meta label="Shared groups">{row.sharedGroupsCount.toLocaleString()}</Meta>
+            </>}
           </div>
         </div>
       </Card>

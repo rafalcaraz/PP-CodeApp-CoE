@@ -25,6 +25,10 @@ explicitly unreported usage); owner, maker and subtype remain in app inspection.
 App details lead with the app name, environment and joined group name, identity
 names (or explicit unresolved lookup), and friendly connector names. Usage help
 is contextual; transfer protocol warnings belong to move review, not app details.
+**View full app details** closes app inspection and opens the existing Apps
+detail page, including its managed-app properties and Packages sections.
+Navigation includes the encoded app ID and environment ID; missing identities
+do not produce a link. **Close** remains available without navigating.
 Other environment apps are collapsed and exclude the selected app; failed or
 incomplete sibling reads remain explicit errors rather than complete counts.
 IDs/subtype are under **Technical details**. **Raw inventory record** lazily
@@ -32,9 +36,14 @@ displays only the selected app's original returned resource, including unmapped
 fields, in a bounded scrollable JSON panel. It makes no extra request and stores
 no payload in localStorage. Missing raw records and serialization failures are
 shown explicitly, never replaced with reconstructed UI fields.
-`CopilotStudio` is displayed
-as **Copilot Studio**; other origin strings are shown literally with an
-observed-origin badge. Missing origins are explicitly unavailable. Cowork,
+The shared origin reader prefers a nonempty string `properties.origin`, falling
+back to `properties.createdIn` when origin is absent, blank or malformed.
+`CopilotStudio` and `Copilot Studio` share one **Copilot Studio** badge, search
+label, filter category and Managed Apps Estate category. Other returned strings
+remain literal observed origins; they are not inferred from packages, subtype
+or creator. When both fields differ, origin takes precedence and both raw
+fields remain unchanged in the original inventory record. Origins are explicitly
+unavailable only when neither field supplies a nonempty string. Cowork,
 CLI and Code are not invented API enums. Owner and maker names present in
 inventory or the shared identity cache are searchable. **Resolve owner /
 maker names** explicitly runs the existing bounded, cached identity lookup
@@ -509,13 +518,116 @@ bucket or resource field omits the **entire source rule resource**, including
 otherwise-supported buckets in that resource; individual fields are never
 stripped to manufacture a writable rule. These omissions appear before
 confirmation and remain visible in the completion notice and recovery history.
-In particular, a `managedBy` field on a policy module envelope (reported on
-`MicrosoftAppsContentSecurityPolicy`) is not defined by the published
+The `managedBy` field on a policy module envelope is not defined by the published
 [RuleSet create contract](https://learn.microsoft.com/rest/api/power-platform/governance/rule-based-policies/create-rule-based-policy#ruleset)
-or the registered connector model. Its type, ownership semantics and safe
-independent-copy behavior are not established. It is not transferred or treated
-as read-only metadata: the whole optional CSP module can instead be explicitly
-skipped. Microsoft's independent-copy tutorial establishes creation and
+or the registered connector model. Duplication now supports a narrow,
+explicit **independently managed settings** recreation for
+the following exact version `1.0` module/attribution pairs:
+
+| Module | Returned envelope `managedBy` accepted for independent recreation |
+| --- | --- |
+| `MicrosoftAppsContentSecurityPolicy` | `"Microsoft"` or `"IT"` |
+| `MicrosoftAppsAppCreationFromCLI` | `"Microsoft"` |
+| `ConnectorManagement` | `"IT"` |
+| `ManagedAppsAssetProfile` | `"Microsoft"` |
+
+The shared `independentRuleContracts` registry in `groupClone.ts` is the extension
+point for future reviewed modules/versions, not a blanket ownership filter.
+The CLI module's setting identifier is `MicrosoftApps_AppCreationFromCLI`;
+the generic incumbent renderer has no dedicated Copilot-CLI label mapping.
+
+Review lists affected rules and confirmation acknowledges that the
+source-management relationship and future source-managed updates are **not** copied.
+Source attribution is retained in preview evidence, source/plan fingerprints and
+the recovery journal. CREATE contains only each module's `id`, `version` and
+complete deep-copied `inputs`, omitting envelope attribution and response
+timestamps. Null versus missing values, the configuration string `"{}"`, false
+values and nested `inputs.managedBy` are not normalized. This is snapshot-settings
+recreation, not a promise of equivalent source-managed lifecycle or effective
+runtime policy. Other attribution values, modules, versions and unknown envelope
+fields retain the existing whole-rule omissions or foundational blockers.
+
+Destination read-back must contain the exact settings and no management
+attribution on the recreated modules or independent policy; unexpected markers
+stop before assignment without an ownership-repair PATCH. Existing independent
+policy identity, exclusive assignment, empty membership and source-unchanged
+checks still apply, including during read-only recovery. Real source/manual CSP
+GETs informed this contract; CLI attribution and execution regressions are
+synthetic. Actual independent CREATE/read-back through the tenant connector
+remains user testing, not verified by a local build. No live request or endpoint
+call is needed to interpret the CSP reporting URL. Selective rule sync is not
+expanded by this duplication behavior.
+
+Connection-type modes are preserved exactly, not filled in. The registered
+`RuleSet.inputs` create shape is an open object; the
+[ACP programming tutorial](https://learn.microsoft.com/power-platform/admin/programmability-tutorial-manage-advanced-connector-policies)
+recommends mirroring returned connector entries but does **not** establish a
+default for an absent `AllowedConnectionTypesMode`. Duplication accepts an
+absent mode only when `AllowedConnectionTypes` is absent too, transmits both
+fields as absent, and shows the omitted-mode count in the review. Mixed lists
+with explicit `AllAllowed` and `SomeAllowed` entries retain their exact modes,
+action restrictions and connection-type lists. A list without its mode
+(including an empty or null list), null/unknown/non-string modes, missing
+`SomeAllowed` lists, malformed lists and ambiguous action modes remain blocked.
+Missing is not equivalent to explicit `AllAllowed`. No server default or expanded
+restriction is normalized during read-back; any lasting difference fails
+completion and leaves the operation's IDs available for recovery. Actual tenant
+CREATE/read-back remains unverified locally. A generated regression reproduces
+the observed 1,370 omitted modes among 1,394 entries without committing a tenant
+connector inventory. Selective sync retains its previous explicit-mode guards.
+
+The Model A bucket `Sharing/MicrosoftApp` supports confirmed independent
+duplication when its source attribution is `"IT"` or absent. The user reported
+successful creation and returned sharing values `"-1"`, `"false"`, `"true"`,
+`"false"` without a `managedBy` envelope, as well as a copied
+`ManagedAppsAssetProfile`. This is evidence for that configuration, not every
+value, service variant or management lifecycle. Both the registered `MgGovResourceType` enum and the current
+[group RuleSet create contract](https://learn.microsoft.com/rest/api/power-platform/governance/rule-sets/create-rule-set)
+list `App`, not `MicrosoftApp`; however, the generated type is `string` and the
+installed SDK serializes the named request body without converting resource
+types. This establishes transport fidelity, **not gateway/service acceptance**.
+The trial retains literal `MicrosoftApp`, all sibling buckets (including
+`AuthoringBot` and `UsersBot`), ordering and exact string settings such as `"-1"`,
+`"false"` and `"noLimit"`. It omits only reviewed bucket-level attribution and
+response timestamps, uses a new resource identity, and scopes CREATE only to
+the returned destination group. Same-named setting IDs and JSON strings remain
+unchanged. No `MicrosoftApp` to `App` remapping or recursive field stripping occurs.
+
+One final confirmation covers the reviewed independent source settings and any
+acknowledged omissions. Source management and future managed
+updates are not copied; service rejection and manual-recovery risk remain visible.
+Module inventory, source manager names, connector omission counts, raw payloads
+and completed history live in a collapsed bottom **Technical details** section.
+Omitted governance, blockers and uncertain-write recovery remain visible outside
+that section. Trial evidence is bound to the reviewed plan, fresh source
+fingerprint and durable ID-only journal. Unknown manager values, additional
+envelope fields and other attributed bucket shapes still omit the whole source
+resource; selective sync does not gain trial eligibility. Completion requires
+exact destination settings, bucket cardinality, new identities, destination-only
+scope, independent ACP and empty membership. Unexpected returned management
+attribution is rejected, not normalized. Gateway errors, asynchronous responses
+and ambiguous/bodyless creates retain the existing no-blind-retry and manual
+recovery behavior. A unique exact destination read-back may identify a bodyless
+creation; otherwise it remains indeterminate. Local mocked verification does
+not prove other tenant configurations. Development performs no tenant writes or
+deployment.
+
+The **Managed app sharing editor is withheld** following the user's report that
+the feature is not enabled for their tenant. The duplication form has no sharing
+controls, customization state or override request, and cannot add an absent
+sharing bucket. Existing source `MaximumShareLimit`, `IsGroupSharingDisabled`,
+`IsGuestSharingDisabled` and `IsViralSharingDisabled` values still copy exactly
+as strings, including missing versus `"false"` versus `"-1"`, with sibling
+buckets and unrelated settings preserved. Tenant availability is not inferred
+from the presence of stored settings, and no tenant toggle is changed. Existing
+fingerprint, destination read-back and recovery guards remain. Earlier operations
+that included sharing overrides cannot rebuild that plan through this form and
+cannot use exact-plan completion verification here. Their known resources can
+still be inspected read-only without that form; unresolved configuration needs
+manual recovery. A separately acknowledged new copy does not resume or retry
+them. Selective sync is unchanged.
+
+Microsoft's independent-copy tutorial establishes creation and
 whole-group assignment of a new policy containing only `ConnectorManagement`;
 omitting a separate optional module does not reuse or transfer source ownership.
 Unknown ownership on the **policy/group itself**, source-resource references,
@@ -649,6 +761,9 @@ It stores only operation/resource IDs, source/payload fingerprints and step
 outcomes; it does **not** store policy payloads, names, credentials or raw errors.
 Storage failure before write intent is durable blocks that write. This is
 browser-local recovery, not a transactional or cross-device tenant journal.
+Version 2 records add a hash of the source ID and normalized destination name,
+separate from the exact reviewed-plan hash. Version 1 records remain readable in
+the same storage namespace; no history is deleted or reset.
 
 Each non-idempotent step persists its intent before the request and its returned
 ID before further work. Requests have a 60-second bound; a timed-out request may
@@ -657,22 +772,41 @@ authorization/network failures during writes and lost responses stop later
 writes. Actual operation IDs are retained when exposed, but no unrelated lifecycle
 operation endpoint is guessed or polled. There is no blind POST retry or
 same-name adoption. An already started operation can only be reconciled by
-recorded IDs; the UI also blocks a new copy while an unresolved local operation
-is present.
+recorded IDs. An incomplete record blocks another request with the same known
+destination intent (or exact legacy plan), not every future copy from that
+source. Other incomplete records, including legacy records with unknown target
+intent, require explicit **Start a separate new copy** acknowledgement. Their
+resources may remain orphaned and still need review. A different name is not
+proof of resource ownership: new groups, rules and policies must have fresh
+returned IDs, must not reuse earlier recorded resources, and still pass all
+empty-group, independent-policy and exact-settings checks.
 
-**Reconcile known IDs (read only)** performs full read-back, without creation,
-PATCH, assignment or deletion. A re-created preview must match the original
-semantic plan/source fingerprint; its read timestamp may differ. Unknown
-creation IDs, partial configuration or a changed source need manual admin
-recovery. Returned IDs for group/rules/policy and actual step outcomes remain
-visible, including invalid source-ID returns. No automatic cleanup is attempted;
-policy deletion/unassignment and group-delete cascades are not established, so
-atomic rollback is not promised.
+Creation is serialized across this browser's tabs using an exclusive,
+non-queued Web Lock; unavailable lock support or an actively held lock prevents
+writes. The executor also rejects overlapping in-process operations and checks
+current durable history before starting. Historical uncertainty is not an
+active lock. These controls do not establish tenant-wide or cross-device
+serialization.
 
-A destination PPAC link is shown only after a fully verified outcome using the
-actual returned group identity. Successful completion refreshes the board through
-its existing race-protected refresh path. Refresh/external-return invalidation
-still closes stale previews. No unverified destination link is fabricated.
+**Review existing copy (read only)** works without the original preview. It uses
+recorded group/policy IDs to report current resources, rule and assignment IDs,
+membership and read failures. It does not discover ownership by name, retry any
+write, change the journal or mark a copy complete. An obsolete sharing-override
+plan therefore does not prevent useful inspection. **Verify against reviewed
+settings (read only)** is available only for an exact matching plan; its read
+timestamp may differ. This performs full equivalence verification without
+creation, PATCH, assignment or deletion. Unknown creation IDs, partial
+configuration or a changed source still need manual admin recovery. Returned
+IDs and actual step outcomes remain available in collapsed recovery details.
+No automatic cleanup is attempted; policy deletion/unassignment and group-delete
+cascades are not established, so atomic rollback is not promised.
+
+History links are explicitly labeled **recorded destination**, not verified
+completion, and use only durable returned group IDs distinct from the source.
+Inspection checks that identity before reading child resources. The successful
+outcome link still requires full destination verification. Only verified
+completion refreshes the board through its existing race-protected refresh
+path. Refresh/external-return invalidation still closes stale previews.
 
 ### Required safe tenant verification
 

@@ -362,6 +362,19 @@ describe("managed apps inventory", () => {
     expect(originLabel("FutureSurface")).toBe("FutureSurface");
     expect(originLabel("")).toBe("Origin unavailable");
   });
+  it("uses createdIn for origin badges, searches and filters while preserving raw evidence", () => {
+    const original = resource("Synthetic app");
+    const raw = { ...original, properties: { ...original.properties, origin: " ", createdIn: "Copilot Studio" } };
+    const app = readManagedApp(raw);
+    expect(app.origin).toBe("CopilotStudio");
+    expect(originLabel(app.origin)).toBe("Copilot Studio");
+    expect(matchesApp(app, "copilot studio", "CopilotStudio")).toBe(true);
+    expect(matchesApp(app, "", "managed-apps-cli")).toBe(false);
+    expect(matchesContext(app, env, { key: group.id, name: group.displayName, description: "", apps: [app] },
+      "copilot studio", { app: "", environment: "", group: "" })).toBe(true);
+    expect(app.raw).toBe(raw);
+    expect(app.raw?.properties).toEqual(raw.properties);
+  });
 
   it("keeps duplicate app GUIDs in different PDEs separate", async () => {
     envQuery.mockResolvedValue({ ok: true, data: { items: [

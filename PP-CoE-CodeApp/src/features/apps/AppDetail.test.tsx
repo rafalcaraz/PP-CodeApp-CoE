@@ -13,7 +13,7 @@
  * call.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Routes, Route } from "react-router-dom";
 import { FluentProvider, webLightTheme } from "@fluentui/react-components";
@@ -101,6 +101,56 @@ describe("AppDetail smoke", () => {
       expect(screen.getAllByText("Onboarding App").length).toBeGreaterThan(0);
     });
     expect(getApp).toHaveBeenCalledWith("app-1", undefined);
+    expect(screen.queryByRole("heading", { name: "Managed app properties" })).not.toBeInTheDocument();
+  });
+
+  describe("AppDetail managed app metadata", () => {
+    it("shows runtime/sharing and searches returned package names and versions without enrichment calls", async () => {
+      vi.mocked(getApp).mockResolvedValue({ ok: true, data: {
+        row: appRow({ type: "microsoft.powerapps/apps", subType: "microsoftApp" }) as never,
+        raw: { properties: {
+          createdIn: "Copilot Studio", hasCustomMiddleTier: false,
+          sharing: { run: { userCount: 2, groupCount: 0, entireTenant: false } },
+          npmPackages: [{ name: "@example/widgets", version: "6.3.1" }, { name: "react", version: "19.2.5" }],
+          npmPackageCount: 2, npmPackageInventoryScope: "directProduction",
+          npmPackageInventoryTruncated: false, npmPackageUnresolvedCount: 0, npmPackageInventoryVersion: 1,
+        } },
+      } });
+      renderAppDetail();
+      expect(await screen.findByRole("heading", { name: "Managed app properties" })).toBeVisible();
+      expect(screen.getByText("Copilot Studio")).toBeVisible();
+      expect(screen.getByText("Custom middle tier").parentElement).toHaveTextContent("No");
+      expect(screen.queryByText("Shared users")).not.toBeInTheDocument();
+      const sharing = within(screen.getByRole("table", { name: "Managed app sharing" }));
+      expect(sharing.getAllByRole("row")[2]).toHaveTextContent("Run20Not reportedNot reportedNo");
+      expect(screen.getByText("Direct production dependencies, not a full transitive inventory.")).toBeVisible();
+      fireEvent.change(screen.getByRole("textbox", { name: "Search packages" }), { target: { value: "19.2" } });
+      const packages = within(screen.getByRole("table", { name: "Returned packages" }));
+      expect(packages.getByText("react")).toBeVisible();
+      expect(packages.queryByText("@example/widgets")).not.toBeInTheDocument();
+      fireEvent.change(screen.getByRole("textbox", { name: "Search packages" }), { target: { value: "@EXAMPLE" } });
+      expect(packages.getByText("@example/widgets")).toBeVisible();
+      expect(getAppAdminDetails).not.toHaveBeenCalled();
+      expect(getApp).toHaveBeenCalledTimes(1);
+    });
+    it("surfaces partial/unknown metadata without inventing zero sharing or full dependency coverage", async () => {
+      vi.mocked(getApp).mockResolvedValue({ ok: true, data: {
+        row: appRow({ type: "microsoft.powerapps/apps", subType: "microsoftApp" }) as never,
+        raw: { properties: {
+          npmPackages: [{ name: "partial-package" }, null], npmPackageCount: 5,
+          npmPackageInventoryTruncated: true, npmPackageUnresolvedCount: 2,
+          npmPackageInventoryScope: "futureScope", npmPackageInventoryVersion: 3,
+        } },
+      } });
+      renderAppDetail();
+      expect(await screen.findByText("partial-package")).toBeVisible();
+      expect(screen.getByText(/2 entries returned/)).toHaveTextContent("Declared count: 5");
+      expect(screen.getByText(/returned package inventory is truncated/)).toHaveTextContent("2 unresolved packages");
+      expect(screen.getByRole("table", { name: "Managed app sharing" })).not.toHaveTextContent("0");
+      fireEvent.click(screen.getByText("Package inventory coverage"));
+      expect(screen.getByText("futureScope")).toBeVisible();
+      expect(screen.getByText("3")).toBeVisible();
+    });
   });
 
   it("renders the missing-state ErrorPane when getApp returns ok:true but no data", async () => {

@@ -51,6 +51,7 @@ vi.mock("../../components/EnvironmentPicker", () => ({
 import { AppsList } from "../../features/apps/AppsList";
 import { listAppsPage } from "../../features/apps/data";
 import { MANAGED_APP_SUBTYPE } from "../../features/apps/data";
+import { toAppRow } from "../../data/inventory";
 
 function renderAppsList() {
   return render(
@@ -90,6 +91,28 @@ describe("AppsList smoke", () => {
       expect(screen.getByText("Onboarding App")).toBeInTheDocument();
     });
   });
+  it("finds managed apps by package name/version using the existing loaded-row column filter", async () => {
+    vi.mocked(listAppsPage).mockResolvedValueOnce({ ok: true, data: {
+      rows: ["with-package", "without-package"].map((id, index) => toAppRow({
+        name: id, type: "microsoft.powerapps/apps", properties: {
+          subType: "microsoftApp", displayName: id,
+          npmPackages: [{ name: index ? "other" : "@example/widgets", version: index ? "1.0.0" : "6.3.1" }],
+        },
+      })), totalRecords: 2,
+    } });
+    renderAppsList();
+    await screen.findByText("with-package");
+    await userEvent.click(screen.getByRole("button", { name: "Columns" }));
+    await userEvent.click(await screen.findByLabelText("Packages"));
+    await userEvent.click(screen.getByText("Done"));
+    await userEvent.click(await screen.findByRole("button", { name: "Packages column options" }));
+    await userEvent.type(screen.getByRole("textbox", { name: "Packages filter value" }), "6.3.1");
+    await userEvent.click(screen.getByRole("button", { name: "Apply filter" }));
+    expect(screen.getByText("with-package")).toBeInTheDocument();
+    expect(screen.queryByText("without-package")).not.toBeInTheDocument();
+    expect(screen.getByText(/1 matching \/ 2 loaded/)).toBeVisible();
+    expect(listAppsPage).toHaveBeenCalledTimes(1);
+  }, 15_000);
 
   it("filters by sub-type and clears it when the resource type changes", async () => {
     renderAppsList();

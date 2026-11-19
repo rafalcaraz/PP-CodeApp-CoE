@@ -31,6 +31,22 @@ beforeEach(() => {
 });
 
 describe("Managed Apps Estate complete source", () => {
+  it("uses the same origin fallback and known alias grouping as governance without guessing unknown origins", async () => {
+    const apps = [
+      app("created-in", "env", { createdIn: "Copilot Studio" }),
+      app("origin", "env", { origin: "CopilotStudio" }),
+      app("both", "env", { origin: "managed-apps-cli", createdIn: "Copilot Studio" }),
+      app("malformed", "env", { origin: {}, createdIn: "FutureSurface" }),
+      app("missing", "env", { createdIn: false }),
+    ];
+    query.mockImplementation((clauses: unknown[]) => page(typeOf(clauses) === ResourceType.AppBuilderApp ? apps : []));
+    const result = await readManagedAppsEstate(new AbortController().signal);
+    if (!result.ok) throw new Error(result.error);
+    expect(result.data.apps.map((row) => row.origin)).toEqual([
+      "CopilotStudio", "CopilotStudio", "managed-apps-cli", "FutureSurface", "",
+    ]);
+    expect(apps[2].properties).toMatchObject({ origin: "managed-apps-cli", createdIn: "Copilot Studio" });
+  });
   it("includes all eight managed apps across environment types, keeps creator distinct and reads each relevant group's assignments once", async () => {
     const apps = [
       app("a", "developer", { origin: "CopilotStudio", powerPlatformConnectors: [{ connectorId: "shared_sql" }, { connectorId: "/apis/SHARED_SQL" }] }),

@@ -65,7 +65,7 @@ function portableModule(rule: Module): boolean {
 }
 
 export async function ruleSyncCatalog(source: SyncSnapshot): Promise<SyncCatalog> {
-  const checked = await planGroupClone(source, "Validation only");
+  const checked = await planGroupClone(source, "Validation only", source.group.description, Date.now(), { purpose: "selective-sync" });
   const rules: SyncRule[] = [];
   const exclusions = (checked.skipped ?? []).map((entry) => ({ label: entry.id, reason: entry.reasons.join(" ") }));
   for (const resource of checked.rules) for (const bucket of resource.parameters ?? []) for (const setting of bucket.value ?? []) {
@@ -115,7 +115,7 @@ export async function planRuleSync(source: SyncSnapshot, selected: string[], des
   for (const before of destinations) {
     const id = before.group.id ?? "";
     // Unlike copying, an in-place update must retain the target's own existing resource references.
-    const checked = await planGroupClone(before, "Validation only", before.group.description, Date.now(), { preserveExistingReferences: true });
+    const checked = await planGroupClone(before, "Validation only", before.group.description, Date.now(), { preserveExistingReferences: true, purpose: "selective-sync" });
     const target: SyncTarget = { id, name: before.group.displayName || id, before, after: structuredClone(before), changes: [], steps: [], blockers: [...checked.blockers] };
     if (membershipId(id) === membershipId(sourceId)) target.blockers.push("The source group cannot be a destination.");
     if (before.publication !== "applied") target.blockers.push("Destination applied state is unavailable.");

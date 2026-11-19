@@ -1809,6 +1809,15 @@ export function isManagedApp(app: { type: string; subType?: string }): boolean {
   return app.type === ResourceType.AppBuilderApp && app.subType === MANAGED_APP_SUBTYPE;
 }
 
+export function readAppOrigin(item: ResourceItem): string {
+  const origin = propStr(item, "origin").trim() || propStr(item, "createdIn").trim();
+  return origin === "Copilot Studio" ? "CopilotStudio" : origin;
+}
+
+export function appOriginLabel(origin: string): string {
+  return origin === "CopilotStudio" ? "Copilot Studio" : origin || "Origin unavailable";
+}
+
 /** Short label for inline use (e.g. table cells). */
 export function shortResourceType(type: string, subType?: string): string {
   switch (type) {
