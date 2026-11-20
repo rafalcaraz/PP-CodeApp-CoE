@@ -5,6 +5,11 @@ board in the existing Zones visual language. Unlike Zones' local organization,
 columns represent live inventory environment-group membership. Nothing is
 stored as local governance.
 
+Groups share the available board width, with more room given to groups containing
+more visible environments. Within each group, environment cards flow side by side
+when space permits, keeping their apps together in readable columns. Groups and
+cards wrap to a single column on narrow screens; controls remain compact.
+
 ## Scope and search
 
 The board drains `QueryResources` for `microsoft.powerapps/apps` with

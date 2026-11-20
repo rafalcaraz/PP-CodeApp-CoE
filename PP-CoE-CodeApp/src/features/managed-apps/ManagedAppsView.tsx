@@ -33,7 +33,7 @@ import {
 } from "./data";
 
 const useStyles = makeStyles({
-  root: { display: "flex", flexDirection: "column", gap: tokens.spacingVerticalM, minWidth: 0 },
+  root: { display: "flex", flexDirection: "column", gap: tokens.spacingVerticalS, minWidth: 0 },
   header: { display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: tokens.spacingHorizontalM, flexWrap: "wrap" },
   intro: { display: "flex", flexDirection: "column", gap: tokens.spacingVerticalXS, maxWidth: "75ch" },
   heading: { margin: 0, overflowWrap: "anywhere" },
@@ -41,20 +41,21 @@ const useStyles = makeStyles({
   toolbar: { display: "flex", alignItems: "flex-end", flexWrap: "wrap", gap: tokens.spacingHorizontalM },
   primaryToolbar: { display: "flex", alignItems: "center", flexWrap: "wrap", gap: tokens.spacingHorizontalS, minWidth: 0 },
   filterPanel: { display: "flex", flexDirection: "column", gap: tokens.spacingVerticalM, paddingBlock: tokens.spacingVerticalM, borderBottom: `1px solid ${tokens.colorNeutralStroke2}`, minWidth: 0 },
-  filterGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 220px), 1fr))", gap: tokens.spacingHorizontalM, minWidth: 0 },
-  results: { display: "flex", flexWrap: "wrap", alignItems: "baseline", justifyContent: "space-between", gap: tokens.spacingHorizontalM, minWidth: 0 },
+  filterGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 220px), min(100%, 280px)))", gap: tokens.spacingHorizontalM, minWidth: 0 },
+  results: { display: "flex", flexWrap: "wrap", alignItems: "baseline", gap: tokens.spacingHorizontalL, minWidth: 0 },
   help: { maxWidth: "100%", color: tokens.colorNeutralForeground2 },
   helpContent: { display: "flex", flexDirection: "column", gap: tokens.spacingVerticalS, maxWidth: "75ch", paddingBlock: tokens.spacingVerticalS },
-  search: { flex: "1 1 260px", minWidth: 0 },
+  search: { flex: "0 1 400px", minWidth: 0, maxWidth: "100%" },
   filter: { minWidth: "min(160px, 100%)", maxWidth: "100%" },
   select: { width: "100%", maxWidth: "100%", minWidth: 0 },
-  board: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 320px), 1fr))", alignItems: "start", gap: tokens.spacingHorizontalL, minWidth: 0 },
-  column: { display: "flex", flexDirection: "column", minWidth: 0, backgroundColor: tokens.colorNeutralBackground2, borderRadius: tokens.borderRadiusLarge, border: `1px solid ${tokens.colorNeutralStroke2}`, overflow: "hidden" },
+  board: { display: "flex", flexWrap: "wrap", alignItems: "flex-start", gap: tokens.spacingHorizontalM, minWidth: 0 },
+  column: { display: "flex", flexDirection: "column", flexBasis: "min(100%, 360px)", minWidth: 0, maxWidth: "100%", backgroundColor: tokens.colorNeutralBackground2, borderRadius: tokens.borderRadiusLarge, border: `1px solid ${tokens.colorNeutralStroke2}`, overflow: "hidden" },
   columnHeader: { padding: tokens.spacingHorizontalM, borderBottom: `1px solid ${tokens.colorNeutralStroke2}`, display: "flex", flexDirection: "column", gap: tokens.spacingVerticalS },
+  groupAction: { alignSelf: "flex-start", maxWidth: "100%" },
   row: { display: "flex", alignItems: "center", gap: tokens.spacingHorizontalS, justifyContent: "space-between" },
   title: { margin: 0, minWidth: 0, flex: 1, overflowWrap: "anywhere", fontWeight: tokens.fontWeightSemibold },
-  body: { padding: tokens.spacingHorizontalM, display: "flex", flexDirection: "column", gap: tokens.spacingVerticalS, flex: 1 },
-  card: { padding: tokens.spacingHorizontalM, border: `1px solid ${tokens.colorNeutralStroke2}`, borderRadius: tokens.borderRadiusMedium, backgroundColor: tokens.colorNeutralBackground1, display: "flex", flexDirection: "column", gap: tokens.spacingVerticalS, contentVisibility: "auto", containIntrinsicSize: "auto 200px", ":hover": { ...shorthands.borderColor(tokens.colorNeutralStroke1) } },
+  body: { padding: tokens.spacingHorizontalS, display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(min(100%, 280px), 1fr))", alignItems: "start", gap: tokens.spacingVerticalS, minWidth: 0 },
+  card: { padding: tokens.spacingHorizontalS, border: `1px solid ${tokens.colorNeutralStroke2}`, borderRadius: tokens.borderRadiusMedium, backgroundColor: tokens.colorNeutralBackground1, display: "flex", flexDirection: "column", gap: tokens.spacingVerticalXS, contentVisibility: "auto", containIntrinsicSize: "auto 200px", ":hover": { ...shorthands.borderColor(tokens.colorNeutralStroke1) } },
   appRows: { listStyleType: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", minWidth: 0 },
   appRow: { display: "flex", flexDirection: "column", gap: tokens.spacingVerticalXS, paddingBlock: tokens.spacingVerticalS, borderTop: `1px solid ${tokens.colorNeutralStroke2}`, minWidth: 0 },
   appName: { justifyContent: "flex-start", textAlign: "left", whiteSpace: "normal", overflowWrap: "anywhere", minWidth: 0 },
@@ -498,7 +499,7 @@ export function ManagedAppsView() {
                   <Caption1 className={styles.muted}>{column.apps.length} shown / {column.totalApps} apps · {column.pdeCount} PDE{column.pdeCount === 1 ? "" : "s"}{column.otherEnvironments ? ` · ${column.otherEnvironments} other environment${column.otherEnvironments === 1 ? "" : "s"}` : ""}</Caption1>
                   {column.description && <Caption1 className={styles.muted}>{column.description}</Caption1>}
                   {column.groupId
-                    ? <Button size="small" icon={<ShieldCheckmarkRegular />} disabled={evidenceLoading} onClick={() => {
+                    ? <Button className={styles.groupAction} size="small" icon={<ShieldCheckmarkRegular />} disabled={evidenceLoading} onClick={() => {
                       const entry = inventory.data.groups.find((item) => membershipId(item.id) === membershipId(column.groupId!));
                       if (entry) { returnFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null; setGroupPanel(entry); void fetchEvidence([entry.id]); }
                     }}>Inspect ACP permissions</Button>
@@ -555,7 +556,9 @@ export function ManagedAppsView() {
 function GroupColumn({ column, children }: { column: BoardColumn; children: ReactNode }) {
   const styles = useStyles();
   const { setNodeRef, isOver } = useDroppable({ id: membershipId(column.groupId ?? column.key), disabled: !column.groupId });
-  return <section ref={setNodeRef} className={mergeClasses(styles.column, isOver && styles.drop)} aria-label={column.name}>{children}</section>;
+  const environmentCount = new Set(column.apps.map((app) => membershipId(app.environmentId))).size;
+  return <section ref={setNodeRef} style={{ flexGrow: Math.max(1, environmentCount) }}
+    className={mergeClasses(styles.column, isOver && styles.drop)} aria-label={column.name}>{children}</section>;
 }
 
 const PdeCard = memo(function PdeCard({ apps, totalApps, environment, environmentId, moveBlocker, onInspect, selected, onSelect, onPrepare, governingGroupAvailable, onGoverningGroup }: {
