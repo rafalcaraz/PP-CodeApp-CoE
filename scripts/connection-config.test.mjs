@@ -33,6 +33,17 @@ test("direct Graph calls retain their dedicated logical connection reference", (
   assert.equal(graph.xrmConnectionReferenceLogicalName, "msftcsa_HTTPEntraPreAuthGraph");
 });
 
+test("PP API wrapper preserves HTTP status, headers and binary body in its string response", () => {
+  const file = workflowFiles.find((name) => name.startsWith("PP-API-Wrapper-Flow-"));
+  assert.ok(file);
+  const { actions } = JSON.parse(readFileSync(new URL(file, workflowDir), "utf8")).properties.definition;
+  assert.equal(actions.Main.actions.Set_variable.inputs.value, "@string(outputs('Invoke_an_HTTP_request'))");
+  assert.ok(actions.Set_variable_1.inputs.value.includes("outputs('Invoke_an_HTTP_request')"));
+  assert.ok(actions.Set_variable_1.inputs.value.includes('"error":"PP-API HTTP action failed'));
+  assert.deepEqual(actions.Set_variable_1.runAfter.Main, ["TimedOut", "Failed"]);
+  assert.equal(actions.Respond_to_a_Power_App_or_flow.inputs.body.response, "@{variables('response')}");
+});
+
 test("three HTTP audiences have distinct solution references with their documented endpoints", () => {
   const customizations = readFileSync(new URL("../solution/src/Other/Customizations.xml", import.meta.url), "utf8");
   for (const [logicalName, audience] of [

@@ -1,12 +1,10 @@
 import snapshotJson from "./catalog.generated.json";
-import { createSchemaTools } from "../../shared/api-explorer/schema";
+import { createSchemaTools, isJsonObject } from "../../shared/api-explorer/schema";
 import type { ApiCatalog, ApiOperation, ApiParameter, ApiRequestInputs, FlowHttpRequest } from "./types";
 
 export const apiCatalog = snapshotJson as ApiCatalog;
 export const schemaTools = createSchemaTools(apiCatalog.definitions);
-export const apiOperations = [...apiCatalog.operations].sort((a, b) =>
-  `${a.section} ${a.group} ${a.title}`.localeCompare(`${b.section} ${b.group} ${b.title}`),
-);
+export const apiOperations = apiCatalog.operations;
 export const API_ORIGIN = "https://api.powerplatform.com";
 const METHODS = new Set(["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE"]);
 
@@ -108,6 +106,18 @@ export function buildApiRequest(inputs: ApiRequestInputs): FlowHttpRequest {
         throw new Error("Request body must be valid JSON.");
       }
       schemaTools.validateValue(parsed, operation.body.schema, "body");
+      if (operation.path === "/copilotstudio/licensing/reports/{ReportName}" && operation.method === "POST" && isJsonObject(parsed)) {
+        for (const name of ["startDate", "endDate"]) {
+          const value = parsed[name];
+          const date = typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value) ? new Date(`${value}T00:00:00Z`) : undefined;
+          if (!date || !Number.isFinite(date.getTime()) || date.toISOString().slice(0, 10) !== value) {
+            throw new Error(`body.${name}: enter a valid UTC date (YYYY-MM-DD).`);
+          }
+        }
+        if (String(parsed.endDate) < String(parsed.startDate)) {
+          throw new Error("body.endDate must be on or after startDate.");
+        }
+      }
     }
   } else if (inputs.body.trim()) {
     throw new Error("This operation does not document a request body.");

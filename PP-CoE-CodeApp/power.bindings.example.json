@@ -1,0 +1,8 @@
+{
+  "environmentId": "<environment-id-from-power.config.json>",
+  "sharedConnections": {
+    "msftcsa_HTTPEntraPreAuthGraph": "/providers/Microsoft.PowerApps/apis/shared_webcontents/connections/<graph-http-connection-name>",
+    "msftcsa_PPLicensingAPI": "/providers/Microsoft.PowerApps/apis/shared_webcontents/connections/<licensing-http-connection-name>",
+    "msftcsa_HTTPWithEntraPPAPI": "/providers/Microsoft.PowerApps/apis/shared_webcontents/connections/<power-platform-api-http-connection-name>"
+  }
+}

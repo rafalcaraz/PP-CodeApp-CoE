@@ -9,7 +9,8 @@ Power Platform for Admins V2 connector. The API playground targets
 ## Explore and run
 
 Browse an API section, resource group, and operation, or search names,
-descriptions, and paths. Each operation links to its Microsoft Learn page.
+descriptions, and paths. Sections, resource groups, and operations follow the
+published Microsoft Learn table-of-contents order. Each operation links to its Microsoft Learn page.
 The inventory-schema article describes inventory payloads; the REST API
 reference supplies the operation catalog.
 
@@ -51,6 +52,35 @@ the search carries over between tabs. **Wrap lines** controls long-line
 display. On wider screens, the response panel stays visible while you edit
 request inputs; smaller screens stack the panels.
 
+### Copilot Studio licensing reports
+
+Select **Copilot Studio / Licensing Reports**. All three documented operations
+are available with API version `2024-10-01`:
+
+1. **Generate Licensing Report** sends a POST for the selected `ReportName`.
+   Supply inclusive UTC `startDate` and `endDate` in `YYYY-MM-DD` form and,
+   optionally, `granularity` (`Daily` or `Summary`). Invalid calendar dates and
+   reversed ranges are blocked locally. Generation requires typed confirmation.
+2. **Get Licensing Report Operation** sends a GET with the same `ReportName`
+   and the `OperationId` from generation's `Location` response header. Inspect
+   `Running`, `Succeeded`, or `Failed`; respect `Retry-After` before another
+   manual check. Nothing polls or follows a returned URL automatically.
+3. After `Succeeded`, copy `fileName` into **Download Licensing Report File**.
+   Run the GET, then click **Save &lt;filename&gt;** to save the returned gzip
+   bytes. Extract the `.gz` to read the CSV. This does not reinterpret or
+   re-serialize the report's columns.
+
+Use an API-supported report name; the current reference does not declare a
+local report-name enum. The caller needs a Global, Dynamics 365, or Power
+Platform administrator role. Tenant availability and service-side report rules
+still apply.
+
+The wrapper must preserve response headers to expose the operation ID, and
+binary downloads must arrive as Power Automate's base64 `$content` object.
+Missing or malformed binary content is an explicit error with the raw response
+retained, not a successful text-file download. Files never bypass the registered
+flow or use a direct browser request to the API. Saving requires a separate click.
+
 ## Flow contract and limitations
 
 The app maps the three required trigger strings exactly:
@@ -61,7 +91,18 @@ The app maps the three required trigger strings exactly:
 | URL | `text_1` | Fully encoded URL on `api.powerplatform.com` |
 | Body | `text_2` | JSON text, or an empty string for a bodyless request |
 
-The flow returns `response?: string`. The app parses JSON when possible and
+The flow returns `response?: string`. The checked-in wrapper now serializes the
+HTTP action's complete outputs (`statusCode`, `headers`, and `body`) into this
+same string, on both successful and failed HTTP calls. This preserves
+`Location`/`Retry-After` and the binary body's `$content` representation.
+An HTTP action without output returns an explicit error object without
+inventing an upstream HTTP status.
+Its three trigger inputs, dedicated audience, and invoker connection are unchanged.
+**Existing deployments need this flow-definition update as well as the app
+update** for complete licensing-report support. Local source changes do not
+update a deployed flow or prove live tenant access.
+
+The app remains compatible with older body-only responses. It parses JSON when possible and
 preserves plain text and empty output. A missing output is an explicit error.
 Standard API error objects are shown as failures. If the flow returns an
 envelope containing `statusCode`, `body`, and optionally `headers`, those are
@@ -144,10 +185,19 @@ listed but cannot run through this JSON-only contract.
 
 ## Catalog coverage and refresh
 
-The checked-in snapshot contains all **217 operations across 16 sections**
-listed in the published reference table of contents when generated, including
-both Resource Threshold operations. It is not limited to operations exposed
-by the Admins V2 connector. Routes load this catalog lazily.
+The **2026-11-23** snapshot contains all **227 operations across 18 sections**
+listed in the published reference table of contents, including both Resource
+Threshold operations and the existing **Licensing / Fin Ops Licensing / Get
+Fin Ops License Summary V2**. It is not limited to operations exposed by the
+Admins V2 connector. Routes load this catalog lazily.
+
+Compared with the previous 217-operation snapshot, this adds three Copilot
+Studio licensing-report operations, five **Copilot Governance / Copilot
+Settings** operations, **Monitoring Hub / Metrics Export / Export Metrics**,
+and two **Support / Known Issues** operations. **Send Advisor Chat Message**
+is no longer listed in the published table of contents and is no longer in
+this documentation-derived catalog; that does not establish whether the
+service endpoint itself has been retired.
 
 From `PP-CoE-CodeApp`, refresh the snapshot with:
 
@@ -160,6 +210,8 @@ then downloads every listed Power Platform operation as Microsoft Learn
 Markdown. Without `--fresh`, it reuses a temporary download cache so failed
 refreshes can resume. It extracts the hierarchy, HTTP route, version defaults,
 parameter/body tables, response schemas, enums, and documented constraints.
+Response media types identify gzip downloads. Numeric enum values remain
+numbers (including Known Issues' `issueStatus`), rather than string choices.
 It fails rather than publishing an incomplete catalog when a page cannot be
 downloaded or an unrecognized schema shape appears.
 
@@ -170,7 +222,7 @@ source documentation is subject to
 [Microsoft Learn terms](https://learn.microsoft.com/en-us/legal/termsofuse).
 
 Some published pages reference types without defining them (for example
-`Clause`, `Geo`, and `ActionEvent`). These known source gaps are retained as
+`Clause`, `Geo`, `ActionEvent`, and `CopilotGovernanceSettingValue`). These known source gaps are retained as
 explicit warnings, not replaced with invented schemas or endpoint behavior.
 Those values must be checked against the linked documentation; local
 validation does not assert an undocumented type.

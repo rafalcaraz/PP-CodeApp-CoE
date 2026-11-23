@@ -61,8 +61,18 @@ export function parameterSchema(parameter: ActionParameter): JsonSchema {
   return parameter.schema ?? { ...parameter, required: undefined };
 }
 
-export function initialInputs(action: ConnectorAction): Record<string, string> {
-  return Object.fromEntries(action.parameters.map((parameter) => {
+export function licensingReportExample(now = new Date()) {
+  const today = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  const dayMs = 24 * 60 * 60 * 1000;
+  return {
+    startDate: new Date(today - 14 * dayMs).toISOString().slice(0, 10),
+    endDate: new Date(today - dayMs).toISOString().slice(0, 10),
+    granularity: "Summary",
+  };
+}
+
+export function initialInputs(action: ConnectorAction, now = new Date()): Record<string, string> {
+  const inputs = Object.fromEntries(action.parameters.map((parameter) => {
     const schema = parameterSchema(parameter);
     const value = parameter.default ?? schema.default;
     return [
@@ -70,6 +80,11 @@ export function initialInputs(action: ConnectorAction): Record<string, string> {
       value === undefined ? "" : typeof value === "string" ? value : JSON.stringify(value),
     ];
   }));
+  if (action.id === "GenerateLicensingReport") {
+    inputs.ReportName = "FeatureDetailsPerResource";
+    inputs.body = JSON.stringify(licensingReportExample(now), null, 2);
+  }
+  return inputs;
 }
 
 export function parseInputs(action: ConnectorAction, inputs: Record<string, string>): Record<string, unknown> {

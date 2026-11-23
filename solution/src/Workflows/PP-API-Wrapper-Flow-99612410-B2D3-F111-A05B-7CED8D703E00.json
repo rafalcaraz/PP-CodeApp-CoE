@@ -134,7 +134,7 @@
               "type": "SetVariable",
               "inputs": {
                 "name": "response",
-                "value": "@string(body('Invoke_an_HTTP_request'))"
+                "value": "@string(outputs('Invoke_an_HTTP_request'))"
               },
               "runAfter": {
                 "Invoke_an_HTTP_request": [
@@ -153,7 +153,7 @@
           "type": "SetVariable",
           "inputs": {
             "name": "response",
-            "value": "ERROR"
+            "value": "@string(coalesce(outputs('Invoke_an_HTTP_request'), json('{\"error\":\"PP-API HTTP action failed without response details. Inspect the flow run history.\"}')))"
           },
           "runAfter": {
             "Main": [

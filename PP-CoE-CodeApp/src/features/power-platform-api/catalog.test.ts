@@ -41,6 +41,55 @@ describe("Power Platform API catalog", () => {
     }
   });
 
+  it("builds all three licensing report requests with their documented inputs", () => {
+    const reports = apiOperations.filter((operation) => operation.section === "Copilot Studio" && operation.group === "Licensing Reports");
+    const generate = reports.find((operation) => operation.method === "POST");
+    const status = reports.find((operation) => operation.title === "Get Licensing Report Operation");
+    const download = reports.find((operation) => operation.title === "Download Licensing Report File");
+    if (!generate?.body || !status || !download) throw new Error("Missing licensing report lifecycle.");
+    const inputs = initialApiInputs(generate);
+    inputs.parameters["path:ReportName"] = "test-report";
+    inputs.body = '{"startDate":"2026-11-01","endDate":"2026-11-02","granularity":"Daily"}';
+    expect(buildApiRequest(inputs)).toEqual({
+      method: "POST", url: "https://api.powerplatform.com/copilotstudio/licensing/reports/test-report?api-version=2024-10-01",
+      body: inputs.body,
+    });
+    expect(isReadOnly(generate)).toBe(false);
+    const statusInputs = initialApiInputs(status);
+    Object.assign(statusInputs.parameters, { "path:ReportName": "test-report", "path:OperationId": "test-operation" });
+    expect(buildApiRequest(statusInputs)).toEqual({
+      method: "GET", url: "https://api.powerplatform.com/copilotstudio/licensing/reports/test-report/operations/test-operation?api-version=2024-10-01", body: "",
+    });
+    const fileInputs = initialApiInputs(download);
+    Object.assign(fileInputs.parameters, { "path:ReportName": "test-report", "path:FileName": "file name.csv.gz" });
+    expect(buildApiRequest(fileInputs)).toEqual({
+      method: "GET", url: "https://api.powerplatform.com/copilotstudio/licensing/reports/test-report/files/file%20name.csv.gz?api-version=2024-10-01", body: "",
+    });
+    expect(download.responses.find((response) => response.status === "200 OK")?.mediaTypes).toContain("application/gzip");
+    for (const body of [
+      {}, { startDate: "", endDate: "2026-11-02" },
+      { startDate: "2026-02-30", endDate: "2026-11-02" },
+      { startDate: "2026-11-03", endDate: "2026-11-02" },
+      { startDate: "2026-11-01", endDate: "2026-11-02", granularity: "Hourly" },
+    ]) {
+      expect(() => buildApiRequest({ ...inputs, body: JSON.stringify(body) })).toThrow();
+    }
+    inputs.body = '{"startDate":"2026-11-01","endDate":"2026-11-01","granularity":"Summary"}';
+    expect(() => buildApiRequest(inputs)).not.toThrow();
+  });
+
+  it("accepts numeric known-issue statuses rather than stringifying the documented enum", () => {
+    const operation = apiOperations.find((entry) => entry.title === "Search Known Issues");
+    if (!operation) throw new Error("Missing known-issue search.");
+    const inputs = initialApiInputs(operation);
+    inputs.body = '{"productIds":[],"searchText":"*","issueStatus":2}';
+    expect(buildApiRequest(inputs).body).toBe(inputs.body);
+    inputs.body = '{"productIds":[],"searchText":"*","issueStatus":"2"}';
+    expect(() => buildApiRequest(inputs)).toThrow("choose one of");
+    inputs.body = '{"productIds":[],"searchText":"","issueStatus":2}';
+    expect(() => buildApiRequest(inputs)).toThrow("minimum length");
+  });
+
   it("builds the exact documented threshold GET without an HTTP request body", () => {
     const inputs = initialApiInputs(getAll);
     inputs.parameters["path:entitlementId"] = "MCSMessages";

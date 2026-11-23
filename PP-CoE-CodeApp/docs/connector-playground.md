@@ -54,6 +54,51 @@ explicit execution, and retain per-request write confirmation. Do not introduce
 automatic calls or persist response data. Connector-specific fields and
 transport limitations should remain visible.
 
+## Licensing report payload examples
+
+Select **Licensing Reports / Generate Licensing Report** for an editable
+example based on the [Copilot Credit usage reports tutorial](https://learn.microsoft.com/en-us/power-platform/admin/programmability-tutorial-download-copilot-credit-usage-reports?tabs=powershell).
+Selection prefills `ReportName` with `FeatureDetailsPerResource` and the
+**body (JSON request body)** textbox with actual payload values, not JSON Schema.
+Dates cover the previous 14 complete UTC days, ending yesterday, and the
+example explicitly requests `Summary`. Nothing is submitted on selection.
+
+| Field | Where | Required | Values |
+|---|---|---|---|
+| `ReportName` | Separate path input, not in the body | Yes | `FeatureDetailsPerResource` for usage by agent/resource and feature; `BillingDetailsPerEnvironment` for environment-level capacity-pack and pay-as-you-go usage |
+| `startDate` | JSON body | Yes | Inclusive UTC date, `YYYY-MM-DD`; the service enforces the available lookback window (30 days by default in the tutorial) |
+| `endDate` | JSON body | Yes | Inclusive UTC date, `YYYY-MM-DD`, on or after `startDate` |
+| `granularity` | JSON body | No | `Daily` (service default) or `Summary` (example choice) |
+
+`Daily` retains a date for each report-dimension combination. `Summary` combines
+the requested dates per combination and omits the date column; it is not one
+tenant-wide total. Output columns such as `ResourceID` and `BilledCredits` are
+not request fields. The registered body does not document environment, agent,
+or resource filters.
+
+Edit or replace the JSON directly. **Insert report example (last 14 UTC days)**
+recomputes the dates and replaces only the body, preserving the selected
+report name. **Reset inputs** restores the initial report name and example.
+The generic **Insert JSON template** remains available for a required-only
+structural starting point. The expandable **Request schema** describes
+validation rules; its `type`, `properties`, and `required` keys are not the
+payload to send.
+
+The tutorial marks connector `format=json` support as an upcoming December
+2026 rollout. The currently registered connector exposes only the three body
+fields above, so the example does not add `format`. Its download metadata
+declares gzip-compressed CSV. Do not assume the tutorial's future JSON example
+is available through this connector version.
+
+Generation still requires the existing exact-request review and typed
+confirmation. Use its initial `Location` header to obtain `OperationId` for
+**Get Licensing Report Operation Status**; headers are available only if the
+SDK exposes them. HTTP 200 can still mean `Running`. Respect `Retry-After`
+when returned and check manually. After `Succeeded`, pass `fileName` to
+**Download Licensing Report File**, with the same `ReportName`. Neither
+status nor download takes a request body. Missing headers are not a reason
+to automatically resubmit generation. There is no automatic polling or download.
+
 ## Metadata and execution
 
 The catalog is derived from the bundled connector Swagger at

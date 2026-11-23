@@ -1,13 +1,13 @@
 import { useMemo, useRef, useState } from "react";
 import {
   Badge, Button, Checkbox, Dialog, DialogActions, DialogBody, DialogContent,
-  DialogSurface, DialogTitle, Field, Input, Select, Text, Title2,
+  DialogSurface, DialogTitle, Field, Input, Link, Select, Text, Title2,
   makeStyles, mergeClasses, tokens,
 } from "@fluentui/react-components";
 import { PlayRegular, SearchRegular, CodeRegular, ArrowReplyRegular } from "@fluentui/react-icons";
 import { ErrorPane, LoadingPane } from "../../components/Status";
 import {
-  connectorActions, initialInputs, parameterSchema, parseInputs,
+  connectorActions, initialInputs, licensingReportExample, parameterSchema, parseInputs,
   resolveSchema, schemaDocument, schemaTemplate, validateValue, type ActionParameter,
 } from "./catalog";
 import { SchemaField } from "../../shared/api-explorer/SchemaField";
@@ -63,9 +63,10 @@ function ParameterInput({ parameter, value, disabled, onChange }: {
   onChange: (value: string) => void;
 }) {
   const schema = resolveSchema(parameterSchema(parameter));
-  const label = `${parameter.name} (${parameter.in}, ${schema.type ?? "JSON"})`;
+  const label = parameter.in === "body" ? `${parameter.name} (JSON request body)` : `${parameter.name} (${parameter.in}, ${schema.type ?? "JSON"})`;
   return (
-    <SchemaField label={label} required={parameter.required} hint={parameter.description}
+    <SchemaField label={label} required={parameter.required}
+      hint={parameter.description ?? (parameter.in === "body" ? "Enter the actual JSON payload here, not the request schema shown below." : undefined)}
       schema={parameterSchema(parameter)}
       tools={{ resolveSchema, schemaDocument, schemaTemplate, validateValue }}
       json={parameter.in === "body"} value={value} disabled={disabled} onChange={onChange} />
@@ -187,6 +188,56 @@ export function ConnectorPlayground() {
             <Badge appearance="tint" color={action.readOnly ? "informative" : "warning"}>{action.method}</Badge>
             <code>{action.path}</code>
           </div>
+          {action.group === "Licensing Reports" && (
+            <details className={explorer.details} open>
+              <summary>Licensing report request guide</summary>
+              <div className={styles.column}>
+                <Text>
+                  ReportName is a path parameter, not a body field. Choose FeatureDetailsPerResource for usage by
+                  agent/resource and feature, or BillingDetailsPerEnvironment for capacity-pack and pay-as-you-go usage by environment.
+                </Text>
+                {action.id === "GenerateLicensingReport" ? <>
+                  <Text>
+                    The editable body below is a ready-to-edit payload for the previous 14 complete UTC days, ending yesterday.
+                    The request schema describes its shape; do not paste that schema as the payload.
+                  </Text>
+                  <dl>
+                    <dt><Text weight="semibold">startDate (required)</Text></dt>
+                    <dd>Inclusive UTC start date in YYYY-MM-DD form. The tutorial describes a 30-day default lookback; the service enforces the available window.</dd>
+                    <dt><Text weight="semibold">endDate (required)</Text></dt>
+                    <dd>Inclusive UTC end date in YYYY-MM-DD form, on or after startDate. The example uses yesterday to avoid a partial day.</dd>
+                    <dt><Text weight="semibold">granularity (optional)</Text></dt>
+                    <dd>Daily returns dated rows per report-dimension combination. Summary combines the requested dates per combination and omits the date column. The service defaults to Daily; this example explicitly requests Summary.</dd>
+                  </dl>
+                  <Text>
+                    Do not add report output columns such as ResourceID or BilledCredits to the request.
+                    No environment, agent, or resource filters are documented in this body.
+                  </Text>
+                  <Text>
+                    The tutorial marks connector format=json support as an upcoming December 2026 rollout.
+                    The currently registered connector has no format field, so this example omits it; its download metadata declares gzip-compressed CSV.
+                  </Text>
+                  <Text>
+                    After submitting once, use the operation ID from the initial Location header with Get Licensing Report Operation Status.
+                    Headers are available only if exposed by the SDK. If Location is missing, inspect the connector response rather than generating another report.
+                  </Text>
+                </> : action.id === "GetLicensingReportOperation" ? (
+                  <Text>
+                    No request body is needed. Use the same ReportName and the OperationId from generation&apos;s Location header.
+                    Check status manually: HTTP 200 can still mean Running. Respect Retry-After when returned; only Succeeded with fileName is ready to download.
+                  </Text>
+                ) : (
+                  <Text>
+                    No request body is needed. Use the same ReportName and the FileName returned by a Succeeded operation.
+                    The response is report file content, not a JSON request payload.
+                  </Text>
+                )}
+                <Text>Nothing submits, polls, or downloads automatically. Generation still requires reviewing and confirming the exact request.</Text>
+                <Link href="https://learn.microsoft.com/en-us/power-platform/admin/programmability-tutorial-download-copilot-credit-usage-reports?tabs=powershell"
+                  target="_blank" rel="noopener noreferrer">Microsoft Learn: Copilot Credit usage report examples</Link>
+              </div>
+            </details>
+          )}
           {!action.readOnly && (
             <div className={styles.warning}>
               This action can change tenant data, permissions, billing, or availability.
@@ -203,6 +254,12 @@ export function ConnectorPlayground() {
                   setInputs((previous) => ({ ...previous, [parameter.name]: value }));
                   setError("");
                 }} />
+              {action.id === "GenerateLicensingReport" && parameter.in === "body" && (
+                <Button size="small" appearance="subtle" disabled={locked} onClick={() => {
+                  setInputs((previous) => ({ ...previous, [parameter.name]: JSON.stringify(licensingReportExample(), null, 2) }));
+                  setError("");
+                }}>Insert report example (last 14 UTC days)</Button>
+              )}
               </div>
             ))}
             {!action.parameters.length && <Text>This action has no inputs.</Text>}

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { dataSourcesInfo } from "../../../.power/schemas/appschemas/dataSourcesInfo";
 import {
-  connectorActions, initialInputs, parameterSchema, parseInputs,
+  connectorActions, initialInputs, licensingReportExample, parameterSchema, parseInputs,
   resolveSchema, schemaDocument, schemaTemplate, validateValue,
 } from "./catalog";
 
@@ -43,6 +43,36 @@ describe("connector playground catalog", () => {
     const defaults = initialInputs(action("GetEnvironmentByIdForUser"));
     expect(defaults["api-version"]).toBe("2024-10-01");
     expect(defaults.environmentId).toBe("");
+  });
+
+  it.each([
+    ["2026-01-01T00:15:00Z", "2025-12-18", "2025-12-31"],
+    ["2024-03-01T23:59:00Z", "2024-02-16", "2024-02-29"],
+  ])("builds a report payload for 14 complete UTC days at %s", (now, startDate, endDate) => {
+    const example = licensingReportExample(new Date(now));
+    expect(example).toEqual({ startDate, endDate, granularity: "Summary" });
+    const inputs = initialInputs(action("GenerateLicensingReport"), new Date(now));
+    expect(parseInputs(action("GenerateLicensingReport"), inputs)).toEqual({
+      ReportName: "FeatureDetailsPerResource",
+      "api-version": "2024-10-01",
+      body: example,
+    });
+  });
+
+  it("accepts an edited billing-report payload with optional granularity omitted", () => {
+    const entry = action("GenerateLicensingReport");
+    const inputs = initialInputs(entry, new Date("2026-11-23T12:00:00Z"));
+    inputs.ReportName = "BillingDetailsPerEnvironment";
+    inputs.body = '{"startDate":"2026-11-20","endDate":"2026-11-21"}';
+    expect(parseInputs(entry, inputs)).toEqual({
+      ReportName: "BillingDetailsPerEnvironment",
+      "api-version": "2024-10-01",
+      body: { startDate: "2026-11-20", endDate: "2026-11-21" },
+    });
+    inputs.body = '{"type":"object","properties":{"startDate":{"type":"string"}}}';
+    expect(() => parseInputs(entry, inputs)).toThrow("body.endDate is required");
+    expect(initialInputs(action("GetLicensingReportOperation")).OperationId).toBe("");
+    expect(initialInputs(action("DownloadLicensingReportFile")).FileName).toBe("");
   });
 
   it("omits blank optional parameters and retains literal strings", () => {

@@ -149,6 +149,33 @@ export interface AdvisorScenario {
   scenarioName?: string;
 }
 
+export interface AffectedSite {
+  // Website unique identifier (ID).
+  portalId?: string;
+  // Friendly website name (may be null when not resolvable).
+  portalName?: string;
+  // Website URL (may be null when not resolvable).
+  portalUrl?: string;
+  // Site type ("Production" or "Trial").
+  siteType?: string;
+  // Deep link to this website's settings page in the Power Platform admin center (may be null when the base URL is not configured).
+  ppacUrl?: string;
+  // Scenario-specific detail of why the website is affected.
+  detail?: string;
+  // Existing grant state for this website and exception type ("None" when no grant exists, otherwise the derived lifecycle status).
+  grantStatus?: string;
+  // Expiry of the existing grant, when one exists (null otherwise).
+  expirationDate?: string;
+}
+
+export interface AffectedSitesResult {
+  exceptionType?: ExceptionType;
+  // Number of affected sites.
+  totalCount?: number;
+  // The affected websites.
+  sites?: AffectedSite[];
+}
+
 export interface Alert {
   // Unique identifier of the alert
   AlertId?: string;
@@ -168,6 +195,38 @@ export interface Alert {
   CallToAction?: string[];
 }
 
+export interface AllocationAvailabilityResponseModel {
+  scope?: ScopeModel;
+  // Availability of the entitlements for the scope.
+  entitlementAllocationsAvailable?: EntitlementAllocationAvailabilityModel[];
+}
+
+export interface AllocationByEnvironmentModel {
+  // The environment ID.
+  environmentId?: string;
+  // The per-currency allocations, including enforcement rules such as TenantPool that can be enabled or disabled.
+  currencyAllocations?: CurrencyAllocationModel[];
+}
+
+export interface AllocationEnforcementRule {
+  ruleType?: AllocationEnforcementRuleTypes;
+  enabled?: boolean;
+}
+
+export type AllocationEnforcementRuleTypes = string;
+
+export interface AllocationModel {
+  quantity?: number;
+  autoAllocated?: number;
+  unit?: EntitlementUnit;
+}
+
+export interface AllocationPutRequestModel {
+  scope?: ScopeModel;
+  // Allocated entitlements.
+  allocatedEntitlements?: EntitlementAllocationModel[];
+}
+
 export interface AllocationsByEnvironmentPatchRequestModelV1 {
   // Specify the request body with environment ID and currency details.
   currencyAllocations?: CurrencyAllocationRequestModelV1[];
@@ -178,19 +237,6 @@ export interface AllocationsByEnvironmentResponseModelV1 {
   environmentId?: string;
   // The collection of currencies with allocation count.
   currencyAllocations?: CurrencyAllocationResponseModelV1[];
-}
-
-export interface AllowedIpAddressesConfiguration {
-  AllowedIpAddresses?: {
-   // The IP address or CIDR range
-   IpAddress?: string;
-   IpType?: IpAddressType;
-   // The unique identifier of the tenant
-   TenantId?: string;
-   // The creation timestamp of the IP address entry
-   CreatedOn?: string;
-   LastModifiedOn?: string;
- }[];
 }
 
 export interface ApiProperties {
@@ -253,6 +299,24 @@ export interface ApplicationPackageContinuationResponse {
 }
 
 export type ApplicationVisibility = string;
+
+export interface ApplyFinOpsVersionAcceptedResponse {
+  // The identifier of the environment resource the operation applies to.
+  resourceId?: string;
+  // The identifier of the long-running operation to poll for status.
+  operationId?: string;
+}
+
+export interface AuditInfo {
+  // The ID of the user who created the record.
+  createdBy?: string;
+  // The UTC time when the record was created.
+  createdTimeUtc?: string;
+  // The ID of the user who last modified the record.
+  modifiedBy?: string;
+  // The UTC time when the record was last modified.
+  modifiedTimeUtc?: string;
+}
 
 export type Base64ThoughtImageformat = 'base64';
 
@@ -326,9 +390,9 @@ export interface BillingPolicyResponseModel {
   location?: string;
   billingInstrument?: BillingInstrumentModel;
   createdOn?: string;
-  createdBy?: Principal;
+  createdBy?: LicensingPrincipal;
   lastModifiedOn?: string;
-  lastModifiedBy?: Principal;
+  lastModifiedBy?: LicensingPrincipal;
 }
 
 export interface BillingPolicyResponseModelResponseWithOdataContinuation {
@@ -360,12 +424,37 @@ export interface BotQuarantineStatus {
 }
 
 export interface BusinessContinuityStateFullSnapshot {
+  // The last time the environment's business-continuity state was synced.
   lastSyncTime?: string;
 }
 
 export type CapacityAvailabilityStatus = string;
 
+export interface CapacityEntitlementModel {
+  entitled?: EntitlementEntitledModel;
+  consumed?: EntitlementConsumedModel;
+  unit?: EntitlementUnit;
+  allocated?: EntitlementAllocationModelV2;
+  availableQuantity?: number;
+  status?: OverageStatus;
+  licenses?: CapacityLicenseModel[];
+}
+
 export type CapacityEntitlementType = string;
+
+export interface CapacityLicenseModel {
+  skuId?: string;
+  productName?: string;
+  licenseQuantity?: number;
+  entitled?: EntitlementEntitledModel;
+  licenseTier?: LicenseTier;
+  licenseStatus?: string;
+  nextLifecycleStatus?: string;
+  nextLifecycleDate?: string;
+  licenseId?: string;
+  licenseSource?: LicenseSource;
+  isUnlimited?: boolean;
+}
 
 export type CapacityStatusMessageCode = string;
 
@@ -382,7 +471,25 @@ export type CapacityType = string;
 
 export type CapacityUnits = string;
 
+export interface CatalogPayGoEntitlementModel {
+  entitled?: EntitlementEntitledModel;
+  consumed?: EntitlementConsumedModel;
+}
+
 export type CatalogVisibility = string;
+
+export interface CertificateDTO {
+  // The subject name of the certificate.
+  SubjectName?: string;
+  // The expiration date of the certificate.
+  ExpirationDate?: string;
+  // The thumbprint of the certificate.
+  Thumbprint?: string;
+  // The Azure region where the certificate is stored.
+  Location?: string;
+  // The type of the certificate (e.g., SSL, MANAGED, AZURE_MANAGED).
+  Type?: string;
+}
 
 export type Clause$type = 'where'|'project'|'take'|'orderby'|'distinct'|'count'|'summarize'|'extend'|'join';
 
@@ -547,6 +654,11 @@ export interface ConnectorActionStartProperties {
   validation?: ValidationProperties;
 }
 
+export interface ConnectorConsentBypassResponse {
+  // Indicates whether admin connector consent bypass is enabled for the bot.
+  adminConsentBypass?: boolean;
+}
+
 export interface ConsumerIdentityModel {
   // The ID of the customer tenant.
   tenantId?: string;
@@ -662,6 +774,28 @@ export interface ConvertTrialToProductionRequest {
   UseDynamics365PortalAddOnLicense?: boolean;
 }
 
+export type CopilotStudioLicensingReportGranularity = string;
+
+export type CopilotStudioLicensingReportName = string;
+
+export interface CopilotStudioLicensingReportOperation {
+  // A message describing why report generation failed. Returned only when the status is Failed.
+  error?: string;
+  // The generated report file name to use when downloading the report. Returned only when the status is Succeeded.
+  fileName?: string;
+  status: CopilotStudioLicensingReportOperationStatus;
+}
+
+export type CopilotStudioLicensingReportOperationStatus = string;
+
+export interface CopilotStudioLicensingReportRequest {
+  // The inclusive UTC end date of the report range. Must be on or after the start date.
+  endDate: string;
+  granularity?: CopilotStudioLicensingReportGranularity;
+  // The inclusive UTC start date of the report range.
+  startDate: string;
+}
+
 export interface CopyRequest {
   // Source environment ID to copy from.
   sourceEnvironmentId: string;
@@ -676,7 +810,7 @@ export interface CopyRequestOptions {
   securityGroupIdToOverride?: string;
   // Boolean flag to skip audit data for copy.
   skipAuditData?: boolean;
-  // Boolean flag to execute advanced copy for Finance and Operation data.
+  // Boolean flag to execute advanced copy for Finance and Operations data.
   executeAdvancedCopyForFinanceAndOperations?: boolean;
 }
 
@@ -692,11 +826,76 @@ export interface CreateBackupRequest {
 export interface CreateEnvironmentManagementSettingResponse {
   // Gets or sets the ID of the entity being created in the response
   objectResult?: string;
-  errors?: ErrorResponse;
+  errors?: EnvironmentServiceErrorResponse;
   // Gets or sets the next link if there are more records to be returned
   nextLink?: string;
   // Gets or sets the error message.
   responseMessage?: string;
+}
+
+export interface CreateEnvironmentRequest {
+  // The location where the environment will be provisioned. Mutually exclusive with MacroRegion.
+  location?: string;
+  // The macro region where the environment will be provisioned.
+  macroRegion?: string;
+  // The display name of the environment.
+  displayName: string;
+  environmentSku: EnvironmentSku;
+  // An optional description for the environment.
+  description?: string;
+  // The type of database to create (e.g., CommonDataService). CommonDataService requires either location or macroRegion, linkedEnvironmentMetadata.baseLanguageCode, and linkedEnvironmentMetadata.currency.code.
+  databaseType?: string;
+  usedBy?: UserIdentity;
+  billingPolicy?: CreateEnvironmentRequestBillingPolicy;
+  linkedEnvironmentMetadata?: CreateEnvironmentRequestLinkedMetadata;
+  parentEnvironmentGroup?: CreateEnvironmentRequestParentGroup;
+  cluster?: CreateEnvironmentRequestCluster;
+  governanceConfiguration?: CreateEnvironmentRequestGovernance;
+  // Microsoft 365 Group ID to be linked to the Teams environment during provisioning. This property is not applicable for non-Teams environments.
+  connectedGroupIdForTeamsEnvironment?: string;
+  finOpsMetadata?: CreateEnvironmentRequestFinOpsMetadata;
+}
+
+export interface CreateEnvironmentRequestBillingPolicy {
+  // The billing policy ID.
+  id?: string;
+}
+
+export interface CreateEnvironmentRequestCluster {
+  // The cluster category. Eg: FirstRelease.
+  category?: string;
+}
+
+export interface CreateEnvironmentRequestFinOpsMetadata {
+  // The FinOps environment ID.
+  id?: string;
+  // The FinOps environment URL.
+  url?: string;
+  // The FinOps environment link type.
+  type?: string;
+}
+
+export interface CreateEnvironmentRequestGovernance {
+  protectionLevel?: ProtectionLevel;
+}
+
+export interface CreateEnvironmentRequestLinkedMetadata {
+  // The base language code (e.g., 1033 for English).
+  baseLanguageCode?: number;
+  currency?: EnvironmentRequestCurrency;
+  // The templates to apply.
+  templates?: string[];
+  // The security group ID.
+  securityGroupId?: string;
+  // The domain name.
+  domainName?: string;
+  // A JSON object payload customized for the selected templates.
+  templateMetadata?: Record<string, unknown>;
+}
+
+export interface CreateEnvironmentRequestParentGroup {
+  // The environment group ID.
+  id?: string;
 }
 
 export type CrossTenantConnectionconnectionType = 'Inbound'|'Outbound';
@@ -735,6 +934,13 @@ export interface CrossTenantConnectionReportsResponseWithOdataContinuation {
   "@odata.nextLink"?: string;
 }
 
+export interface CurrencyAllocationModel {
+  currencyType?: ExternalCurrencyType;
+  allocated?: number;
+  autoAllocated?: number;
+  enforcementRules?: EnforcementRule[];
+}
+
 export interface CurrencyAllocationRequestModelV1 {
   currencyType?: ExternalCurrencyType;
   // Specify the currency count.
@@ -758,6 +964,8 @@ export interface CurrencyReportV2 {
   allocated?: number;
   consumed?: CurrencyConsumption;
 }
+
+export type CurrencyType = string;
 
 export type CustomRuleenabledState = 'Enabled'|'Disabled';
 export type CustomRulematchConditionsoperator = 'GeoMatch'|'Equals'|'Contains'|'StartsWith'|'EndsWith';
@@ -795,6 +1003,13 @@ export interface CustomRule {
 
 export type customRules = string[];
 
+export interface DisabledReason {
+  // The reason code.
+  code?: string;
+  // The reason message.
+  message?: string;
+}
+
 export interface DistinctClause {
   FieldList: string[];
 }
@@ -829,30 +1044,169 @@ export interface DsrPagedResponse {
   nextLink?: string;
 }
 
+export interface EnforcementRule {
+  ruleType?: EnforcementRuleTypes;
+  enabled?: boolean;
+}
+
+export type EnforcementRuleTypes = string;
+
+export interface EnterprisePolicies {
+  encryption?: EnterprisePolicyLink;
+  identity?: EnterprisePolicyLink;
+  networkInjection?: EnterprisePolicyLink;
+  privateEndpoint?: EnterprisePolicyLink;
+}
+
+export interface EnterprisePolicyLink {
+  // The ID of the enterprise policy.
+  id?: string;
+  // The fully-qualified Azure resource ID of the enterprise policy.
+  resourceId?: string;
+  status?: EnterprisePolicyLinkStatus;
+  // Error details when the link status is Failed.
+  error?: string;
+}
+
+export type EnterprisePolicyLinkStatus = string;
+
+export interface EntitlementAllocationAvailabilityModel {
+  entitlementId?: string;
+  availableQuantity?: number;
+  unit?: EntitlementUnit;
+}
+
+export interface EntitlementAllocationModel {
+  allocation?: AllocationModel;
+  entitlementId?: string;
+  enforcementRules?: AllocationEnforcementRule[];
+}
+
+export interface EntitlementAllocationModelV2 {
+  value?: number;
+  autoAllocated?: number;
+}
+
+export interface EntitlementConsumedModel {
+  value?: number;
+  consumptionType?: EntitlementConsumptionType;
+  lastUpdatedOn?: string;
+  writeOff?: number;
+}
+
+export type EntitlementConsumptionType = string;
+
+export interface EntitlementEntitledModel {
+  value?: number;
+}
+
+export interface EntitlementReservedResponseModel {
+  reserved?: ReservedModel;
+  entitlementId?: string;
+}
+
+export type EntitlementUnit = string;
+
 export interface Environment {
   // The environment ID.
   environmentId?: string;
   // Display name of the environment.
   displayName?: string;
-  // Dataverse organization Url of the environment.
+  // Dataverse organization URL of the environment.
   dataverseOrganizationUrl?: string;
 }
 
+export interface EnvironmentAddonResponseModel {
+  addonType?: CurrencyType;
+  allocated?: number;
+  addonUnit?: string;
+}
+
 export interface EnvironmentBackup {
-  // The backup point date time. Set when backup is created.
+  // The backup point date time.
   backupPointDateTime?: string;
   // The label for the manually created backup.
   label?: string;
-  // Backup expiry date time based on retention period in days.
+  // The backup expiry date time.
   backupExpiryDateTime?: string;
-  // Environment backup ID. Auto-generated GUID if null.
+  // The identifier of the environment backup.
   id?: string;
-  createdBy?: Identity;
+  createdBy?: UserIdentity;
 }
 
 export interface EnvironmentBackupPagedCollection {
   collection?: EnvironmentBackup[];
   continuationToken?: string;
+}
+
+export interface EnvironmentCapacityEntitlementModel {
+  allocated?: EntitlementAllocationModelV2;
+  enforcementRules?: AllocationEnforcementRule[];
+  consumed?: EntitlementConsumedModel;
+  availableQuantity?: number;
+  status?: OverageStatus;
+}
+
+export interface EnvironmentCurrency {
+  // The currency code (e.g. "USD").
+  code?: string;
+  // The currency symbol (e.g. "$").
+  symbol?: string;
+  // Whether this is the tenant's default currency.
+  isTenantDefault?: boolean;
+}
+
+export interface EnvironmentCurrencyResourceCollection {
+  collection?: EnvironmentCurrency[];
+}
+
+export type EnvironmentDisasterRecoveryLocation = string;
+
+export type EnvironmentDisasterRecoveryState = string;
+
+export interface EnvironmentEntitlementDetailServiceModel {
+  unit?: EntitlementUnit;
+  capacity?: EnvironmentCapacityEntitlementModel;
+  payGo?: CatalogPayGoEntitlementModel;
+}
+
+export interface EnvironmentEntitlementResponseModel {
+  // The entitlement ID.
+  entitlementId?: string;
+  // The entitlement product categories (e.g. D365Apps, Dataverse, PowerApps, PowerAutomate).
+  productCategories?: ProductCategory[];
+  // The environment ID.
+  environmentId?: string;
+  environmentType?: EnvironmentType;
+  // The environment name.
+  environmentName?: string;
+  // Indicates whether the environment is a managed environment.
+  isManagedEnvironment?: boolean;
+  // The geographic location of the environment.
+  location?: string;
+  scenario?: EnvironmentScenario;
+  disasterRecoveryState?: EnvironmentDisasterRecoveryState;
+  disasterRecoveryLocation?: EnvironmentDisasterRecoveryLocation;
+  entitlement?: EnvironmentEntitlementDetailServiceModel;
+  // The BAP addons attached to the environment.
+  addons?: EnvironmentAddonResponseModel[];
+  // The BAP permissions on the environment.
+  permissions?: EnvironmentPermissionResponseModel[];
+  // The total storage in bytes that could be reclaimed.
+  cleanupOpportunitySize?: number;
+  // The number of active cleanup recommendations.
+  recommendationCount?: number;
+}
+
+export interface EnvironmentEntitlementSnapshotResponseModel {
+  resources?: EnvironmentResourceEntitlementSnapshotResponseModel[];
+}
+
+export interface EnvironmentEntitlementSnapshotResponseModelPagedResponse {
+  value?: EnvironmentEntitlementSnapshotResponseModel[];
+  "@odata.count"?: number;
+  "@odata.nextLink"?: string;
+  continuationtoken?: string;
 }
 
 export interface EnvironmentGroup {
@@ -872,8 +1226,23 @@ export interface EnvironmentGroupResponseWithOdataContinuation {
   "@odata.nextLink"?: string;
 }
 
+export interface EnvironmentLanguage {
+  // The locale identifier (LCID, e.g. 1033 for English).
+  localeId?: number;
+  // The language name, localized for display.
+  localizedName?: string;
+  // Whether this is the tenant's default language.
+  isTenantDefault?: boolean;
+}
+
+export interface EnvironmentLanguageResourceCollection {
+  collection?: EnvironmentLanguage[];
+}
+
 export interface EnvironmentList {
   value?: EnvironmentResponse[];
+  // Opaque URL to retrieve the next page of results. Present only when additional pages are available.
+  "@odata.nextlink"?: string;
 }
 
 export interface EnvironmentManagementSetting {
@@ -917,14 +1286,49 @@ export interface EnvironmentPagedCollection {
   continuationToken?: string;
 }
 
+export interface EnvironmentPermissionResponseModel {
+  name?: string;
+  displayName?: string;
+}
+
+export interface EnvironmentPrincipal {
+  // The principal ID.
+  id?: string;
+  // The principal type.
+  type?: string;
+}
+
+export interface EnvironmentRequestCurrency {
+  // The currency code (e.g., USD).
+  code?: string;
+  // The currency name.
+  name?: string;
+  // The currency symbol.
+  symbol?: string;
+  // The currency precision.
+  precision?: number;
+}
+
+export interface EnvironmentResourceEntitlementSnapshotResponseModel {
+  // The resource ID.
+  resourceId?: string;
+  // The consumed value.
+  consumed?: number;
+  unit?: EntitlementUnit;
+  // The last refreshed date.
+  lastRefreshedDate?: string;
+  // Additional metadata such as Feature, ProductName and nonBillableConsumed for MCSMessages.
+  metadata?: Record<string, unknown>;
+}
+
 export interface EnvironmentResponse {
-  // The value of id property on the environment object.
+  // The ID of the environment.
   id?: string;
   // The display name of the environment.
   displayName?: string;
-  // The value of tenantId property on the environment object.
+  // The ID of the tenant that the environment belongs to.
   tenantId?: string;
-  // The type of environment.
+  // The type (SKU) of the environment.
   type?: string;
   // The geographical region of the environment.
   geo?: string;
@@ -932,45 +1336,75 @@ export interface EnvironmentResponse {
   environmentGroupId?: string;
   // The Azure region of the environment.
   azureRegion?: string;
+  // The cluster category the environment is in.
+  clusterCategory?: string;
+  createdBy?: EnvironmentPrincipal;
+  createdFor?: EnvironmentPrincipal;
   // The creation date and time of the environment.
   createdDateTime?: string;
   // The deletion date and time of the environment.
   deletedDateTime?: string;
-  // The value of dataverseId property on the environment object.
+  // The ID of the Dataverse database (organization) associated with the environment.
   dataverseId?: string;
-  // The URL of the environment.
+  // The URL of the Dataverse database associated with the environment.
   url?: string;
-  // The version of the environment.
+  // The version of the Dataverse database associated with the environment.
   version?: string;
-  // The domain name of the environment.
+  // The domain name of the Dataverse database associated with the environment.
   domainName?: string;
-  // The state of the environment.
+  // The security group that controls access to the environment.
+  securityGroupId?: string;
+  // The ID of the AAD group connected to the environment.
+  connectedGroupId?: string;
+  // The current state of the environment.
   state?: string;
-  // The administrative mode of the environment.
+  // Indicates whether admin-only mode is enabled or disabled for the environment.
   adminMode?: string;
-  // The background operations state of the environment.
+  // Indicates whether background operations are enabled or disabled for the environment.
   backgroundOperationsState?: string;
-  // The protection level of the environment.
+  // The protection level applied to the environment.
   protectionLevel?: string;
   // The retention details of the environment.
   retentionDetails?: {
     // The retention period of the environment.
     retentionPeriod?: string;
-    // The available from date and time of the environment.
+    // The date and time from which the environment is available for recovery.
     availableFromDateTime?: string;
   };
+  finOpsMetadata?: FinOpsMetadata;
+  enterprisePolicies?: EnterprisePolicies;
+  // The scenario name associated with the environment (e.g. singleton scenario type).
+  scenarioName?: string;
 }
 
-export interface EnvironmentRestoreRequest {
-  // Restore point date-time with timezone offset per RFC 3339.
-  restorePointDateTime: string;
-  // A value indicating whether to skip audit data during the restore process.
-  skipAuditData?: boolean;
-  // The ID of the source environment from which the backup will be restored from.
-  sourceEnvironmentId: string;
+export type EnvironmentScenario = string;
+
+export interface EnvironmentServiceErrorResponse {
+  code?: string;
+  message?: string;
+  details?: ErrorDetail[];
 }
 
 export type EnvironmentSku = string;
+
+export interface EnvironmentTemplate {
+  // The template name (identifier).
+  name?: string;
+  // The template name, localized for display.
+  displayName?: string;
+  // Whether the template is a Customer Engagement template.
+  isCustomerEngagement?: boolean;
+  // Whether this template is supported for the reset operation.
+  isSupportedForResetOperation?: boolean;
+  // The per-SKU availability of this template.
+  availability?: TemplateAvailability[];
+}
+
+export interface EnvironmentTemplateResourceCollection {
+  collection?: EnvironmentTemplate[];
+}
+
+export type EnvironmentType = string;
 
 export interface ErrorDetail {
   code?: string;
@@ -994,13 +1428,6 @@ export interface ErrorDetails {
   source?: string;
 }
 
-export interface ErrorInfo {
-  // The error Code.
-  code?: string;
-  // The detailed error.
-  fieldErrors?: Record<string, unknown>;
-}
-
 export interface ErrorMessage {
   error?: {
     // Error code
@@ -1021,10 +1448,31 @@ export interface ErrorMessage {
 }
 
 export interface ErrorResponse {
-  code?: string;
-  message?: string;
-  details?: ErrorDetail[];
+  error?: {
+    // Error code for the failure type (e.g., BadRequest).
+    code?: string;
+    // Description of the error.
+    message?: string;
+  };
 }
+
+export type EvaluationRunState = string;
+
+export type ExceptionType = string;
+
+export interface ExceptionView {
+  // Website unique identifier (ID).
+  portalId?: string;
+  exceptionType?: ExceptionType;
+  // Derived lifecycle status of the exception.
+  status?: string;
+  // UTC time the exception was created.
+  created?: string;
+  // UTC expiry of the exception.
+  expirationDate?: string;
+}
+
+export type ExecutionState = string;
 
 export interface ExtendClause {
   FieldName: string;
@@ -1033,13 +1481,39 @@ export interface ExtendClause {
 
 export type ExternalCurrencyType = string;
 
+export interface FieldError {
+  // The error messages describing what is wrong with the field.
+  errorMessages?: string[];
+  // A suggested or accepted value that would resolve the error.
+  suggestedValue?: string;
+}
+
 export interface FinOpsAdminSettingsResponse {
   // The preferred days of week for RunOne Updates.
   maintenanceWindowDaysOfWeek?: FinOpsDayOfWeek[];
   maintenanceWindowCadence?: FinOpsUpdateCadence;
 }
 
+export interface FinOpsAppVersion {
+  // The application version.
+  version?: string;
+  // The release stage of the version.
+  releaseStage?: string;
+}
+
+export interface FinOpsAttachLicenseConsumption {
+  purchasedAttachUnassignedCount?: number;
+  purchasedAttachAssignedCount?: number;
+}
+
+export interface FinOpsBaseLicenseConsumption {
+  purchasedBaseUnassignedCount?: number;
+  purchasedBaseAssignedCount?: number;
+}
+
 export type FinOpsDayOfWeek = string;
+
+export type FinOpsDeploymentCategory = string;
 
 export interface FinOpsErrorResponse {
   error?: {
@@ -1050,7 +1524,94 @@ export interface FinOpsErrorResponse {
   };
 }
 
+export interface FinOpsLicenseRequirements {
+  usersNeedingLicenseCount?: number;
+}
+
+export interface FinOpsLicensesConsumption {
+  supplyChainManagement?: FinOpsProductLicenseConsumption;
+  finance?: FinOpsProductLicenseConsumption;
+  commerce?: FinOpsProductLicenseConsumption;
+  projectOperations?: FinOpsProductLicenseConsumption;
+  humanResources?: FinOpsProductLicenseConsumption;
+  operations?: FinOpsOperationsLicenseConsumption;
+  activity?: FinOpsSimpleLicenseConsumption;
+  teamMember?: FinOpsSimpleLicenseConsumption;
+  selfService?: FinOpsSimpleLicenseConsumption;
+  supplyChainManagementOrFinanceOrCommerce?: FinOpsSupplyChainManagementOrFinanceOrCommerceLicenseConsumption;
+  projectOperationsOrHumanResources?: FinOpsProjectOperationsOrHumanResourcesLicenseConsumption;
+}
+
+export interface FinOpsLicenseSummaryV2Response {
+  lastReportRefreshTime?: string;
+  tenantId?: string;
+  allUsersCount?: number;
+  usersWithoutLicensesCount?: number;
+  underLicensedUsersCount?: number;
+  overLicensedUsersCount?: number;
+  licensesConsumption?: FinOpsLicensesConsumption;
+}
+
+export interface FinOpsMetadata {
+  // The linked FinOps environment type.
+  type?: string;
+  // The linked FinOps environment ID.
+  id?: string;
+  // The linked FinOps environment URL.
+  url?: string;
+}
+
+export interface FinOpsOperationsLicenseConsumption {
+  licenseRequirements?: FinOpsLicenseRequirements;
+  baseConsumption?: FinOpsBaseLicenseConsumption;
+}
+
+export interface FinOpsProductLicenseConsumption {
+  licenseRequirements?: FinOpsLicenseRequirements;
+  baseConsumption?: FinOpsBaseLicenseConsumption;
+  attachConsumption?: FinOpsAttachLicenseConsumption;
+}
+
+export interface FinOpsProjectOperationsOrHumanResourcesLicenseConsumption {
+  licenseRequirements?: FinOpsLicenseRequirements;
+  projectOperationsConsumption?: FinOpsBaseLicenseConsumption;
+  humanResourcesConsumption?: FinOpsBaseLicenseConsumption;
+}
+
+export interface FinOpsPropertiesResponse {
+  // The Finance and Operations environment ID (AppId).
+  appId?: string;
+  // The maximum number of interactive AOS instances configured for the environment.
+  maxAOSCount?: string;
+  // The last observed interactive AOS instance count.
+  lastObservedAOSCount?: number;
+  // The maximum number of batch (non-interactive) AOS instances configured for the environment.
+  maxBatchAOSCount?: string;
+  // The last observed batch (non-interactive) AOS instance count.
+  lastObservedBatchAOSCount?: number;
+  deploymentType?: FinOpsDeploymentCategory;
+  // The demo dataset name for the environment.
+  demoDataset?: string;
+}
+
+export interface FinOpsSimpleLicenseConsumption {
+  licenseRequirements?: FinOpsLicenseRequirements;
+  baseConsumption?: FinOpsBaseLicenseConsumption;
+}
+
+export interface FinOpsSupplyChainManagementOrFinanceOrCommerceLicenseConsumption {
+  licenseRequirements?: FinOpsLicenseRequirements;
+  supplyChainManagementConsumption?: FinOpsBaseLicenseConsumption;
+  financeConsumption?: FinOpsBaseLicenseConsumption;
+  commerceConsumption?: FinOpsBaseLicenseConsumption;
+}
+
 export type FinOpsUpdateCadence = string;
+
+export interface FinOpsVersionsResponse {
+  // The list of available Finance and Operations application versions.
+  availableVersions?: FinOpsAppVersion[];
+}
 
 export interface FlowAction {
   // The workflow ID.
@@ -1123,8 +1684,8 @@ export interface FlowRun {
 }
 
 export interface ForceFailoverRequest {
-  // Last sync time used for the force failover operation.
-  lastSyncTime: string;
+  // The sync time to fail over to. Optional: if null or omitted, fails over to the latest available sync point.
+  lastSyncTime?: string;
 }
 
 export interface GetConnectorByIdResponse {
@@ -1167,7 +1728,7 @@ export interface GetConnectorByIdResponse {
 export interface GetEnvironmentManagementSettingResponse {
   // Gets or sets the fields for the entities being queried.
   objectResult?: EnvironmentManagementSetting[];
-  errors?: ErrorResponse;
+  errors?: EnvironmentServiceErrorResponse;
   // Gets or sets the next link if there are more records to be returned
   nextLink?: string;
   // Gets or sets the error message.
@@ -1180,10 +1741,24 @@ export interface GetTemporaryCurrencyEntitlementCountResponseModel {
   entitledQuantity?: number;
 }
 
-export interface Identity {
-  id?: string;
-  displayName?: string;
-  tenantId?: string;
+export interface GrantExceptionRequest {
+  // Websites the exception should be applied to (deduplicated server-side).
+  portalIds?: string[];
+  exceptionType?: ExceptionType;
+  // Whether the admin explicitly acknowledged the risk. Must be true to proceed.
+  riskAcknowledged?: boolean;
+}
+
+export interface GrantExceptionResult {
+  // Id of the audit record created for this grant request.
+  exceptionId?: string;
+  // Optional orchestration instance id for queued application-setting propagation.
+  propagationOrchestrationId?: string;
+  exceptionType?: ExceptionType;
+  // Effective UTC expiry applied to every accepted website in this request.
+  expirationDate?: string;
+  // Per-website outcomes.
+  portals?: PortalExceptionResult[];
 }
 
 export type IEnumerableAdvisorAction = AdvisorAction[];
@@ -1260,11 +1835,13 @@ export type InstancePackageOperationStatus = string;
 export type InstancePackageState = string;
 
 export interface IpAddressConfiguration {
-  IpAddresses?: {
-   // The IP address or CIDR range
-   IpAddress?: string;
-   IpAddressType?: IpAddressType;
- }[];
+  IpAddresses?: IpAddressEntity[];
+}
+
+export interface IpAddressEntity {
+  // The IP address or CIDR range (e.g., "208.130.0.0/16")
+  IpAddress?: string;
+  IpAddressType?: IpAddressType;
 }
 
 export type IpAddressType = string;
@@ -1297,9 +1874,9 @@ export interface IsvContractResponseModel {
   billingInstrument?: BillingInstrumentModel;
   powerAutomatePolicy?: PowerAutomatePolicyModel;
   createdOn?: string;
-  createdBy?: Principal;
+  createdBy?: LicensingPrincipal;
   lastModifiedOn?: string;
-  lastModifiedBy?: Principal;
+  lastModifiedBy?: LicensingPrincipal;
 }
 
 export interface IsvContractResponseModelResponseWithOdataContinuation {
@@ -1335,12 +1912,35 @@ export interface LicenseDetailsModel {
   capabilityStatus?: string;
 }
 
+export interface LicensedPolicyModel {
+  entitled?: boolean;
+}
+
 export type LicenseModel = string;
+
+export type LicenseModelType = string;
 
 export interface LicenseQuantity {
   enabled?: number;
   warning?: number;
   suspended?: number;
+}
+
+export type LicenseSource = string;
+
+export type LicenseTier = string;
+
+export interface LicensingPrincipal {
+  id?: string;
+  type?: PrincipalType;
+}
+
+export interface LicensingProblemDetails {
+  type?: string;
+  title?: string;
+  status?: number;
+  detail?: string;
+  instance?: string;
 }
 
 export interface LinkProperties {
@@ -1361,6 +1961,63 @@ export interface ListConnectorsResponse {
 export interface ListPolicyResponse {
   value?: Policy[];
 }
+
+export interface Location {
+  // The location name.
+  name?: string;
+  // The display name.
+  displayName?: string;
+  // The location code.
+  code?: string;
+  // Whether this is the default location.
+  isDefault?: boolean;
+  // Whether this location is disabled.
+  isDisabled?: boolean;
+  // Whether database provisioning is allowed.
+  canProvisionDatabase?: boolean;
+  // Whether a first-release island is available for provisioning in this location.
+  hasFirstReleaseIslandAvailableForProvisioning?: boolean;
+}
+
+export type LocationSelectionMode = string;
+
+export interface MacroRegion {
+  // The macro region identifier.
+  macroRegionId?: string;
+  // The display name of the macro region.
+  displayName?: string;
+  // The data residency note shown to customers for this macro region.
+  dataResidencyNote?: string;
+}
+
+export interface MakerEvaluationConnection {
+  // User connection ID.
+  connectionId: string;
+  // Connection reference name in the bot definition.
+  connectionReferenceName: string;
+  // The tool (connector) ID.
+  connectorId: string;
+}
+
+export interface Metric {
+  result: MetricResult;
+  type: MetricType;
+}
+
+export type MetricErrorReason = string;
+
+export interface MetricResult {
+  // The reason generated by LLM, providing additional context to the evaluation result.
+  aiResultReason?: string;
+  // The set of key-value pairs that defines this metric. Keys are normalized to lowercase.
+  data: Record<string, unknown>;
+  errorReason?: MetricErrorReason;
+  status: MetricStatus;
+}
+
+export type MetricStatus = string;
+
+export type MetricType = string;
 
 export interface MgGovEnvironmentValues {
   // The ID of the environment.
@@ -1412,6 +2069,79 @@ export interface ModifyEnvironmentSkuRequest {
   environmentSku: EnvironmentSku;
 }
 
+export interface MonitoringHubAffectedResource {
+  // The environment ID: a GUID, or Default-{tenant GUID} for the default environment.
+  environmentId: string;
+  // The ID of the affected resource.
+  resourceId: string;
+  // The observed value for this resource, expressed in the alert's Metric Unit. Omitted when unavailable.
+  metricValue?: number;
+}
+
+export type MonitoringHubTriggeredAlertmonitorCondition = 'Unknown'|'Fired'|'Resolved';
+export type MonitoringHubTriggeredAlertseverity = 'Unknown'|'Low'|'Medium'|'High';
+export type MonitoringHubTriggeredAlertproductType = 'Unknown'|'PowerApps'|'PowerAutomate'|'PowerPages'|'CopilotStudio';
+export type MonitoringHubTriggeredAlertsubProductType = 'Unknown'|'CanvasApp'|'ModelDrivenApp'|'PowerPages'|'CodeApp'|'DesktopFlow'|'CloudFlow'|'WorkQueue'|'Agent';
+export type MonitoringHubTriggeredAlertscope = 'Unknown'|'Tenant'|'Environment'|'Resource';
+export type MonitoringHubTriggeredAlertmetric = 'Unknown'|'CanvasAppAvailability'|'CanvasAppTimeToInteract'|'CanvasAppTimeToFullLoad'|'CanvasAppRecentAppLaunches'|'CanvasAppDataRequest'|'CanvasAppDataRequestLatency'|'CodeAppAvailability'|'CodeAppTimeToInteract'|'CodeAppRecentAppLaunches'|'CodeAppDataRequest'|'CodeAppDataRequestLatency'|'ModelAppAvailability'|'ModelDrivenAppRecentAppLaunches'|'CloudFlowSuccessRate'|'CloudFlowDuration'|'CloudFlowRunCount'|'DesktopFlowSuccessRate'|'DesktopFlowTimeInQueue'|'DesktopFlowDuration'|'DesktopFlowRunCount'|'PowerPagesAvailability'|'PowerPagesPageLoadTime'|'PowerPagesErrorRate'|'PowerPagesSessions'|'PowerPagesSessionTime'|'WorkQueueOutOfSla'|'WorkQueueItException'|'WorkQueueBusinessException'|'WorkQueueGenericException'|'AgentSuccessRate';
+export type MonitoringHubTriggeredAlertmetricUnit = 'Unknown'|'Percent'|'Seconds'|'Count';
+export type MonitoringHubTriggeredAlertoperator = 'Unknown'|'IsUnder'|'IsOver'|'Equals'|'IsUnderOrEqual'|'IsOverOrEqual';
+
+export interface MonitoringHubTriggeredAlert {
+  // The ID of the alert instance.
+  alertId: string;
+  // The ID of the alert rule in Power Platform admin center.
+  alertRuleId: string;
+  // Whether the alert has fired or resolved. Daily alert rules currently report Fired only. Unknown indicates an unrecognized condition.
+  monitorCondition: MonitoringHubTriggeredAlertmonitorCondition;
+  // The alert severity, or Unknown when the severity isn't recognized.
+  severity: MonitoringHubTriggeredAlertseverity;
+  // The time the alert fired, in UTC ISO-8601 format.
+  firedDateTime: string;
+  // The time the alert resolved, in UTC ISO-8601 format. Omitted when no resolution time is available.
+  resolvedDateTime?: string;
+  // The Power Platform product associated with the alert, or Unknown when unrecognized.
+  productType: MonitoringHubTriggeredAlertproductType;
+  // The type of app, flow, or other resource associated with the alert, or Unknown when unrecognized.
+  subProductType: MonitoringHubTriggeredAlertsubProductType;
+  // Whether the rule monitors a tenant, environment, or resource, or Unknown when unrecognized.
+  scope: MonitoringHubTriggeredAlertscope;
+  // The metric monitored by the alert rule, or Unknown when the metric isn't recognized.
+  metric: MonitoringHubTriggeredAlertmetric;
+  // The unit for the threshold and observed metric values. Percent uses percentage points (95 means 95 percent), Seconds uses seconds, and Count uses item or event counts. Unknown indicates an unrecognized unit.
+  metricUnit: MonitoringHubTriggeredAlertmetricUnit;
+  // How the metric is compared with the threshold. IsUnder and IsOver exclude equality; IsUnderOrEqual and IsOverOrEqual include equality. Unknown indicates an unrecognized comparison.
+  operator: MonitoringHubTriggeredAlertoperator;
+  // The threshold configured for the rule, expressed in Metric Unit. For example, 95 with Percent means 95 percent.
+  threshold: number;
+  // The time period evaluated by the rule, as an ISO-8601 duration, such as PT1H for one hour or P1D for one day.
+  dataReviewPeriod: string;
+  // The total number of affected resources, including any resources omitted from the Affected Resources list.
+  affectedResourceCount: number;
+  // A list of affected resource and environment IDs, with observed metric values when available. The list can be limited. Check Affected Resource Count and Affected Resources Truncated to determine whether more resources were affected.
+  affectedResources: MonitoringHubAffectedResource[];
+  // True when the Affected Resources list omits one or more resources included in Affected Resource Count.
+  affectedResourcesTruncated: boolean;
+  // A link to view the alert in Power Platform admin center. Sign in with an account that has access to the alert.
+  alertLink: string;
+  // The ID of your Power Platform tenant.
+  tenantId: string;
+}
+
+export interface MonitoringHubTriggeredAlertsPollResponse {
+  // The alerts returned by this poll.
+  value: MonitoringHubTriggeredAlert[];
+  // The number of alerts in this response.
+  totalCount: number;
+}
+
+export interface NeptuneOperationResult {
+  // The HTTP status code of the operation result.
+  statusCode?: number;
+  // Indicates whether the operation result represents an error.
+  isErrorResult?: boolean;
+}
+
 export interface NeptuneValidationError {
   key?: string;
   errorMessage?: NeptuneValidationErrorMessage;
@@ -1429,15 +2159,12 @@ export interface NeptuneValidationErrorMessage {
   target?: string;
 }
 
-export type NewWebsiteRequesttemplateName = 'DefaultPortalTemplate'|'PowerPortals_ProgramRegistration'|'PowerPortals_BookMeeting';
-
 export interface NewWebsiteRequest {
   // Dataverse organization's unique identifier (ID)
   dataverseOrganizationId: string;
   // Name of the website
   name: string;
-  // Website template name
-  templateName: NewWebsiteRequesttemplateName;
+  templateName: WebsiteTemplateName;
   // Language ID - https://go.microsoft.com/fwlink/?linkid=2208135
   selectedBaseLanguage: number;
   // Subdomain for the website URL
@@ -1452,6 +2179,35 @@ export interface ODataListWebsitesDto {
   "@odata.nextLink"?: string;
 }
 
+export interface OperationErrorDetail {
+  // The error code.
+  code?: string;
+  // Per-field error detail, keyed by field name.
+  fieldErrors?: Record<string, unknown>;
+}
+
+export interface OperationErrorItem {
+  // The operation type.
+  operationType?: string;
+  // The correlation ID.
+  correlationId?: string;
+  // The name of the failed action.
+  failedActionName?: string;
+  // The error code.
+  errorCode?: string;
+  // The customer-friendly error message.
+  errorMessage?: string;
+  // The timestamp when the operation failed.
+  failedAt?: string;
+}
+
+export interface OperationErrorsResponse {
+  // The environment ID.
+  environmentId?: string;
+  // The list of operation errors.
+  errors?: OperationErrorItem[];
+}
+
 export interface OperationExecutionResult {
   // The name of the operation.
   name?: string;
@@ -1464,8 +2220,8 @@ export interface OperationExecutionResult {
   endTime?: string;
   updatedEnvironment?: Environment;
   requestedBy?: UserIdentity;
-  errorDetail?: ErrorInfo;
-  // The list of State statuses associated with the operation.
+  errorDetail?: OperationErrorDetail;
+  // Per-stage progress of the operation.
   stageStatuses?: StageStatus[];
 }
 
@@ -1484,7 +2240,7 @@ export interface OperationProperties {
 export interface OperationResponse {
   // Gets or sets the response's object
   objectResult?: unknown;
-  errors?: ErrorResponse;
+  errors?: EnvironmentServiceErrorResponse;
   // Gets or sets the next link if there are more records to be returned
   nextLink?: string;
   // Gets or sets debug errors, that are only shown for private/local testing
@@ -1498,6 +2254,8 @@ export type OperationStatus = string;
 export interface OrderByClause {
   FieldNamesAscDesc: Record<string, unknown>;
 }
+
+export type OverageStatus = string;
 
 export interface OverflowCapacityModel {
   capacityType?: CapacityType;
@@ -1544,8 +2302,17 @@ export interface PolicyRequest {
 }
 
 export interface PortalDataModelDto {
-  // value of data model version for IsNewDataModel
-  dataModelVersionValue: boolean;
+  // Whether the portal uses the enhanced data model.
+  isNewDataModel: boolean;
+}
+
+export interface PortalExceptionResult {
+  // Website unique identifier (ID).
+  portalId?: string;
+  // Per-website outcome status, e.g. "Granted", "Accepted", "AlreadyGranted", "NotApplicable", "Failed", "Revoked", "AlreadyRevoked".
+  status?: string;
+  // Optional human-readable detail (populated for non-granted outcomes).
+  message?: string;
 }
 
 export type PortalScanIssuesItemcategory = 'Provisioning issues'|'Configuration Issues'|'Portal Startup Issue'|'Performance'|'Security';
@@ -1776,13 +2543,46 @@ export interface ProblemDetails {
   extensions?: Record<string, unknown>;
 }
 
+export type ProductCategory = string;
+
 export interface ProjectClause {
   FieldList: string[];
 }
 
+export type ProtectionLevel = string;
+
+export interface ProvisioningLocations {
+  // The list of provisioning locations available to the tenant.
+  collection?: Location[];
+  locationSelectionMode?: LocationSelectionMode;
+  // The list of macro regions available to the tenant.
+  macroRegions?: MacroRegion[];
+}
+
 export interface ReassignBotRequestBody {
-  // The new owner aad id.
+  // The new owner Entra ID.
   NewOwnerAadUserId: string;
+}
+
+export interface ReservedModel {
+  quantity?: number;
+  unit?: EntitlementUnit;
+}
+
+export interface ResetRequest {
+  // The base language code (e.g., 1033 for English) for the environment to reset to.
+  baseLanguageCode?: number;
+  currency?: EnvironmentRequestCurrency;
+  // The display name for the environment to reset to.
+  displayName?: string;
+  // Domain name for the environment to reset to.
+  domainName?: string;
+  // An optional description for the environment to reset to.
+  description?: string;
+  // Security group ID for the environment to reset to.
+  securityGroupId?: string;
+  // Templates to apply for the environment after reset.
+  templates?: string[];
 }
 
 export interface ResourceArrayPowerApp {
@@ -1828,7 +2628,7 @@ export interface ResourceQueryRequest {
 export interface ResourceQueryRequestOptions {
   // Max rows per page
   Top?: number;
-  // Offset; typically 0 when using SkipToken
+  // Offset; don't include when using SkipToken
   Skip?: number;
   // Continuation token from previous page
   SkipToken?: string;
@@ -1848,8 +2648,73 @@ export interface ResourceQueryResponse {
   data?: ResourceItem[];
 }
 
+export interface ResourceThresholdModel {
+  // Unique identifier for the resource.
+  resourceId?: string;
+  // Entitlement ID associated with the resource.
+  entitlementId?: string;
+  // Unique identifier for the environment associated with the resource.
+  environmentId?: string;
+  // Indicates whether the user has selected to stop the resource explicitly or not. If 'true' the resource is in a disabled state.
+  stopResource?: boolean;
+  // The limit set for the resource consumption.
+  limit?: number;
+  // Indicates whether to stop consuming the capacity if the resource exceeds its limit.
+  stopIfOverCapacity?: boolean;
+  // Indicates whether to notify when the resource consumption reaches its notification threshold.
+  notifyIfOverCapacity?: boolean;
+  // The threshold percentage for sending notifications about resource consumption.
+  notificationThreshold?: number;
+  // Current consumption of the resource.
+  resourceConsumption?: number;
+  // The UTC date and time when the resource threshold configuration was first created.
+  createdOn?: string;
+}
+
+export interface ResourceThresholdRequestModel {
+  stopResource?: boolean;
+  limit?: number;
+  stopIfOverCapacity?: boolean;
+  notifyIfOverCapacity?: boolean;
+  notificationThreshold?: number;
+  resourceConsumption?: number;
+}
+
 export interface ResponseMetadataProperties {
   sensitivityLabel?: SensitivityLabelProperties;
+}
+
+export interface RestoreRequest {
+  // The point in time to restore the environment to. Must include a timezone offset per RFC 3339 (e.g., 2025-04-30T12:34:56+02:00).
+  restorePointDateTime: string;
+  // The ID of the source environment from which the backup will be restored.
+  sourceEnvironmentId: string;
+  restoreOptions?: RestoreRequestOptions;
+}
+
+export interface RestoreRequestOptions {
+  // Environment name to override on target environment.
+  environmentNameToOverride?: string;
+  // Security group ID to override on target environment.
+  securityGroupIdToOverride?: string;
+  // Boolean flag to skip audit data during restore.
+  skipAuditData?: boolean;
+}
+
+export interface RevokeExceptionRequest {
+  // Websites whose exception should be revoked (deduplicated server-side).
+  portalIds?: string[];
+  exceptionType?: ExceptionType;
+}
+
+export interface RevokeExceptionResult {
+  // Id of the audit record created for this revoke request.
+  auditId?: string;
+  // Optional orchestration instance id for the queued application-setting revert propagation.
+  propagationOrchestrationId?: string;
+  exceptionType?: ExceptionType;
+  // Per-website outcomes.
+  portals?: PortalExceptionResult[];
 }
 
 export interface RoleAssignmentRequest {
@@ -1958,6 +2823,89 @@ export type RunningActionType = string;
 
 export type RunStatus = string;
 
+export interface RunStatusResponse {
+  // The URI to poll for the evaluation run results.
+  callbackUri?: string;
+  executionState: ExecutionState;
+  // The timestamp when the last status update occurred.
+  lastUpdatedAt: string;
+  // The unique identifier for this evaluation run.
+  runId?: string;
+  state: EvaluationRunState;
+  // The number of test cases processed so far in the evaluation run.
+  testCasesProcessed?: number;
+  // Total number of test cases to be processed in the evaluation run.
+  totalTestCases?: number;
+}
+
+export interface RunTestSetRequestBody {
+  // The name of the evaluation run.
+  evaluationRunName?: string;
+  // The connection ID for the MCS connector that is used to execute the evaluation run, or leave empty for an anonymous run.
+  mcsConnectionId?: string;
+  // Indicates whether the operation should run on a published bot instance. If set to false, the operation will run on a draft bot instance.
+  runOnPublishedBot?: boolean;
+  // The tools connections that will be used to execute the evaluation run. This is a list of tools along with the corresponding user connections that should be used for each tool.
+  toolsConnections?: ToolsConnections[];
+}
+
+export interface ScopeModel {
+  tenantId?: string;
+  environmentGroupId?: string;
+  environmentId?: string;
+  resourceId?: string;
+  userId?: string;
+  userGroupId?: string;
+}
+
+export interface SearchRoleAssignmentsRequest {
+  // The scope to filter role assignments by
+  scope: string;
+  // The type of the principal to filter by
+  principalType?: string;
+  // The Id of the principal to filter by
+  principalObjectId?: string;
+  // The permission to filter by
+  permission?: string;
+  // Whether to include role assignments from scopes nested under the provided scope
+  includeNestedScopes?: boolean;
+  // Whether to include role assignments from parent scopes up to the tenant
+  includeParentScopes?: boolean;
+  // Whether to include role assignments inherited from the environment groups an environment belongs to
+  expandEnvironmentGroups?: boolean;
+  // Whether to include role assignments inherited from the environment cluster an environment belongs to
+  expandEnvironmentClusters?: boolean;
+  // Whether to include role assignments inherited from the security groups the principal belongs to
+  expandSecurityGroups?: boolean;
+  // Whether to include virtual role assignments granted through an Entra directory role
+  includeVirtualEntraRoleAssignments?: boolean;
+}
+
+export interface SearchRoleAssignmentsResponse {
+  value?: {
+   // Role assignment Id
+   roleAssignmentId?: string;
+   // The Id of the assigned principal
+   principalObjectId?: string;
+   // The Id of the role definition
+   roleDefinitionId?: string;
+   // The assignment scope
+   scope?: string;
+   // The type of the principal
+   principalType?: string;
+   // The type of the creator principal
+   createdByPrincipalType?: string;
+   // The Id of the creator principal
+   createdByPrincipalObjectId?: string;
+   // The datetime of when the assignment was created
+   createdOn?: string;
+   // Where the role assignment came from, such as a directly stored assignment or a virtual grant from an Entra or Dataverse role
+   source?: string;
+ }[];
+  // The URL to retrieve the next page of results, or null if there are no more pages
+  nextLink?: string;
+}
+
 export interface SensitivityLabelProperties {
   // Unique identifier of the sensitivity label.
   sensitivityLabelId?: string;
@@ -1971,6 +2919,11 @@ export interface SensitivityLabelProperties {
   color?: string;
   // Whether the labeled content is encrypted.
   isEncrypted?: boolean;
+}
+
+export interface SetAdminConsentBypassRequest {
+  // Indicates whether to enable admin connector consent bypass for the bot.
+  adminConsentBypass: boolean;
 }
 
 export interface SiteSecurityResult {
@@ -1997,22 +2950,27 @@ export interface SiteSecurityScore {
   succeededRules?: number;
 }
 
-export interface StageStatus {
-  // The name of stage.
-  name?: string;
-  // The status of stage.
-  status?: string;
-  // The start time of stage.
-  startTime?: string;
-  // The end time of stage.
-  endTime?: string;
-  errorDetail?: ErrorInfo;
+export interface SslBindingThumbprintDTO {
+  // The custom hostname the SSL binding is associated with.
+  Name?: string;
+  // The certificate thumbprint bound to the hostname.
+  Thumbprint?: string;
 }
 
-export interface StateChangeRequest {
-  // The reason of this state change.
-  reason?: string;
+export interface StageStatus {
+  // The name of the stage.
+  name?: string;
+  status?: StepExecutionStatus;
+  // The start time of the stage.
+  startTime?: string;
+  // The end time of the stage.
+  endTime?: string;
+  errorDetail?: OperationErrorDetail;
 }
+
+export type StateCode = string;
+
+export type StepExecutionStatus = string;
 
 export interface StorageWarningThresholds {
   storageCategory?: string;
@@ -2046,6 +3004,13 @@ export interface SummarizeClause {
 
 export interface TakeClause {
   TakeCount: number;
+}
+
+export interface TemplateAvailability {
+  environmentSku?: EnvironmentSku;
+  // Whether the template is disabled for this SKU.
+  isDisabled?: boolean;
+  disabledReason?: DisabledReason;
 }
 
 export interface TemporaryLicenseInfo {
@@ -2093,6 +3058,26 @@ export interface TenantCapacityAndConsumptionModel {
   capacityEntitlements?: TenantCapacityEntitlementModel[];
 }
 
+export interface TenantCapacityConsumptionSnapshotResponseModel {
+  tenantId?: string;
+  environmentId?: string;
+  resourceId?: string;
+  consumed?: number;
+  unit?: string;
+  metadata?: Record<string, unknown>;
+  asOfDate?: string;
+}
+
+export interface TenantCapacityConsumptionUserSnapshotResponseModel {
+  tenantId?: string;
+  environmentId?: string;
+  userId?: string;
+  consumed?: number;
+  unit?: string;
+  metadata?: Record<string, unknown>;
+  asOfDate?: string;
+}
+
 export interface TenantCapacityDetailsModel {
   tenantId?: string;
   licenseModelType?: LicenseModel;
@@ -2110,6 +3095,148 @@ export interface TenantCapacityEntitlementModel {
   licenses?: LicenseDetailsModel[];
 }
 
+export interface TenantEntitlementDetailServiceModel {
+  unit?: EntitlementUnit;
+  capacity?: CapacityEntitlementModel;
+  payGo?: CatalogPayGoEntitlementModel;
+  licensedPolicy?: LicensedPolicyModel;
+}
+
+export interface TenantEntitlementLicenseModel {
+  licenseId?: string;
+  skuId?: string;
+  productName?: string;
+  licenseQuantity?: number;
+  entitled?: number;
+  licenseTier?: LicenseTier;
+  licenseStatus?: string;
+}
+
+export interface TenantEntitlementLicenseTrendResponseModel {
+  date?: string;
+  licenseModelType?: LicenseModelType;
+  licenses?: TenantEntitlementLicenseModel[];
+}
+
+export interface TenantEntitlementLicenseTrendResponseModelPagedResponse {
+  value?: TenantEntitlementLicenseTrendResponseModel[];
+  "@odata.count"?: number;
+  "@odata.nextLink"?: string;
+  continuationtoken?: string;
+}
+
+export interface TenantEntitlementResponseModel {
+  // The entitlement ID.
+  entitlementId?: string;
+  // The entitlement product categories (e.g. D365Apps, Dataverse, PowerApps, PowerAutomate).
+  productCategories?: ProductCategory[];
+  entitlement?: TenantEntitlementDetailServiceModel;
+}
+
+export interface TenantEnvironmentResourceSnapshotResponseModel {
+  // The resource ID.
+  resourceId?: string;
+  // The consumed value.
+  consumed?: number;
+  unit?: EntitlementUnit;
+  // The last refreshed date.
+  lastRefreshedDate?: string;
+  // Additional metadata such as Feature, ProductName and nonBillableConsumed for MCSMessages.
+  metadata?: Record<string, unknown>;
+  // The environment this resource belongs to.
+  environmentId?: string;
+}
+
+export interface TenantEnvironmentResourceSnapshotResponseModelPagedResponse {
+  value?: TenantEnvironmentResourceSnapshotResponseModel[];
+  "@odata.count"?: number;
+  "@odata.nextLink"?: string;
+  continuationtoken?: string;
+}
+
+export interface TenantResourceResponseModel {
+  // The list of resources associated with the tenant.
+  resources?: TenantCapacityConsumptionSnapshotResponseModel[];
+}
+
+export interface TenantResourceResponseModelPagedResponse {
+  value?: TenantResourceResponseModel[];
+  "@odata.count"?: number;
+  "@odata.nextLink"?: string;
+  continuationtoken?: string;
+}
+
+export interface TenantUserResponseModel {
+  // The list of users associated with the tenant.
+  users?: TenantCapacityConsumptionUserSnapshotResponseModel[];
+}
+
+export interface TenantUserResponseModelPagedResponse {
+  value?: TenantUserResponseModel[];
+  "@odata.count"?: number;
+  "@odata.nextLink"?: string;
+  continuationtoken?: string;
+}
+
+export interface TestCaseResult {
+  // The list of grader metrics associated with the test case.
+  metricsResults: Metric[];
+  state: TestCaseState;
+  // The ID of the object model entity that the test case is sourced from.
+  testCaseId: string;
+}
+
+export type TestCaseState = string;
+
+export interface TestRun {
+  // The CDS bot ID where the evaluation run is executed.
+  cdsBotId: string;
+  // The timestamp when the evaluation run ended.
+  endTime?: string;
+  // The environment ID where the evaluation run is executed.
+  environmentId: string;
+  // The unique identifier for this evaluation run.
+  id: string;
+  // The MCS connection ID used in the evaluation run.
+  mcsConnectionId?: string;
+  // The name of the evaluation run.
+  name?: string;
+  // The ID of the owner who initiated the evaluation run.
+  ownerId: string;
+  // The timestamp when the evaluation run started.
+  startTime: string;
+  state: EvaluationRunState;
+  // The test cases and their results in the evaluation run.
+  testCasesResults: TestCaseResult[];
+  // The ID of the object model test set entity record that the run is associated with.
+  testSetId: string;
+  // Number of test cases included in the evaluation run.
+  totalTestCases?: number;
+}
+
+export interface TestRunCollection {
+  // The list of test runs.
+  value?: TestRun[];
+}
+
+export interface TestSet {
+  auditInfo?: AuditInfo;
+  // Description of the test set.
+  description?: string;
+  // Display name of the test set.
+  displayName?: string;
+  // The unique identifier for the test set component.
+  id: string;
+  state?: StateCode;
+  // The number of test cases in the test set.
+  totalTestCases?: number;
+}
+
+export interface TestSetCollection {
+  // The list of test sets.
+  value?: TestSet[];
+}
+
 export type ThoughtEvent = ActionEventBase & { properties?: ThoughtProperties };
 
 export interface ThoughtProperties {
@@ -2117,6 +3244,20 @@ export interface ThoughtProperties {
   text?: string;
   // Base64-encoded images associated with the thought.
   images?: Base64ThoughtImage[];
+}
+
+export interface ToggleAFDTrafficRoutingResponse {
+  // Result message describing the outcome of the toggle operation.
+  message: string;
+}
+
+export interface ToolsConnections {
+  // The Dataverse bot ID.
+  botId: string;
+  // Bot schema name.
+  botSchemaName: string;
+  // A list of connections.
+  connections: MakerEvaluationConnection[];
 }
 
 export interface TpsInstallRequestPayload {
@@ -2140,6 +3281,8 @@ export interface UpdateFinOpsAdminSettingsRequestBody {
 export interface UserIdentity {
   // The ID of the user.
   userId?: string;
+  // The type of the user identity (e.g., User).
+  type?: string;
   // The display name of the user.
   displayName?: string;
   // The tenant ID of the user.
@@ -2224,7 +3367,7 @@ export interface ValidationProperties {
 }
 
 export interface ValidationResponse {
-  errorDetail?: ErrorInfo;
+  errorDetail?: OperationErrorDetail;
 }
 
 export type WafRuleAction = string;
@@ -2269,6 +3412,17 @@ export interface WebApplicationFirewallConfiguration {
   CustomRules?: CustomRule[];
 }
 
+export type WebApplicationFirewallPolicySettingsmode = 'Prevention'|'Detection';
+
+export interface WebApplicationFirewallPolicySettings {
+  // Web application firewall enforcement mode. Prevention blocks matching requests; Detection only logs them.
+  mode?: WebApplicationFirewallPolicySettingsmode;
+  // JavaScript challenge cookie validity lifetime in minutes. The accepted range is validated by Azure Front Door.
+  javascriptChallengeExpirationInMinutes?: number;
+  // CAPTCHA challenge cookie validity lifetime in minutes. The accepted range is validated by Azure Front Door.
+  captchaExpirationInMinutes?: number;
+}
+
 export type WebApplicationFirewallRulesmanagedRulesRuleSetAction = 'Allow'|'Block'|'Log';
 export type WebApplicationFirewallRulesmanagedRulesRuleGroupOverridesRulesEnabledState = 'Enabled'|'Disabled';
 
@@ -2303,7 +3457,6 @@ export interface WebApplicationFirewallRules {
 
 export type WebApplicationFirewallStatus = string;
 
-export type WebsiteDtotemplateName = 'DefaultPortalTemplate'|'PowerPortals_ProgramRegistration'|'PowerPortals_BookMeeting';
 export type WebsiteDtopackageInstallStatus = 'None'|'Installed'|'Uninstalled'|'InstallRequested'|'UninstallRequested'|'InstallFailed'|'UninstallFailed'|'Installing'|'Uninstalling'|'InstallScheduled'|'InstallRetrying'|'TemplateInstalled';
 export type WebsiteDtotype = 'Trial'|'Production';
 export type WebsiteDtostatus = 'OperationComplete'|'OperationInProgress'|'OperationNotStarted'|'OperationFailed';
@@ -2316,8 +3469,7 @@ export interface WebsiteDto {
   name?: string;
   // Website creation time in the ISO 8601 UTC format
   createdOn?: string;
-  // Website template name
-  templateName?: WebsiteDtotemplateName;
+  templateName?: WebsiteTemplateName;
   // Website URL
   websiteUrl?: string;
   // Tenant unique identifier (ID) of the website
@@ -2362,6 +3514,8 @@ export interface WebsiteDto {
   siteVisibility?: WebsiteDtositeVisibility;
 }
 
+export type WebsiteTemplateName = string;
+
 export interface WhereClause {
   FieldName: string;
   Operator: string;
@@ -2383,6 +3537,15 @@ export interface MCPQueryRequest {
 }
 
 export interface MCPQueryResponse {
+  jsonrpc?: string;
+  id?: string;
+  method?: string;
+  params?: Record<string, unknown>;
+  result?: Record<string, unknown>;
+  error?: Record<string, unknown>;
+}
+
+export interface QueryRequest {
   jsonrpc?: string;
   id?: string;
   method?: string;
