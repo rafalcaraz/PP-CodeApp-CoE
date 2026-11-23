@@ -7,6 +7,7 @@ import { ArrowReplyRegular, CodeRegular, PlayRegular, SearchRegular } from "@flu
 import { ErrorPane, LoadingPane } from "../../components/Status";
 import { SchemaField } from "../../shared/api-explorer/SchemaField";
 import { ResponseViewer } from "../../shared/api-explorer/ResponseViewer";
+import { exposedResponseHeaders } from "../../shared/api-explorer/responseHeaders";
 import { usePlaygroundStyles } from "../../shared/api-explorer/playgroundStyles";
 import { formatApiError } from "../../shared/api-explorer/schema";
 import {
@@ -261,14 +262,13 @@ export function CostManagementApiPlayground() {
                 <Text>{lastRun.request.actionId} &middot; {lastRun.elapsedMs} ms</Text>
               </div>
               {!lastRun.result.ok && <ErrorPane title="Connector call failed" message={lastRun.result.error} />}
-              <ResponseViewer key={`${lastRun.request.actionId}:${lastRun.elapsedMs}`} sources={[{
+              <ResponseViewer key={`${lastRun.request.actionId}:${lastRun.elapsedMs}`}
+                headers={exposedResponseHeaders(lastRun.result.data)}
+                request={{ label: "Submitted request", text: JSON.stringify({ ...lastRun.preview, sdkRequest: lastRun.request }, null, 2) }}
+                sources={[{
                 label: "Raw SDK result", ariaLabel: "Raw connector response",
                 text: JSON.stringify(lastRun.result.data ?? lastRun.result, null, 2),
               }]} />
-              <details className={explorer.details}>
-                <summary>Submitted request</summary>
-                <pre className={styles.code}>{JSON.stringify({ ...lastRun.preview, sdkRequest: lastRun.request }, null, 2)}</pre>
-              </details>
               <Button appearance="subtle" disabled={locked} onClick={() => setLastRun(null)}>Clear response</Button>
             </div> : <div className={explorer.empty}>
               <ArrowReplyRegular />

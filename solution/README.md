@@ -82,6 +82,61 @@ never apply the legacy PAC publishing translation to the modern local-dev
 configuration. Repairing local bindings does not require publishing or
 changing/removing the app's capabilities.
 
+### Recreating a missing private binding file
+
+The tracked [power.bindings.example.json](../PP-CoE-CodeApp/power.bindings.example.json)
+is a **nonfunctional, placeholder-only template**. Copy it to
+`PP-CoE-CodeApp/power.bindings.local` inside the worktree you are using. Do not
+replace a working private file with the example. Worktrees do not inherit
+ignored files from another checkout.
+
+Fill in these values privately:
+
+1. Replace `environmentId` with the exact `environmentId` from this worktree's
+   `PP-CoE-CodeApp/power.config.json`. This identifies the environment, not the
+   tenant, app, or Dataverse organization ID.
+2. Replace each `<...-connection-name>` with the actual Power Apps connection
+   name/ID for that audience. Keep the complete
+   `/providers/Microsoft.PowerApps/apis/shared_webcontents/connections/` prefix.
+   The three values must be distinct, existing, healthy HTTP-with-Entra
+   connections with the audiences in the table above.
+3. Keep the logical-name keys unchanged. They are solution reference names,
+   not connection IDs. Do not add tokens, passwords, client secrets,
+   authorization headers, flow IDs, or other fields to the file.
+
+Find candidate connections with the installed CLI:
+
+```powershell
+pa connection list --environment-id "<environmentId-from-power.config.json>" --search shared_webcontents --json --non-interactive
+```
+
+The returned connection `name` (or the final segment of its `id` path) is the
+value that replaces a connection-name placeholder. It might be a compact
+alphanumeric ID or a name such as `shared-webcontents-<guid>`; it is **not**
+the `shared_webcontents` connector type, a display name, the app's reference
+dictionary key, a flow GUID, or the logical reference name.
+
+Identical display names are not enough to choose a binding. To confirm the
+existing solution mapping, inspect Dataverse's `connectionreferences` table
+in the configured source environment, selecting `connectionid` and
+`connectionreferencelogicalname` for the three names above. Use each reference's
+bound connection and verify its audience and health. `pa connection
+list-references` lists solution components but does not establish the bound
+connection ID. A `Connected` status alone does not establish the HTTP audience
+or the caller's permissions.
+
+After restoring the file, `npm run dev` reads it through the local overlay;
+use the current server's Local Play URL. Before an authorized publication,
+`npm --prefix PP-CoE-CodeApp run push -- --dry-run` builds and verifies the
+private staging without tenant commands. It does not prove live consent.
+An unresolved placeholder or wrong environment must fail rather than be guessed.
+
+A private backup from this same environment can instead be copied back under
+the exact filename `power.bindings.local`. Revalidate it: connection bindings can
+change or expire. The file is gitignored, not encrypted. Keep any Downloads
+backup private and out of shared repositories, chat, logs, release artifacts,
+or folders shared with other people. Never commit a filled-in example.
+
 ### Single-command source publish
 
 From `PP-CoE-CodeApp/`, run:

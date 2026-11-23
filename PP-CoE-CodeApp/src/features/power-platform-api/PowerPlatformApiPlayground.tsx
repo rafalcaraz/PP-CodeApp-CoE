@@ -77,10 +77,11 @@ export function PowerPlatformApiPlayground() {
   const [pending, setPending] = useState<PendingRequest | null>(null);
   const [confirmation, setConfirmation] = useState("");
   const [lastRun, setLastRun] = useState<LastRun | null>(null);
+  const [downloadError, setDownloadError] = useState("");
   const locked = busy || pending !== null;
-  const sections = useMemo(() => [...new Set(apiOperations.map((operation) => operation.section))].sort(), []);
+  const sections = useMemo(() => [...new Set(apiOperations.map((operation) => operation.section))], []);
   const groups = useMemo(() => [...new Set(apiOperations
-    .filter((operation) => !section || operation.section === section).map((operation) => operation.group))].sort(), [section]);
+    .filter((operation) => !section || operation.section === section).map((operation) => operation.group))], [section]);
   const matches = useMemo(() => apiOperations.filter((operation) =>
     (!section || operation.section === section) && (!group || operation.group === group) &&
     (!readOnlyOnly || isReadOnly(operation)) &&
@@ -110,6 +111,7 @@ export function PowerPlatformApiPlayground() {
     running.current = true;
     setBusy(true);
     setError("");
+    setDownloadError("");
     const started = performance.now();
     try {
       const result = await executeApiRequest(snapshot.inputs, confirmedWrite);
@@ -140,6 +142,27 @@ export function PowerPlatformApiPlayground() {
       }
     } catch (cause) {
       setError(formatApiError(cause));
+    }
+  }
+
+  function saveDownload() {
+    const download = lastRun?.result.data?.download;
+    if (!lastRun?.result.ok || !download) return;
+    setDownloadError("");
+    try {
+      const url = URL.createObjectURL(new Blob([download.bytes], { type: download.contentType }));
+      try {
+        const anchor = document.createElement("a");
+        anchor.href = url;
+        anchor.download = download.filename;
+        document.body.appendChild(anchor);
+        try { anchor.click(); }
+        finally { anchor.remove(); }
+      } finally {
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+      }
+    } catch (cause) {
+      setDownloadError(formatApiError(cause));
     }
   }
 
@@ -204,6 +227,14 @@ export function PowerPlatformApiPlayground() {
             </div>
             <Text>{operation.description}</Text>
             <Link href={operation.docUrl} target="_blank" rel="noopener noreferrer">Operation documentation</Link>
+            {operation.section === "Copilot Studio" && operation.group === "Licensing Reports" && (
+              <Text className={styles.warning}>
+                Generate the report, then copy the operation ID from the Location response header into Get Licensing Report Operation.
+                Check status manually; after Succeeded, use fileName with Download Licensing Report File.
+                The download is a gzip-compressed CSV, not JSON. Generation requires a Global, Dynamics 365, or Power Platform administrator.
+                An older wrapper may omit Location; update the flow if response headers are missing.
+              </Text>
+            )}
             <div className={explorer.endpoint}>
               <Badge appearance="tint" color={isReadOnly(operation) ? "informative" : "warning"}>{operation.method}</Badge>
               <code>{operation.path}</code>
@@ -283,7 +314,14 @@ export function PowerPlatformApiPlayground() {
                   {lastRun.result.data?.status !== undefined && <Text>HTTP {lastRun.result.data.status}</Text>}
                 </div>
                 {!lastRun.result.ok && <ErrorPane title="API request failed" message={lastRun.result.error} />}
-                <ResponseViewer key={lastRun.elapsedMs + lastRun.operation} sources={[
+                {lastRun.result.ok && lastRun.result.data.download && (
+                  <Button disabled={locked} onClick={saveDownload}>Save {lastRun.result.data.download.filename}</Button>
+                )}
+                {downloadError && <ErrorPane title="Could not save report" message={downloadError} />}
+                <ResponseViewer key={lastRun.elapsedMs + lastRun.operation}
+                  headers={lastRun.result.data?.headers}
+                  request={{ label: "Submitted flow request", text: JSON.stringify(lastRun.request, null, 2) }}
+                  sources={[
                   {
                     label: "Response body", ariaLabel: "API response body",
                     text: lastRun.result.data ? JSON.stringify(lastRun.result.data.body, null, 2)
@@ -294,14 +332,6 @@ export function PowerPlatformApiPlayground() {
                     text: lastRun.result.data.raw || "(empty response)",
                   }] : []),
                 ]} />
-                {lastRun.result.data?.headers !== undefined && <details className={explorer.details}>
-                  <summary>Response headers</summary>
-                  <pre className={styles.code}>{JSON.stringify(lastRun.result.data.headers, null, 2)}</pre>
-                </details>}
-                <details className={explorer.details}>
-                  <summary>Submitted flow request</summary>
-                  <pre className={styles.code}>{JSON.stringify(lastRun.request, null, 2)}</pre>
-                </details>
                 <Button appearance="subtle" disabled={locked} onClick={() => setLastRun(null)}>Clear API response</Button>
               </div>
             ) : <div className={explorer.empty}>

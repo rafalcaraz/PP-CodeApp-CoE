@@ -1879,6 +1879,59 @@ export const dataSourcesInfo = {
     "primaryKey": "",
     "dataSourceType": "Connector",
     "apis": {
+      "InvokeAdvisorMCP": {
+        "path": "/{connectionId}/analytics/mcp/Advisor",
+        "method": "POST",
+        "parameters": [
+          {
+            "name": "connectionId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "api-version",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "Mcp-Session-Id",
+            "in": "header",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "queryRequest",
+            "in": "body",
+            "required": false,
+            "type": "object"
+          }
+        ],
+        "responseInfo": {
+          "200": {
+            "type": "void"
+          },
+          "202": {
+            "type": "void"
+          },
+          "400": {
+            "type": "void"
+          },
+          "401": {
+            "type": "void"
+          },
+          "403": {
+            "type": "void"
+          },
+          "404": {
+            "type": "void"
+          },
+          "429": {
+            "type": "void"
+          }
+        }
+      },
       "ExecuteRecommendationAction": {
         "path": "/{connectionId}/analytics/actions/{actionName}",
         "method": "POST",
@@ -2332,6 +2385,59 @@ export const dataSourcesInfo = {
           }
         }
       },
+      "SearchEnvironmentRoleAssignments": {
+        "path": "/{connectionId}/authorization/environments/{environmentId}/listRoleAssignments",
+        "method": "POST",
+        "parameters": [
+          {
+            "name": "connectionId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "environmentId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "api-version",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "type": "object"
+          },
+          {
+            "name": "continuationToken",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "responseInfo": {
+          "200": {
+            "type": "object"
+          },
+          "400": {
+            "type": "void"
+          },
+          "401": {
+            "type": "void"
+          },
+          "404": {
+            "type": "void"
+          },
+          "500": {
+            "type": "void"
+          }
+        }
+      },
       "ListEnvironmentRoleAssignments": {
         "path": "/{connectionId}/authorization/environments/{environmentId}/roleAssignments",
         "method": "GET",
@@ -2452,6 +2558,53 @@ export const dataSourcesInfo = {
         "responseInfo": {
           "204": {
             "type": "void"
+          },
+          "400": {
+            "type": "void"
+          },
+          "401": {
+            "type": "void"
+          },
+          "404": {
+            "type": "void"
+          },
+          "500": {
+            "type": "void"
+          }
+        }
+      },
+      "SearchRoleAssignments": {
+        "path": "/{connectionId}/authorization/listRoleAssignments",
+        "method": "POST",
+        "parameters": [
+          {
+            "name": "connectionId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "api-version",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "type": "object"
+          },
+          {
+            "name": "continuationToken",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "responseInfo": {
+          "200": {
+            "type": "object"
           },
           "400": {
             "type": "void"
@@ -2724,6 +2877,55 @@ export const dataSourcesInfo = {
           }
         }
       },
+      "DownloadAgentChannelManifest": {
+        "path": "/{connectionId}/copilotstudio/environments/{EnvironmentId}/agents/{AgentId}/channels/{ChannelName}/download",
+        "method": "GET",
+        "parameters": [
+          {
+            "name": "connectionId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "EnvironmentId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "AgentId",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "uuid"
+          },
+          {
+            "name": "ChannelName",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "api-version",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "includeAgentSchema",
+            "in": "query",
+            "required": false,
+            "type": "boolean"
+          }
+        ],
+        "responseInfo": {
+          "200": {
+            "type": "string",
+            "format": "binary"
+          }
+        }
+      },
       "DeleteCopilotAgent": {
         "path": "/{connectionId}/copilotstudio/environments/{EnvironmentId}/bots/{BotId}/api/botAdminOperations",
         "method": "DELETE",
@@ -2903,6 +3105,82 @@ export const dataSourcesInfo = {
             "in": "query",
             "required": true,
             "type": "string"
+          }
+        ],
+        "responseInfo": {
+          "200": {
+            "type": "object"
+          }
+        }
+      },
+      "GetConnectorConsentBypass": {
+        "path": "/{connectionId}/copilotstudio/environments/{EnvironmentId}/bots/{BotId}/api/connectorConsentBypass",
+        "method": "GET",
+        "parameters": [
+          {
+            "name": "connectionId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "EnvironmentId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "BotId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "api-version",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responseInfo": {
+          "200": {
+            "type": "object"
+          }
+        }
+      },
+      "SetConnectorConsentBypass": {
+        "path": "/{connectionId}/copilotstudio/environments/{EnvironmentId}/bots/{BotId}/api/connectorConsentBypass",
+        "method": "PUT",
+        "parameters": [
+          {
+            "name": "connectionId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "EnvironmentId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "BotId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "api-version",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "type": "object"
           }
         ],
         "responseInfo": {
@@ -3163,6 +3441,142 @@ export const dataSourcesInfo = {
           }
         }
       },
+      "GenerateLicensingReport": {
+        "path": "/{connectionId}/copilotstudio/licensing/reports/{ReportName}",
+        "method": "POST",
+        "parameters": [
+          {
+            "name": "connectionId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "ReportName",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "api-version",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "type": "object"
+          }
+        ],
+        "responseInfo": {
+          "202": {
+            "type": "void"
+          },
+          "400": {
+            "type": "void"
+          },
+          "401": {
+            "type": "void"
+          },
+          "403": {
+            "type": "void"
+          },
+          "404": {
+            "type": "void"
+          }
+        }
+      },
+      "DownloadLicensingReportFile": {
+        "path": "/{connectionId}/copilotstudio/licensing/reports/{ReportName}/files/{FileName}",
+        "method": "GET",
+        "parameters": [
+          {
+            "name": "connectionId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "ReportName",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "FileName",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "api-version",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responseInfo": {
+          "200": {
+            "type": "string",
+            "format": "binary"
+          },
+          "401": {
+            "type": "void"
+          },
+          "403": {
+            "type": "void"
+          },
+          "404": {
+            "type": "void"
+          }
+        }
+      },
+      "GetLicensingReportOperation": {
+        "path": "/{connectionId}/copilotstudio/licensing/reports/{ReportName}/operations/{OperationId}",
+        "method": "GET",
+        "parameters": [
+          {
+            "name": "connectionId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "ReportName",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "OperationId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "api-version",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responseInfo": {
+          "200": {
+            "type": "object"
+          },
+          "401": {
+            "type": "void"
+          },
+          "403": {
+            "type": "void"
+          },
+          "404": {
+            "type": "void"
+          }
+        }
+      },
       "GetFinOpsMaintenanceSettings": {
         "path": "/{connectionId}/dynamics/environments/{environmentId}/finopsadminsettings",
         "method": "GET",
@@ -3236,6 +3650,202 @@ export const dataSourcesInfo = {
             "in": "body",
             "required": true,
             "type": "object"
+          }
+        ],
+        "responseInfo": {
+          "200": {
+            "type": "object"
+          },
+          "400": {
+            "type": "object"
+          },
+          "401": {
+            "type": "object"
+          },
+          "403": {
+            "type": "object"
+          },
+          "404": {
+            "type": "object"
+          },
+          "500": {
+            "type": "object"
+          }
+        }
+      },
+      "GetFinOpsProperties": {
+        "path": "/{connectionId}/dynamics/environments/{environmentId}/finopsproperties",
+        "method": "GET",
+        "parameters": [
+          {
+            "name": "connectionId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "environmentId",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "uuid"
+          },
+          {
+            "name": "api-version",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responseInfo": {
+          "200": {
+            "type": "object"
+          },
+          "400": {
+            "type": "object"
+          },
+          "401": {
+            "type": "object"
+          },
+          "403": {
+            "type": "object"
+          },
+          "404": {
+            "type": "object"
+          },
+          "500": {
+            "type": "object"
+          }
+        }
+      },
+      "GetFinOpsVersions": {
+        "path": "/{connectionId}/dynamics/environments/{environmentId}/finopsversions",
+        "method": "GET",
+        "parameters": [
+          {
+            "name": "connectionId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "environmentId",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "uuid"
+          },
+          {
+            "name": "api-version",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responseInfo": {
+          "200": {
+            "type": "object"
+          },
+          "400": {
+            "type": "object"
+          },
+          "401": {
+            "type": "object"
+          },
+          "403": {
+            "type": "object"
+          },
+          "404": {
+            "type": "object"
+          },
+          "500": {
+            "type": "object"
+          }
+        }
+      },
+      "ApplyFinOpsVersion": {
+        "path": "/{connectionId}/dynamics/environments/{environmentId}/finopsversions/{version}/apply",
+        "method": "POST",
+        "parameters": [
+          {
+            "name": "connectionId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "environmentId",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "uuid"
+          },
+          {
+            "name": "version",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "api-version",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responseInfo": {
+          "202": {
+            "type": "object"
+          },
+          "204": {
+            "type": "void"
+          },
+          "400": {
+            "type": "object"
+          },
+          "401": {
+            "type": "object"
+          },
+          "403": {
+            "type": "object"
+          },
+          "404": {
+            "type": "object"
+          },
+          "500": {
+            "type": "object"
+          }
+        }
+      },
+      "GetFinOpsOperationErrors": {
+        "path": "/{connectionId}/dynamics/environments/{environmentId}/operationerrors",
+        "method": "GET",
+        "parameters": [
+          {
+            "name": "connectionId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "environmentId",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "uuid"
+          },
+          {
+            "name": "api-version",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "maxResults",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
           }
         ],
         "responseInfo": {
@@ -3429,6 +4039,18 @@ export const dataSourcesInfo = {
           },
           "400": {
             "type": "object"
+          },
+          "401": {
+            "type": "void"
+          },
+          "403": {
+            "type": "void"
+          },
+          "409": {
+            "type": "object"
+          },
+          "429": {
+            "type": "void"
           }
         }
       },
@@ -3462,8 +4084,17 @@ export const dataSourcesInfo = {
           "400": {
             "type": "object"
           },
+          "401": {
+            "type": "void"
+          },
+          "403": {
+            "type": "void"
+          },
           "404": {
-            "type": "object"
+            "type": "void"
+          },
+          "429": {
+            "type": "void"
           }
         }
       },
@@ -3503,7 +4134,19 @@ export const dataSourcesInfo = {
           "400": {
             "type": "object"
           },
+          "401": {
+            "type": "void"
+          },
+          "403": {
+            "type": "void"
+          },
           "404": {
+            "type": "void"
+          },
+          "409": {
+            "type": "object"
+          },
+          "429": {
             "type": "void"
           }
         }
@@ -3538,58 +4181,17 @@ export const dataSourcesInfo = {
           "400": {
             "type": "object"
           },
-          "404": {
-            "type": "object"
-          }
-        }
-      },
-      "DisableEnvironment": {
-        "path": "/{connectionId}/environmentmanagement/environments/{environmentId}/Disable",
-        "method": "POST",
-        "parameters": [
-          {
-            "name": "connectionId",
-            "in": "path",
-            "required": true,
-            "type": "string"
-          },
-          {
-            "name": "environmentId",
-            "in": "path",
-            "required": true,
-            "type": "string"
-          },
-          {
-            "name": "api-version",
-            "in": "query",
-            "required": true,
-            "type": "string"
-          },
-          {
-            "name": "ValidateOnly",
-            "in": "query",
-            "required": false,
-            "type": "boolean"
-          },
-          {
-            "name": "ValidateProperties",
-            "in": "query",
-            "required": false,
-            "type": "string"
-          },
-          {
-            "name": "body",
-            "in": "body",
-            "required": false,
-            "type": "object"
-          }
-        ],
-        "responseInfo": {
-          "202": {
+          "401": {
             "type": "void"
           },
-          "400": {
-            "type": "object"
+          "403": {
+            "type": "void"
+          },
+          "404": {
+            "type": "void"
+          },
+          "429": {
+            "type": "void"
           }
         }
       },
@@ -3629,13 +4231,22 @@ export const dataSourcesInfo = {
           }
         ],
         "responseInfo": {
-          "201": {
-            "type": "object"
+          "202": {
+            "type": "void"
           },
           "400": {
+            "type": "object"
+          },
+          "401": {
+            "type": "void"
+          },
+          "403": {
             "type": "void"
           },
           "409": {
+            "type": "object"
+          },
+          "429": {
             "type": "void"
           }
         }
@@ -3676,64 +4287,23 @@ export const dataSourcesInfo = {
           }
         ],
         "responseInfo": {
-          "201": {
-            "type": "object"
-          },
-          "400": {
-            "type": "void"
-          },
-          "409": {
-            "type": "void"
-          }
-        }
-      },
-      "EnableEnvironment": {
-        "path": "/{connectionId}/environmentmanagement/environments/{environmentId}/Enable",
-        "method": "POST",
-        "parameters": [
-          {
-            "name": "connectionId",
-            "in": "path",
-            "required": true,
-            "type": "string"
-          },
-          {
-            "name": "environmentId",
-            "in": "path",
-            "required": true,
-            "type": "string"
-          },
-          {
-            "name": "api-version",
-            "in": "query",
-            "required": true,
-            "type": "string"
-          },
-          {
-            "name": "ValidateOnly",
-            "in": "query",
-            "required": false,
-            "type": "boolean"
-          },
-          {
-            "name": "ValidateProperties",
-            "in": "query",
-            "required": false,
-            "type": "string"
-          },
-          {
-            "name": "body",
-            "in": "body",
-            "required": false,
-            "type": "object"
-          }
-        ],
-        "responseInfo": {
           "202": {
             "type": "void"
           },
           "400": {
             "type": "object"
+          },
+          "401": {
+            "type": "void"
+          },
+          "403": {
+            "type": "void"
+          },
+          "409": {
+            "type": "object"
+          },
+          "429": {
+            "type": "void"
           }
         }
       },
@@ -3773,13 +4343,78 @@ export const dataSourcesInfo = {
           }
         ],
         "responseInfo": {
-          "201": {
-            "type": "object"
+          "202": {
+            "type": "void"
           },
           "400": {
+            "type": "object"
+          },
+          "401": {
+            "type": "void"
+          },
+          "403": {
             "type": "void"
           },
           "409": {
+            "type": "object"
+          },
+          "429": {
+            "type": "void"
+          }
+        }
+      },
+      "PerformFailback": {
+        "path": "/{connectionId}/environmentmanagement/environments/{environmentId}/failback",
+        "method": "POST",
+        "parameters": [
+          {
+            "name": "connectionId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "environmentId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "api-version",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "ValidateOnly",
+            "in": "query",
+            "required": false,
+            "type": "boolean"
+          },
+          {
+            "name": "ValidateProperties",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "responseInfo": {
+          "202": {
+            "type": "void"
+          },
+          "400": {
+            "type": "object"
+          },
+          "401": {
+            "type": "void"
+          },
+          "403": {
+            "type": "void"
+          },
+          "409": {
+            "type": "object"
+          },
+          "429": {
             "type": "void"
           }
         }
@@ -3826,19 +4461,28 @@ export const dataSourcesInfo = {
           }
         ],
         "responseInfo": {
-          "201": {
-            "type": "object"
+          "202": {
+            "type": "void"
           },
           "400": {
+            "type": "object"
+          },
+          "401": {
+            "type": "void"
+          },
+          "403": {
             "type": "void"
           },
           "409": {
+            "type": "object"
+          },
+          "429": {
             "type": "void"
           }
         }
       },
       "DisableManagedEnvironment": {
-        "path": "/{connectionId}/environmentmanagement/environments/{environmentId}/governancesetting/disablemanaged",
+        "path": "/{connectionId}/environmentmanagement/environments/{environmentId}/governanceSetting/disableManaged",
         "method": "POST",
         "parameters": [
           {
@@ -3873,16 +4517,28 @@ export const dataSourcesInfo = {
           }
         ],
         "responseInfo": {
-          "201": {
-            "type": "object"
+          "202": {
+            "type": "void"
           },
           "400": {
             "type": "object"
+          },
+          "401": {
+            "type": "void"
+          },
+          "403": {
+            "type": "void"
+          },
+          "409": {
+            "type": "object"
+          },
+          "429": {
+            "type": "void"
           }
         }
       },
       "EnableManagedEnvironment": {
-        "path": "/{connectionId}/environmentmanagement/environments/{environmentId}/governancesetting/enablemanaged",
+        "path": "/{connectionId}/environmentmanagement/environments/{environmentId}/governanceSetting/enableManaged",
         "method": "POST",
         "parameters": [
           {
@@ -3917,11 +4573,23 @@ export const dataSourcesInfo = {
           }
         ],
         "responseInfo": {
-          "201": {
-            "type": "object"
+          "202": {
+            "type": "void"
           },
           "400": {
             "type": "object"
+          },
+          "401": {
+            "type": "void"
+          },
+          "403": {
+            "type": "void"
+          },
+          "409": {
+            "type": "object"
+          },
+          "429": {
+            "type": "void"
           }
         }
       },
@@ -3967,11 +4635,23 @@ export const dataSourcesInfo = {
           }
         ],
         "responseInfo": {
-          "201": {
-            "type": "object"
+          "202": {
+            "type": "void"
           },
           "400": {
             "type": "object"
+          },
+          "401": {
+            "type": "void"
+          },
+          "403": {
+            "type": "void"
+          },
+          "409": {
+            "type": "object"
+          },
+          "429": {
+            "type": "void"
           }
         }
       },
@@ -4017,8 +4697,17 @@ export const dataSourcesInfo = {
           "400": {
             "type": "object"
           },
+          "401": {
+            "type": "void"
+          },
+          "403": {
+            "type": "void"
+          },
           "404": {
-            "type": "object"
+            "type": "void"
+          },
+          "429": {
+            "type": "void"
           }
         }
       },
@@ -4063,6 +4752,80 @@ export const dataSourcesInfo = {
           },
           "400": {
             "type": "object"
+          },
+          "401": {
+            "type": "void"
+          },
+          "403": {
+            "type": "void"
+          },
+          "409": {
+            "type": "object"
+          },
+          "429": {
+            "type": "void"
+          }
+        }
+      },
+      "ResetEnvironment": {
+        "path": "/{connectionId}/environmentmanagement/environments/{environmentId}/reset",
+        "method": "POST",
+        "parameters": [
+          {
+            "name": "connectionId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "environmentId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "api-version",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "ValidateOnly",
+            "in": "query",
+            "required": false,
+            "type": "boolean"
+          },
+          {
+            "name": "ValidateProperties",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": false,
+            "type": "object"
+          }
+        ],
+        "responseInfo": {
+          "202": {
+            "type": "void"
+          },
+          "400": {
+            "type": "object"
+          },
+          "401": {
+            "type": "void"
+          },
+          "403": {
+            "type": "void"
+          },
+          "409": {
+            "type": "object"
+          },
+          "429": {
+            "type": "void"
           }
         }
       },
@@ -4108,8 +4871,17 @@ export const dataSourcesInfo = {
           "400": {
             "type": "object"
           },
+          "401": {
+            "type": "void"
+          },
+          "403": {
+            "type": "void"
+          },
           "404": {
-            "type": "object"
+            "type": "void"
+          },
+          "429": {
+            "type": "void"
           }
         }
       },
@@ -4155,8 +4927,17 @@ export const dataSourcesInfo = {
           "400": {
             "type": "object"
           },
+          "401": {
+            "type": "void"
+          },
+          "403": {
+            "type": "void"
+          },
           "404": {
-            "type": "object"
+            "type": "void"
+          },
+          "429": {
+            "type": "void"
           }
         }
       },
@@ -4207,11 +4988,73 @@ export const dataSourcesInfo = {
           },
           "400": {
             "type": "object"
+          },
+          "401": {
+            "type": "void"
+          },
+          "403": {
+            "type": "void"
+          },
+          "409": {
+            "type": "object"
+          },
+          "429": {
+            "type": "void"
+          }
+        }
+      },
+      "GetEnvironmentOperationByID": {
+        "path": "/{connectionId}/environmentmanagement/environments/{targetEnvironmentId}/operations/{operationId}",
+        "method": "GET",
+        "parameters": [
+          {
+            "name": "connectionId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "targetEnvironmentId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "operationId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "api-version",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responseInfo": {
+          "200": {
+            "type": "object"
+          },
+          "400": {
+            "type": "object"
+          },
+          "401": {
+            "type": "void"
+          },
+          "403": {
+            "type": "void"
+          },
+          "404": {
+            "type": "void"
+          },
+          "429": {
+            "type": "void"
           }
         }
       },
       "RestoreEnvironment": {
-        "path": "/{connectionId}/environmentmanagement/environments/{targetEnvironmentId}/Restore",
+        "path": "/{connectionId}/environmentmanagement/environments/{targetEnvironmentId}/restore",
         "method": "POST",
         "parameters": [
           {
@@ -4257,6 +5100,18 @@ export const dataSourcesInfo = {
           },
           "400": {
             "type": "object"
+          },
+          "401": {
+            "type": "void"
+          },
+          "403": {
+            "type": "void"
+          },
+          "409": {
+            "type": "object"
+          },
+          "429": {
+            "type": "void"
           }
         }
       },
@@ -4290,13 +5145,22 @@ export const dataSourcesInfo = {
           "400": {
             "type": "object"
           },
+          "401": {
+            "type": "void"
+          },
+          "403": {
+            "type": "void"
+          },
           "404": {
-            "type": "object"
+            "type": "void"
+          },
+          "429": {
+            "type": "void"
           }
         }
       },
       "ProvisionNewEnvironment": {
-        "path": "/{connectionId}/environmentmanagement/provisioning/create",
+        "path": "/{connectionId}/environmentmanagement/provisioning/environments",
         "method": "POST",
         "parameters": [
           {
@@ -4327,6 +5191,18 @@ export const dataSourcesInfo = {
           },
           "400": {
             "type": "object"
+          },
+          "401": {
+            "type": "void"
+          },
+          "403": {
+            "type": "void"
+          },
+          "409": {
+            "type": "object"
+          },
+          "429": {
+            "type": "void"
           }
         }
       },
@@ -4361,10 +5237,22 @@ export const dataSourcesInfo = {
         ],
         "responseInfo": {
           "202": {
-            "type": "object"
+            "type": "void"
           },
           "400": {
             "type": "object"
+          },
+          "401": {
+            "type": "void"
+          },
+          "403": {
+            "type": "void"
+          },
+          "409": {
+            "type": "object"
+          },
+          "429": {
+            "type": "void"
           }
         }
       },
@@ -4392,8 +5280,17 @@ export const dataSourcesInfo = {
           "400": {
             "type": "object"
           },
+          "401": {
+            "type": "void"
+          },
+          "403": {
+            "type": "void"
+          },
           "404": {
-            "type": "object"
+            "type": "void"
+          },
+          "429": {
+            "type": "void"
           }
         }
       },
@@ -4426,6 +5323,18 @@ export const dataSourcesInfo = {
           },
           "400": {
             "type": "object"
+          },
+          "401": {
+            "type": "void"
+          },
+          "403": {
+            "type": "void"
+          },
+          "404": {
+            "type": "void"
+          },
+          "429": {
+            "type": "void"
           }
         }
       },
@@ -4458,6 +5367,18 @@ export const dataSourcesInfo = {
           },
           "400": {
             "type": "object"
+          },
+          "401": {
+            "type": "void"
+          },
+          "403": {
+            "type": "void"
+          },
+          "404": {
+            "type": "void"
+          },
+          "429": {
+            "type": "void"
           }
         }
       },
@@ -4490,6 +5411,18 @@ export const dataSourcesInfo = {
           },
           "400": {
             "type": "object"
+          },
+          "401": {
+            "type": "void"
+          },
+          "403": {
+            "type": "void"
+          },
+          "404": {
+            "type": "void"
+          },
+          "429": {
+            "type": "void"
           }
         }
       },
@@ -4806,12 +5739,6 @@ export const dataSourcesInfo = {
             "type": "string"
           },
           {
-            "name": "ids",
-            "in": "query",
-            "required": false,
-            "type": "array"
-          },
-          {
             "name": "$filter",
             "in": "query",
             "required": false,
@@ -4925,7 +5852,19 @@ export const dataSourcesInfo = {
           "400": {
             "type": "object"
           },
+          "401": {
+            "type": "void"
+          },
+          "403": {
+            "type": "void"
+          },
           "404": {
+            "type": "void"
+          },
+          "409": {
+            "type": "object"
+          },
+          "429": {
             "type": "void"
           }
         }
@@ -5815,6 +6754,927 @@ export const dataSourcesInfo = {
           },
           {
             "name": "reportId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "api-version",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responseInfo": {
+          "200": {
+            "type": "object"
+          },
+          "400": {
+            "type": "void"
+          },
+          "401": {
+            "type": "void"
+          },
+          "403": {
+            "type": "void"
+          },
+          "404": {
+            "type": "void"
+          }
+        }
+      },
+      "PutAllocationsV2": {
+        "path": "/{connectionId}/licensing/allocationsV2",
+        "method": "PUT",
+        "parameters": [
+          {
+            "name": "connectionId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "api-version",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": false,
+            "type": "object"
+          }
+        ],
+        "responseInfo": {
+          "200": {
+            "type": "object"
+          },
+          "400": {
+            "type": "void"
+          },
+          "401": {
+            "type": "void"
+          },
+          "403": {
+            "type": "void"
+          }
+        }
+      },
+      "GetAllocationsAvailabilityV2": {
+        "path": "/{connectionId}/licensing/allocationsV2/availability",
+        "method": "GET",
+        "parameters": [
+          {
+            "name": "connectionId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "api-version",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "$filter",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "responseInfo": {
+          "200": {
+            "type": "object"
+          },
+          "400": {
+            "type": "void"
+          },
+          "401": {
+            "type": "void"
+          },
+          "403": {
+            "type": "void"
+          }
+        }
+      },
+      "GetManyEntitlementsReservedV2": {
+        "path": "/{connectionId}/licensing/allocationsV2/entitlements/reserved",
+        "method": "GET",
+        "parameters": [
+          {
+            "name": "connectionId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "api-version",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "$filter",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "responseInfo": {
+          "200": {
+            "type": "array"
+          },
+          "400": {
+            "type": "void"
+          },
+          "401": {
+            "type": "void"
+          },
+          "403": {
+            "type": "void"
+          }
+        }
+      },
+      "GetEntitlement": {
+        "path": "/{connectionId}/licensing/entitlements/{entitlementId}",
+        "method": "GET",
+        "parameters": [
+          {
+            "name": "connectionId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "entitlementId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "api-version",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responseInfo": {
+          "200": {
+            "type": "object"
+          },
+          "204": {
+            "type": "void"
+          },
+          "400": {
+            "type": "void"
+          },
+          "401": {
+            "type": "void"
+          },
+          "403": {
+            "type": "void"
+          },
+          "404": {
+            "type": "void"
+          }
+        }
+      },
+      "GetEnvironmentResources": {
+        "path": "/{connectionId}/licensing/entitlements/{entitlementId}/environments/{environmentId}/resources",
+        "method": "GET",
+        "parameters": [
+          {
+            "name": "connectionId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "entitlementId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "environmentId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "fromDate",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "toDate",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "api-version",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "searchRequest",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "includeFields",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "orderbyConsumed",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "continuationToken",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "responseInfo": {
+          "200": {
+            "type": "object"
+          },
+          "204": {
+            "type": "void"
+          },
+          "400": {
+            "type": "void"
+          },
+          "401": {
+            "type": "void"
+          },
+          "403": {
+            "type": "void"
+          },
+          "404": {
+            "type": "void"
+          }
+        }
+      },
+      "GetTenantLicenseTrends": {
+        "path": "/{connectionId}/licensing/entitlements/{entitlementId}/licenses",
+        "method": "GET",
+        "parameters": [
+          {
+            "name": "connectionId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "entitlementId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "fromDate",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "toDate",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "api-version",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "$top",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "$filter",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "responseInfo": {
+          "200": {
+            "type": "object"
+          },
+          "204": {
+            "type": "void"
+          },
+          "400": {
+            "type": "void"
+          },
+          "401": {
+            "type": "void"
+          },
+          "403": {
+            "type": "void"
+          },
+          "404": {
+            "type": "void"
+          }
+        }
+      },
+      "GetTenantResourcesAcrossEnvironments": {
+        "path": "/{connectionId}/licensing/entitlements/{entitlementId}/resources",
+        "method": "GET",
+        "parameters": [
+          {
+            "name": "connectionId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "entitlementId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "fromDate",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "toDate",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "api-version",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "continuationToken",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "responseInfo": {
+          "200": {
+            "type": "object"
+          },
+          "400": {
+            "type": "void"
+          },
+          "401": {
+            "type": "void"
+          },
+          "403": {
+            "type": "void"
+          },
+          "404": {
+            "type": "void"
+          }
+        }
+      },
+      "GetTenantUserConsumptionByResource": {
+        "path": "/{connectionId}/licensing/entitlements/{entitlementId}/resources/{resourceId}/users",
+        "method": "GET",
+        "parameters": [
+          {
+            "name": "connectionId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "entitlementId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "resourceId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "fromDate",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "toDate",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "api-version",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "searchRequest",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "continuationToken",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "responseInfo": {
+          "200": {
+            "type": "object"
+          },
+          "204": {
+            "type": "void"
+          },
+          "400": {
+            "type": "void"
+          },
+          "401": {
+            "type": "void"
+          },
+          "403": {
+            "type": "void"
+          },
+          "404": {
+            "type": "void"
+          }
+        }
+      },
+      "GetAllResourceThresholds": {
+        "path": "/{connectionId}/licensing/entitlements/{entitlementId}/resourceThresholds",
+        "method": "GET",
+        "parameters": [
+          {
+            "name": "connectionId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "entitlementId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "api-version",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responseInfo": {
+          "200": {
+            "type": "array"
+          },
+          "400": {
+            "type": "void"
+          },
+          "401": {
+            "type": "void"
+          },
+          "403": {
+            "type": "void"
+          }
+        }
+      },
+      "GetTenantUsers": {
+        "path": "/{connectionId}/licensing/entitlements/{entitlementId}/users",
+        "method": "GET",
+        "parameters": [
+          {
+            "name": "connectionId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "entitlementId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "fromDate",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "toDate",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "api-version",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "searchRequest",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "orderbyConsumed",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "continuationToken",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "responseInfo": {
+          "200": {
+            "type": "object"
+          },
+          "204": {
+            "type": "void"
+          },
+          "400": {
+            "type": "void"
+          },
+          "401": {
+            "type": "void"
+          },
+          "403": {
+            "type": "void"
+          },
+          "404": {
+            "type": "void"
+          }
+        }
+      },
+      "GetTenantResourceConsumptionByUser": {
+        "path": "/{connectionId}/licensing/entitlements/{entitlementId}/users/{userId}/resources",
+        "method": "GET",
+        "parameters": [
+          {
+            "name": "connectionId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "entitlementId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "userId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "fromDate",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "toDate",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "api-version",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "searchRequest",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "continuationToken",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "responseInfo": {
+          "200": {
+            "type": "object"
+          },
+          "204": {
+            "type": "void"
+          },
+          "400": {
+            "type": "void"
+          },
+          "401": {
+            "type": "void"
+          },
+          "403": {
+            "type": "void"
+          },
+          "404": {
+            "type": "void"
+          }
+        }
+      },
+      "GetManyEnvironmentEntitlements": {
+        "path": "/{connectionId}/licensing/environments/{environmentId}/entitlements",
+        "method": "GET",
+        "parameters": [
+          {
+            "name": "connectionId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "environmentId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "api-version",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "$filter",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "responseInfo": {
+          "200": {
+            "type": "array"
+          },
+          "204": {
+            "type": "void"
+          },
+          "400": {
+            "type": "void"
+          },
+          "401": {
+            "type": "void"
+          },
+          "403": {
+            "type": "void"
+          },
+          "404": {
+            "type": "void"
+          }
+        }
+      },
+      "UpsertResourceThreshold": {
+        "path": "/{connectionId}/licensing/environments/{environmentId}/entitlements/{entitlementId}/resources/{resourceId}/threshold",
+        "method": "PUT",
+        "parameters": [
+          {
+            "name": "connectionId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "environmentId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "entitlementId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "resourceId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "api-version",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": false,
+            "type": "object"
+          }
+        ],
+        "responseInfo": {
+          "200": {
+            "type": "object"
+          },
+          "400": {
+            "type": "void"
+          },
+          "401": {
+            "type": "void"
+          },
+          "403": {
+            "type": "void"
+          }
+        }
+      },
+      "GetFinOpsLicenseSummaryV2": {
+        "path": "/{connectionId}/licensing/FinOpsLicensing/GetLicenseSummaryV2",
+        "method": "GET",
+        "parameters": [
+          {
+            "name": "connectionId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "api-version",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responseInfo": {
+          "200": {
+            "type": "object"
+          },
+          "204": {
+            "type": "void"
+          },
+          "400": {
+            "type": "void"
+          },
+          "401": {
+            "type": "void"
+          },
+          "403": {
+            "type": "void"
+          },
+          "404": {
+            "type": "void"
+          }
+        }
+      },
+      "ListAllocationsByEnvironment": {
+        "path": "/{connectionId}/licensing/allocationsByEnvironment",
+        "method": "GET",
+        "parameters": [
+          {
+            "name": "connectionId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "api-version",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responseInfo": {
+          "200": {
+            "type": "array"
+          },
+          "400": {
+            "type": "void"
+          },
+          "401": {
+            "type": "void"
+          },
+          "403": {
+            "type": "void"
+          },
+          "404": {
+            "type": "void"
+          }
+        }
+      },
+      "UpdateAllocationsByEnvironment": {
+        "path": "/{connectionId}/licensing/allocationsByEnvironment",
+        "method": "PATCH",
+        "parameters": [
+          {
+            "name": "connectionId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "api-version",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": false,
+            "type": "object"
+          }
+        ],
+        "responseInfo": {
+          "200": {
+            "type": "object"
+          },
+          "400": {
+            "type": "void"
+          },
+          "401": {
+            "type": "void"
+          },
+          "403": {
+            "type": "void"
+          },
+          "404": {
+            "type": "void"
+          }
+        }
+      },
+      "GetAllocationsByEnvironment": {
+        "path": "/{connectionId}/licensing/allocationsByEnvironment/{environmentId}",
+        "method": "GET",
+        "parameters": [
+          {
+            "name": "connectionId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "environmentId",
             "in": "path",
             "required": true,
             "type": "string"
@@ -7275,6 +9135,53 @@ export const dataSourcesInfo = {
           }
         }
       },
+      "OnAlertTriggered": {
+        "path": "/{connectionId}/monitoringhub/powerplatform/triggeredAlerts/poll",
+        "method": "GET",
+        "parameters": [
+          {
+            "name": "connectionId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "api-version",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "responseInfo": {
+          "200": {
+            "type": "object"
+          },
+          "202": {
+            "type": "void"
+          },
+          "400": {
+            "type": "void"
+          },
+          "401": {
+            "type": "void"
+          },
+          "403": {
+            "type": "void"
+          },
+          "429": {
+            "type": "void"
+          },
+          "500": {
+            "type": "void"
+          }
+        }
+      },
       "Get-AdminApps": {
         "path": "/{connectionId}/powerapps/environments/{environmentId}/apps",
         "method": "GET",
@@ -7602,6 +9509,188 @@ export const dataSourcesInfo = {
           }
         }
       },
+      "GetAffectedSites": {
+        "path": "/{connectionId}/powerpages/environments/{environmentId}/exceptions/affectedSites",
+        "method": "GET",
+        "parameters": [
+          {
+            "name": "connectionId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "environmentId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "exceptionType",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "api-version",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responseInfo": {
+          "200": {
+            "type": "object"
+          },
+          "400": {
+            "type": "object"
+          },
+          "401": {
+            "type": "object"
+          },
+          "403": {
+            "type": "object"
+          },
+          "404": {
+            "type": "object"
+          }
+        }
+      },
+      "GrantException": {
+        "path": "/{connectionId}/powerpages/environments/{environmentId}/exceptions/grant",
+        "method": "POST",
+        "parameters": [
+          {
+            "name": "connectionId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "environmentId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "api-version",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "type": "object"
+          }
+        ],
+        "responseInfo": {
+          "200": {
+            "type": "object"
+          },
+          "400": {
+            "type": "object"
+          },
+          "401": {
+            "type": "object"
+          },
+          "403": {
+            "type": "object"
+          },
+          "404": {
+            "type": "object"
+          }
+        }
+      },
+      "GetExceptions": {
+        "path": "/{connectionId}/powerpages/environments/{environmentId}/exceptions/list",
+        "method": "GET",
+        "parameters": [
+          {
+            "name": "connectionId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "environmentId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "api-version",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "exceptionType",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "responseInfo": {
+          "200": {
+            "type": "array"
+          },
+          "400": {
+            "type": "object"
+          },
+          "401": {
+            "type": "object"
+          },
+          "404": {
+            "type": "object"
+          }
+        }
+      },
+      "RevokeException": {
+        "path": "/{connectionId}/powerpages/environments/{environmentId}/exceptions/revoke",
+        "method": "POST",
+        "parameters": [
+          {
+            "name": "connectionId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "environmentId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "api-version",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "type": "object"
+          }
+        ],
+        "responseInfo": {
+          "200": {
+            "type": "object"
+          },
+          "400": {
+            "type": "object"
+          },
+          "401": {
+            "type": "object"
+          },
+          "404": {
+            "type": "object"
+          }
+        }
+      },
       "GetWebsites": {
         "path": "/{connectionId}/powerpages/environments/{environmentId}/websites",
         "method": "GET",
@@ -7781,6 +9870,174 @@ export const dataSourcesInfo = {
           }
         }
       },
+      "UploadCertificate": {
+        "path": "/{connectionId}/powerpages/environments/{environmentId}/websites/{id}/certificates",
+        "method": "POST",
+        "parameters": [
+          {
+            "name": "connectionId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "environmentId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "certType",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "api-version",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "file",
+            "in": "formData",
+            "required": false,
+            "type": "file"
+          },
+          {
+            "name": "password",
+            "in": "formData",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "responseInfo": {
+          "200": {
+            "type": "string"
+          },
+          "400": {
+            "type": "object"
+          },
+          "401": {
+            "type": "object"
+          },
+          "404": {
+            "type": "object"
+          }
+        }
+      },
+      "GetCertificatesByPortal": {
+        "path": "/{connectionId}/powerpages/environments/{environmentId}/websites/{id}/certificates",
+        "method": "GET",
+        "parameters": [
+          {
+            "name": "connectionId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "environmentId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "certType",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "api-version",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responseInfo": {
+          "200": {
+            "type": "array"
+          },
+          "400": {
+            "type": "object"
+          },
+          "401": {
+            "type": "object"
+          },
+          "404": {
+            "type": "object"
+          }
+        }
+      },
+      "DeleteCertificateByPortal": {
+        "path": "/{connectionId}/powerpages/environments/{environmentId}/websites/{id}/certificates",
+        "method": "DELETE",
+        "parameters": [
+          {
+            "name": "connectionId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "environmentId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "thumbprint",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "certType",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "api-version",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responseInfo": {
+          "200": {
+            "type": "void"
+          },
+          "400": {
+            "type": "object"
+          },
+          "401": {
+            "type": "object"
+          },
+          "404": {
+            "type": "object"
+          }
+        }
+      },
       "ConvertTrialToProduction": {
         "path": "/{connectionId}/powerpages/environments/{environmentId}/websites/{id}/convertToProduction",
         "method": "POST",
@@ -7868,6 +10125,150 @@ export const dataSourcesInfo = {
         ],
         "responseInfo": {
           "202": {
+            "type": "void"
+          },
+          "400": {
+            "type": "object"
+          },
+          "401": {
+            "type": "object"
+          },
+          "404": {
+            "type": "object"
+          }
+        }
+      },
+      "ListHostNamesForPortal": {
+        "path": "/{connectionId}/powerpages/environments/{environmentId}/websites/{id}/customDomain",
+        "method": "GET",
+        "parameters": [
+          {
+            "name": "connectionId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "environmentId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "api-version",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responseInfo": {
+          "200": {
+            "type": "array"
+          },
+          "400": {
+            "type": "object"
+          },
+          "401": {
+            "type": "object"
+          },
+          "404": {
+            "type": "object"
+          }
+        }
+      },
+      "CreateCustomDomain": {
+        "path": "/{connectionId}/powerpages/environments/{environmentId}/websites/{id}/customDomain",
+        "method": "POST",
+        "parameters": [
+          {
+            "name": "connectionId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "environmentId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "customDomain",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "api-version",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responseInfo": {
+          "200": {
+            "type": "void"
+          },
+          "400": {
+            "type": "object"
+          },
+          "401": {
+            "type": "object"
+          },
+          "404": {
+            "type": "object"
+          }
+        }
+      },
+      "DeleteHostNameForPortal": {
+        "path": "/{connectionId}/powerpages/environments/{environmentId}/websites/{id}/customDomain",
+        "method": "DELETE",
+        "parameters": [
+          {
+            "name": "connectionId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "environmentId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "hostName",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "api-version",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responseInfo": {
+          "200": {
             "type": "void"
           },
           "400": {
@@ -8116,6 +10517,50 @@ export const dataSourcesInfo = {
           }
         }
       },
+      "GetAllowedIpAddresses": {
+        "path": "/{connectionId}/powerpages/environments/{environmentId}/websites/{id}/ipaddressrules",
+        "method": "GET",
+        "parameters": [
+          {
+            "name": "connectionId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "environmentId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "api-version",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responseInfo": {
+          "200": {
+            "type": "array"
+          },
+          "400": {
+            "type": "object"
+          },
+          "401": {
+            "type": "object"
+          },
+          "404": {
+            "type": "object"
+          }
+        }
+      },
       "AddAllowedIpAddresses": {
         "path": "/{connectionId}/powerpages/environments/{environmentId}/websites/{id}/ipaddressrules",
         "method": "POST",
@@ -8152,8 +10597,8 @@ export const dataSourcesInfo = {
           }
         ],
         "responseInfo": {
-          "200": {
-            "type": "array"
+          "204": {
+            "type": "void"
           },
           "400": {
             "type": "object"
@@ -8202,8 +10647,8 @@ export const dataSourcesInfo = {
           }
         ],
         "responseInfo": {
-          "200": {
-            "type": "array"
+          "204": {
+            "type": "void"
           },
           "400": {
             "type": "object"
@@ -8536,6 +10981,168 @@ export const dataSourcesInfo = {
           }
         }
       },
+      "ListSslBindingsByThumbprints": {
+        "path": "/{connectionId}/powerpages/environments/{environmentId}/websites/{id}/sslBindings",
+        "method": "GET",
+        "parameters": [
+          {
+            "name": "connectionId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "environmentId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "hostName",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "api-version",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responseInfo": {
+          "200": {
+            "type": "array"
+          },
+          "400": {
+            "type": "object"
+          },
+          "401": {
+            "type": "object"
+          },
+          "404": {
+            "type": "object"
+          }
+        }
+      },
+      "AddSslBindingByPortal": {
+        "path": "/{connectionId}/powerpages/environments/{environmentId}/websites/{id}/sslBindings",
+        "method": "POST",
+        "parameters": [
+          {
+            "name": "connectionId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "environmentId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "thumbprint",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "hostName",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "api-version",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responseInfo": {
+          "200": {
+            "type": "void"
+          },
+          "400": {
+            "type": "object"
+          },
+          "401": {
+            "type": "object"
+          },
+          "404": {
+            "type": "object"
+          }
+        }
+      },
+      "DeleteSslBindingByThumbprint": {
+        "path": "/{connectionId}/powerpages/environments/{environmentId}/websites/{id}/sslBindings",
+        "method": "DELETE",
+        "parameters": [
+          {
+            "name": "connectionId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "environmentId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "hostName",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "thumbprint",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "api-version",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responseInfo": {
+          "200": {
+            "type": "void"
+          },
+          "400": {
+            "type": "object"
+          },
+          "401": {
+            "type": "object"
+          },
+          "404": {
+            "type": "object"
+          }
+        }
+      },
       "StartWebsite": {
         "path": "/{connectionId}/powerpages/environments/{environmentId}/websites/{id}/start",
         "method": "POST",
@@ -8762,6 +11369,56 @@ export const dataSourcesInfo = {
         "responseInfo": {
           "200": {
             "type": "void"
+          },
+          "400": {
+            "type": "object"
+          },
+          "401": {
+            "type": "object"
+          },
+          "404": {
+            "type": "object"
+          }
+        }
+      },
+      "UpdateWafPolicySettings": {
+        "path": "/{connectionId}/powerpages/environments/{environmentId}/websites/{id}/updateWafPolicySettings",
+        "method": "PUT",
+        "parameters": [
+          {
+            "name": "connectionId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "environmentId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "api-version",
+            "in": "query",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "type": "object"
+          }
+        ],
+        "responseInfo": {
+          "200": {
+            "type": "object"
           },
           "400": {
             "type": "object"

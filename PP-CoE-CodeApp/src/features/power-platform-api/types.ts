@@ -22,7 +22,7 @@ export interface ApiOperation {
   warnings: string[];
   parameters: ApiParameter[];
   body?: { required: boolean; description: string; schema: JsonSchema };
-  responses: { status: string; description: string; schema?: JsonSchema }[];
+  responses: { status: string; description: string; schema?: JsonSchema; mediaTypes?: string[] }[];
 }
 
 export interface ApiCatalog {
@@ -55,6 +55,7 @@ export interface ApiResponse {
   raw: string;
   status?: number;
   headers?: unknown;
+  download?: { filename: string; bytes: Uint8Array<ArrayBuffer>; contentType: string };
 }
 
 export type ApiResult =

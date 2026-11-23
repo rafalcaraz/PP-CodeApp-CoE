@@ -96,7 +96,7 @@ const operations = entries.map((entry, index) => {
   const models = new Map(chunks.map((chunk) => [clean(chunk.split("\n")[0]), chunk.slice(chunk.indexOf("\n") + 1)]));
   const warnings = new Set();
   function typeSchema(raw) {
-    const name = clean(raw);
+    const name = clean(raw).replace(/^([A-Z]\w*)\s*\((int32|int64)\)$/, "$1");
     if (!name) return {};
     if (name === "file") return { type: "string", format: "binary" };
     if (name.startsWith("enum:")) return { type: "string", enum: name.slice(5).split(/\s*-\s+/).filter(Boolean) };
@@ -115,7 +115,7 @@ const operations = entries.map((entry, index) => {
       return schema;
     }
     if (!models.has(name)) {
-      if (name === id || ["Geo", "Clause", "WebApplicationFirewallStatus", "ActionEvent"].includes(name)) {
+      if (name === id || ["Geo", "Clause", "WebApplicationFirewallStatus", "ActionEvent", "CopilotGovernanceSettingValue"].includes(name)) {
         const warning = `Microsoft Learn references "${name}" without defining its schema. No local type restriction is inferred; consult the operation documentation.`;
         warnings.add(warning);
         return { description: warning };
@@ -137,7 +137,8 @@ const operations = entries.map((entry, index) => {
     const rows = table(content, "Value").length ? table(content, "Value") : table(content);
     let schema;
     if (rows.length && Object.hasOwn(rows[0], "Value")) {
-      schema = { type: "string", enum: rows.map((row) => row.Value) };
+      const numeric = rows.every((row) => /^-?\d+$/.test(row.Value));
+      schema = { type: numeric ? "integer" : "string", enum: rows.map((row) => numeric ? Number(row.Value) : row.Value) };
     } else if (rows.length && Object.hasOwn(rows[0], "Name") && Object.hasOwn(rows[0], "Type")) {
       schema = objectSchema(rows);
     } else if (rows.length && Object.hasOwn(rows[0], "Name") && Object.hasOwn(rows[0], "Description")) {
@@ -172,9 +173,13 @@ const operations = entries.map((entry, index) => {
     description: "Documented JSON request body. Review the operation documentation for business rules.",
     schema: rootBody ? typeSchema(bodyRows[0].Type) : bodyRows.length ? objectSchema(bodyRows) : {},
   } : undefined;
-  const responses = table(block(page, "Responses")).map((row) => ({
-    status: row.Name, description: row.Name, ...(row.Type ? { schema: typeSchema(row.Type) } : {}),
-  }));
+  const responses = table(block(page, "Responses")).map((row) => {
+    const mediaTypes = [...row.Description.matchAll(/"([\w.+-]+\/[\w.+-]+)"/g)].map((match) => match[1]);
+    return {
+      status: row.Name, description: row.Name, ...(row.Type ? { schema: typeSchema(row.Type) } : {}),
+      ...(mediaTypes.length ? { mediaTypes } : {}),
+    };
+  });
   const description = `Send a ${method} request to ${path}. Open the operation documentation for usage and permission details.`;
   return { ...entry, id, description, method, path, sourceRevision: metadata.git_commit_id, warnings: [...warnings], parameters, ...(body ? { body } : {}), responses };
 });

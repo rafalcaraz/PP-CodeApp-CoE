@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { localConnectionBindings, resolveLocalBindings } from "../PP-CoE-CodeApp/scripts/localConnectionBindings.ts";
+import { validatePublishConfig } from "./prepare-code-app-publish.mjs";
 
 const config = () => ({
   environmentId: "synthetic-env",
@@ -59,6 +60,26 @@ test("base configuration stays portable and the private override is already giti
   assert.equal(http.length, 3);
   assert.ok(http.every((ref) => ref.sharedConnectionId.includes("<connection-id>")));
   assert.match(readFileSync(new URL("../PP-CoE-CodeApp/.gitignore", import.meta.url), "utf8"), /^\*\.local$/m);
+});
+
+test("binding example requires private substitution and then resolves every HTTP audience without changing registration", () => {
+  const base = JSON.parse(readFileSync(new URL("../PP-CoE-CodeApp/power.config.json", import.meta.url), "utf8"));
+  const sample = JSON.parse(readFileSync(new URL("../PP-CoE-CodeApp/power.bindings.example.json", import.meta.url), "utf8"));
+  assert.match(sample.environmentId, /^<[^>]+>$/);
+  const logicalNames = Object.values(base.connectionReferences)
+    .filter((ref) => ref.id.toLowerCase().endsWith("/shared_webcontents"))
+    .map((ref) => ref.xrmConnectionReferenceLogicalName);
+  assert.deepEqual(Object.keys(sample.sharedConnections).sort(), logicalNames.sort());
+  sample.environmentId = base.environmentId;
+  assert.throws(() => resolveLocalBindings(base, sample));
+  for (const [index, [name, connection]] of Object.entries(sample.sharedConnections).entries()) {
+    assert.match(connection, /^\/providers\/Microsoft\.PowerApps\/apis\/shared_webcontents\/connections\/<[^>]+>$/);
+    sample.sharedConnections[name] = connection.replace(/<[^>]+>$/, `synthetic-http-${index}`);
+  }
+  const before = structuredClone(base);
+  const resolved = resolveLocalBindings(base, sample);
+  assert.doesNotThrow(() => validatePublishConfig(resolved, base));
+  assert.deepEqual(base, before);
 });
 
 test("dev-only middleware blocks raw bindings and invalid admission metadata instead of falling back", () => {

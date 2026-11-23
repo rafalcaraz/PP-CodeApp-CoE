@@ -79,6 +79,42 @@ describe("flow-only Power Platform API adapter", () => {
     expect(await executeApiRequest(inputs, true)).toEqual({ ok: false, error: "Response lost" });
     expect(invalidateInventoryCache).toHaveBeenCalledTimes(2);
   });
+
+  it("preserves report generation Location and Retry-After headers without polling", async () => {
+    const operation = apiOperations.find((entry) => entry.title === "Generate Licensing Report");
+    if (!operation) throw new Error("Missing report generation.");
+    const inputs = initialApiInputs(operation);
+    inputs.parameters["path:ReportName"] = "test-report";
+    inputs.body = '{"startDate":"2026-11-01","endDate":"2026-11-02"}';
+    runFlow.mockResolvedValueOnce({ success: true, data: { response: JSON.stringify({
+      statusCode: 202, headers: { Location: "/test-report/operations/test-operation", "Retry-After": "30" }, body: "",
+    }) } });
+    expect((await executeApiRequest(inputs)).ok).toBe(false);
+    expect(runFlow).not.toHaveBeenCalled();
+    expect(await executeApiRequest(inputs, true)).toMatchObject({
+      ok: true, data: { status: 202, headers: { Location: "/test-report/operations/test-operation", "Retry-After": "30" } },
+    });
+    expect(runFlow).toHaveBeenCalledOnce();
+  });
+
+  it("returns downloadable gzip bytes through the registered flow, never a direct HTTP download", async () => {
+    const operation = apiOperations.find((entry) => entry.title === "Download Licensing Report File");
+    if (!operation) throw new Error("Missing report download.");
+    const inputs = initialApiInputs(operation);
+    Object.assign(inputs.parameters, { "path:ReportName": "test-report", "path:FileName": "report.csv.gz" });
+    runFlow.mockResolvedValueOnce({ success: true, data: { response: JSON.stringify({
+      statusCode: 200, body: { "$content-type": "application/gzip", $content: "H4sIAAAAAAAAAwMAAAAAAAAAAAA=" },
+    }) } });
+    expect(await executeApiRequest(inputs)).toMatchObject({
+      ok: true, data: { status: 200, download: { filename: "report.csv.gz", contentType: "application/gzip", bytes: expect.any(Uint8Array) } },
+    });
+    expect(runFlow).toHaveBeenCalledExactlyOnceWith({
+      text: "GET",
+      text_1: "https://api.powerplatform.com/copilotstudio/licensing/reports/test-report/files/report.csv.gz?api-version=2024-10-01",
+      text_2: "",
+    });
+    expect(invalidateInventoryCache).not.toHaveBeenCalled();
+  });
 });
 
 describe("flow response normalization", () => {
@@ -98,5 +134,24 @@ describe("flow response normalization", () => {
     expect(normalizeFlowResponse('{"statusCode":202,"headers":{},"body":""}')).toMatchObject({
       ok: true, data: { status: 202, body: null },
     });
+    expect(normalizeFlowResponse('{"statusCode":504}')).toMatchObject({ ok: false, data: { status: 504 } });
+  });
+
+  it("rejects missing, invalid-base64 and non-gzip downloads while preserving raw evidence", () => {
+    for (const body of ["corrupted text", { $content: "%%%invalid%%%" }, { $content: btoa("not gzip") }]) {
+      const raw = JSON.stringify({ statusCode: 200, body });
+      expect(normalizeFlowResponse(raw, "report.csv.gz")).toMatchObject({
+        ok: false, error: expect.stringContaining("Report download failed"), data: { raw },
+      });
+      expect(normalizeFlowResponse(raw, "report.csv.gz").data?.download).toBeUndefined();
+    }
+    expect(normalizeFlowResponse('{"statusCode":404,"body":"not found"}', "report.csv.gz")).toMatchObject({
+      ok: false, error: "HTTP 404: not found",
+    });
+    const result = normalizeFlowResponse('{"$content":"H4sIAAAAAAAAAwMAAAAAAAAAAAA="}', "../report.csv.gz");
+    expect(result.data?.download?.filename).toBe(".._report.csv.gz");
+    expect(Array.from(result.data?.download?.bytes ?? [])).toEqual([
+      31, 139, 8, 0, 0, 0, 0, 0, 0, 3, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    ]);
   });
 });

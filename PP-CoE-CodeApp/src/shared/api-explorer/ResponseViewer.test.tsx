@@ -1,7 +1,20 @@
-import { describe, expect, it } from "vitest";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { FluentProvider, webLightTheme } from "@fluentui/react-components";
 import { ResponseViewer } from "./ResponseViewer";
+
+const clipboardDescriptor = Object.getOwnPropertyDescriptor(navigator, "clipboard");
+const writeText = vi.fn<(text: string) => Promise<void>>();
+
+beforeEach(() => {
+  writeText.mockReset().mockResolvedValue(undefined);
+  Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
+});
+
+afterEach(() => {
+  if (clipboardDescriptor) Object.defineProperty(navigator, "clipboard", clipboardDescriptor);
+  else Reflect.deleteProperty(navigator, "clipboard");
+});
 
 function renderViewer(text = '{"name":"Example","other":"example"}') {
   return render(<FluentProvider theme={webLightTheme}>
@@ -61,5 +74,60 @@ describe("ResponseViewer", () => {
     expect(response.querySelector("mark")).toHaveTextContent(".*");
     fireEvent.click(screen.getByRole("checkbox", { name: "Wrap lines" }));
     expect(screen.getByRole("checkbox", { name: "Wrap lines" })).not.toBeChecked();
+  });
+
+  it("copies the complete selected response without search markup and resets feedback between tabs", async () => {
+    const text = '{"name":"Example","other":"example"}';
+    renderViewer(text);
+    fireEvent.change(screen.getByRole("textbox", { name: "Search response" }), { target: { value: "example" } });
+    expect(writeText).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Copy response" }));
+    await screen.findByText("Copied to clipboard.");
+    expect(writeText).toHaveBeenLastCalledWith(text);
+    fireEvent.click(screen.getByRole("tab", { name: "Raw flow response" }));
+    expect(screen.queryByText("Copied to clipboard.")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Copy response" }));
+    await screen.findByText("Copied to clipboard.");
+    expect(writeText).toHaveBeenLastCalledWith("EXAMPLE");
+  });
+
+  it("keeps headers and the submitted snapshot collapsed and copies their exact JSON independently", async () => {
+    const headers = { Location: "/operations/example", "Retry-After": "10", ETag: 'W/"9"' };
+    const request = { method: "POST", body: { granularity: "Summary" } };
+    render(<FluentProvider theme={webLightTheme}>
+      <ResponseViewer sources={[{ label: "Body", ariaLabel: "Body", text: "{}" }]}
+        headers={headers} request={{ label: "Submitted request", text: JSON.stringify(request, null, 2) }} />
+    </FluentProvider>);
+    expect(screen.getByText("Response headers").parentElement).not.toHaveAttribute("open");
+    expect(screen.getByText("Submitted request").parentElement).not.toHaveAttribute("open");
+    expect(writeText).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByText("Response headers"));
+    expect(screen.getByLabelText("Response headers JSON")).toHaveTextContent("/operations/example");
+    fireEvent.click(screen.getByRole("button", { name: "Copy response headers" }));
+    await waitFor(() => expect(writeText).toHaveBeenLastCalledWith(JSON.stringify(headers, null, 2)));
+    fireEvent.click(screen.getByText("Submitted request"));
+    fireEvent.click(screen.getByRole("button", { name: "Copy submitted request" }));
+    await waitFor(() => expect(writeText).toHaveBeenLastCalledWith(JSON.stringify(request, null, 2)));
+    expect(writeText).toHaveBeenCalledTimes(2);
+  });
+
+  it("distinguishes unavailable headers from an exposed empty collection", () => {
+    const { rerender } = render(<ResponseViewer sources={[]} />);
+    expect(screen.getByText(/No response headers were exposed/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Copy response headers", hidden: true })).not.toBeInTheDocument();
+    rerender(<ResponseViewer sources={[]} headers={new Headers({ Location: "/operations/example" })} />);
+    expect(screen.getByLabelText("Response headers JSON")).toHaveTextContent('"location": "/operations/example"');
+    rerender(<ResponseViewer sources={[]} headers={{}} />);
+    expect(screen.getByLabelText("Response headers JSON")).toHaveTextContent("{}");
+    expect(screen.queryByText(/No response headers were exposed/)).not.toBeInTheDocument();
+  });
+
+  it.each(["denied", "unavailable"])("surfaces %s clipboard access without claiming success", async (failure) => {
+    if (failure === "denied") writeText.mockRejectedValueOnce(new Error("Permission denied"));
+    else Object.defineProperty(navigator, "clipboard", { configurable: true, value: undefined });
+    renderViewer();
+    fireEvent.click(screen.getByRole("button", { name: "Copy response" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(/Could not copy:.*copy it manually/);
+    expect(screen.queryByText("Copied to clipboard.")).not.toBeInTheDocument();
   });
 });

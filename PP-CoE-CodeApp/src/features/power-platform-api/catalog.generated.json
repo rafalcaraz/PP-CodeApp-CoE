@@ -1,84 +1,13 @@
 {
   "source": {
     "url": "https://learn.microsoft.com/en-us/rest/api/toc.json",
-    "revision": "92813e8ead95f02f8f28e750c0f54f4cbb5eb00f,9d5f2974d5b8a7c5df33a967224d25e0d0868f5d,adb4825fa3bb3a54aabe7499ed131d01fcd69ce6,d511c0d9a19292903acc7046c7fdf16a844e3801,fa1bd063a5c3a90c6bb9b0be14cb3abd32834d9e",
-    "generatedAt": "2026-11-01T22:10:46.639Z",
+    "revision": "0be4e3ae4052d412f4ea372e792845eb46eadb99,92813e8ead95f02f8f28e750c0f54f4cbb5eb00f,9a317197f470590bf26f4a4a6a19ba5fddd80ff4,9d5f2974d5b8a7c5df33a967224d25e0d0868f5d,adb4825fa3bb3a54aabe7499ed131d01fcd69ce6,d511c0d9a19292903acc7046c7fdf16a844e3801,fa1bd063a5c3a90c6bb9b0be14cb3abd32834d9e",
+    "generatedAt": "2026-11-23T17:13:03.130Z",
     "license": "API interface metadata only; source documentation subject to Microsoft Learn terms.",
-    "operationCount": 217,
-    "contentHash": "2aab97d74820a6010e3f6d1c14b516d1b626cf366081e039c2a1899aeaa1c49b"
+    "operationCount": 227,
+    "contentHash": "898b437679fa6224f07679c195806eb23b44b2688ab78404abe3dfd2f9e49ac1"
   },
   "operations": [
-    {
-      "title": "Send Advisor Chat Message",
-      "docUrl": "https://learn.microsoft.com/en-us/rest/api/power-platform/analytics/advisor-chat/send-advisor-chat-message",
-      "section": "Analytics",
-      "group": "Advisor Chat",
-      "id": "api.powerplatform.com.power-platform.analytics.advisorchat.sendadvisorchatmessage",
-      "description": "Send a POST request to /analytics/advisor/chat/messages. Open the operation documentation for usage and permission details.",
-      "method": "POST",
-      "path": "/analytics/advisor/chat/messages",
-      "sourceRevision": "fa1bd063a5c3a90c6bb9b0be14cb3abd32834d9e",
-      "warnings": [],
-      "parameters": [
-        {
-          "name": "api-version",
-          "in": "query",
-          "required": true,
-          "description": "Documented query parameter.",
-          "schema": {
-            "type": "string",
-            "default": "2024-10-01"
-          }
-        }
-      ],
-      "body": {
-        "required": true,
-        "description": "Documented JSON request body. Review the operation documentation for business rules.",
-        "schema": {
-          "type": "object",
-          "properties": {
-            "message": {
-              "type": "string"
-            },
-            "conversationId": {
-              "type": "string"
-            }
-          },
-          "required": [
-            "message"
-          ]
-        }
-      },
-      "responses": [
-        {
-          "status": "200 OK",
-          "description": "200 OK",
-          "schema": {
-            "$ref": "#/definitions/api.powerplatform.com.power-platform.analytics.advisorchat.sendadvisorchatmessage.AdvisorChatMessageResponse"
-          }
-        },
-        {
-          "status": "400 Bad Request",
-          "description": "400 Bad Request"
-        },
-        {
-          "status": "401 Unauthorized",
-          "description": "401 Unauthorized"
-        },
-        {
-          "status": "403 Forbidden",
-          "description": "403 Forbidden"
-        },
-        {
-          "status": "404 Not Found",
-          "description": "404 Not Found"
-        },
-        {
-          "status": "429 Too Many Requests",
-          "description": "429 Too Many Requests"
-        }
-      ]
-    },
     {
       "title": "Execute Recommendation Action",
       "docUrl": "https://learn.microsoft.com/en-us/rest/api/power-platform/analytics/recommendations/execute-recommendation-action",
@@ -528,7 +457,7 @@
       "description": "Send a GET request to /appmanagement/environments/{environmentId}/applicationPackages. Open the operation documentation for usage and permission details.",
       "method": "GET",
       "path": "/appmanagement/environments/{environmentId}/applicationPackages",
-      "sourceRevision": "d511c0d9a19292903acc7046c7fdf16a844e3801",
+      "sourceRevision": "9a317197f470590bf26f4a4a6a19ba5fddd80ff4",
       "warnings": [],
       "parameters": [
         {
@@ -645,7 +574,7 @@
       "description": "Send a POST request to /appmanagement/environments/{environmentId}/applicationPackages/{uniqueName}/install. Open the operation documentation for usage and permission details.",
       "method": "POST",
       "path": "/appmanagement/environments/{environmentId}/applicationPackages/{uniqueName}/install",
-      "sourceRevision": "d511c0d9a19292903acc7046c7fdf16a844e3801",
+      "sourceRevision": "9a317197f470590bf26f4a4a6a19ba5fddd80ff4",
       "warnings": [],
       "parameters": [
         {
@@ -1703,6 +1632,353 @@
       ]
     },
     {
+      "title": "Fetch Copilot Settings Summary",
+      "docUrl": "https://learn.microsoft.com/en-us/rest/api/power-platform/copilotgovernance/copilot-settings/fetch-copilot-settings-summary",
+      "section": "Copilot Governance",
+      "group": "Copilot Settings",
+      "id": "api.powerplatform.com.power-platform.copilotgovernance.copilotsettings.fetchcopilotsettingssummary",
+      "description": "Send a POST request to /copilotgovernance/settings/fetchSummary. Open the operation documentation for usage and permission details.",
+      "method": "POST",
+      "path": "/copilotgovernance/settings/fetchSummary",
+      "sourceRevision": "9a317197f470590bf26f4a4a6a19ba5fddd80ff4",
+      "warnings": [
+        "Microsoft Learn references \"CopilotGovernanceSettingValue\" without defining its schema. No local type restriction is inferred; consult the operation documentation."
+      ],
+      "parameters": [
+        {
+          "name": "api-version",
+          "in": "query",
+          "required": true,
+          "description": "Documented query parameter.",
+          "schema": {
+            "type": "string",
+            "default": "2024-10-01"
+          }
+        }
+      ],
+      "responses": [
+        {
+          "status": "200 OK",
+          "description": "200 OK",
+          "schema": {
+            "$ref": "#/definitions/api.powerplatform.com.power-platform.copilotgovernance.copilotsettings.fetchcopilotsettingssummary.CopilotGovernanceSettingsSummaryResponse"
+          }
+        },
+        {
+          "status": "400 Bad Request",
+          "description": "400 Bad Request"
+        },
+        {
+          "status": "401 Unauthorized",
+          "description": "401 Unauthorized"
+        },
+        {
+          "status": "403 Forbidden",
+          "description": "403 Forbidden"
+        },
+        {
+          "status": "500 Internal Server Error",
+          "description": "500 Internal Server Error"
+        }
+      ]
+    },
+    {
+      "title": "Get Copilot Setting",
+      "docUrl": "https://learn.microsoft.com/en-us/rest/api/power-platform/copilotgovernance/copilot-settings/get-copilot-setting",
+      "section": "Copilot Governance",
+      "group": "Copilot Settings",
+      "id": "api.powerplatform.com.power-platform.copilotgovernance.copilotsettings.getcopilotsetting",
+      "description": "Send a GET request to /copilotgovernance/environments/{environmentId}/settings/{settingName}. Open the operation documentation for usage and permission details.",
+      "method": "GET",
+      "path": "/copilotgovernance/environments/{environmentId}/settings/{settingName}",
+      "sourceRevision": "9a317197f470590bf26f4a4a6a19ba5fddd80ff4",
+      "warnings": [
+        "Microsoft Learn references \"CopilotGovernanceSettingValue\" without defining its schema. No local type restriction is inferred; consult the operation documentation."
+      ],
+      "parameters": [
+        {
+          "name": "environmentId",
+          "in": "path",
+          "required": true,
+          "description": "Documented path parameter.",
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "name": "settingName",
+          "in": "path",
+          "required": true,
+          "description": "Documented path parameter.",
+          "schema": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        {
+          "name": "api-version",
+          "in": "query",
+          "required": true,
+          "description": "Documented query parameter.",
+          "schema": {
+            "type": "string",
+            "default": "2024-10-01"
+          }
+        }
+      ],
+      "responses": [
+        {
+          "status": "200 OK",
+          "description": "200 OK",
+          "schema": {
+            "$ref": "#/definitions/api.powerplatform.com.power-platform.copilotgovernance.copilotsettings.getcopilotsetting.CopilotGovernanceSetting"
+          }
+        },
+        {
+          "status": "400 Bad Request",
+          "description": "400 Bad Request"
+        },
+        {
+          "status": "401 Unauthorized",
+          "description": "401 Unauthorized"
+        },
+        {
+          "status": "403 Forbidden",
+          "description": "403 Forbidden"
+        },
+        {
+          "status": "404 Not Found",
+          "description": "404 Not Found"
+        },
+        {
+          "status": "500 Internal Server Error",
+          "description": "500 Internal Server Error"
+        }
+      ]
+    },
+    {
+      "title": "List Copilot Settings",
+      "docUrl": "https://learn.microsoft.com/en-us/rest/api/power-platform/copilotgovernance/copilot-settings/list-copilot-settings",
+      "section": "Copilot Governance",
+      "group": "Copilot Settings",
+      "id": "api.powerplatform.com.power-platform.copilotgovernance.copilotsettings.listcopilotsettings",
+      "description": "Send a GET request to /copilotgovernance/environments/{environmentId}/settings. Open the operation documentation for usage and permission details.",
+      "method": "GET",
+      "path": "/copilotgovernance/environments/{environmentId}/settings",
+      "sourceRevision": "9a317197f470590bf26f4a4a6a19ba5fddd80ff4",
+      "warnings": [
+        "Microsoft Learn references \"CopilotGovernanceSettingValue\" without defining its schema. No local type restriction is inferred; consult the operation documentation."
+      ],
+      "parameters": [
+        {
+          "name": "environmentId",
+          "in": "path",
+          "required": true,
+          "description": "Documented path parameter.",
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "name": "api-version",
+          "in": "query",
+          "required": true,
+          "description": "Documented query parameter.",
+          "schema": {
+            "type": "string",
+            "default": "2024-10-01"
+          }
+        }
+      ],
+      "responses": [
+        {
+          "status": "200 OK",
+          "description": "200 OK",
+          "schema": {
+            "$ref": "#/definitions/api.powerplatform.com.power-platform.copilotgovernance.copilotsettings.listcopilotsettings.CopilotGovernanceSettingsResponse"
+          }
+        },
+        {
+          "status": "400 Bad Request",
+          "description": "400 Bad Request"
+        },
+        {
+          "status": "401 Unauthorized",
+          "description": "401 Unauthorized"
+        },
+        {
+          "status": "403 Forbidden",
+          "description": "403 Forbidden"
+        },
+        {
+          "status": "500 Internal Server Error",
+          "description": "500 Internal Server Error"
+        }
+      ]
+    },
+    {
+      "title": "Update Copilot Setting",
+      "docUrl": "https://learn.microsoft.com/en-us/rest/api/power-platform/copilotgovernance/copilot-settings/update-copilot-setting",
+      "section": "Copilot Governance",
+      "group": "Copilot Settings",
+      "id": "api.powerplatform.com.power-platform.copilotgovernance.copilotsettings.updatecopilotsetting",
+      "description": "Send a PUT request to /copilotgovernance/environments/{environmentId}/settings/{settingName}. Open the operation documentation for usage and permission details.",
+      "method": "PUT",
+      "path": "/copilotgovernance/environments/{environmentId}/settings/{settingName}",
+      "sourceRevision": "9a317197f470590bf26f4a4a6a19ba5fddd80ff4",
+      "warnings": [
+        "Microsoft Learn references \"CopilotGovernanceSettingValue\" without defining its schema. No local type restriction is inferred; consult the operation documentation."
+      ],
+      "parameters": [
+        {
+          "name": "environmentId",
+          "in": "path",
+          "required": true,
+          "description": "Documented path parameter.",
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "name": "settingName",
+          "in": "path",
+          "required": true,
+          "description": "Documented path parameter.",
+          "schema": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        {
+          "name": "api-version",
+          "in": "query",
+          "required": true,
+          "description": "Documented query parameter.",
+          "schema": {
+            "type": "string",
+            "default": "2024-10-01"
+          }
+        }
+      ],
+      "body": {
+        "required": true,
+        "description": "Documented JSON request body. Review the operation documentation for business rules.",
+        "schema": {
+          "type": "object",
+          "properties": {
+            "value": {
+              "description": "Microsoft Learn references \"CopilotGovernanceSettingValue\" without defining its schema. No local type restriction is inferred; consult the operation documentation."
+            }
+          }
+        }
+      },
+      "responses": [
+        {
+          "status": "204 No Content",
+          "description": "204 No Content"
+        },
+        {
+          "status": "400 Bad Request",
+          "description": "400 Bad Request"
+        },
+        {
+          "status": "401 Unauthorized",
+          "description": "401 Unauthorized"
+        },
+        {
+          "status": "403 Forbidden",
+          "description": "403 Forbidden"
+        },
+        {
+          "status": "404 Not Found",
+          "description": "404 Not Found"
+        },
+        {
+          "status": "500 Internal Server Error",
+          "description": "500 Internal Server Error"
+        }
+      ]
+    },
+    {
+      "title": "Update Copilot Settings Batch",
+      "docUrl": "https://learn.microsoft.com/en-us/rest/api/power-platform/copilotgovernance/copilot-settings/update-copilot-settings-batch",
+      "section": "Copilot Governance",
+      "group": "Copilot Settings",
+      "id": "api.powerplatform.com.power-platform.copilotgovernance.copilotsettings.updatecopilotsettingsbatch",
+      "description": "Send a PUT request to /copilotgovernance/environments/{environmentId}/settings. Open the operation documentation for usage and permission details.",
+      "method": "PUT",
+      "path": "/copilotgovernance/environments/{environmentId}/settings",
+      "sourceRevision": "9a317197f470590bf26f4a4a6a19ba5fddd80ff4",
+      "warnings": [
+        "Microsoft Learn references \"CopilotGovernanceSettingValue\" without defining its schema. No local type restriction is inferred; consult the operation documentation."
+      ],
+      "parameters": [
+        {
+          "name": "environmentId",
+          "in": "path",
+          "required": true,
+          "description": "Documented path parameter.",
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "name": "api-version",
+          "in": "query",
+          "required": true,
+          "description": "Documented query parameter.",
+          "schema": {
+            "type": "string",
+            "default": "2024-10-01"
+          }
+        }
+      ],
+      "body": {
+        "required": true,
+        "description": "Documented JSON request body. Review the operation documentation for business rules.",
+        "schema": {
+          "type": "object",
+          "properties": {
+            "settings": {
+              "type": "object",
+              "additionalProperties": {
+                "$ref": "#/definitions/api.powerplatform.com.power-platform.copilotgovernance.copilotsettings.updatecopilotsettingsbatch.CopilotGovernanceSettingUpdate"
+              }
+            }
+          },
+          "required": [
+            "settings"
+          ]
+        }
+      },
+      "responses": [
+        {
+          "status": "204 No Content",
+          "description": "204 No Content"
+        },
+        {
+          "status": "400 Bad Request",
+          "description": "400 Bad Request"
+        },
+        {
+          "status": "401 Unauthorized",
+          "description": "401 Unauthorized"
+        },
+        {
+          "status": "403 Forbidden",
+          "description": "403 Forbidden"
+        },
+        {
+          "status": "404 Not Found",
+          "description": "404 Not Found"
+        },
+        {
+          "status": "500 Internal Server Error",
+          "description": "500 Internal Server Error"
+        }
+      ]
+    },
+    {
       "title": "Download Agent Channel Manifest",
       "docUrl": "https://learn.microsoft.com/en-us/rest/api/power-platform/copilotstudio/agent-channels/download-agent-channel-manifest",
       "section": "Copilot Studio",
@@ -1768,7 +2044,10 @@
           "description": "200 OK",
           "schema": {
             "type": "string"
-          }
+          },
+          "mediaTypes": [
+            "application/zip"
+          ]
         }
       ]
     },
@@ -1877,11 +2156,17 @@
           "description": "200 OK",
           "schema": {
             "type": "string"
-          }
+          },
+          "mediaTypes": [
+            "application/zip"
+          ]
         },
         {
           "status": "404 Not Found",
-          "description": "404 Not Found"
+          "description": "404 Not Found",
+          "mediaTypes": [
+            "application/zip"
+          ]
         }
       ]
     },
@@ -2542,6 +2827,223 @@
       ]
     },
     {
+      "title": "Download Licensing Report File",
+      "docUrl": "https://learn.microsoft.com/en-us/rest/api/power-platform/copilotstudio/licensing-reports/download-licensing-report-file",
+      "section": "Copilot Studio",
+      "group": "Licensing Reports",
+      "id": "api.powerplatform.com.power-platform.copilotstudio.licensingreports.downloadlicensingreportfile",
+      "description": "Send a GET request to /copilotstudio/licensing/reports/{ReportName}/files/{FileName}. Open the operation documentation for usage and permission details.",
+      "method": "GET",
+      "path": "/copilotstudio/licensing/reports/{ReportName}/files/{FileName}",
+      "sourceRevision": "0be4e3ae4052d412f4ea372e792845eb46eadb99",
+      "warnings": [],
+      "parameters": [
+        {
+          "name": "FileName",
+          "in": "path",
+          "required": true,
+          "description": "Documented path parameter.",
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "name": "ReportName",
+          "in": "path",
+          "required": true,
+          "description": "Documented path parameter.",
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "name": "api-version",
+          "in": "query",
+          "required": true,
+          "description": "Documented query parameter.",
+          "schema": {
+            "type": "string",
+            "default": "2024-10-01"
+          }
+        }
+      ],
+      "responses": [
+        {
+          "status": "200 OK",
+          "description": "200 OK",
+          "schema": {
+            "type": "string"
+          },
+          "mediaTypes": [
+            "application/gzip"
+          ]
+        },
+        {
+          "status": "401 Unauthorized",
+          "description": "401 Unauthorized",
+          "mediaTypes": [
+            "application/gzip"
+          ]
+        },
+        {
+          "status": "403 Forbidden",
+          "description": "403 Forbidden",
+          "mediaTypes": [
+            "application/gzip"
+          ]
+        },
+        {
+          "status": "404 Not Found",
+          "description": "404 Not Found",
+          "mediaTypes": [
+            "application/gzip"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Generate Licensing Report",
+      "docUrl": "https://learn.microsoft.com/en-us/rest/api/power-platform/copilotstudio/licensing-reports/generate-licensing-report",
+      "section": "Copilot Studio",
+      "group": "Licensing Reports",
+      "id": "api.powerplatform.com.power-platform.copilotstudio.licensingreports.generatelicensingreport",
+      "description": "Send a POST request to /copilotstudio/licensing/reports/{ReportName}. Open the operation documentation for usage and permission details.",
+      "method": "POST",
+      "path": "/copilotstudio/licensing/reports/{ReportName}",
+      "sourceRevision": "0be4e3ae4052d412f4ea372e792845eb46eadb99",
+      "warnings": [],
+      "parameters": [
+        {
+          "name": "ReportName",
+          "in": "path",
+          "required": true,
+          "description": "Documented path parameter.",
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "name": "api-version",
+          "in": "query",
+          "required": true,
+          "description": "Documented query parameter.",
+          "schema": {
+            "type": "string",
+            "default": "2024-10-01"
+          }
+        }
+      ],
+      "body": {
+        "required": true,
+        "description": "Documented JSON request body. Review the operation documentation for business rules.",
+        "schema": {
+          "type": "object",
+          "properties": {
+            "endDate": {
+              "type": "string",
+              "format": "date"
+            },
+            "startDate": {
+              "type": "string",
+              "format": "date"
+            },
+            "granularity": {
+              "$ref": "#/definitions/api.powerplatform.com.power-platform.copilotstudio.licensingreports.generatelicensingreport.CopilotStudioLicensingReportGranularity"
+            }
+          },
+          "required": [
+            "endDate",
+            "startDate"
+          ]
+        }
+      },
+      "responses": [
+        {
+          "status": "202 Accepted",
+          "description": "202 Accepted"
+        },
+        {
+          "status": "400 Bad Request",
+          "description": "400 Bad Request"
+        },
+        {
+          "status": "401 Unauthorized",
+          "description": "401 Unauthorized"
+        },
+        {
+          "status": "403 Forbidden",
+          "description": "403 Forbidden"
+        },
+        {
+          "status": "404 Not Found",
+          "description": "404 Not Found"
+        }
+      ]
+    },
+    {
+      "title": "Get Licensing Report Operation",
+      "docUrl": "https://learn.microsoft.com/en-us/rest/api/power-platform/copilotstudio/licensing-reports/get-licensing-report-operation",
+      "section": "Copilot Studio",
+      "group": "Licensing Reports",
+      "id": "api.powerplatform.com.power-platform.copilotstudio.licensingreports.getlicensingreportoperation",
+      "description": "Send a GET request to /copilotstudio/licensing/reports/{ReportName}/operations/{OperationId}. Open the operation documentation for usage and permission details.",
+      "method": "GET",
+      "path": "/copilotstudio/licensing/reports/{ReportName}/operations/{OperationId}",
+      "sourceRevision": "0be4e3ae4052d412f4ea372e792845eb46eadb99",
+      "warnings": [],
+      "parameters": [
+        {
+          "name": "OperationId",
+          "in": "path",
+          "required": true,
+          "description": "Documented path parameter.",
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "name": "ReportName",
+          "in": "path",
+          "required": true,
+          "description": "Documented path parameter.",
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "name": "api-version",
+          "in": "query",
+          "required": true,
+          "description": "Documented query parameter.",
+          "schema": {
+            "type": "string",
+            "default": "2024-10-01"
+          }
+        }
+      ],
+      "responses": [
+        {
+          "status": "200 OK",
+          "description": "200 OK",
+          "schema": {
+            "$ref": "#/definitions/api.powerplatform.com.power-platform.copilotstudio.licensingreports.getlicensingreportoperation.CopilotStudioLicensingReportOperation"
+          }
+        },
+        {
+          "status": "401 Unauthorized",
+          "description": "401 Unauthorized"
+        },
+        {
+          "status": "403 Forbidden",
+          "description": "403 Forbidden"
+        },
+        {
+          "status": "404 Not Found",
+          "description": "404 Not Found"
+        }
+      ]
+    },
+    {
       "title": "Get Fin Ops Maintenance Settings",
       "docUrl": "https://learn.microsoft.com/en-us/rest/api/power-platform/dynamics/finance-and-operations-maintenance-settings/get-fin-ops-maintenance-settings",
       "section": "Dynamics",
@@ -3103,33 +3605,63 @@
           "description": "201 Created",
           "schema": {
             "$ref": "#/definitions/api.powerplatform.com.power-platform.environmentmanagement.environmentbackup.createenvironmentbackup.EnvironmentBackup"
-          }
+          },
+          "mediaTypes": [
+            "text/plain",
+            "application/json",
+            "text/json"
+          ]
         },
         {
           "status": "400 Bad Request",
           "description": "400 Bad Request",
           "schema": {
             "$ref": "#/definitions/api.powerplatform.com.power-platform.environmentmanagement.environmentbackup.createenvironmentbackup.ValidationResponse"
-          }
+          },
+          "mediaTypes": [
+            "text/plain",
+            "application/json",
+            "text/json"
+          ]
         },
         {
           "status": "401 Unauthorized",
-          "description": "401 Unauthorized"
+          "description": "401 Unauthorized",
+          "mediaTypes": [
+            "text/plain",
+            "application/json",
+            "text/json"
+          ]
         },
         {
           "status": "403 Forbidden",
-          "description": "403 Forbidden"
+          "description": "403 Forbidden",
+          "mediaTypes": [
+            "text/plain",
+            "application/json",
+            "text/json"
+          ]
         },
         {
           "status": "429 Too Many Requests",
-          "description": "429 Too Many Requests"
+          "description": "429 Too Many Requests",
+          "mediaTypes": [
+            "text/plain",
+            "application/json",
+            "text/json"
+          ]
         },
         {
           "status": "Other Status Codes",
           "description": "Other Status Codes",
           "schema": {
             "$ref": "#/definitions/api.powerplatform.com.power-platform.environmentmanagement.environmentbackup.createenvironmentbackup.ValidationResponse"
-          }
+          },
+          "mediaTypes": [
+            "text/plain",
+            "application/json",
+            "text/json"
+          ]
         }
       ]
     },
@@ -3249,30 +3781,60 @@
           "description": "200 OK",
           "schema": {
             "$ref": "#/definitions/api.powerplatform.com.power-platform.environmentmanagement.environmentbackup.getenvironmentbackups.EnvironmentBackupPagedCollection"
-          }
+          },
+          "mediaTypes": [
+            "text/plain",
+            "application/json",
+            "text/json"
+          ]
         },
         {
           "status": "400 Bad Request",
           "description": "400 Bad Request",
           "schema": {
             "$ref": "#/definitions/api.powerplatform.com.power-platform.environmentmanagement.environmentbackup.getenvironmentbackups.ValidationResponse"
-          }
+          },
+          "mediaTypes": [
+            "text/plain",
+            "application/json",
+            "text/json"
+          ]
         },
         {
           "status": "401 Unauthorized",
-          "description": "401 Unauthorized"
+          "description": "401 Unauthorized",
+          "mediaTypes": [
+            "text/plain",
+            "application/json",
+            "text/json"
+          ]
         },
         {
           "status": "403 Forbidden",
-          "description": "403 Forbidden"
+          "description": "403 Forbidden",
+          "mediaTypes": [
+            "text/plain",
+            "application/json",
+            "text/json"
+          ]
         },
         {
           "status": "404 Not Found",
-          "description": "404 Not Found"
+          "description": "404 Not Found",
+          "mediaTypes": [
+            "text/plain",
+            "application/json",
+            "text/json"
+          ]
         },
         {
           "status": "429 Too Many Requests",
-          "description": "429 Too Many Requests"
+          "description": "429 Too Many Requests",
+          "mediaTypes": [
+            "text/plain",
+            "application/json",
+            "text/json"
+          ]
         }
       ]
     },
@@ -3437,30 +3999,60 @@
           "description": "200 OK",
           "schema": {
             "$ref": "#/definitions/api.powerplatform.com.power-platform.environmentmanagement.environmentcopy.getenvironmentcopycandidates.EnvironmentPagedCollection"
-          }
+          },
+          "mediaTypes": [
+            "text/plain",
+            "application/json",
+            "text/json"
+          ]
         },
         {
           "status": "400 Bad Request",
           "description": "400 Bad Request",
           "schema": {
             "$ref": "#/definitions/api.powerplatform.com.power-platform.environmentmanagement.environmentcopy.getenvironmentcopycandidates.ValidationResponse"
-          }
+          },
+          "mediaTypes": [
+            "text/plain",
+            "application/json",
+            "text/json"
+          ]
         },
         {
           "status": "401 Unauthorized",
-          "description": "401 Unauthorized"
+          "description": "401 Unauthorized",
+          "mediaTypes": [
+            "text/plain",
+            "application/json",
+            "text/json"
+          ]
         },
         {
           "status": "403 Forbidden",
-          "description": "403 Forbidden"
+          "description": "403 Forbidden",
+          "mediaTypes": [
+            "text/plain",
+            "application/json",
+            "text/json"
+          ]
         },
         {
           "status": "404 Not Found",
-          "description": "404 Not Found"
+          "description": "404 Not Found",
+          "mediaTypes": [
+            "text/plain",
+            "application/json",
+            "text/json"
+          ]
         },
         {
           "status": "429 Too Many Requests",
-          "description": "429 Too Many Requests"
+          "description": "429 Too Many Requests",
+          "mediaTypes": [
+            "text/plain",
+            "application/json",
+            "text/json"
+          ]
         }
       ]
     },
@@ -4275,21 +4867,42 @@
           "description": "200 OK",
           "schema": {
             "$ref": "#/definitions/api.powerplatform.com.power-platform.environmentmanagement.environmentmanagementsettings.createenvironmentmanagementsettings.CreateEnvironmentManagementSettingResponse"
-          }
+          },
+          "mediaTypes": [
+            "application/json",
+            "application/xml",
+            "application/prs.odatatestxx-odata",
+            "text/plain",
+            "text/json"
+          ]
         },
         {
           "status": "400 Bad Request",
           "description": "400 Bad Request",
           "schema": {
             "$ref": "#/definitions/api.powerplatform.com.power-platform.environmentmanagement.environmentmanagementsettings.createenvironmentmanagementsettings.CreateEnvironmentManagementSettingResponse"
-          }
+          },
+          "mediaTypes": [
+            "application/json",
+            "application/xml",
+            "application/prs.odatatestxx-odata",
+            "text/plain",
+            "text/json"
+          ]
         },
         {
           "status": "Other Status Codes",
           "description": "Other Status Codes",
           "schema": {
             "$ref": "#/definitions/api.powerplatform.com.power-platform.environmentmanagement.environmentmanagementsettings.createenvironmentmanagementsettings.CreateEnvironmentManagementSettingResponse"
-          }
+          },
+          "mediaTypes": [
+            "application/json",
+            "application/xml",
+            "application/prs.odatatestxx-odata",
+            "text/plain",
+            "text/json"
+          ]
         }
       ]
     },
@@ -4349,28 +4962,56 @@
           "description": "200 OK",
           "schema": {
             "$ref": "#/definitions/api.powerplatform.com.power-platform.environmentmanagement.environmentmanagementsettings.listenvironmentmanagementsettings.GetEnvironmentManagementSettingResponse"
-          }
+          },
+          "mediaTypes": [
+            "application/json",
+            "application/xml",
+            "application/prs.odatatestxx-odata",
+            "text/plain",
+            "text/json"
+          ]
         },
         {
           "status": "400 Bad Request",
           "description": "400 Bad Request",
           "schema": {
             "$ref": "#/definitions/api.powerplatform.com.power-platform.environmentmanagement.environmentmanagementsettings.listenvironmentmanagementsettings.GetEnvironmentManagementSettingResponse"
-          }
+          },
+          "mediaTypes": [
+            "application/json",
+            "application/xml",
+            "application/prs.odatatestxx-odata",
+            "text/plain",
+            "text/json"
+          ]
         },
         {
           "status": "404 Not Found",
           "description": "404 Not Found",
           "schema": {
             "$ref": "#/definitions/api.powerplatform.com.power-platform.environmentmanagement.environmentmanagementsettings.listenvironmentmanagementsettings.GetEnvironmentManagementSettingResponse"
-          }
+          },
+          "mediaTypes": [
+            "application/json",
+            "application/xml",
+            "application/prs.odatatestxx-odata",
+            "text/plain",
+            "text/json"
+          ]
         },
         {
           "status": "429 Too Many Requests",
           "description": "429 Too Many Requests",
           "schema": {
             "$ref": "#/definitions/api.powerplatform.com.power-platform.environmentmanagement.environmentmanagementsettings.listenvironmentmanagementsettings.GetEnvironmentManagementSettingResponse"
-          }
+          },
+          "mediaTypes": [
+            "application/json",
+            "application/xml",
+            "application/prs.odatatestxx-odata",
+            "text/plain",
+            "text/json"
+          ]
         }
       ]
     },
@@ -4414,28 +5055,56 @@
           "description": "200 OK",
           "schema": {
             "$ref": "#/definitions/api.powerplatform.com.power-platform.environmentmanagement.environmentmanagementsettings.updateenvironmentmanagementsettings.OperationResponse"
-          }
+          },
+          "mediaTypes": [
+            "application/json",
+            "application/xml",
+            "application/prs.odatatestxx-odata",
+            "text/plain",
+            "text/json"
+          ]
         },
         {
           "status": "404 Not Found",
           "description": "404 Not Found",
           "schema": {
             "$ref": "#/definitions/api.powerplatform.com.power-platform.environmentmanagement.environmentmanagementsettings.updateenvironmentmanagementsettings.OperationResponse"
-          }
+          },
+          "mediaTypes": [
+            "application/json",
+            "application/xml",
+            "application/prs.odatatestxx-odata",
+            "text/plain",
+            "text/json"
+          ]
         },
         {
           "status": "Other Status Codes",
           "description": "Other Status Codes",
           "schema": {
             "$ref": "#/definitions/api.powerplatform.com.power-platform.environmentmanagement.environmentmanagementsettings.updateenvironmentmanagementsettings.OperationResponse"
-          }
+          },
+          "mediaTypes": [
+            "application/json",
+            "application/xml",
+            "application/prs.odatatestxx-odata",
+            "text/plain",
+            "text/json"
+          ]
         },
         {
           "status": "Other Status Codes",
           "description": "Other Status Codes",
           "schema": {
             "$ref": "#/definitions/api.powerplatform.com.power-platform.environmentmanagement.environmentmanagementsettings.updateenvironmentmanagementsettings.OperationResponse"
-          }
+          },
+          "mediaTypes": [
+            "application/json",
+            "application/xml",
+            "application/prs.odatatestxx-odata",
+            "text/plain",
+            "text/json"
+          ]
         }
       ]
     },
@@ -4477,30 +5146,60 @@
           "description": "200 OK",
           "schema": {
             "$ref": "#/definitions/api.powerplatform.com.power-platform.environmentmanagement.environmentprovisioning.getprovisioningcurrencies.EnvironmentCurrencyResourceCollection"
-          }
+          },
+          "mediaTypes": [
+            "text/plain",
+            "application/json",
+            "text/json"
+          ]
         },
         {
           "status": "400 Bad Request",
           "description": "400 Bad Request",
           "schema": {
             "$ref": "#/definitions/api.powerplatform.com.power-platform.environmentmanagement.environmentprovisioning.getprovisioningcurrencies.ValidationResponse"
-          }
+          },
+          "mediaTypes": [
+            "text/plain",
+            "application/json",
+            "text/json"
+          ]
         },
         {
           "status": "401 Unauthorized",
-          "description": "401 Unauthorized"
+          "description": "401 Unauthorized",
+          "mediaTypes": [
+            "text/plain",
+            "application/json",
+            "text/json"
+          ]
         },
         {
           "status": "403 Forbidden",
-          "description": "403 Forbidden"
+          "description": "403 Forbidden",
+          "mediaTypes": [
+            "text/plain",
+            "application/json",
+            "text/json"
+          ]
         },
         {
           "status": "404 Not Found",
-          "description": "404 Not Found"
+          "description": "404 Not Found",
+          "mediaTypes": [
+            "text/plain",
+            "application/json",
+            "text/json"
+          ]
         },
         {
           "status": "429 Too Many Requests",
-          "description": "429 Too Many Requests"
+          "description": "429 Too Many Requests",
+          "mediaTypes": [
+            "text/plain",
+            "application/json",
+            "text/json"
+          ]
         }
       ]
     },
@@ -4542,30 +5241,60 @@
           "description": "200 OK",
           "schema": {
             "$ref": "#/definitions/api.powerplatform.com.power-platform.environmentmanagement.environmentprovisioning.getprovisioninglanguages.EnvironmentLanguageResourceCollection"
-          }
+          },
+          "mediaTypes": [
+            "text/plain",
+            "application/json",
+            "text/json"
+          ]
         },
         {
           "status": "400 Bad Request",
           "description": "400 Bad Request",
           "schema": {
             "$ref": "#/definitions/api.powerplatform.com.power-platform.environmentmanagement.environmentprovisioning.getprovisioninglanguages.ValidationResponse"
-          }
+          },
+          "mediaTypes": [
+            "text/plain",
+            "application/json",
+            "text/json"
+          ]
         },
         {
           "status": "401 Unauthorized",
-          "description": "401 Unauthorized"
+          "description": "401 Unauthorized",
+          "mediaTypes": [
+            "text/plain",
+            "application/json",
+            "text/json"
+          ]
         },
         {
           "status": "403 Forbidden",
-          "description": "403 Forbidden"
+          "description": "403 Forbidden",
+          "mediaTypes": [
+            "text/plain",
+            "application/json",
+            "text/json"
+          ]
         },
         {
           "status": "404 Not Found",
-          "description": "404 Not Found"
+          "description": "404 Not Found",
+          "mediaTypes": [
+            "text/plain",
+            "application/json",
+            "text/json"
+          ]
         },
         {
           "status": "429 Too Many Requests",
-          "description": "429 Too Many Requests"
+          "description": "429 Too Many Requests",
+          "mediaTypes": [
+            "text/plain",
+            "application/json",
+            "text/json"
+          ]
         }
       ]
     },
@@ -4607,30 +5336,60 @@
           "description": "200 OK",
           "schema": {
             "$ref": "#/definitions/api.powerplatform.com.power-platform.environmentmanagement.environmentprovisioning.getprovisioningtemplates.EnvironmentTemplateResourceCollection"
-          }
+          },
+          "mediaTypes": [
+            "text/plain",
+            "application/json",
+            "text/json"
+          ]
         },
         {
           "status": "400 Bad Request",
           "description": "400 Bad Request",
           "schema": {
             "$ref": "#/definitions/api.powerplatform.com.power-platform.environmentmanagement.environmentprovisioning.getprovisioningtemplates.ValidationResponse"
-          }
+          },
+          "mediaTypes": [
+            "text/plain",
+            "application/json",
+            "text/json"
+          ]
         },
         {
           "status": "401 Unauthorized",
-          "description": "401 Unauthorized"
+          "description": "401 Unauthorized",
+          "mediaTypes": [
+            "text/plain",
+            "application/json",
+            "text/json"
+          ]
         },
         {
           "status": "403 Forbidden",
-          "description": "403 Forbidden"
+          "description": "403 Forbidden",
+          "mediaTypes": [
+            "text/plain",
+            "application/json",
+            "text/json"
+          ]
         },
         {
           "status": "404 Not Found",
-          "description": "404 Not Found"
+          "description": "404 Not Found",
+          "mediaTypes": [
+            "text/plain",
+            "application/json",
+            "text/json"
+          ]
         },
         {
           "status": "429 Too Many Requests",
-          "description": "429 Too Many Requests"
+          "description": "429 Too Many Requests",
+          "mediaTypes": [
+            "text/plain",
+            "application/json",
+            "text/json"
+          ]
         }
       ]
     },
@@ -4663,30 +5422,60 @@
           "description": "200 OK",
           "schema": {
             "$ref": "#/definitions/api.powerplatform.com.power-platform.environmentmanagement.environmentprovisioning.getsupportedlocations.ProvisioningLocations"
-          }
+          },
+          "mediaTypes": [
+            "text/plain",
+            "application/json",
+            "text/json"
+          ]
         },
         {
           "status": "400 Bad Request",
           "description": "400 Bad Request",
           "schema": {
             "$ref": "#/definitions/api.powerplatform.com.power-platform.environmentmanagement.environmentprovisioning.getsupportedlocations.ValidationResponse"
-          }
+          },
+          "mediaTypes": [
+            "text/plain",
+            "application/json",
+            "text/json"
+          ]
         },
         {
           "status": "401 Unauthorized",
-          "description": "401 Unauthorized"
+          "description": "401 Unauthorized",
+          "mediaTypes": [
+            "text/plain",
+            "application/json",
+            "text/json"
+          ]
         },
         {
           "status": "403 Forbidden",
-          "description": "403 Forbidden"
+          "description": "403 Forbidden",
+          "mediaTypes": [
+            "text/plain",
+            "application/json",
+            "text/json"
+          ]
         },
         {
           "status": "404 Not Found",
-          "description": "404 Not Found"
+          "description": "404 Not Found",
+          "mediaTypes": [
+            "text/plain",
+            "application/json",
+            "text/json"
+          ]
         },
         {
           "status": "429 Too Many Requests",
-          "description": "429 Too Many Requests"
+          "description": "429 Too Many Requests",
+          "mediaTypes": [
+            "text/plain",
+            "application/json",
+            "text/json"
+          ]
         }
       ]
     },
@@ -4871,37 +5660,72 @@
           "description": "201 Created",
           "schema": {
             "$ref": "#/definitions/api.powerplatform.com.power-platform.environmentmanagement.environmentprovisioning.provisionnewenvironment.OperationExecutionResult"
-          }
+          },
+          "mediaTypes": [
+            "text/plain",
+            "application/json",
+            "text/json"
+          ]
         },
         {
           "status": "202 Accepted",
-          "description": "202 Accepted"
+          "description": "202 Accepted",
+          "mediaTypes": [
+            "text/plain",
+            "application/json",
+            "text/json"
+          ]
         },
         {
           "status": "400 Bad Request",
           "description": "400 Bad Request",
           "schema": {
             "$ref": "#/definitions/api.powerplatform.com.power-platform.environmentmanagement.environmentprovisioning.provisionnewenvironment.ValidationResponse"
-          }
+          },
+          "mediaTypes": [
+            "text/plain",
+            "application/json",
+            "text/json"
+          ]
         },
         {
           "status": "401 Unauthorized",
-          "description": "401 Unauthorized"
+          "description": "401 Unauthorized",
+          "mediaTypes": [
+            "text/plain",
+            "application/json",
+            "text/json"
+          ]
         },
         {
           "status": "403 Forbidden",
-          "description": "403 Forbidden"
+          "description": "403 Forbidden",
+          "mediaTypes": [
+            "text/plain",
+            "application/json",
+            "text/json"
+          ]
         },
         {
           "status": "429 Too Many Requests",
-          "description": "429 Too Many Requests"
+          "description": "429 Too Many Requests",
+          "mediaTypes": [
+            "text/plain",
+            "application/json",
+            "text/json"
+          ]
         },
         {
           "status": "Other Status Codes",
           "description": "Other Status Codes",
           "schema": {
             "$ref": "#/definitions/api.powerplatform.com.power-platform.environmentmanagement.environmentprovisioning.provisionnewenvironment.ValidationResponse"
-          }
+          },
+          "mediaTypes": [
+            "text/plain",
+            "application/json",
+            "text/json"
+          ]
         }
       ]
     },
@@ -5161,30 +5985,60 @@
           "description": "200 OK",
           "schema": {
             "$ref": "#/definitions/api.powerplatform.com.power-platform.environmentmanagement.environmentrestore.getrestorecandidates.EnvironmentPagedCollection"
-          }
+          },
+          "mediaTypes": [
+            "text/plain",
+            "application/json",
+            "text/json"
+          ]
         },
         {
           "status": "400 Bad Request",
           "description": "400 Bad Request",
           "schema": {
             "$ref": "#/definitions/api.powerplatform.com.power-platform.environmentmanagement.environmentrestore.getrestorecandidates.ValidationResponse"
-          }
+          },
+          "mediaTypes": [
+            "text/plain",
+            "application/json",
+            "text/json"
+          ]
         },
         {
           "status": "401 Unauthorized",
-          "description": "401 Unauthorized"
+          "description": "401 Unauthorized",
+          "mediaTypes": [
+            "text/plain",
+            "application/json",
+            "text/json"
+          ]
         },
         {
           "status": "403 Forbidden",
-          "description": "403 Forbidden"
+          "description": "403 Forbidden",
+          "mediaTypes": [
+            "text/plain",
+            "application/json",
+            "text/json"
+          ]
         },
         {
           "status": "404 Not Found",
-          "description": "404 Not Found"
+          "description": "404 Not Found",
+          "mediaTypes": [
+            "text/plain",
+            "application/json",
+            "text/json"
+          ]
         },
         {
           "status": "429 Too Many Requests",
-          "description": "429 Too Many Requests"
+          "description": "429 Too Many Requests",
+          "mediaTypes": [
+            "text/plain",
+            "application/json",
+            "text/json"
+          ]
         }
       ]
     },
@@ -5641,30 +6495,60 @@
           "description": "200 OK",
           "schema": {
             "$ref": "#/definitions/api.powerplatform.com.power-platform.environmentmanagement.failover.getbusinesscontinuitystatefullsnapshot.BusinessContinuityStateFullSnapshot"
-          }
+          },
+          "mediaTypes": [
+            "text/plain",
+            "application/json",
+            "text/json"
+          ]
         },
         {
           "status": "400 Bad Request",
           "description": "400 Bad Request",
           "schema": {
             "$ref": "#/definitions/api.powerplatform.com.power-platform.environmentmanagement.failover.getbusinesscontinuitystatefullsnapshot.ValidationResponse"
-          }
+          },
+          "mediaTypes": [
+            "text/plain",
+            "application/json",
+            "text/json"
+          ]
         },
         {
           "status": "401 Unauthorized",
-          "description": "401 Unauthorized"
+          "description": "401 Unauthorized",
+          "mediaTypes": [
+            "text/plain",
+            "application/json",
+            "text/json"
+          ]
         },
         {
           "status": "403 Forbidden",
-          "description": "403 Forbidden"
+          "description": "403 Forbidden",
+          "mediaTypes": [
+            "text/plain",
+            "application/json",
+            "text/json"
+          ]
         },
         {
           "status": "404 Not Found",
-          "description": "404 Not Found"
+          "description": "404 Not Found",
+          "mediaTypes": [
+            "text/plain",
+            "application/json",
+            "text/json"
+          ]
         },
         {
           "status": "429 Too Many Requests",
-          "description": "429 Too Many Requests"
+          "description": "429 Too Many Requests",
+          "mediaTypes": [
+            "text/plain",
+            "application/json",
+            "text/json"
+          ]
         }
       ]
     },
@@ -5977,30 +6861,60 @@
           "description": "200 OK",
           "schema": {
             "$ref": "#/definitions/api.powerplatform.com.power-platform.environmentmanagement.operation.getenvironmentoperationbyid.OperationExecutionResult"
-          }
+          },
+          "mediaTypes": [
+            "text/plain",
+            "application/json",
+            "text/json"
+          ]
         },
         {
           "status": "400 Bad Request",
           "description": "400 Bad Request",
           "schema": {
             "$ref": "#/definitions/api.powerplatform.com.power-platform.environmentmanagement.operation.getenvironmentoperationbyid.ValidationResponse"
-          }
+          },
+          "mediaTypes": [
+            "text/plain",
+            "application/json",
+            "text/json"
+          ]
         },
         {
           "status": "401 Unauthorized",
-          "description": "401 Unauthorized"
+          "description": "401 Unauthorized",
+          "mediaTypes": [
+            "text/plain",
+            "application/json",
+            "text/json"
+          ]
         },
         {
           "status": "403 Forbidden",
-          "description": "403 Forbidden"
+          "description": "403 Forbidden",
+          "mediaTypes": [
+            "text/plain",
+            "application/json",
+            "text/json"
+          ]
         },
         {
           "status": "404 Not Found",
-          "description": "404 Not Found"
+          "description": "404 Not Found",
+          "mediaTypes": [
+            "text/plain",
+            "application/json",
+            "text/json"
+          ]
         },
         {
           "status": "429 Too Many Requests",
-          "description": "429 Too Many Requests"
+          "description": "429 Too Many Requests",
+          "mediaTypes": [
+            "text/plain",
+            "application/json",
+            "text/json"
+          ]
         }
       ]
     },
@@ -6042,30 +6956,60 @@
           "description": "200 OK",
           "schema": {
             "$ref": "#/definitions/api.powerplatform.com.power-platform.environmentmanagement.operation.getoperationbyid.OperationExecutionResult"
-          }
+          },
+          "mediaTypes": [
+            "text/plain",
+            "application/json",
+            "text/json"
+          ]
         },
         {
           "status": "400 Bad Request",
           "description": "400 Bad Request",
           "schema": {
             "$ref": "#/definitions/api.powerplatform.com.power-platform.environmentmanagement.operation.getoperationbyid.ValidationResponse"
-          }
+          },
+          "mediaTypes": [
+            "text/plain",
+            "application/json",
+            "text/json"
+          ]
         },
         {
           "status": "401 Unauthorized",
-          "description": "401 Unauthorized"
+          "description": "401 Unauthorized",
+          "mediaTypes": [
+            "text/plain",
+            "application/json",
+            "text/json"
+          ]
         },
         {
           "status": "403 Forbidden",
-          "description": "403 Forbidden"
+          "description": "403 Forbidden",
+          "mediaTypes": [
+            "text/plain",
+            "application/json",
+            "text/json"
+          ]
         },
         {
           "status": "404 Not Found",
-          "description": "404 Not Found"
+          "description": "404 Not Found",
+          "mediaTypes": [
+            "text/plain",
+            "application/json",
+            "text/json"
+          ]
         },
         {
           "status": "429 Too Many Requests",
-          "description": "429 Too Many Requests"
+          "description": "429 Too Many Requests",
+          "mediaTypes": [
+            "text/plain",
+            "application/json",
+            "text/json"
+          ]
         }
       ]
     },
@@ -6125,30 +7069,60 @@
           "description": "200 OK",
           "schema": {
             "$ref": "#/definitions/api.powerplatform.com.power-platform.environmentmanagement.operation.getoperationsforenvironment.OperationExecutionResultPagedCollection"
-          }
+          },
+          "mediaTypes": [
+            "text/plain",
+            "application/json",
+            "text/json"
+          ]
         },
         {
           "status": "400 Bad Request",
           "description": "400 Bad Request",
           "schema": {
             "$ref": "#/definitions/api.powerplatform.com.power-platform.environmentmanagement.operation.getoperationsforenvironment.ValidationResponse"
-          }
+          },
+          "mediaTypes": [
+            "text/plain",
+            "application/json",
+            "text/json"
+          ]
         },
         {
           "status": "401 Unauthorized",
-          "description": "401 Unauthorized"
+          "description": "401 Unauthorized",
+          "mediaTypes": [
+            "text/plain",
+            "application/json",
+            "text/json"
+          ]
         },
         {
           "status": "403 Forbidden",
-          "description": "403 Forbidden"
+          "description": "403 Forbidden",
+          "mediaTypes": [
+            "text/plain",
+            "application/json",
+            "text/json"
+          ]
         },
         {
           "status": "404 Not Found",
-          "description": "404 Not Found"
+          "description": "404 Not Found",
+          "mediaTypes": [
+            "text/plain",
+            "application/json",
+            "text/json"
+          ]
         },
         {
           "status": "429 Too Many Requests",
-          "description": "429 Too Many Requests"
+          "description": "429 Too Many Requests",
+          "mediaTypes": [
+            "text/plain",
+            "application/json",
+            "text/json"
+          ]
         }
       ]
     },
@@ -6320,7 +7294,7 @@
       "description": "Send a POST request to /governance/ruleBasedPolicies/{policyId}/environmentGroups/{groupId}/assignments. Open the operation documentation for usage and permission details.",
       "method": "POST",
       "path": "/governance/ruleBasedPolicies/{policyId}/environmentGroups/{groupId}/assignments",
-      "sourceRevision": "fa1bd063a5c3a90c6bb9b0be14cb3abd32834d9e",
+      "sourceRevision": "9a317197f470590bf26f4a4a6a19ba5fddd80ff4",
       "warnings": [],
       "parameters": [
         {
@@ -6409,7 +7383,7 @@
       "description": "Send a POST request to /governance/ruleBasedPolicies/{policyId}/environments/{environmentId}/assignments. Open the operation documentation for usage and permission details.",
       "method": "POST",
       "path": "/governance/ruleBasedPolicies/{policyId}/environments/{environmentId}/assignments",
-      "sourceRevision": "fa1bd063a5c3a90c6bb9b0be14cb3abd32834d9e",
+      "sourceRevision": "9a317197f470590bf26f4a4a6a19ba5fddd80ff4",
       "warnings": [],
       "parameters": [
         {
@@ -6498,7 +7472,7 @@
       "description": "Send a POST request to /governance/ruleBasedPolicies. Open the operation documentation for usage and permission details.",
       "method": "POST",
       "path": "/governance/ruleBasedPolicies",
-      "sourceRevision": "92813e8ead95f02f8f28e750c0f54f4cbb5eb00f",
+      "sourceRevision": "9a317197f470590bf26f4a4a6a19ba5fddd80ff4",
       "warnings": [],
       "parameters": [
         {
@@ -6565,7 +7539,7 @@
       "description": "Send a GET request to /governance/ruleBasedPolicies/{policyId}. Open the operation documentation for usage and permission details.",
       "method": "GET",
       "path": "/governance/ruleBasedPolicies/{policyId}",
-      "sourceRevision": "92813e8ead95f02f8f28e750c0f54f4cbb5eb00f",
+      "sourceRevision": "9a317197f470590bf26f4a4a6a19ba5fddd80ff4",
       "warnings": [],
       "parameters": [
         {
@@ -6882,7 +7856,7 @@
       "description": "Send a GET request to /governance/ruleBasedPolicies. Open the operation documentation for usage and permission details.",
       "method": "GET",
       "path": "/governance/ruleBasedPolicies",
-      "sourceRevision": "92813e8ead95f02f8f28e750c0f54f4cbb5eb00f",
+      "sourceRevision": "9a317197f470590bf26f4a4a6a19ba5fddd80ff4",
       "warnings": [],
       "parameters": [
         {
@@ -6931,7 +7905,7 @@
       "description": "Send a PATCH request to /governance/ruleBasedPolicies/{policyId}. Open the operation documentation for usage and permission details.",
       "method": "PATCH",
       "path": "/governance/ruleBasedPolicies/{policyId}",
-      "sourceRevision": "92813e8ead95f02f8f28e750c0f54f4cbb5eb00f",
+      "sourceRevision": "9a317197f470590bf26f4a4a6a19ba5fddd80ff4",
       "warnings": [],
       "parameters": [
         {
@@ -7083,7 +8057,7 @@
       "description": "Send a PUT request to /governance/ruleBasedPolicies/{policyId}. Open the operation documentation for usage and permission details.",
       "method": "PUT",
       "path": "/governance/ruleBasedPolicies/{policyId}",
-      "sourceRevision": "92813e8ead95f02f8f28e750c0f54f4cbb5eb00f",
+      "sourceRevision": "9a317197f470590bf26f4a4a6a19ba5fddd80ff4",
       "warnings": [],
       "parameters": [
         {
@@ -7715,7 +8689,7 @@
       "description": "Send a PUT request to /licensing/allocationsV2. Open the operation documentation for usage and permission details.",
       "method": "PUT",
       "path": "/licensing/allocationsV2",
-      "sourceRevision": "92813e8ead95f02f8f28e750c0f54f4cbb5eb00f",
+      "sourceRevision": "9a317197f470590bf26f4a4a6a19ba5fddd80ff4",
       "warnings": [],
       "parameters": [
         {
@@ -7778,7 +8752,7 @@
       "description": "Send a GET request to /licensing/allocationsByEnvironment/{environmentId}. Open the operation documentation for usage and permission details.",
       "method": "GET",
       "path": "/licensing/allocationsByEnvironment/{environmentId}",
-      "sourceRevision": "d511c0d9a19292903acc7046c7fdf16a844e3801",
+      "sourceRevision": "9a317197f470590bf26f4a4a6a19ba5fddd80ff4",
       "warnings": [],
       "parameters": [
         {
@@ -7836,7 +8810,7 @@
       "description": "Send a GET request to /licensing/allocationsByEnvironment. Open the operation documentation for usage and permission details.",
       "method": "GET",
       "path": "/licensing/allocationsByEnvironment",
-      "sourceRevision": "d511c0d9a19292903acc7046c7fdf16a844e3801",
+      "sourceRevision": "9a317197f470590bf26f4a4a6a19ba5fddd80ff4",
       "warnings": [],
       "parameters": [
         {
@@ -7888,7 +8862,7 @@
       "description": "Send a PATCH request to /licensing/allocationsByEnvironment. Open the operation documentation for usage and permission details.",
       "method": "PATCH",
       "path": "/licensing/allocationsByEnvironment",
-      "sourceRevision": "d511c0d9a19292903acc7046c7fdf16a844e3801",
+      "sourceRevision": "9a317197f470590bf26f4a4a6a19ba5fddd80ff4",
       "warnings": [],
       "parameters": [
         {
@@ -7955,7 +8929,7 @@
       "description": "Send a POST request to /licensing/billingPolicies. Open the operation documentation for usage and permission details.",
       "method": "POST",
       "path": "/licensing/billingPolicies",
-      "sourceRevision": "92813e8ead95f02f8f28e750c0f54f4cbb5eb00f",
+      "sourceRevision": "9a317197f470590bf26f4a4a6a19ba5fddd80ff4",
       "warnings": [],
       "parameters": [
         {
@@ -8076,7 +9050,7 @@
       "description": "Send a GET request to /licensing/billingPolicies/{billingPolicyId}. Open the operation documentation for usage and permission details.",
       "method": "GET",
       "path": "/licensing/billingPolicies/{billingPolicyId}",
-      "sourceRevision": "92813e8ead95f02f8f28e750c0f54f4cbb5eb00f",
+      "sourceRevision": "9a317197f470590bf26f4a4a6a19ba5fddd80ff4",
       "warnings": [],
       "parameters": [
         {
@@ -8246,7 +9220,7 @@
       "description": "Send a PUT request to /licensing/billingPolicies/{billingPolicyId}. Open the operation documentation for usage and permission details.",
       "method": "PUT",
       "path": "/licensing/billingPolicies/{billingPolicyId}",
-      "sourceRevision": "92813e8ead95f02f8f28e750c0f54f4cbb5eb00f",
+      "sourceRevision": "9a317197f470590bf26f4a4a6a19ba5fddd80ff4",
       "warnings": [],
       "parameters": [
         {
@@ -8584,7 +9558,7 @@
       "description": "Send a GET request to /licensing/environments/{environmentId}/allocations. Open the operation documentation for usage and permission details.",
       "method": "GET",
       "path": "/licensing/environments/{environmentId}/allocations",
-      "sourceRevision": "9d5f2974d5b8a7c5df33a967224d25e0d0868f5d",
+      "sourceRevision": "9a317197f470590bf26f4a4a6a19ba5fddd80ff4",
       "warnings": [],
       "parameters": [
         {
@@ -8642,7 +9616,7 @@
       "description": "Send a PATCH request to /licensing/environments/{environmentId}/allocations. Open the operation documentation for usage and permission details.",
       "method": "PATCH",
       "path": "/licensing/environments/{environmentId}/allocations",
-      "sourceRevision": "9d5f2974d5b8a7c5df33a967224d25e0d0868f5d",
+      "sourceRevision": "9a317197f470590bf26f4a4a6a19ba5fddd80ff4",
       "warnings": [],
       "parameters": [
         {
@@ -8715,7 +9689,7 @@
       "description": "Send a GET request to /licensing/tenantCapacity/currencyReports. Open the operation documentation for usage and permission details.",
       "method": "GET",
       "path": "/licensing/tenantCapacity/currencyReports",
-      "sourceRevision": "9d5f2974d5b8a7c5df33a967224d25e0d0868f5d",
+      "sourceRevision": "9a317197f470590bf26f4a4a6a19ba5fddd80ff4",
       "warnings": [],
       "parameters": [
         {
@@ -8769,7 +9743,7 @@
       "description": "Send a GET request to /licensing/entitlements/{entitlementId}. Open the operation documentation for usage and permission details.",
       "method": "GET",
       "path": "/licensing/entitlements/{entitlementId}",
-      "sourceRevision": "fa1bd063a5c3a90c6bb9b0be14cb3abd32834d9e",
+      "sourceRevision": "9a317197f470590bf26f4a4a6a19ba5fddd80ff4",
       "warnings": [],
       "parameters": [
         {
@@ -8831,7 +9805,7 @@
       "description": "Send a GET request to /licensing/environments/{environmentId}/entitlements. Open the operation documentation for usage and permission details.",
       "method": "GET",
       "path": "/licensing/environments/{environmentId}/entitlements",
-      "sourceRevision": "fa1bd063a5c3a90c6bb9b0be14cb3abd32834d9e",
+      "sourceRevision": "9a317197f470590bf26f4a4a6a19ba5fddd80ff4",
       "warnings": [],
       "parameters": [
         {
@@ -8905,7 +9879,7 @@
       "description": "Send a GET request to /licensing/entitlements/{entitlementId}/environments/{environmentId}/resources. Open the operation documentation for usage and permission details.",
       "method": "GET",
       "path": "/licensing/entitlements/{entitlementId}/environments/{environmentId}/resources",
-      "sourceRevision": "fa1bd063a5c3a90c6bb9b0be14cb3abd32834d9e",
+      "sourceRevision": "9a317197f470590bf26f4a4a6a19ba5fddd80ff4",
       "warnings": [],
       "parameters": [
         {
@@ -9246,7 +10220,7 @@
       "description": "Send a GET request to /licensing/entitlements/{entitlementId}/resources. Open the operation documentation for usage and permission details.",
       "method": "GET",
       "path": "/licensing/entitlements/{entitlementId}/resources",
-      "sourceRevision": "fa1bd063a5c3a90c6bb9b0be14cb3abd32834d9e",
+      "sourceRevision": "9a317197f470590bf26f4a4a6a19ba5fddd80ff4",
       "warnings": [],
       "parameters": [
         {
@@ -9458,7 +10432,7 @@
       "description": "Send a GET request to /licensing/entitlements/{entitlementId}/users. Open the operation documentation for usage and permission details.",
       "method": "GET",
       "path": "/licensing/entitlements/{entitlementId}/users",
-      "sourceRevision": "fa1bd063a5c3a90c6bb9b0be14cb3abd32834d9e",
+      "sourceRevision": "9a317197f470590bf26f4a4a6a19ba5fddd80ff4",
       "warnings": [],
       "parameters": [
         {
@@ -9682,7 +10656,7 @@
       "description": "Send a POST request to /licensing/isvContracts. Open the operation documentation for usage and permission details.",
       "method": "POST",
       "path": "/licensing/isvContracts",
-      "sourceRevision": "92813e8ead95f02f8f28e750c0f54f4cbb5eb00f",
+      "sourceRevision": "9a317197f470590bf26f4a4a6a19ba5fddd80ff4",
       "warnings": [
         "Microsoft Learn references \"Geo\" without defining its schema. No local type restriction is inferred; consult the operation documentation."
       ],
@@ -9829,7 +10803,7 @@
       "description": "Send a GET request to /licensing/isvContracts/{isvContractId}. Open the operation documentation for usage and permission details.",
       "method": "GET",
       "path": "/licensing/isvContracts/{isvContractId}",
-      "sourceRevision": "92813e8ead95f02f8f28e750c0f54f4cbb5eb00f",
+      "sourceRevision": "9a317197f470590bf26f4a4a6a19ba5fddd80ff4",
       "warnings": [],
       "parameters": [
         {
@@ -9887,7 +10861,7 @@
       "description": "Send a GET request to /licensing/isvContracts. Open the operation documentation for usage and permission details.",
       "method": "GET",
       "path": "/licensing/isvContracts",
-      "sourceRevision": "92813e8ead95f02f8f28e750c0f54f4cbb5eb00f",
+      "sourceRevision": "9a317197f470590bf26f4a4a6a19ba5fddd80ff4",
       "warnings": [],
       "parameters": [
         {
@@ -9941,7 +10915,7 @@
       "description": "Send a PUT request to /licensing/isvContracts/{isvContractId}. Open the operation documentation for usage and permission details.",
       "method": "PUT",
       "path": "/licensing/isvContracts/{isvContractId}",
-      "sourceRevision": "92813e8ead95f02f8f28e750c0f54f4cbb5eb00f",
+      "sourceRevision": "9a317197f470590bf26f4a4a6a19ba5fddd80ff4",
       "warnings": [],
       "parameters": [
         {
@@ -10020,7 +10994,7 @@
       "description": "Send a GET request to /licensing/entitlements/{entitlementId}/resourceThresholds. Open the operation documentation for usage and permission details.",
       "method": "GET",
       "path": "/licensing/entitlements/{entitlementId}/resourceThresholds",
-      "sourceRevision": "92813e8ead95f02f8f28e750c0f54f4cbb5eb00f",
+      "sourceRevision": "9a317197f470590bf26f4a4a6a19ba5fddd80ff4",
       "warnings": [],
       "parameters": [
         {
@@ -10077,7 +11051,7 @@
       "description": "Send a PUT request to /licensing/environments/{environmentId}/entitlements/{entitlementId}/resources/{resourceId}/threshold. Open the operation documentation for usage and permission details.",
       "method": "PUT",
       "path": "/licensing/environments/{environmentId}/entitlements/{entitlementId}/resources/{resourceId}/threshold",
-      "sourceRevision": "92813e8ead95f02f8f28e750c0f54f4cbb5eb00f",
+      "sourceRevision": "9a317197f470590bf26f4a4a6a19ba5fddd80ff4",
       "warnings": [],
       "parameters": [
         {
@@ -10428,7 +11402,7 @@
       "description": "Send a GET request to /licensing/UserPerFlowCapacitySource. Open the operation documentation for usage and permission details.",
       "method": "GET",
       "path": "/licensing/UserPerFlowCapacitySource",
-      "sourceRevision": "9d5f2974d5b8a7c5df33a967224d25e0d0868f5d",
+      "sourceRevision": "9a317197f470590bf26f4a4a6a19ba5fddd80ff4",
       "warnings": [],
       "parameters": [
         {
@@ -10571,7 +11545,7 @@
       "description": "Send a GET request to /licensing/UserPerFlowCapacitySource/FlowContextSummary. Open the operation documentation for usage and permission details.",
       "method": "GET",
       "path": "/licensing/UserPerFlowCapacitySource/FlowContextSummary",
-      "sourceRevision": "9d5f2974d5b8a7c5df33a967224d25e0d0868f5d",
+      "sourceRevision": "9a317197f470590bf26f4a4a6a19ba5fddd80ff4",
       "warnings": [],
       "parameters": [
         {
@@ -10678,7 +11652,7 @@
       "description": "Send a GET request to /licensing/UserPerFlowCapacitySource/FlowContextSummary/{userId}. Open the operation documentation for usage and permission details.",
       "method": "GET",
       "path": "/licensing/UserPerFlowCapacitySource/FlowContextSummary/{userId}",
-      "sourceRevision": "9d5f2974d5b8a7c5df33a967224d25e0d0868f5d",
+      "sourceRevision": "9a317197f470590bf26f4a4a6a19ba5fddd80ff4",
       "warnings": [],
       "parameters": [
         {
@@ -10795,7 +11769,7 @@
       "description": "Send a GET request to /licensing/UserPerFlowCapacitySource/TenantContextSummary. Open the operation documentation for usage and permission details.",
       "method": "GET",
       "path": "/licensing/UserPerFlowCapacitySource/TenantContextSummary",
-      "sourceRevision": "9d5f2974d5b8a7c5df33a967224d25e0d0868f5d",
+      "sourceRevision": "9a317197f470590bf26f4a4a6a19ba5fddd80ff4",
       "warnings": [],
       "parameters": [
         {
@@ -10885,7 +11859,7 @@
       "description": "Send a GET request to /licensing/UserPerFlowCapacitySource/UserContextSummary. Open the operation documentation for usage and permission details.",
       "method": "GET",
       "path": "/licensing/UserPerFlowCapacitySource/UserContextSummary",
-      "sourceRevision": "9d5f2974d5b8a7c5df33a967224d25e0d0868f5d",
+      "sourceRevision": "9a317197f470590bf26f4a4a6a19ba5fddd80ff4",
       "warnings": [],
       "parameters": [
         {
@@ -10992,7 +11966,7 @@
       "description": "Send a GET request to /licensing/UserPerFlowCapacitySource/UserContextSummary/{userId}. Open the operation documentation for usage and permission details.",
       "method": "GET",
       "path": "/licensing/UserPerFlowCapacitySource/UserContextSummary/{userId}",
-      "sourceRevision": "9d5f2974d5b8a7c5df33a967224d25e0d0868f5d",
+      "sourceRevision": "9a317197f470590bf26f4a4a6a19ba5fddd80ff4",
       "warnings": [],
       "parameters": [
         {
@@ -11101,6 +12075,167 @@
       ]
     },
     {
+      "title": "Export Metrics",
+      "docUrl": "https://learn.microsoft.com/en-us/rest/api/power-platform/monitoringhub/metrics-export/export-metrics",
+      "section": "Monitoring Hub",
+      "group": "Metrics Export",
+      "id": "api.powerplatform.com.power-platform.monitoringhub.metricsexport.exportmetrics",
+      "description": "Send a POST request to /monitoringhub/environments/{environmentId}/resourceType/{resourceType}/resourceSubType/{resourceSubType}/exports/metrics. Open the operation documentation for usage and permission details.",
+      "method": "POST",
+      "path": "/monitoringhub/environments/{environmentId}/resourceType/{resourceType}/resourceSubType/{resourceSubType}/exports/metrics",
+      "sourceRevision": "9a317197f470590bf26f4a4a6a19ba5fddd80ff4",
+      "warnings": [],
+      "parameters": [
+        {
+          "name": "environmentId",
+          "in": "path",
+          "required": true,
+          "description": "Documented path parameter.",
+          "schema": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          }
+        },
+        {
+          "name": "resourceSubType",
+          "in": "path",
+          "required": true,
+          "description": "Documented path parameter.",
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "name": "resourceType",
+          "in": "path",
+          "required": true,
+          "description": "Documented path parameter.",
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "name": "api-version",
+          "in": "query",
+          "required": true,
+          "description": "Documented query parameter.",
+          "schema": {
+            "type": "string",
+            "default": "2024-10-01"
+          }
+        },
+        {
+          "name": "x-ms-continuation",
+          "in": "header",
+          "required": false,
+          "description": "Documented request header.",
+          "schema": {
+            "type": "string",
+            "maxLength": 16384
+          }
+        },
+        {
+          "name": "x-ms-client-request-id",
+          "in": "header",
+          "required": false,
+          "description": "Documented request header.",
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "body": {
+        "required": true,
+        "description": "Documented JSON request body. Review the operation documentation for business rules.",
+        "schema": {
+          "type": "object",
+          "properties": {
+            "resourceIds": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "format": "uuid"
+              }
+            },
+            "timeRange": {
+              "$ref": "#/definitions/api.powerplatform.com.power-platform.monitoringhub.metricsexport.exportmetrics.MonitoringHubMetricsExportTimeRange"
+            },
+            "metricNames": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": [
+            "resourceIds",
+            "timeRange"
+          ]
+        }
+      },
+      "responses": [
+        {
+          "status": "200 OK",
+          "description": "200 OK",
+          "schema": {
+            "$ref": "#/definitions/api.powerplatform.com.power-platform.monitoringhub.metricsexport.exportmetrics.MonitoringHubMetricsExportPage"
+          }
+        },
+        {
+          "status": "400 Bad Request",
+          "description": "400 Bad Request",
+          "schema": {
+            "$ref": "#/definitions/api.powerplatform.com.power-platform.monitoringhub.metricsexport.exportmetrics.MonitoringHubErrorResponse"
+          }
+        },
+        {
+          "status": "401 Unauthorized",
+          "description": "401 Unauthorized"
+        },
+        {
+          "status": "403 Forbidden",
+          "description": "403 Forbidden",
+          "schema": {
+            "$ref": "#/definitions/api.powerplatform.com.power-platform.monitoringhub.metricsexport.exportmetrics.MonitoringHubErrorResponse"
+          }
+        },
+        {
+          "status": "404 Not Found",
+          "description": "404 Not Found",
+          "schema": {
+            "$ref": "#/definitions/api.powerplatform.com.power-platform.monitoringhub.metricsexport.exportmetrics.MonitoringHubErrorResponse"
+          }
+        },
+        {
+          "status": "429 Too Many Requests",
+          "description": "429 Too Many Requests"
+        },
+        {
+          "status": "500 Internal Server Error",
+          "description": "500 Internal Server Error",
+          "schema": {
+            "$ref": "#/definitions/api.powerplatform.com.power-platform.monitoringhub.metricsexport.exportmetrics.MonitoringHubErrorResponse"
+          }
+        },
+        {
+          "status": "Other Status Codes",
+          "description": "Other Status Codes",
+          "schema": {
+            "$ref": "#/definitions/api.powerplatform.com.power-platform.monitoringhub.metricsexport.exportmetrics.MonitoringHubErrorResponse"
+          }
+        },
+        {
+          "status": "Other Status Codes",
+          "description": "Other Status Codes",
+          "schema": {
+            "$ref": "#/definitions/api.powerplatform.com.power-platform.monitoringhub.metricsexport.exportmetrics.MonitoringHubErrorResponse"
+          }
+        }
+      ]
+    },
+    {
       "title": "On Alert Triggered",
       "docUrl": "https://learn.microsoft.com/en-us/rest/api/power-platform/monitoringhub/monitoring-hub/on-alert-triggered",
       "section": "Monitoring Hub",
@@ -11109,7 +12244,7 @@
       "description": "Send a GET request to /monitoringhub/powerplatform/triggeredAlerts/poll. Open the operation documentation for usage and permission details.",
       "method": "GET",
       "path": "/monitoringhub/powerplatform/triggeredAlerts/poll",
-      "sourceRevision": "fa1bd063a5c3a90c6bb9b0be14cb3abd32834d9e",
+      "sourceRevision": "9a317197f470590bf26f4a4a6a19ba5fddd80ff4",
       "warnings": [],
       "parameters": [],
       "responses": [
@@ -11270,7 +12405,7 @@
       "description": "Send a GET request to /powerautomate/environments/{environmentId}/cloudFlows. Open the operation documentation for usage and permission details.",
       "method": "GET",
       "path": "/powerautomate/environments/{environmentId}/cloudFlows",
-      "sourceRevision": "9d5f2974d5b8a7c5df33a967224d25e0d0868f5d",
+      "sourceRevision": "9a317197f470590bf26f4a4a6a19ba5fddd80ff4",
       "warnings": [],
       "parameters": [
         {
@@ -14893,6 +16028,175 @@
       ]
     },
     {
+      "title": "Get Known Issue",
+      "docUrl": "https://learn.microsoft.com/en-us/rest/api/power-platform/support/known-issues/get-known-issue",
+      "section": "Support",
+      "group": "Known Issues",
+      "id": "api.powerplatform.com.power-platform.support.knownissues.getknownissue",
+      "description": "Send a GET request to /support/KnownIssue/{issueId}. Open the operation documentation for usage and permission details.",
+      "method": "GET",
+      "path": "/support/KnownIssue/{issueId}",
+      "sourceRevision": "9a317197f470590bf26f4a4a6a19ba5fddd80ff4",
+      "warnings": [],
+      "parameters": [
+        {
+          "name": "issueId",
+          "in": "path",
+          "required": true,
+          "description": "Documented path parameter.",
+          "schema": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        {
+          "name": "api-version",
+          "in": "query",
+          "required": true,
+          "description": "Documented query parameter.",
+          "schema": {
+            "type": "string",
+            "default": "2024-10-01"
+          }
+        },
+        {
+          "name": "locale",
+          "in": "query",
+          "required": false,
+          "description": "Documented query parameter.",
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "responses": [
+        {
+          "status": "200 OK",
+          "description": "200 OK",
+          "schema": {
+            "$ref": "#/definitions/api.powerplatform.com.power-platform.support.knownissues.getknownissue.SupportKnownIssue"
+          }
+        },
+        {
+          "status": "400 Bad Request",
+          "description": "400 Bad Request"
+        },
+        {
+          "status": "401 Unauthorized",
+          "description": "401 Unauthorized"
+        },
+        {
+          "status": "403 Forbidden",
+          "description": "403 Forbidden"
+        },
+        {
+          "status": "500 Internal Server Error",
+          "description": "500 Internal Server Error"
+        }
+      ]
+    },
+    {
+      "title": "Search Known Issues",
+      "docUrl": "https://learn.microsoft.com/en-us/rest/api/power-platform/support/known-issues/search-known-issues",
+      "section": "Support",
+      "group": "Known Issues",
+      "id": "api.powerplatform.com.power-platform.support.knownissues.searchknownissues",
+      "description": "Send a POST request to /support/KnownIssue/search. Open the operation documentation for usage and permission details.",
+      "method": "POST",
+      "path": "/support/KnownIssue/search",
+      "sourceRevision": "9a317197f470590bf26f4a4a6a19ba5fddd80ff4",
+      "warnings": [],
+      "parameters": [
+        {
+          "name": "api-version",
+          "in": "query",
+          "required": true,
+          "description": "Documented query parameter.",
+          "schema": {
+            "type": "string",
+            "default": "2024-10-01"
+          }
+        }
+      ],
+      "body": {
+        "required": true,
+        "description": "Documented JSON request body. Review the operation documentation for business rules.",
+        "schema": {
+          "type": "object",
+          "properties": {
+            "productIds": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "format": "uuid"
+              }
+            },
+            "searchText": {
+              "type": "string",
+              "minLength": 1
+            },
+            "issueStatus": {
+              "$ref": "#/definitions/api.powerplatform.com.power-platform.support.knownissues.searchknownissues.SupportKnownIssueStatus"
+            },
+            "locale": {
+              "type": "string"
+            },
+            "maxIssueCount": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "minMatchingScore": {
+              "type": "number",
+              "format": "double"
+            },
+            "skip": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "source": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "productIds",
+            "searchText"
+          ]
+        }
+      },
+      "responses": [
+        {
+          "status": "200 OK",
+          "description": "200 OK",
+          "schema": {
+            "type": "array",
+            "items": {
+              "$ref": "#/definitions/api.powerplatform.com.power-platform.support.knownissues.searchknownissues.SupportKnownIssue"
+            }
+          }
+        },
+        {
+          "status": "204 No Content",
+          "description": "204 No Content"
+        },
+        {
+          "status": "400 Bad Request",
+          "description": "400 Bad Request"
+        },
+        {
+          "status": "401 Unauthorized",
+          "description": "401 Unauthorized"
+        },
+        {
+          "status": "403 Forbidden",
+          "description": "403 Forbidden"
+        },
+        {
+          "status": "500 Internal Server Error",
+          "description": "500 Internal Server Error"
+        }
+      ]
+    },
+    {
       "title": "Apply Admin Role",
       "docUrl": "https://learn.microsoft.com/en-us/rest/api/power-platform/usermanagement/users/apply-admin-role",
       "section": "User management",
@@ -15988,35 +17292,6 @@
     }
   ],
   "definitions": {
-    "api.powerplatform.com.power-platform.analytics.advisorchat.sendadvisorchatmessage.AdvisorChatMessageRequest": {
-      "type": "object",
-      "properties": {
-        "conversationId": {
-          "type": "string"
-        },
-        "message": {
-          "type": "string"
-        }
-      }
-    },
-    "api.powerplatform.com.power-platform.analytics.advisorchat.sendadvisorchatmessage.AdvisorChatMessageResponse": {
-      "type": "object",
-      "properties": {
-        "conversationId": {
-          "type": "string"
-        },
-        "executionTimeMs": {
-          "type": "integer",
-          "format": "int64"
-        },
-        "message": {
-          "type": "string"
-        },
-        "role": {
-          "type": "string"
-        }
-      }
-    },
     "api.powerplatform.com.power-platform.analytics.recommendations.executerecommendationaction.AdvisorActionRequest": {
       "type": "object",
       "properties": {
@@ -17444,6 +18719,733 @@
         }
       }
     },
+    "api.powerplatform.com.power-platform.copilotgovernance.copilotsettings.fetchcopilotsettingssummary.CopilotGovernanceAudienceType": {
+      "type": "string",
+      "enum": [
+        "Admins",
+        "Makers",
+        "EndUsers"
+      ]
+    },
+    "api.powerplatform.com.power-platform.copilotgovernance.copilotsettings.fetchcopilotsettingssummary.CopilotGovernanceCategoryType": {
+      "type": "string",
+      "enum": [
+        "None",
+        "DataEntryAgent",
+        "DataExplorationAgent",
+        "SummaryAgent",
+        "ChatAgent",
+        "ExternalModels"
+      ]
+    },
+    "api.powerplatform.com.power-platform.copilotgovernance.copilotsettings.fetchcopilotsettingssummary.CopilotGovernanceEnabledStatus": {
+      "type": "string",
+      "enum": [
+        "EnabledForNone",
+        "EnabledForAll",
+        "EnabledForSome"
+      ]
+    },
+    "api.powerplatform.com.power-platform.copilotgovernance.copilotsettings.fetchcopilotsettingssummary.CopilotGovernanceEnumOption": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "value": {
+          "type": "integer",
+          "format": "int32"
+        }
+      }
+    },
+    "api.powerplatform.com.power-platform.copilotgovernance.copilotsettings.fetchcopilotsettingssummary.CopilotGovernancePlatformProductType": {
+      "type": "string",
+      "enum": [
+        "PowerPlatform",
+        "PowerApps",
+        "PowerAutomate",
+        "PowerPages",
+        "CopilotStudio",
+        "Agent365",
+        "D365Marketing",
+        "D365Sales",
+        "D365CustomerService",
+        "D365ProjectOperations",
+        "MicrosoftDataverse",
+        "ManagedApps"
+      ]
+    },
+    "api.powerplatform.com.power-platform.copilotgovernance.copilotsettings.fetchcopilotsettingssummary.CopilotGovernanceRuleInput": {
+      "type": "object",
+      "properties": {
+        "inputName": {
+          "type": "string"
+        },
+        "settingName": {
+          "type": "string"
+        }
+      }
+    },
+    "api.powerplatform.com.power-platform.copilotgovernance.copilotsettings.fetchcopilotsettingssummary.CopilotGovernanceSettingRule": {
+      "type": "object",
+      "properties": {
+        "isLegacyRule": {
+          "type": "boolean"
+        },
+        "resourceType": {
+          "type": "string"
+        },
+        "ruleId": {
+          "type": "string"
+        },
+        "ruleInput": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/api.powerplatform.com.power-platform.copilotgovernance.copilotsettings.fetchcopilotsettingssummary.CopilotGovernanceRuleInput"
+          }
+        }
+      }
+    },
+    "api.powerplatform.com.power-platform.copilotgovernance.copilotsettings.fetchcopilotsettingssummary.CopilotGovernanceSettingsSummaryResponse": {
+      "type": "object",
+      "properties": {
+        "@odata.count": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "@odata.nextLink": {
+          "type": "string"
+        },
+        "results": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/api.powerplatform.com.power-platform.copilotgovernance.copilotsettings.fetchcopilotsettingssummary.CopilotGovernanceSettingSummary"
+          }
+        }
+      }
+    },
+    "api.powerplatform.com.power-platform.copilotgovernance.copilotsettings.fetchcopilotsettingssummary.CopilotGovernanceSettingState": {
+      "type": "string",
+      "enum": [
+        "PrivatePreview",
+        "PublicPreview",
+        "GenerallyAvailable",
+        "Beta"
+      ]
+    },
+    "api.powerplatform.com.power-platform.copilotgovernance.copilotsettings.fetchcopilotsettingssummary.CopilotGovernanceSettingSummary": {
+      "type": "object",
+      "properties": {
+        "audiences": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/api.powerplatform.com.power-platform.copilotgovernance.copilotsettings.fetchcopilotsettingssummary.CopilotGovernanceAudienceType"
+          }
+        },
+        "category": {
+          "$ref": "#/definitions/api.powerplatform.com.power-platform.copilotgovernance.copilotsettings.fetchcopilotsettingssummary.CopilotGovernanceCategoryType"
+        },
+        "checkboxLabel": {
+          "type": "string"
+        },
+        "defaultValue": {
+          "description": "Microsoft Learn references \"CopilotGovernanceSettingValue\" without defining its schema. No local type restriction is inferred; consult the operation documentation."
+        },
+        "description": {
+          "type": "string"
+        },
+        "displayName": {
+          "type": "string"
+        },
+        "enabledPercentage": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "enabledStatus": {
+          "$ref": "#/definitions/api.powerplatform.com.power-platform.copilotgovernance.copilotsettings.fetchcopilotsettingssummary.CopilotGovernanceEnabledStatus"
+        },
+        "environmentId": {
+          "type": "string"
+        },
+        "hideWhenNull": {
+          "type": "boolean"
+        },
+        "invertValue": {
+          "type": "boolean"
+        },
+        "isDisabled": {
+          "type": "boolean"
+        },
+        "isManagedEnvironmentProperty": {
+          "type": "boolean"
+        },
+        "learnDocLink": {
+          "type": "string"
+        },
+        "options": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/api.powerplatform.com.power-platform.copilotgovernance.copilotsettings.fetchcopilotsettingssummary.CopilotGovernanceEnumOption"
+          }
+        },
+        "platformProduct": {
+          "$ref": "#/definitions/api.powerplatform.com.power-platform.copilotgovernance.copilotsettings.fetchcopilotsettingssummary.CopilotGovernancePlatformProductType"
+        },
+        "resourceId": {
+          "type": "string"
+        },
+        "rule": {
+          "$ref": "#/definitions/api.powerplatform.com.power-platform.copilotgovernance.copilotsettings.fetchcopilotsettingssummary.CopilotGovernanceSettingRule"
+        },
+        "settingName": {
+          "type": "string"
+        },
+        "settingState": {
+          "$ref": "#/definitions/api.powerplatform.com.power-platform.copilotgovernance.copilotsettings.fetchcopilotsettingssummary.CopilotGovernanceSettingState"
+        },
+        "statusMessage": {
+          "$ref": "#/definitions/api.powerplatform.com.power-platform.copilotgovernance.copilotsettings.fetchcopilotsettingssummary.CopilotGovernanceStatusMessage"
+        },
+        "storeResource": {
+          "$ref": "#/definitions/api.powerplatform.com.power-platform.copilotgovernance.copilotsettings.fetchcopilotsettingssummary.CopilotGovernanceStoreResourceType"
+        },
+        "tenantId": {
+          "type": "string"
+        },
+        "valueType": {
+          "$ref": "#/definitions/api.powerplatform.com.power-platform.copilotgovernance.copilotsettings.fetchcopilotsettingssummary.CopilotGovernanceSettingValueType"
+        }
+      }
+    },
+    "api.powerplatform.com.power-platform.copilotgovernance.copilotsettings.fetchcopilotsettingssummary.CopilotGovernanceSettingValueType": {
+      "type": "string",
+      "enum": [
+        "StringValue",
+        "IntegerValue",
+        "NumberValue",
+        "BooleanValue",
+        "ArrayValue",
+        "EnumValue",
+        "NullableBooleanValue"
+      ]
+    },
+    "api.powerplatform.com.power-platform.copilotgovernance.copilotsettings.fetchcopilotsettingssummary.CopilotGovernanceStatusMessage": {
+      "type": "object",
+      "properties": {
+        "disabledLearnMoreLink": {
+          "type": "string"
+        },
+        "disabledText": {
+          "type": "string"
+        },
+        "disabledTooltip": {
+          "type": "string"
+        },
+        "enabledText": {
+          "type": "string"
+        },
+        "someText": {
+          "type": "string"
+        }
+      }
+    },
+    "api.powerplatform.com.power-platform.copilotgovernance.copilotsettings.fetchcopilotsettingssummary.CopilotGovernanceStoreResourceType": {
+      "type": "string",
+      "enum": [
+        "BAPRPTenant",
+        "BAPRPEnvironment",
+        "DataverseOrganization",
+        "OMSEnvironment",
+        "OMSEnvironmentV2"
+      ]
+    },
+    "api.powerplatform.com.power-platform.copilotgovernance.copilotsettings.getcopilotsetting.CopilotGovernanceAudienceType": {
+      "type": "string",
+      "enum": [
+        "Admins",
+        "Makers",
+        "EndUsers"
+      ]
+    },
+    "api.powerplatform.com.power-platform.copilotgovernance.copilotsettings.getcopilotsetting.CopilotGovernanceCategoryType": {
+      "type": "string",
+      "enum": [
+        "None",
+        "DataEntryAgent",
+        "DataExplorationAgent",
+        "SummaryAgent",
+        "ChatAgent",
+        "ExternalModels"
+      ]
+    },
+    "api.powerplatform.com.power-platform.copilotgovernance.copilotsettings.getcopilotsetting.CopilotGovernanceEnabledStatus": {
+      "type": "string",
+      "enum": [
+        "EnabledForNone",
+        "EnabledForAll",
+        "EnabledForSome"
+      ]
+    },
+    "api.powerplatform.com.power-platform.copilotgovernance.copilotsettings.getcopilotsetting.CopilotGovernanceEnumOption": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "value": {
+          "type": "integer",
+          "format": "int32"
+        }
+      }
+    },
+    "api.powerplatform.com.power-platform.copilotgovernance.copilotsettings.getcopilotsetting.CopilotGovernancePlatformProductType": {
+      "type": "string",
+      "enum": [
+        "PowerPlatform",
+        "PowerApps",
+        "PowerAutomate",
+        "PowerPages",
+        "CopilotStudio",
+        "Agent365",
+        "D365Marketing",
+        "D365Sales",
+        "D365CustomerService",
+        "D365ProjectOperations",
+        "MicrosoftDataverse",
+        "ManagedApps"
+      ]
+    },
+    "api.powerplatform.com.power-platform.copilotgovernance.copilotsettings.getcopilotsetting.CopilotGovernanceRuleInput": {
+      "type": "object",
+      "properties": {
+        "inputName": {
+          "type": "string"
+        },
+        "settingName": {
+          "type": "string"
+        }
+      }
+    },
+    "api.powerplatform.com.power-platform.copilotgovernance.copilotsettings.getcopilotsetting.CopilotGovernanceSetting": {
+      "type": "object",
+      "properties": {
+        "audiences": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/api.powerplatform.com.power-platform.copilotgovernance.copilotsettings.getcopilotsetting.CopilotGovernanceAudienceType"
+          }
+        },
+        "category": {
+          "$ref": "#/definitions/api.powerplatform.com.power-platform.copilotgovernance.copilotsettings.getcopilotsetting.CopilotGovernanceCategoryType"
+        },
+        "checkboxLabel": {
+          "type": "string"
+        },
+        "defaultValue": {
+          "description": "Microsoft Learn references \"CopilotGovernanceSettingValue\" without defining its schema. No local type restriction is inferred; consult the operation documentation."
+        },
+        "description": {
+          "type": "string"
+        },
+        "displayName": {
+          "type": "string"
+        },
+        "enabledStatus": {
+          "$ref": "#/definitions/api.powerplatform.com.power-platform.copilotgovernance.copilotsettings.getcopilotsetting.CopilotGovernanceEnabledStatus"
+        },
+        "environmentId": {
+          "type": "string"
+        },
+        "hideWhenNull": {
+          "type": "boolean"
+        },
+        "invertValue": {
+          "type": "boolean"
+        },
+        "isDisabled": {
+          "type": "boolean"
+        },
+        "isManagedEnvironmentProperty": {
+          "type": "boolean"
+        },
+        "learnDocLink": {
+          "type": "string"
+        },
+        "options": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/api.powerplatform.com.power-platform.copilotgovernance.copilotsettings.getcopilotsetting.CopilotGovernanceEnumOption"
+          }
+        },
+        "platformProduct": {
+          "$ref": "#/definitions/api.powerplatform.com.power-platform.copilotgovernance.copilotsettings.getcopilotsetting.CopilotGovernancePlatformProductType"
+        },
+        "resourceId": {
+          "type": "string"
+        },
+        "rule": {
+          "$ref": "#/definitions/api.powerplatform.com.power-platform.copilotgovernance.copilotsettings.getcopilotsetting.CopilotGovernanceSettingRule"
+        },
+        "settingName": {
+          "type": "string"
+        },
+        "settingState": {
+          "$ref": "#/definitions/api.powerplatform.com.power-platform.copilotgovernance.copilotsettings.getcopilotsetting.CopilotGovernanceSettingState"
+        },
+        "statusMessage": {
+          "$ref": "#/definitions/api.powerplatform.com.power-platform.copilotgovernance.copilotsettings.getcopilotsetting.CopilotGovernanceStatusMessage"
+        },
+        "storeResource": {
+          "$ref": "#/definitions/api.powerplatform.com.power-platform.copilotgovernance.copilotsettings.getcopilotsetting.CopilotGovernanceStoreResourceType"
+        },
+        "tenantId": {
+          "type": "string"
+        },
+        "value": {
+          "description": "Microsoft Learn references \"CopilotGovernanceSettingValue\" without defining its schema. No local type restriction is inferred; consult the operation documentation."
+        },
+        "valueType": {
+          "$ref": "#/definitions/api.powerplatform.com.power-platform.copilotgovernance.copilotsettings.getcopilotsetting.CopilotGovernanceSettingValueType"
+        }
+      }
+    },
+    "api.powerplatform.com.power-platform.copilotgovernance.copilotsettings.getcopilotsetting.CopilotGovernanceSettingRule": {
+      "type": "object",
+      "properties": {
+        "isLegacyRule": {
+          "type": "boolean"
+        },
+        "resourceType": {
+          "type": "string"
+        },
+        "ruleId": {
+          "type": "string"
+        },
+        "ruleInput": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/api.powerplatform.com.power-platform.copilotgovernance.copilotsettings.getcopilotsetting.CopilotGovernanceRuleInput"
+          }
+        }
+      }
+    },
+    "api.powerplatform.com.power-platform.copilotgovernance.copilotsettings.getcopilotsetting.CopilotGovernanceSettingState": {
+      "type": "string",
+      "enum": [
+        "PrivatePreview",
+        "PublicPreview",
+        "GenerallyAvailable",
+        "Beta"
+      ]
+    },
+    "api.powerplatform.com.power-platform.copilotgovernance.copilotsettings.getcopilotsetting.CopilotGovernanceSettingValueType": {
+      "type": "string",
+      "enum": [
+        "StringValue",
+        "IntegerValue",
+        "NumberValue",
+        "BooleanValue",
+        "ArrayValue",
+        "EnumValue",
+        "NullableBooleanValue"
+      ]
+    },
+    "api.powerplatform.com.power-platform.copilotgovernance.copilotsettings.getcopilotsetting.CopilotGovernanceStatusMessage": {
+      "type": "object",
+      "properties": {
+        "disabledLearnMoreLink": {
+          "type": "string"
+        },
+        "disabledText": {
+          "type": "string"
+        },
+        "disabledTooltip": {
+          "type": "string"
+        },
+        "enabledText": {
+          "type": "string"
+        },
+        "someText": {
+          "type": "string"
+        }
+      }
+    },
+    "api.powerplatform.com.power-platform.copilotgovernance.copilotsettings.getcopilotsetting.CopilotGovernanceStoreResourceType": {
+      "type": "string",
+      "enum": [
+        "BAPRPTenant",
+        "BAPRPEnvironment",
+        "DataverseOrganization",
+        "OMSEnvironment",
+        "OMSEnvironmentV2"
+      ]
+    },
+    "api.powerplatform.com.power-platform.copilotgovernance.copilotsettings.listcopilotsettings.CopilotGovernanceAudienceType": {
+      "type": "string",
+      "enum": [
+        "Admins",
+        "Makers",
+        "EndUsers"
+      ]
+    },
+    "api.powerplatform.com.power-platform.copilotgovernance.copilotsettings.listcopilotsettings.CopilotGovernanceCategoryType": {
+      "type": "string",
+      "enum": [
+        "None",
+        "DataEntryAgent",
+        "DataExplorationAgent",
+        "SummaryAgent",
+        "ChatAgent",
+        "ExternalModels"
+      ]
+    },
+    "api.powerplatform.com.power-platform.copilotgovernance.copilotsettings.listcopilotsettings.CopilotGovernanceEnabledStatus": {
+      "type": "string",
+      "enum": [
+        "EnabledForNone",
+        "EnabledForAll",
+        "EnabledForSome"
+      ]
+    },
+    "api.powerplatform.com.power-platform.copilotgovernance.copilotsettings.listcopilotsettings.CopilotGovernanceEnumOption": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "value": {
+          "type": "integer",
+          "format": "int32"
+        }
+      }
+    },
+    "api.powerplatform.com.power-platform.copilotgovernance.copilotsettings.listcopilotsettings.CopilotGovernancePlatformProductType": {
+      "type": "string",
+      "enum": [
+        "PowerPlatform",
+        "PowerApps",
+        "PowerAutomate",
+        "PowerPages",
+        "CopilotStudio",
+        "Agent365",
+        "D365Marketing",
+        "D365Sales",
+        "D365CustomerService",
+        "D365ProjectOperations",
+        "MicrosoftDataverse",
+        "ManagedApps"
+      ]
+    },
+    "api.powerplatform.com.power-platform.copilotgovernance.copilotsettings.listcopilotsettings.CopilotGovernanceRuleInput": {
+      "type": "object",
+      "properties": {
+        "inputName": {
+          "type": "string"
+        },
+        "settingName": {
+          "type": "string"
+        }
+      }
+    },
+    "api.powerplatform.com.power-platform.copilotgovernance.copilotsettings.listcopilotsettings.CopilotGovernanceSetting": {
+      "type": "object",
+      "properties": {
+        "audiences": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/api.powerplatform.com.power-platform.copilotgovernance.copilotsettings.listcopilotsettings.CopilotGovernanceAudienceType"
+          }
+        },
+        "category": {
+          "$ref": "#/definitions/api.powerplatform.com.power-platform.copilotgovernance.copilotsettings.listcopilotsettings.CopilotGovernanceCategoryType"
+        },
+        "checkboxLabel": {
+          "type": "string"
+        },
+        "defaultValue": {
+          "description": "Microsoft Learn references \"CopilotGovernanceSettingValue\" without defining its schema. No local type restriction is inferred; consult the operation documentation."
+        },
+        "description": {
+          "type": "string"
+        },
+        "displayName": {
+          "type": "string"
+        },
+        "enabledStatus": {
+          "$ref": "#/definitions/api.powerplatform.com.power-platform.copilotgovernance.copilotsettings.listcopilotsettings.CopilotGovernanceEnabledStatus"
+        },
+        "environmentId": {
+          "type": "string"
+        },
+        "hideWhenNull": {
+          "type": "boolean"
+        },
+        "invertValue": {
+          "type": "boolean"
+        },
+        "isDisabled": {
+          "type": "boolean"
+        },
+        "isManagedEnvironmentProperty": {
+          "type": "boolean"
+        },
+        "learnDocLink": {
+          "type": "string"
+        },
+        "options": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/api.powerplatform.com.power-platform.copilotgovernance.copilotsettings.listcopilotsettings.CopilotGovernanceEnumOption"
+          }
+        },
+        "platformProduct": {
+          "$ref": "#/definitions/api.powerplatform.com.power-platform.copilotgovernance.copilotsettings.listcopilotsettings.CopilotGovernancePlatformProductType"
+        },
+        "resourceId": {
+          "type": "string"
+        },
+        "rule": {
+          "$ref": "#/definitions/api.powerplatform.com.power-platform.copilotgovernance.copilotsettings.listcopilotsettings.CopilotGovernanceSettingRule"
+        },
+        "settingName": {
+          "type": "string"
+        },
+        "settingState": {
+          "$ref": "#/definitions/api.powerplatform.com.power-platform.copilotgovernance.copilotsettings.listcopilotsettings.CopilotGovernanceSettingState"
+        },
+        "statusMessage": {
+          "$ref": "#/definitions/api.powerplatform.com.power-platform.copilotgovernance.copilotsettings.listcopilotsettings.CopilotGovernanceStatusMessage"
+        },
+        "storeResource": {
+          "$ref": "#/definitions/api.powerplatform.com.power-platform.copilotgovernance.copilotsettings.listcopilotsettings.CopilotGovernanceStoreResourceType"
+        },
+        "tenantId": {
+          "type": "string"
+        },
+        "value": {
+          "description": "Microsoft Learn references \"CopilotGovernanceSettingValue\" without defining its schema. No local type restriction is inferred; consult the operation documentation."
+        },
+        "valueType": {
+          "$ref": "#/definitions/api.powerplatform.com.power-platform.copilotgovernance.copilotsettings.listcopilotsettings.CopilotGovernanceSettingValueType"
+        }
+      }
+    },
+    "api.powerplatform.com.power-platform.copilotgovernance.copilotsettings.listcopilotsettings.CopilotGovernanceSettingRule": {
+      "type": "object",
+      "properties": {
+        "isLegacyRule": {
+          "type": "boolean"
+        },
+        "resourceType": {
+          "type": "string"
+        },
+        "ruleId": {
+          "type": "string"
+        },
+        "ruleInput": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/api.powerplatform.com.power-platform.copilotgovernance.copilotsettings.listcopilotsettings.CopilotGovernanceRuleInput"
+          }
+        }
+      }
+    },
+    "api.powerplatform.com.power-platform.copilotgovernance.copilotsettings.listcopilotsettings.CopilotGovernanceSettingsResponse": {
+      "type": "object",
+      "properties": {
+        "@odata.count": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "@odata.nextLink": {
+          "type": "string"
+        },
+        "results": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/api.powerplatform.com.power-platform.copilotgovernance.copilotsettings.listcopilotsettings.CopilotGovernanceSetting"
+          }
+        }
+      }
+    },
+    "api.powerplatform.com.power-platform.copilotgovernance.copilotsettings.listcopilotsettings.CopilotGovernanceSettingState": {
+      "type": "string",
+      "enum": [
+        "PrivatePreview",
+        "PublicPreview",
+        "GenerallyAvailable",
+        "Beta"
+      ]
+    },
+    "api.powerplatform.com.power-platform.copilotgovernance.copilotsettings.listcopilotsettings.CopilotGovernanceSettingValueType": {
+      "type": "string",
+      "enum": [
+        "StringValue",
+        "IntegerValue",
+        "NumberValue",
+        "BooleanValue",
+        "ArrayValue",
+        "EnumValue",
+        "NullableBooleanValue"
+      ]
+    },
+    "api.powerplatform.com.power-platform.copilotgovernance.copilotsettings.listcopilotsettings.CopilotGovernanceStatusMessage": {
+      "type": "object",
+      "properties": {
+        "disabledLearnMoreLink": {
+          "type": "string"
+        },
+        "disabledText": {
+          "type": "string"
+        },
+        "disabledTooltip": {
+          "type": "string"
+        },
+        "enabledText": {
+          "type": "string"
+        },
+        "someText": {
+          "type": "string"
+        }
+      }
+    },
+    "api.powerplatform.com.power-platform.copilotgovernance.copilotsettings.listcopilotsettings.CopilotGovernanceStoreResourceType": {
+      "type": "string",
+      "enum": [
+        "BAPRPTenant",
+        "BAPRPEnvironment",
+        "DataverseOrganization",
+        "OMSEnvironment",
+        "OMSEnvironmentV2"
+      ]
+    },
+    "api.powerplatform.com.power-platform.copilotgovernance.copilotsettings.updatecopilotsetting.CopilotGovernanceSettingUpdate": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "description": "Microsoft Learn references \"CopilotGovernanceSettingValue\" without defining its schema. No local type restriction is inferred; consult the operation documentation."
+        }
+      }
+    },
+    "api.powerplatform.com.power-platform.copilotgovernance.copilotsettings.updatecopilotsettingsbatch.CopilotGovernanceSettingsBatchUpdate": {
+      "type": "object",
+      "properties": {
+        "settings": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/api.powerplatform.com.power-platform.copilotgovernance.copilotsettings.updatecopilotsettingsbatch.CopilotGovernanceSettingUpdate"
+          }
+        }
+      }
+    },
+    "api.powerplatform.com.power-platform.copilotgovernance.copilotsettings.updatecopilotsettingsbatch.CopilotGovernanceSettingUpdate": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "description": "Microsoft Learn references \"CopilotGovernanceSettingValue\" without defining its schema. No local type restriction is inferred; consult the operation documentation."
+        }
+      }
+    },
     "api.powerplatform.com.power-platform.copilotstudio.bots.getbotquarantinestatus.BotQuarantineStatus": {
       "type": "object",
       "properties": {
@@ -18066,6 +20068,51 @@
           "type": "boolean"
         }
       }
+    },
+    "api.powerplatform.com.power-platform.copilotstudio.licensingreports.generatelicensingreport.CopilotStudioLicensingReportGranularity": {
+      "type": "string",
+      "enum": [
+        "Daily",
+        "Summary"
+      ]
+    },
+    "api.powerplatform.com.power-platform.copilotstudio.licensingreports.generatelicensingreport.CopilotStudioLicensingReportRequest": {
+      "type": "object",
+      "properties": {
+        "endDate": {
+          "type": "string",
+          "format": "date"
+        },
+        "granularity": {
+          "$ref": "#/definitions/api.powerplatform.com.power-platform.copilotstudio.licensingreports.generatelicensingreport.CopilotStudioLicensingReportGranularity"
+        },
+        "startDate": {
+          "type": "string",
+          "format": "date"
+        }
+      }
+    },
+    "api.powerplatform.com.power-platform.copilotstudio.licensingreports.getlicensingreportoperation.CopilotStudioLicensingReportOperation": {
+      "type": "object",
+      "properties": {
+        "error": {
+          "type": "string"
+        },
+        "fileName": {
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/definitions/api.powerplatform.com.power-platform.copilotstudio.licensingreports.getlicensingreportoperation.CopilotStudioLicensingReportOperationStatus"
+        }
+      }
+    },
+    "api.powerplatform.com.power-platform.copilotstudio.licensingreports.getlicensingreportoperation.CopilotStudioLicensingReportOperationStatus": {
+      "type": "string",
+      "enum": [
+        "Running",
+        "Succeeded",
+        "Failed"
+      ]
     },
     "api.powerplatform.com.power-platform.dynamics.financeandoperationsmaintenancesettings.getfinopsmaintenancesettings.Error": {
       "type": "object",
@@ -23012,6 +25059,9 @@
         "enabled": {
           "type": "boolean"
         },
+        "ruleData": {
+          "type": "object"
+        },
         "ruleType": {
           "$ref": "#/definitions/api.powerplatform.com.power-platform.licensing.allocation.putallocationsv2.AllocationEnforcementRuleTypes"
         }
@@ -23091,8 +25141,10 @@
           "type": "boolean"
         },
         "statusCode": {
-          "type": "integer",
-          "format": "int32"
+          "type": "string"
+        },
+        "value": {
+          "$ref": "#/definitions/api.powerplatform.com.power-platform.licensing.allocation.putallocationsv2.AllocationPutRequestModel"
         }
       }
     },
@@ -24251,6 +26303,9 @@
       "properties": {
         "enabled": {
           "type": "boolean"
+        },
+        "ruleData": {
+          "type": "object"
         },
         "ruleType": {
           "$ref": "#/definitions/api.powerplatform.com.power-platform.licensing.entitlement.getmanyenvironmententitlements.AllocationEnforcementRuleTypes"
@@ -26827,6 +28882,208 @@
         },
         "userId": {
           "type": "string"
+        }
+      }
+    },
+    "api.powerplatform.com.power-platform.monitoringhub.metricsexport.exportmetrics.MonitoringHubError": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        }
+      }
+    },
+    "api.powerplatform.com.power-platform.monitoringhub.metricsexport.exportmetrics.MonitoringHubErrorResponse": {
+      "type": "object",
+      "properties": {
+        "error": {
+          "$ref": "#/definitions/api.powerplatform.com.power-platform.monitoringhub.metricsexport.exportmetrics.MonitoringHubError"
+        }
+      }
+    },
+    "api.powerplatform.com.power-platform.monitoringhub.metricsexport.exportmetrics.MonitoringHubMetricsExportPage": {
+      "type": "object",
+      "properties": {
+        "resourceMetrics": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/api.powerplatform.com.power-platform.monitoringhub.metricsexport.exportmetrics.MonitoringHubOtlpResourceMetrics"
+          }
+        }
+      }
+    },
+    "api.powerplatform.com.power-platform.monitoringhub.metricsexport.exportmetrics.MonitoringHubMetricsExportRequest": {
+      "type": "object",
+      "properties": {
+        "metricNames": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "resourceIds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "timeRange": {
+          "$ref": "#/definitions/api.powerplatform.com.power-platform.monitoringhub.metricsexport.exportmetrics.MonitoringHubMetricsExportTimeRange"
+        }
+      }
+    },
+    "api.powerplatform.com.power-platform.monitoringhub.metricsexport.exportmetrics.MonitoringHubMetricsExportTimeRange": {
+      "type": "object",
+      "properties": {
+        "endDate": {
+          "type": "string",
+          "format": "date"
+        },
+        "startDate": {
+          "type": "string",
+          "format": "date"
+        }
+      }
+    },
+    "api.powerplatform.com.power-platform.monitoringhub.metricsexport.exportmetrics.MonitoringHubOtlpGauge": {
+      "type": "object",
+      "properties": {
+        "dataPoints": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/api.powerplatform.com.power-platform.monitoringhub.metricsexport.exportmetrics.MonitoringHubOtlpNumberDataPoint"
+          }
+        }
+      }
+    },
+    "api.powerplatform.com.power-platform.monitoringhub.metricsexport.exportmetrics.MonitoringHubOtlpInstrumentationScope": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        }
+      }
+    },
+    "api.powerplatform.com.power-platform.monitoringhub.metricsexport.exportmetrics.MonitoringHubOtlpKeyValue": {
+      "type": "object",
+      "properties": {
+        "key": {
+          "type": "string"
+        },
+        "value": {
+          "$ref": "#/definitions/api.powerplatform.com.power-platform.monitoringhub.metricsexport.exportmetrics.MonitoringHubOtlpStringValue"
+        }
+      }
+    },
+    "api.powerplatform.com.power-platform.monitoringhub.metricsexport.exportmetrics.MonitoringHubOtlpMetric": {
+      "type": "object",
+      "properties": {
+        "gauge": {
+          "$ref": "#/definitions/api.powerplatform.com.power-platform.monitoringhub.metricsexport.exportmetrics.MonitoringHubOtlpGauge"
+        },
+        "name": {
+          "type": "string"
+        },
+        "sum": {
+          "$ref": "#/definitions/api.powerplatform.com.power-platform.monitoringhub.metricsexport.exportmetrics.MonitoringHubOtlpSum"
+        },
+        "unit": {
+          "type": "string"
+        }
+      }
+    },
+    "api.powerplatform.com.power-platform.monitoringhub.metricsexport.exportmetrics.MonitoringHubOtlpNumberDataPoint": {
+      "type": "object",
+      "properties": {
+        "asDouble": {
+          "type": "number",
+          "format": "double"
+        },
+        "asInt": {
+          "type": "string"
+        },
+        "attributes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/api.powerplatform.com.power-platform.monitoringhub.metricsexport.exportmetrics.MonitoringHubOtlpKeyValue"
+          }
+        },
+        "timeUnixNano": {
+          "type": "string"
+        }
+      }
+    },
+    "api.powerplatform.com.power-platform.monitoringhub.metricsexport.exportmetrics.MonitoringHubOtlpResource": {
+      "type": "object",
+      "properties": {
+        "attributes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/api.powerplatform.com.power-platform.monitoringhub.metricsexport.exportmetrics.MonitoringHubOtlpKeyValue"
+          }
+        }
+      }
+    },
+    "api.powerplatform.com.power-platform.monitoringhub.metricsexport.exportmetrics.MonitoringHubOtlpResourceMetrics": {
+      "type": "object",
+      "properties": {
+        "resource": {
+          "$ref": "#/definitions/api.powerplatform.com.power-platform.monitoringhub.metricsexport.exportmetrics.MonitoringHubOtlpResource"
+        },
+        "scopeMetrics": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/api.powerplatform.com.power-platform.monitoringhub.metricsexport.exportmetrics.MonitoringHubOtlpScopeMetrics"
+          }
+        }
+      }
+    },
+    "api.powerplatform.com.power-platform.monitoringhub.metricsexport.exportmetrics.MonitoringHubOtlpScopeMetrics": {
+      "type": "object",
+      "properties": {
+        "metrics": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/api.powerplatform.com.power-platform.monitoringhub.metricsexport.exportmetrics.MonitoringHubOtlpMetric"
+          }
+        },
+        "scope": {
+          "$ref": "#/definitions/api.powerplatform.com.power-platform.monitoringhub.metricsexport.exportmetrics.MonitoringHubOtlpInstrumentationScope"
+        }
+      }
+    },
+    "api.powerplatform.com.power-platform.monitoringhub.metricsexport.exportmetrics.MonitoringHubOtlpStringValue": {
+      "type": "object",
+      "properties": {
+        "stringValue": {
+          "type": "string"
+        }
+      }
+    },
+    "api.powerplatform.com.power-platform.monitoringhub.metricsexport.exportmetrics.MonitoringHubOtlpSum": {
+      "type": "object",
+      "properties": {
+        "aggregationTemporality": {
+          "type": "string",
+          "enum": [
+            "  1 (int32)"
+          ]
+        },
+        "dataPoints": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/api.powerplatform.com.power-platform.monitoringhub.metricsexport.exportmetrics.MonitoringHubOtlpNumberDataPoint"
+          }
+        },
+        "isMonotonic": {
+          "type": "boolean"
         }
       }
     },
@@ -30839,6 +33096,175 @@
           "format": "int64"
         }
       }
+    },
+    "api.powerplatform.com.power-platform.support.knownissues.getknownissue.SupportKnownIssue": {
+      "type": "object",
+      "properties": {
+        "@search.rerankerScore": {
+          "type": "number",
+          "format": "double"
+        },
+        "@search.score": {
+          "type": "number",
+          "format": "double"
+        },
+        "changedDate": {
+          "type": "string"
+        },
+        "createdDate": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "impactedProducts": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "isSearchable": {
+          "type": "boolean"
+        },
+        "parentUrl": {
+          "type": "string"
+        },
+        "product": {
+          "type": "string"
+        },
+        "productFamilyTags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "productId": {
+          "type": "string"
+        },
+        "solution": {
+          "type": "string"
+        },
+        "state": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        },
+        "workItemId": {
+          "type": "string"
+        }
+      }
+    },
+    "api.powerplatform.com.power-platform.support.knownissues.searchknownissues.SupportKnownIssue": {
+      "type": "object",
+      "properties": {
+        "@search.rerankerScore": {
+          "type": "number",
+          "format": "double"
+        },
+        "@search.score": {
+          "type": "number",
+          "format": "double"
+        },
+        "changedDate": {
+          "type": "string"
+        },
+        "createdDate": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "impactedProducts": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "isSearchable": {
+          "type": "boolean"
+        },
+        "parentUrl": {
+          "type": "string"
+        },
+        "product": {
+          "type": "string"
+        },
+        "productFamilyTags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "productId": {
+          "type": "string"
+        },
+        "solution": {
+          "type": "string"
+        },
+        "state": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        },
+        "workItemId": {
+          "type": "string"
+        }
+      }
+    },
+    "api.powerplatform.com.power-platform.support.knownissues.searchknownissues.SupportKnownIssueSearchRequest": {
+      "type": "object",
+      "properties": {
+        "issueStatus": {
+          "$ref": "#/definitions/api.powerplatform.com.power-platform.support.knownissues.searchknownissues.SupportKnownIssueStatus"
+        },
+        "locale": {
+          "type": "string"
+        },
+        "maxIssueCount": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "minMatchingScore": {
+          "type": "number",
+          "format": "double"
+        },
+        "productIds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "searchText": {
+          "type": "string",
+          "minLength": 1
+        },
+        "skip": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "source": {
+          "type": "string"
+        }
+      }
+    },
+    "api.powerplatform.com.power-platform.support.knownissues.searchknownissues.SupportKnownIssueStatus": {
+      "type": "integer",
+      "enum": [
+        0,
+        1,
+        2,
+        3,
+        4
+      ]
     },
     "api.powerplatform.com.power-platform.workflowsagent.dsrcompliance.getapprovals.DsrPagedResponse": {
       "type": "object",
