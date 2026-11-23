@@ -3,6 +3,8 @@ import { dataSourcesInfo } from "../../../.power/schemas/appschemas/dataSourcesI
 import { invalidateInventoryCache, type DataResult } from "../../data/inventory";
 import { connectorActions, validateParameters } from "./catalog";
 
+export type PlaygroundResult = DataResult<unknown> & { data?: unknown };
+
 export interface PlaygroundRequest {
   actionId: string;
   parameters: Record<string, unknown>;
@@ -17,7 +19,7 @@ function errorText(error: unknown): string {
 export async function executeAction(
   request: PlaygroundRequest,
   confirmedWrite = false,
-): Promise<DataResult<unknown>> {
+): Promise<PlaygroundResult> {
   const action = connectorActions.find((entry) => entry.id === request.actionId);
   if (!action) return { ok: false, error: "This action is not registered in the app's connector metadata." };
   if (!action.readOnly && !confirmedWrite) return { ok: false, error: "Confirm the action and inputs before making tenant changes." };
@@ -33,10 +35,10 @@ export async function executeAction(
         parameters: request.parameters,
       },
     });
-    if (!result.success) return { ok: false, error: errorText(result.error) };
+    if (!result.success) return { ok: false, error: errorText(result.error), data: result };
     return { ok: true, data: result };
   } catch (error) {
-    return { ok: false, error: errorText(error) };
+    return { ok: false, error: errorText(error), data: error };
   } finally {
     if (attemptedWrite) invalidateInventoryCache();
   }

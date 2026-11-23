@@ -139,6 +139,12 @@ describe("Power Platform API playground", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: "Confirm and run API request" }));
     await screen.findByText("HTTP 202");
     expect(screen.getByText(/test-report\/operations\/test-operation/)).toBeInTheDocument();
+    fireEvent.click(screen.getByText("Response headers"));
+    expect(screen.getByRole("button", { name: "Copy response headers" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Response headers JSON")).toHaveTextContent("/test-report/operations/test-operation");
+    fireEvent.click(screen.getByText("Submitted flow request"));
+    expect(screen.getByRole("button", { name: "Copy submitted request" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Submitted flow request")).toHaveTextContent('"method": "POST"');
     expect(executeApiRequest).toHaveBeenCalledTimes(1);
     fireEvent.change(selectOperation(), { target: { value: status.id } });
     fireEvent.change(screen.getByRole("textbox", { name: "ReportName (path)" }), { target: { value: "test-report" } });

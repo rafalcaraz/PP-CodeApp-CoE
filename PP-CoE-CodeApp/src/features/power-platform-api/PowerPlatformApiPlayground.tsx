@@ -318,7 +318,10 @@ export function PowerPlatformApiPlayground() {
                   <Button disabled={locked} onClick={saveDownload}>Save {lastRun.result.data.download.filename}</Button>
                 )}
                 {downloadError && <ErrorPane title="Could not save report" message={downloadError} />}
-                <ResponseViewer key={lastRun.elapsedMs + lastRun.operation} sources={[
+                <ResponseViewer key={lastRun.elapsedMs + lastRun.operation}
+                  headers={lastRun.result.data?.headers}
+                  request={{ label: "Submitted flow request", text: JSON.stringify(lastRun.request, null, 2) }}
+                  sources={[
                   {
                     label: "Response body", ariaLabel: "API response body",
                     text: lastRun.result.data ? JSON.stringify(lastRun.result.data.body, null, 2)
@@ -329,14 +332,6 @@ export function PowerPlatformApiPlayground() {
                     text: lastRun.result.data.raw || "(empty response)",
                   }] : []),
                 ]} />
-                {lastRun.result.data?.headers !== undefined && <details className={explorer.details}>
-                  <summary>Response headers</summary>
-                  <pre className={styles.code}>{JSON.stringify(lastRun.result.data.headers, null, 2)}</pre>
-                </details>}
-                <details className={explorer.details}>
-                  <summary>Submitted flow request</summary>
-                  <pre className={styles.code}>{JSON.stringify(lastRun.request, null, 2)}</pre>
-                </details>
                 <Button appearance="subtle" disabled={locked} onClick={() => setLastRun(null)}>Clear API response</Button>
               </div>
             ) : <div className={explorer.empty}>

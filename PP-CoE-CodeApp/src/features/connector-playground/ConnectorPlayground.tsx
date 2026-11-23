@@ -12,9 +12,9 @@ import {
 } from "./catalog";
 import { SchemaField } from "../../shared/api-explorer/SchemaField";
 import { ResponseViewer } from "../../shared/api-explorer/ResponseViewer";
+import { exposedResponseHeaders } from "../../shared/api-explorer/responseHeaders";
 import { usePlaygroundStyles } from "../../shared/api-explorer/playgroundStyles";
-import { executeAction, type PlaygroundRequest } from "./data";
-import type { DataResult } from "../../data/inventory";
+import { executeAction, type PlaygroundRequest, type PlaygroundResult } from "./data";
 
 const useStyles = makeStyles({
   root: { display: "flex", flexDirection: "column", gap: tokens.spacingVerticalL, minWidth: 0 },
@@ -52,7 +52,7 @@ const useStyles = makeStyles({
 
 interface RunResult {
   request: PlaygroundRequest;
-  result: DataResult<unknown>;
+  result: PlaygroundResult;
   elapsedMs: number;
 }
 
@@ -289,14 +289,13 @@ export function ConnectorPlayground() {
                   <Text>{lastRun.request.actionId} &middot; {lastRun.elapsedMs} ms</Text>
                 </div>
                 {!lastRun.result.ok && <ErrorPane title="Connector call failed" message={lastRun.result.error} />}
-                <ResponseViewer key={lastRun.request.actionId + lastRun.elapsedMs} sources={[{
+                <ResponseViewer key={lastRun.request.actionId + lastRun.elapsedMs}
+                  headers={exposedResponseHeaders(lastRun.result.data)}
+                  request={{ label: "Submitted request", text: JSON.stringify(lastRun.request, null, 2) }}
+                  sources={[{
                   label: "Response body", ariaLabel: "JSON response",
-                  text: JSON.stringify(lastRun.result.ok ? lastRun.result.data : { error: lastRun.result.error }, null, 2),
+                  text: JSON.stringify(lastRun.result.data ?? lastRun.result, null, 2),
                 }]} />
-                <details className={explorer.details}>
-                  <summary>Submitted request</summary>
-                  <pre className={styles.code}>{JSON.stringify(lastRun.request, null, 2)}</pre>
-                </details>
                 <Button appearance="subtle" disabled={locked} onClick={() => setLastRun(null)}>Clear response</Button>
               </div>
             ) : <div className={explorer.empty}>

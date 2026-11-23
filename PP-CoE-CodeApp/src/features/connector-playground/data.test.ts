@@ -52,12 +52,14 @@ describe("executeAction", () => {
   });
 
   it("surfaces connector errors and exceptions without retrying", async () => {
-    executeAsync.mockResolvedValueOnce({ success: false, error: { message: "Forbidden", status: 403 } });
+    const failure = { success: false, error: { message: "Forbidden", status: 403 }, headers: { "Retry-After": "30" } };
+    executeAsync.mockResolvedValueOnce(failure);
     const result = await executeAction({ actionId: "GetRecommendations", parameters: { "api-version": "2024-10-01" } });
-    expect(result).toEqual({ ok: false, error: '{"message":"Forbidden","status":403}' });
-    executeAsync.mockRejectedValueOnce(new Error("Connection unavailable"));
+    expect(result).toEqual({ ok: false, error: '{"message":"Forbidden","status":403}', data: failure });
+    const exception = new Error("Connection unavailable");
+    executeAsync.mockRejectedValueOnce(exception);
     expect(await executeAction({ actionId: "GetRecommendations", parameters: { "api-version": "2024-10-01" } }))
-      .toEqual({ ok: false, error: "Connection unavailable" });
+      .toEqual({ ok: false, error: "Connection unavailable", data: exception });
     expect(executeAsync).toHaveBeenCalledTimes(2);
   });
 

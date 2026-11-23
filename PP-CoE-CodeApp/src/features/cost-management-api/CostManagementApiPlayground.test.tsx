@@ -46,6 +46,9 @@ describe("Cost Management API playground", () => {
   });
 
   it("executes a read only on click and uses shared response search and raw SDK inspection", async () => {
+    executeCostRequest.mockResolvedValueOnce({
+      ok: true, data: { success: true, data: { unit: "copilotCredit", consumedQuantity: 50 }, headers: { ETag: 'W/"9"' } },
+    });
     renderPage();
     fireEvent.click(screen.getByRole("button", { name: "Run action" }));
     await screen.findByText("Succeeded");
@@ -54,6 +57,12 @@ describe("Cost Management API playground", () => {
     fireEvent.change(screen.getByRole("textbox", { name: "Search response" }), { target: { value: "COPILOTCREDIT" } });
     expect(screen.getByLabelText("Raw connector response").querySelector("mark")).toHaveTextContent("copilotCredit");
     expect(screen.getByRole("checkbox", { name: "Wrap lines" })).toBeInTheDocument();
+    fireEvent.click(screen.getByText("Response headers"));
+    expect(screen.getByLabelText("Response headers JSON")).toHaveTextContent('"ETag": "W/\\"9\\""');
+    expect(screen.getByRole("button", { name: "Copy response headers" })).toBeInTheDocument();
+    fireEvent.click(screen.getByText("Submitted request"));
+    expect(screen.getByRole("button", { name: "Copy submitted request" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Submitted request")).toHaveTextContent("GetTenantCreditBalance");
     expect(executeCostRequest).toHaveBeenCalledOnce();
   });
 

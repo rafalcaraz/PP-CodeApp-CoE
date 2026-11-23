@@ -23,6 +23,9 @@ afterEach(() => vi.useRealTimers());
 
 describe("ConnectorPlayground", () => {
   it("renders without calling connectors and runs only on demand", async () => {
+    executeAction.mockResolvedValueOnce({
+      ok: true, data: { success: true, data: { value: ["example"] }, headers: { Location: "/operations/example", "Retry-After": "10" } },
+    });
     renderPage();
     expect(screen.getByRole("heading", { name: "Connector playground" })).toBeInTheDocument();
     expect(executeAction).not.toHaveBeenCalled();
@@ -32,6 +35,12 @@ describe("ConnectorPlayground", () => {
       actionId: "ListEnvironmentGroups", parameters: { "api-version": "2024-10-01" },
     }, false);
     expect(screen.getByLabelText("JSON response")).toHaveTextContent("example");
+    fireEvent.click(screen.getByText("Response headers"));
+    expect(screen.getByLabelText("Response headers JSON")).toHaveTextContent("/operations/example");
+    expect(screen.getByRole("button", { name: "Copy response headers" })).toBeInTheDocument();
+    fireEvent.click(screen.getByText("Submitted request"));
+    expect(screen.getByLabelText("Submitted request")).toHaveTextContent("ListEnvironmentGroups");
+    expect(screen.getByRole("button", { name: "Copy submitted request" })).toBeInTheDocument();
   });
 
   it("validates required inputs without submitting", () => {
@@ -124,12 +133,17 @@ describe("ConnectorPlayground", () => {
   });
 
   it("shows failed calls and their submitted request", async () => {
-    executeAction.mockResolvedValueOnce({ ok: false, error: "Forbidden (403)" });
+    executeAction.mockResolvedValueOnce({
+      ok: false, error: "Forbidden (403)", data: { success: false, headers: { "Retry-After": "30" }, error: { code: "Forbidden" } },
+    });
     renderPage();
     fireEvent.click(screen.getByRole("button", { name: "Run action" }));
     await screen.findByText("Failed");
     expect(screen.getByText("Forbidden (403)")).toBeInTheDocument();
     expect(screen.getByText("Submitted request")).toBeInTheDocument();
+    expect(screen.getByLabelText("JSON response")).toHaveTextContent('"code": "Forbidden"');
+    fireEvent.click(screen.getByText("Response headers"));
+    expect(screen.getByLabelText("Response headers JSON")).toHaveTextContent('"Retry-After": "30"');
   });
 
   it("prevents duplicate submissions while a request is running", async () => {

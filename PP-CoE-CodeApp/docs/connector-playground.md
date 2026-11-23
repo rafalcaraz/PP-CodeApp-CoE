@@ -41,6 +41,23 @@ Use the next/previous buttons or Enter/Shift+Enter to jump between matches;
 Escape clears the search. **Wrap lines** controls long-line display. The last
 response remains searchable even when the action filters have no matches.
 
+All three playgrounds share **Copy response**, which copies the complete text
+of the selected response tab, unaffected by search highlights or line wrapping.
+Expand **Response headers** to inspect and copy exposed headers, including
+`Location`, `Retry-After`, and `ETag`. A separate **Copy submitted request**
+button inside the submitted-request section copies the exact saved invocation,
+not the inputs currently being edited. Copying is explicit and reports success
+or a visible clipboard-permission error with a manual-copy alternative.
+
+Headers and submitted requests start collapsed. The inspector does not invent
+headers: it explicitly says when none were exposed by the SDK or flow. Direct
+SDK headers, nested HTTP envelopes with numeric status, and exposed error
+response headers are supported; arbitrary business payload fields named
+`headers` are not treated as HTTP metadata. Failed Admins V2 calls retain their
+SDK envelope for inspection too. The viewer cannot recover a `Location` header
+that a connector or deployed flow omitted, and never follows it automatically.
+Copied content can contain sensitive tenant data; share it carefully.
+
 ## Standard for future connectors
 
 New connector playgrounds must reuse `shared/api-explorer/playgroundStyles.ts`,
@@ -48,6 +65,9 @@ New connector playgrounds must reuse `shared/api-explorer/playgroundStyles.ts`,
 Keep request inputs and the last response in distinct responsive panels, with
 highlighted response search, match counts, next/previous navigation, and line
 wrapping. Group these pages under **Playgrounds** in the left navigation.
+Reuse its expandable header/submitted-request sections and explicit copy
+controls too; pass only headers actually exposed by the transport and keep
+the submitted request associated with its original result.
 
 Use the connector's registered SDK or generated service contract, require
 explicit execution, and retain per-request write confirmation. Do not introduce

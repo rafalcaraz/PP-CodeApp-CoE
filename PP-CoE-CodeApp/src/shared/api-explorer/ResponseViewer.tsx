@@ -4,6 +4,8 @@ import {
 } from "@fluentui/react-components";
 import { ChevronDownRegular, ChevronUpRegular, DismissRegular, SearchRegular } from "@fluentui/react-icons";
 import { findResponseMatches } from "./responseSearch";
+import { CopyTextButton } from "./CopyTextButton";
+import { usePlaygroundStyles } from "./playgroundStyles";
 
 const useStyles = makeStyles({
   root: { minWidth: 0, display: "flex", flexDirection: "column", gap: tokens.spacingVerticalS },
@@ -23,6 +25,7 @@ const useStyles = makeStyles({
     ":focus-visible": { outline: `2px solid ${tokens.colorStrokeFocus2}`, outlineOffset: "2px" },
   },
   wrap: { whiteSpace: "pre-wrap", overflowWrap: "anywhere" },
+  detailCode: { minHeight: 0 },
   match: {
     backgroundColor: tokens.colorStatusWarningBackground2, color: tokens.colorStatusWarningForeground2,
     borderRadius: tokens.borderRadiusSmall,
@@ -39,8 +42,13 @@ export interface ResponseSource {
   text: string;
 }
 
-export function ResponseViewer({ sources }: { sources: ResponseSource[] }) {
+export function ResponseViewer({ sources, headers, request }: {
+  sources: ResponseSource[];
+  headers?: unknown;
+  request?: { label: string; text: string };
+}) {
   const styles = useStyles();
+  const explorer = usePlaygroundStyles();
   const [sourceIndex, setSourceIndex] = useState(0);
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
@@ -51,6 +59,9 @@ export function ResponseViewer({ sources }: { sources: ResponseSource[] }) {
   const current = matches.length ? active % matches.length : 0;
   const code = useRef<HTMLPreElement>(null);
   const activeMatch = useRef<HTMLElement>(null);
+  const headerText = headers instanceof Headers
+    ? JSON.stringify(Object.fromEntries(headers.entries()), null, 2)
+    : JSON.stringify(headers, null, 2);
 
   useEffect(() => {
     const container = code.current;
@@ -98,6 +109,7 @@ export function ResponseViewer({ sources }: { sources: ResponseSource[] }) {
         <Text size={200}>{query ? "Case-insensitive, literal text search" : "Search keys, values, or error messages"}</Text>
         <Checkbox label="Wrap lines" size="medium" checked={wrap} onChange={(_, data) => setWrap(data.checked === true)} />
       </div>
+      <CopyTextButton key={sourceIndex} label="Copy response" text={text} />
       <pre ref={code} className={mergeClasses(styles.code, wrap && styles.wrap)}
         tabIndex={0} aria-label={source?.ariaLabel ?? "Response"}>
         {matches.length ? matches.map((match, index) => (
@@ -110,6 +122,20 @@ export function ResponseViewer({ sources }: { sources: ResponseSource[] }) {
           </Fragment>
         )) : text}
       </pre>
+      <details className={explorer.details}>
+        <summary>Response headers</summary>
+        {headers === undefined || headers === null ? (
+          <Text size={200}>No response headers were exposed by this connector or flow. They cannot be recovered from the response body.</Text>
+        ) : <>
+          <CopyTextButton label="Copy response headers" text={headerText} />
+          <pre className={mergeClasses(styles.code, styles.wrap, styles.detailCode)} aria-label="Response headers JSON">{headerText}</pre>
+        </>}
+      </details>
+      {request && <details className={explorer.details}>
+        <summary>{request.label}</summary>
+        <CopyTextButton label="Copy submitted request" text={request.text} />
+        <pre className={mergeClasses(styles.code, styles.wrap, styles.detailCode)} aria-label={request.label}>{request.text}</pre>
+      </details>}
     </div>
   );
 }

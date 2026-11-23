@@ -52,6 +52,14 @@ the search carries over between tabs. **Wrap lines** controls long-line
 display. On wider screens, the response panel stays visible while you edit
 request inputs; smaller screens stack the panels.
 
+**Copy response** copies the entire active tab without search highlighting.
+Expand **Response headers** to inspect and copy the headers returned by the
+flow, or see an explicit explanation if they were not exposed. Expand
+**Submitted flow request** to copy the saved request snapshot, even after
+editing the next request. Clipboard failures are shown explicitly; select and
+copy the displayed text manually if the player/browser blocks access.
+Header inspection never follows `Location` or sends another request.
+
 ### Copilot Studio licensing reports
 
 Select **Copilot Studio / Licensing Reports**. All three documented operations
