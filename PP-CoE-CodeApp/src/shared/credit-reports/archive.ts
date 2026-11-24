@@ -21,13 +21,14 @@ export async function exportCreditReportArchive(captures: readonly CreditReport[
   const files: Record<string, Uint8Array> = {};
   const manifest = {
     schemaVersion: 1, exportedAt: new Date().toISOString(),
-    reconciliation: "Newest loaded capture wins per report type, reported tenant and reported UTC day. Absent days retain older data; unknown/mixed tenant captures remain separate.",
+    reconciliation: "Newest loaded capture wins per report type, reported/operator-assigned tenant and reported UTC day. Absent days retain older data; unassigned unknown/mixed tenant captures remain separate.",
     captures: await Promise.all(captures.map(async (capture, index) => {
       const originalPath = `originals/${String(index + 1).padStart(3, "0")}-${safeFileName(capture.fileName)}`;
       files[originalPath] = new Uint8Array(await capture.original.arrayBuffer());
       return {
         id: capture.id, name: capture.name, source: capture.source, loadedAt: capture.loadedAt,
         requestedRange: capture.requestedRange, observedRange: capture.observedRange,
+        tenantAssignment: capture.tenantAssignment,
         originalPath, rows: capture.rows.length,
       };
     })),

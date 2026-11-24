@@ -32,6 +32,7 @@ export interface CreditReport {
   readonly source: "power-platform-api" | "connector" | "upload";
   readonly loadedAt: string;
   readonly requestedRange?: ReportRange;
+  readonly tenantAssignment?: { readonly tenantId: string; readonly assignedAt: string };
   readonly observedRange: ReportRange | null;
   readonly columns: readonly string[];
   readonly rows: readonly CreditReportRow[];

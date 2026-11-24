@@ -5,15 +5,30 @@ export function orderCreditReportCaptures(captures: readonly CreditReport[]): Cr
 }
 
 export function creditReportScope(report: CreditReport): { key: string; label: string } {
+  if (report.tenantAssignment) {
+    return { key: `tenant:${report.tenantAssignment.tenantId}`, label: `Tenant ${report.tenantAssignment.tenantId} (operator assigned)` };
+  }
   const tenants = new Set(report.rows.map((row) => row.cells.TenantID?.trim().toLowerCase()).filter(Boolean));
   if (tenants.size === 1 && report.rows.every((row) => Boolean(row.cells.TenantID?.trim()))) {
     const tenant = [...tenants][0];
     return { key: `tenant:${tenant}`, label: `Reported tenant ${tenant}` };
   }
+
   return {
     key: `capture:${report.id}`,
     label: `${tenants.size > 1 ? "Mixed tenants" : "Tenant not fully reported"} / ${report.fileName} / ${report.loadedAt}`,
   };
+}
+
+export function assignCreditReportTenant(report: CreditReport, tenantId: string): CreditReport {
+  const tenant = tenantId.trim().toLowerCase();
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(tenant)) {
+    throw new Error("Enter a valid tenant GUID for this capture.");
+  }
+  if (report.rows.some((row) => row.cells.TenantID?.trim() && row.cells.TenantID.trim().toLowerCase() !== tenant)) {
+    throw new Error("The assigned tenant conflicts with a TenantID in this file. Conflicting or mixed-tenant files cannot be reassigned.");
+  }
+  return { ...report, tenantAssignment: { tenantId: tenant, assignedAt: new Date().toISOString() } };
 }
 
 export function creditReportScopes(captures: readonly CreditReport[], name: ReportName) {

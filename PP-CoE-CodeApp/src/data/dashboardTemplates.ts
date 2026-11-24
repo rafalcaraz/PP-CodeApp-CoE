@@ -29,6 +29,7 @@
 import type { Clause } from "../generated/models/PowerPlatformforAdminsV2Model";
 import { MANAGED_APP_ESTATE_AGGREGATOR } from "./dashboardManagedAppAggregators";
 import { reviseManagedAppsEstateTile } from "./dashboardManagedAppPresentation";
+import { consumptionDashboardLayout } from "./dashboardCreditReports";
 import {
   ResourceType,
   extend,
@@ -2205,6 +2206,13 @@ export interface DashboardTemplate {
 }
 
 export const DASHBOARD_TEMPLATES: DashboardTemplate[] = [
+  {
+    id: "consumption-value",
+    name: "Consumption & Value",
+    description: "Editable reporting canvas for billed/nonbilled credits, resources, features, agent families and separate capacity/PAYG funding. Uses retained Power Platform Daily reports, not inventory counts. Reporting controls filter all report tiles; missing data is not zero.",
+    buildLayout: consumptionDashboardLayout,
+    build: () => consumptionDashboardLayout().tiles.map((tile) => ({ ...tile, tabId: undefined })),
+  },
   {
     id: "copilot-studio-estate",
     name: "Copilot Studio Estate",

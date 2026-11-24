@@ -28,6 +28,9 @@ export const useCostStyles = makeStyles({
     "& caption": { textAlign: "left", paddingBottom: tokens.spacingVerticalM, fontWeight: tokens.fontWeightSemibold },
   },
   chart: { width: "100%", height: "280px", minWidth: 0 },
+  rankingChart: { width: "100%", height: "360px", minWidth: 0 },
+  insights: { display: "flex", flexDirection: "column", gap: tokens.spacingVerticalS, paddingBlock: tokens.spacingVerticalM },
+  insightButton: { justifyContent: "flex-start", textAlign: "left", whiteSpace: "normal", overflowWrap: "anywhere", minHeight: "36px", maxWidth: "100%" },
   fields: {
     display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 220px), 1fr))",
     gap: tokens.spacingHorizontalL, alignItems: "start",

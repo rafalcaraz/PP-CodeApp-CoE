@@ -30,9 +30,11 @@ async function report(text = csv) {
   return readCreditReport(new Blob([text]), "daily.csv", { source: "upload" });
 }
 function renderPage(route = false) {
-  return render(<FluentProvider theme={webLightTheme}><MemoryRouter initialEntries={["/cost-controls/power-platform"]}>
+  const result = render(<FluentProvider theme={webLightTheme}><MemoryRouter initialEntries={["/cost-controls/power-platform"]}>
     {route ? <Suspense fallback="Loading route"><Routes>{costControlsRoutes()}</Routes></Suspense> : <PowerPlatformCredits />}
   </MemoryRouter></FluentProvider>);
+  if (!route) fireEvent.click(screen.getByRole("tab", { name: "Capture analysis" }));
+  return result;
 }
 function confirmGeneration() {
   if (!screen.queryByRole("button", { name: "Review report request" })) fireEvent.click(screen.getByText("Request or upload Daily reports", { selector: "summary" }));
@@ -52,6 +54,7 @@ describe("Power Platform credit usage", () => {
   it("opens the new native route without triggering Graph/MAC or any report request", async () => {
     renderPage(true);
     expect(await screen.findByRole("heading", { name: "Power Platform credit usage" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("tab", { name: "Capture analysis" }));
     expect(screen.getByText("Power Platform preview")).toBeInTheDocument();
     expect(screen.getByText(/Start with a report/)).toBeInTheDocument();
     expect(acquire).not.toHaveBeenCalled(); expect(graphRead).not.toHaveBeenCalled();

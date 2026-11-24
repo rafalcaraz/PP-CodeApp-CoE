@@ -1,15 +1,18 @@
 # Reusable Power Platform credit-report framework
 
-This is the implementation guide for **Cost Controls > Power Platform credit
-usage** (`#/cost-controls/power-platform`) and future consumers of its data.
+This is the implementation guide for **Dashboards > Consumption & Value**
+and **Cost Controls > Power Platform credit usage** (`#/cost-controls/power-platform`).
 The framework lives in `src/shared/credit-reports/`; consumers must import its
 public `index.ts` barrel, **not** the Cost Controls feature or individual
 generated services.
 
 The current implementation acquires and imports Daily reports, retains multiple
 captures in session memory, reconciles overlapping reported days, exposes pure
-selectors, and exports the collection. It does **not** schedule background jobs,
-persist to Dataverse/browser storage, or automatically populate dashboards.
+selectors, and exports the collection. **Consumption & Value** uses the reconciled
+collection for interactive overview/exploration and separate funding analysis.
+Optional browser retention preserves originals and capture provenance across
+reloads. It does **not** schedule collection, persist to Dataverse, or synchronize
+between devices.
 
 ## Architecture and ownership
 
@@ -23,12 +26,21 @@ persist to Dataverse/browser storage, or automatically populate dashboards.
 | `collection.ts` | Reported tenant scopes, requested-period matches and deterministic daily reconciliation |
 | `selectors.ts` | Local row filtering and schema-neutral aggregation |
 | `archive.ts` | Original-file ZIP, derived CSVs and provenance manifest |
+| `persistence.ts` | Opt-in IndexedDB originals/provenance, validated restoration, visible storage failures |
+| `consumption.ts` | Shared signed-credit projections, identity matching, local filters, grouped totals, coverage-aware timelines and funding snapshots |
 | `index.ts` | Public consumer API |
 
 `features/cost-controls/PowerPlatformCredits.tsx` owns user interactions:
 confirmation, request/upload controls, capture/scope selection and downloads.
-`CreditReportAnalysis.tsx` owns charts/tables and local filter state. Neither
-component defines reconciliation or storage policy.
+`CreditReportAnalysis.tsx` retains the individual-capture diagnostic view.
+`features/dashboards/DashboardDetail.tsx` provides the native editable reporting
+canvas. `data/dashboardCreditReports.ts` defines its template and persisted tile
+configuration; `components/credit-reports/` owns report controls, the dashboard-local
+source, report tile editor and renderers. `data/dashboardCreditInventory.ts` is
+the explicit current-inventory read adapter. `ConsumptionDashboard.tsx` remains
+the compact compatibility experience in Cost Controls. Both entry points reuse
+shared projections and charts; neither defines capture reconciliation policy or
+imports from a sibling feature.
 
 The store uses module-level immutable array replacements and
 `useSyncExternalStore`. Snapshot getters return the same array until a write;
@@ -152,6 +164,7 @@ A `CreditReport` is one **immutable captured file**:
 | `source` | `connector`, `power-platform-api` or `upload` |
 | `loadedAt` | Client retrieval/import timestamp, not service generation time |
 | `requestedRange` | Original request bounds when known; generally absent on uploads |
+| `tenantAssignment` | Optional explicit operator-provided tenant GUID + assignment time, separate from original CSV cells |
 | `observedRange` | Minimum/maximum dates actually present; `null` for header-only files |
 | `columns`, `rows` | Original column names plus normalized rows with original `cells` |
 | `fileName`, `original` | Saved name and exact received/imported `Blob` |
@@ -192,9 +205,28 @@ and nonzero fractional seconds are rejected rather than rounded.
 | `replaceCreditReport(capture)` | Legacy alias for `retainCreditReport`; updates the compatibility view without discarding history |
 | `saveReportJob` / `useReportJobs` | Separate resumable acquisition state |
 
-All storage is **in this running app's memory**. Navigation/remount preserves
-it; reload, closing the player or starting another app instance does not.
-There is no localStorage, IndexedDB, cross-tab sharing or Dataverse persistence.
+Storage defaults to **this running app's memory**. Navigation/remount preserves
+it; reload/closing the player loses it unless browser retention is enabled.
+**Browser history and privacy** offers explicit consent to IndexedDB retention
+on this app origin in this browser profile. It is not app-encrypted or shared
+across devices; do not enable it in a shared browser profile. Browser cleanup,
+quota limits or eviction can remove it. ZIP backups remain important.
+
+`initializeCreditReportRetention()` restores the opted-in collection once per
+app lifetime. Originals are reparsed and validated before any saved capture is
+hydrated; original IDs, load timestamps, request bounds and tenant assignments
+are preserved. Existing in-memory captures take precedence on ID collisions and
+load-time ties. Only originals and metadata are saved, not trusted parsed rows.
+`setCreditReportRetention(true)` saves current captures and subsequent collection
+changes; `false` deletes the saved collection without clearing session memory.
+Writes are serialized and transactional, with a 100 MiB original-byte limit;
+quota/corruption/blocked-storage failures are visible and do not discard session
+data. Failed writes leave the previous saved collection intact. A failed
+deletion must be retried before claiming saved data is gone.
+
+There is no cross-tab synchronization or Dataverse persistence. Use a single
+app tab for retained history; concurrent tabs are not a shared warehouse.
+Resumable jobs and current inventory matches remain session-only.
 Keeping the app open does not itself run daily collection.
 
 Captures accumulate until explicitly removed or the session ends. The UI shows
@@ -235,10 +267,23 @@ Consequences:
   **not identity/completeness verification**. This mechanism is not an access
   control boundary. Do not use it as proof of which tenant the invoker owns.
 
+### Explicit operator tenant assignment
+
+Some actual resource exports omit `TenantID`. In **Capture analysis > Assign a
+tenant to this capture**, an operator can confirm its originating tenant GUID.
+`assignCreditReportTenant(capture, tenantId)` validates the GUID and rejects
+every conflicting nonempty CSV `TenantID`; it never overrides mixed claims.
+The assignment is separate metadata, leaving original bytes, capture ID and
+`loadedAt` unchanged. The assigned capture deliberately joins that tenant's
+scope for its own report type. Removing the assignment returns to CSV-derived
+scope rules. This is operator-provided provenance, **not verification**, and is
+included in browser retention and the ZIP manifest. Extracting/reuploading only
+an original CSV cannot restore this metadata.
+
 The UI prefers known reported-tenant scopes, exposes the scope selector in
-holistic mode, and keeps unknown/mixed files selectable separately. Support
-for operator-verified provenance or additional schema aliases would require
-an explicit future design, not a heuristic join.
+holistic mode, and keeps unassigned unknown/mixed files selectable separately.
+Tenant verification against an identity authority and additional CSV schema
+aliases remain future work; neither is inferred from filenames.
 
 ### Algorithm
 
@@ -369,9 +414,152 @@ For environment groups/zones, join normalized environment IDs against the
 appropriate shared inventory membership data **after** reconciliation. For a
 resource detail, join by environment ID plus resource ID, not display name or
 bot ID alone. Group membership is not embedded in these CSVs, and historical
-membership cannot be inferred from today's inventory. Such enrichment,
-dashboard tiles and detail-page wiring are future consumers, not implemented
-by this framework.
+membership cannot be inferred from today's inventory. Consumption & Value
+implements an explicit current-inventory match; wiring this data into other
+feature detail pages and configurable dashboard tiles remains future work.
+
+## Consumption & Value
+
+### Editable Dashboard template
+
+Open **Dashboards > New dashboard menu > From template: Consumption & Value**.
+The template creates a saved dashboard with **Overview**, **Nonbilled consumption**,
+**Billed consumption**, **Agent families** and **Funding** tabs. The data-management
+page also provides **Create editable Consumption & Value dashboard**.
+
+The canvas uses native dashboard tabs and tile placement, the same shared card
+frame, centered KPI typography, table styling and edit menu as Estate tiles.
+Turn on **Edit mode** to rename, resize, duplicate, move or delete report tiles.
+**Add tile** defaults to a report on reporting dashboards; its menu also offers
+inventory/query tiles. The report editor selects resource consumption vs environment funding,
+credit total/trend/ranked bars/breakdown table/family matrix/allocation snapshots,
+the metric, grouping and optional per-tile time buckets. **Add tile** still adds
+ordinary inventory/query tiles through that menu; those retain their existing
+behavior and do not inherit credit-report filters.
+
+Report tiles use the explicit `source: "credit-report"` and `creditReport`
+configuration, not count-oriented `computed` aggregators, raw clauses or builder
+queries. Their placeholder `QuerySpec` is never executed. This separate rendering
+seam preserves signed credit amounts and null activity gaps. Tile and tab edits
+persist in the existing dashboard localStorage store. Reporting filters and
+inventory matches are dashboard-session-local, not persisted or shared with other
+dashboards.
+
+The compact date/period/environment toolbar applies UTC dates and environment
+to consumption and funding. **Data & filters** reveals scope selection,
+advanced filters and a single About reports/coverage disclosure instead of
+repeating setup instructions, headings and caveats in every tile. Chart values
+remain available through disclosures; table tiles use the Estate-style **Show
+more** flow with an initial row count selectable in the editor.
+The consumption tenant scope and funding tenant scope are independently explicit.
+Product, feature, search, resource, current group and schema-family filters apply
+only to consumption. Selecting a named ranking/breakdown entry applies its filter
+across report tiles; removable filter buttons provide the way back. Trends follow
+the reporting granularity unless the tile has an explicit override. Schema family
+selection exposes monthly environment comparisons; matrix cell selection bounds
+the global date filter to the observed environment/month.
+
+On schema-family/current-group tabs, an **Agent inventory** section exposes the
+matching action directly. Before matching, family tiles show an actionable
+not-yet-matched state rather than claiming that all schemas failed to resolve.
+After matching, the section reports matched agent schemas against all reported
+resource instances. Non-agent usage, missing schemas, unmatched IDs and conflicting
+identities remain in totals; they are not called deleted agents. Exact joins
+index both inventory `name`/`AgentRow.id` and documented `botId` as aliases, always
+qualified by environment. A conflicting alias mapping stays unresolved. No
+display-name, Entra application-ID or fuzzy join is performed.
+
+### Managed app consumption
+
+New Consumption & Value templates include an editable **Managed app consumption**
+tab. Existing saved dashboards can add it with **Add managed app tab**, without
+replacing or resetting their existing tiles. Each app tile persists
+`creditReport.scope: "managed-apps"`; this intersects the current reporting
+filters with the exact `ScenarioName: CopilotStudio_AppStudio`. App and non-app
+credits are never mixed in these tiles. A report without `ScenarioName` reports
+unavailable attribution rather than assuming a zero app total.
+
+The tab provides total/billed/nonbilled credits, a daily credit line, a rolling
+30-day line, current environment-group and environment rankings, an app-instance
+table and feature breakdown. Selecting group, environment and app progressively
+filters the same lines/totals. Names join exact environment ID + resource ID to
+current managed (`microsoftApp`) inventory. App names, environment names and
+group membership reuse the Managed Apps Estate reader without fetching ACP rule
+assignments. Complete environment/group mappings also cover historical app IDs
+no longer present in current app inventory. Unmatched AppStudio resources remain
+in totals; same names or IDs in different environments are not fuzzy matched.
+Current groups are not claimed as historical membership.
+
+AppStudio is a combined scenario bucket: building versus playing is not
+distinguished until the source reports a reliable classification. Credits are
+not currency. The line connects adjacent reported points only, retaining null
+activity gaps. Rolling values are **observed credits over the 30 UTC calendar
+days ending on each plotted date**, including available lookback before From.
+Date filters bound plotted endpoints, not that lookback; all other consumption
+filters remain applied. Missing days are not zero-filled, windows below 30
+reported days are explicitly partial, and missing resource activity remains
+unknown even when report-day coverage is 30/30. Rolling values overlap and must
+not be added across endpoints.
+
+One dashboard-local source subscribes to the existing capture store. New captures
+are reconciled before every projection; mounts and Refresh never generate reports
+or silently request current inventory. Explicit inventory matching requires scope
+confirmation and is discarded when consumption scope changes. **Manage Daily report
+data** opens Capture analysis for uploads, requests, tenant assignments, originals,
+exports and opt-in browser retention. Enabling retention is necessary to restore
+report originals after a browser reload; saving a dashboard alone does not retain
+its data.
+
+Allocation snapshot tables expose all environment/entitlement/policy rows via Show more,
+including duplicate rows on the latest day. Funding does not expose resource,
+feature, schema or current-group attribution unavailable in its report.
+
+### Compact compatibility experience
+
+The existing experience inside Power Platform credit usage offers:
+
+- **Overview:** billed/nonbilled totals, reported resource/environment counts,
+  nonbilled mix, largest-resource concentration and top environment bars.
+- **Consumption explorer:** total/billed/nonbilled ranking, environment/resource/
+  product/feature/channel/model/tool grouping, composable date/category/search
+  filters, resource detail and feature drilldown. Current environment-group and
+  schema-family grouping becomes available after inventory matching.
+- **Agent families:** exact-schema candidates across environment-scoped matched
+  resource IDs, monthly grouped environment columns and a paginated activity
+  matrix. Selecting a cell drills into its environment/month with the existing
+  date bounds respected.
+- **Funding:** a separate report scope and filter state, capacity/PAYG trends,
+  environment ranking and latest allocation-day rows by environment/entitlement/
+  policy. Allocation duplicates on that latest day are retained, never summed.
+
+Every view reconciles captures before filtering; it does not add capture
+snapshots together. Resource/funding classifications and consumption/billing
+date bases differ and totals are **not expected to reconcile**. Switching to
+Funding never carries feature/model/resource filters into billing facts.
+
+Daily, Monday-UTC weekly and monthly trends include missing periods as null,
+not zero. Partial calendar periods carry an asterisk and a reported/calendar-day
+table. Report-day presence is not proof of complete resource coverage. Filters
+are local; report arrival updates the view without new generation calls.
+Rankings use the selected metric, preserve negative adjustments and include
+Other in chart totals. Percentage mix is disabled for signed adjustment rows;
+zero or negative cohorts do not produce misleading concentration percentages.
+Numbers are rounded for display, with very small nonzero values retained;
+originals and Capture analysis retain greater numeric detail.
+
+**Inventory matching is explicit and read-only.** The operator confirms the
+report scope belongs to the connected inventory tenant. All agent pages are
+drained with both offset and token through the existing inventory data layer;
+errors/nonadvancing pages do not apply partial matches. Join by normalized
+environment ID + resource ID. No fuzzy/display-name matching. Conflicting
+schema matches remain unresolved, and unresolved usage stays in totals.
+First-party agent consumption is not silently discarded.
+
+Exact schema equality yields **family candidates**, not proof of a shared ALM
+pipeline. Current group/type/schema metadata is labeled as current, not
+historical. Missing monthly activity does not prove deployment absence or
+deletion. Neither nonbilled credits nor a channel name proves license coverage;
+these views make no currency, savings or business-ROI claims.
 
 ## Collection ZIP and restoration limitations
 
@@ -407,7 +595,8 @@ requested/observed ranges, original entry paths and row counts. Every derived
 entry records its report name, scope, selected capture IDs and
 `daySources: { "<UTC date>": "<winning capture ID>" }`.
 
-**ZIP import/automatic session restoration is not implemented.** Extract and
+**ZIP import is not implemented.** Browser retention can automatically restore
+its own opted-in collection, not a ZIP. Extract and
 upload individual original CSV/gzip files if needed. Reimporting creates new
 IDs and import timestamps; it does not restore original priority/provenance
 from the manifest. A derived CSV is also ingestible if it meets the schema,
@@ -434,11 +623,18 @@ Tests:
 | `shared/credit-reports/client.test.ts` | Mocked acquisition, flow contracts, operation URLs, polling, cancellation, resume and failures |
 | `shared/credit-reports/collection.test.ts` | Daily replacement, disjoint/absent days, load-time ties, tenant isolation, presets, compatibility store, ZIP bytes/quoting/provenance |
 | `features/cost-controls/PowerPlatformCredits.test.tsx` | Billing-first requests, confirmation, presets/manual edits, import, scope modes, local filters, cache notice and exports |
+| `shared/credit-reports/persistence.test.ts` | Reparsed originals, retained priority/IDs, validated tenant assignment and atomic restoration validation |
+| `shared/credit-reports/consumption.test.ts` | Environment-scoped identities, filtering, signed totals, metric ranking, Other, weekly/monthly coverage, latest funding snapshots |
+| `features/cost-controls/ConsumptionDashboard.test.tsx` | Overview/resource drilldown, isolated funding, explicit inventory matching, family matrix drilldown and reactive reconciliation |
+| `data/dashboardCreditInventory.test.ts` | Complete token/offset paging, nonadvancing pages, read failure and cancellation |
+| `features/dashboards/DashboardDetail.test.tsx` | Native report controls, reconciliation, separate funding, persisted tile edits/duplicate/move/add, family matching and bounded drilldown, empty/errors and allocation pagination |
+| `data/dashboardTemplates.test.ts` | Fresh report template tile IDs, populated tab layout, perspective isolation and persisted configuration alongside existing Estate templates |
 
 From `PP-CoE-CodeApp`, run:
 
 ```powershell
-npm run test:run -- src/shared/credit-reports/files.test.ts src/shared/credit-reports/client.test.ts src/shared/credit-reports/collection.test.ts src/features/cost-controls/PowerPlatformCredits.test.tsx
+npm run test:run -- src/shared/credit-reports src/features/cost-controls/PowerPlatformCredits.test.tsx src/features/cost-controls/ConsumptionDashboard.test.tsx src/data/dashboardCreditInventory.test.ts
+npm run test:run -- src/features/dashboards/DashboardDetail.test.tsx src/data/dashboardTemplates.test.ts src/data/dashboards.test.ts
 npm run lint
 npx tsc --noEmit
 npm run build

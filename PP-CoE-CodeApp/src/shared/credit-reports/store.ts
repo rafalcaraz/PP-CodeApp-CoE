@@ -23,6 +23,11 @@ export function retainCreditReport(report: CreditReport) {
     : [...captures, report];
   refreshSnapshots();
 }
+export function hydrateCreditReportCaptures(restored: readonly CreditReport[]) {
+  const currentIds = new Set(captures.map((capture) => capture.id));
+  captures = [...restored.filter((capture) => !currentIds.has(capture.id)), ...captures];
+  refreshSnapshots();
+}
 export const replaceCreditReport = retainCreditReport;
 export function removeCreditReportCapture(id: string) {
   captures = captures.filter((capture) => capture.id !== id);
@@ -32,15 +37,15 @@ export function clearCreditReports(name?: ReportName) {
   captures = name ? captures.filter((capture) => capture.name !== name) : [];
   refreshSnapshots();
 }
-function subscribe(listener: () => void) {
+export function subscribeCreditReportCaptures(listener: () => void) {
   listeners.add(listener);
   return () => { listeners.delete(listener); };
 }
 export function useCreditReports() {
-  return useSyncExternalStore(subscribe, getCreditReports);
+  return useSyncExternalStore(subscribeCreditReportCaptures, getCreditReports);
 }
 export function useCreditReportCaptures() {
-  return useSyncExternalStore(subscribe, getCreditReportCaptures);
+  return useSyncExternalStore(subscribeCreditReportCaptures, getCreditReportCaptures);
 }
 export function saveReportJob(job: ReportJob, error?: string, diagnostic?: unknown) {
   jobs = [...jobs.filter((entry) => entry.job.name !== job.name), { job, error, diagnostic }];
@@ -48,5 +53,5 @@ export function saveReportJob(job: ReportJob, error?: string, diagnostic?: unkno
 }
 export function getReportJobs() { return jobs; }
 export function useReportJobs() {
-  return useSyncExternalStore(subscribe, getReportJobs);
+  return useSyncExternalStore(subscribeCreditReportCaptures, getReportJobs);
 }
