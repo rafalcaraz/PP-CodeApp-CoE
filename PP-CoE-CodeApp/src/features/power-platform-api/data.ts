@@ -1,55 +1,9 @@
-import { PP_API_Wrapper_FlowService } from "../../generated/services/PP_API_Wrapper_FlowService";
 import { invalidateInventoryCache } from "../../data/inventory";
-import { formatApiError, isJsonObject } from "../../shared/api-explorer/schema";
+import { formatApiError } from "../../shared/api-explorer/schema";
+import { executePowerPlatformRequest } from "../../shared/power-platform-api";
 import { buildApiRequest, getOperation, isReadOnly } from "./catalog";
-import type { ApiRequestInputs, ApiResponse, ApiResult } from "./types";
-
-function parseBody(text: string): unknown {
-  if (!text.trim()) return null;
-  try {
-    return JSON.parse(text);
-  } catch {
-    return text;
-  }
-}
-
-export function normalizeFlowResponse(raw: string, downloadFileName?: string): ApiResult {
-  const parsed = parseBody(raw);
-  const response: ApiResponse = { body: parsed, raw };
-  if (isJsonObject(parsed) && typeof parsed.statusCode === "number") {
-    if (Object.hasOwn(parsed, "body")) response.body = typeof parsed.body === "string" ? parseBody(parsed.body) : parsed.body;
-    response.status = parsed.statusCode;
-    response.headers = parsed.headers;
-  }
-  const bodyError = isJsonObject(response.body) ? response.body.error : undefined;
-  if (bodyError !== undefined && bodyError !== null) {
-    return { ok: false, error: formatApiError(bodyError), data: response };
-  }
-  if (response.status !== undefined && (response.status < 200 || response.status >= 300)) {
-    return { ok: false, error: `HTTP ${response.status}: ${formatApiError(response.body)}`, data: response };
-  }
-  if (downloadFileName !== undefined) {
-    try {
-      if (!isJsonObject(response.body) || typeof response.body.$content !== "string") {
-        throw new Error("The flow did not preserve the gzip file as a base64 $content object. Update PP-API-Wrapper-Flow to return the HTTP outputs without converting binary content to text.");
-      }
-      const decoded = atob(response.body.$content);
-      const bytes = new Uint8Array(decoded.length);
-      for (let index = 0; index < decoded.length; index++) bytes[index] = decoded.charCodeAt(index);
-      if (bytes[0] !== 0x1f || bytes[1] !== 0x8b || bytes[2] !== 0x08) {
-        throw new Error("The returned file is not gzip data. Inspect the raw flow response; no download was created.");
-      }
-      response.download = {
-        filename: Array.from(downloadFileName, (character) =>
-          character.charCodeAt(0) < 32 || '/\\:*?"<>|'.includes(character) ? "_" : character).join("") || "licensing-report.csv.gz",
-        bytes, contentType: "application/gzip",
-      };
-    } catch (error) {
-      return { ok: false, error: `Report download failed: ${formatApiError(error)}`, data: response };
-    }
-  }
-  return { ok: true, data: response };
-}
+import type { ApiRequestInputs, ApiResult } from "./types";
+export { normalizeFlowResponse } from "../../shared/power-platform-api";
 
 export async function executeApiRequest(inputs: ApiRequestInputs, confirmedWrite = false): Promise<ApiResult> {
   let attemptedWrite = false;
@@ -60,18 +14,9 @@ export async function executeApiRequest(inputs: ApiRequestInputs, confirmedWrite
       return { ok: false, error: "Review and confirm this exact request before making tenant changes." };
     }
     attemptedWrite = !isReadOnly(operation);
-    const result = await PP_API_Wrapper_FlowService.Run({
-      text: request.method,
-      text_1: request.url,
-      text_2: request.body,
-    });
-    if (!result.success) return { ok: false, error: formatApiError(result.error) };
-    if (typeof result.data?.response !== "string") {
-      return { ok: false, error: "PP-API-Wrapper-Flow did not return its expected response text. Check the flow's response action and run history." };
-    }
     const downloadsGzip = operation.responses.some((response) =>
       response.status.startsWith("200") && response.mediaTypes?.includes("application/gzip"));
-    return normalizeFlowResponse(result.data.response, downloadsGzip ? inputs.parameters["path:FileName"] : undefined);
+    return await executePowerPlatformRequest(request, confirmedWrite, downloadsGzip ? inputs.parameters["path:FileName"] : undefined);
   } catch (error) {
     return { ok: false, error: formatApiError(error) };
   } finally {

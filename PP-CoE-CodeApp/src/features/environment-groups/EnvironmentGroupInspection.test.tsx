@@ -1,5 +1,5 @@
 import { Suspense } from "react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { FluentProvider, webLightTheme } from "@fluentui/react-components";
@@ -26,6 +26,7 @@ vi.mock("../managed-apps/governance", async () => ({
 vi.mock("../managed-apps/groupCloneData", async () => ({
   ...await vi.importActual<typeof import("../managed-apps/groupCloneData")>("../managed-apps/groupCloneData"),
   prepareGroupClone: prepare, loadCloneOperations: () => [], groupCloneStore: { read: vi.fn(), save: vi.fn() },
+  withGroupCloneLock: (action: () => Promise<unknown>) => action(),
 }));
 vi.mock("../managed-apps/groupClone", async () => ({
   ...await vi.importActual<typeof import("../managed-apps/groupClone")>("../managed-apps/groupClone"),
@@ -77,10 +78,20 @@ async function openInspection() {
 }
 let user: ReturnType<typeof userEvent.setup>;
 beforeEach(() => {
+  // Match the existing Cost Controls tests: Tabster needs layout evidence in JSDOM.
+  vi.spyOn(document.body, "getBoundingClientRect").mockReturnValue(new DOMRect(0, 0, 1440, 900));
+  vi.spyOn(HTMLElement.prototype, "offsetParent", "get").mockImplementation(function (this: HTMLElement) {
+    if (!this.isConnected || this.hidden || getComputedStyle(this).display === "none") return null;
+    for (let element = this.parentElement; element; element = element.parentElement) {
+      if (element.hidden || getComputedStyle(element).display === "none") return null;
+    }
+    return this.parentElement;
+  });
   user = userEvent.setup();
   vi.clearAllMocks(); localStorage.clear();
   evidence.mockImplementation(async ([id]: string[]) => [groupEvidence(id)]);
 });
+afterEach(() => vi.restoreAllMocks());
 
 describe("Environment group inspection via app-composed public APIs (synthetic)", () => {
   it("loads only the selected empty group's evidence on demand and keeps copying/raw detail quiet", async () => {
@@ -141,6 +152,7 @@ describe("Environment group inspection via app-composed public APIs (synthetic)"
     const signal = evidence.mock.calls[0][1] as AbortSignal;
     await user.click(screen.getByRole("button", { name: "Close group inspection" }));
     await waitFor(() => expect(signal.aborted).toBe(true));
+    await waitFor(() => expect(screen.queryByRole("dialog", { hidden: true })).not.toBeInTheDocument());
     const stale = groupEvidence();
     if (stale.policies.ok) stale.policies.data[0].name = "Stale previous inspection";
     await act(async () => finish([stale]));
@@ -205,7 +217,7 @@ describe("Environment group inspection via app-composed public APIs (synthetic)"
     expect(screen.getByText(/MicrosoftAppsContentSecurityPolicy: Unsupported field: managedBy/)).toBeVisible();
     expect(screen.queryByRole("textbox", { name: "New group name" })).not.toBeInTheDocument();
     expect(execute).toHaveBeenCalledWith(expect.objectContaining({ group: { displayName: "New empty group", description } }),
-      record, expect.anything(), expect.anything(), true, true);
+      record, expect.anything(), expect.anything(), true, true, false, false);
     expect(execute).toHaveBeenCalledTimes(1);
   });
 });

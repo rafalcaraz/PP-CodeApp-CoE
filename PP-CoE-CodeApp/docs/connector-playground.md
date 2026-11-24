@@ -212,6 +212,79 @@ documents consent, runtime-role gaps and API contract caveats.
 
 ## Dedicated Cost Controls
 
+### Power Platform credit usage
+
+Open **Cost Controls** > **Power Platform credit usage**
+(`#/cost-controls/power-platform`). This is independent of the MAC/Graph reports
+below. It uses the Power Platform API through the existing
+`PP-API-Wrapper-Flow`, sharing the transport in `src/shared/power-platform-api.ts`
+with the Power Platform API playground. It calls the report-generation POST,
+operation-status GET and file-download GET under `/copilotstudio/licensing/reports/`
+with API version `2024-10-01`. No Admins V2 fallback, Graph call, new HTTP client,
+Dataverse write, or connection-registration change is involved.
+
+The default request is both `FeatureDetailsPerResource` and
+`BillingDetailsPerEnvironment`, with **Daily** granularity for the previous 30
+complete UTC days (inclusive). Review the immutable request and type
+`GenerateLicensingReport` before submitting. Reports run sequentially; failure
+stops later submissions. Requests are never automatically resubmitted.
+The workflow requires the actual initial `Location` and positive `Retry-After`
+headers preserved in the flow's HTTP response envelope, checks the operation body's `Running`,
+`Succeeded`, or `Failed` status, respects each new polling interval, and
+downloads only after success with a file name. It stops after two hours or
+on missing/invalid metadata instead of inventing headers or changing transports.
+The API's delegated admin permissions and preview limitations apply.
+The existing flow must return its HTTP `statusCode`, `headers` and `body` in
+the `response` text output, retaining binary files as base64 `$content` objects.
+Missing metadata or damaged binary payloads fail visibly; the app does not change
+the flow or manufacture missing headers. For PIM-managed access, activate the
+required administrator role for the invoker connection's identity before use.
+Revisit this transport and permission setup as reporting APIs gain capabilities;
+see the [developer README follow-up](../README.md#credit-reporting-api-access-and-follow-up).
+
+Stopping locally or navigating away stops local waiting, not server generation.
+Known operation IDs, next-poll times and file names remain available during this
+app session. Resume an existing operation, or enter a known generated file name
+and its original report type/dates, without submitting another request. A failed
+server operation cannot be resumed. A submission with no exposed operation ID
+may already be running: inspect the API response rather than generating
+duplicates. The SDK cannot cancel an in-flight call; its late result is ignored.
+
+Upload an existing Daily CSV or gzip-compressed CSV through the same schema
+validation pipeline. Required column names are case-sensitive. Summary reports,
+invalid dates/amounts, malformed CSV and mismatched downloaded report types or
+periods are rejected. Header-only reports are valid empty results. Both compressed
+and expanded files are limited to 25 MiB, and reports to 200,000 data rows; use
+smaller windows for larger tenants. Original files may contain sensitive tenant
+data: download and share deliberately.
+
+Analysis includes per-day consumption, environment/resource/feature/product
+grouping where applicable, local environment/date/value filters, paged rankings
+and inspection of every original column. Resource identities include the
+environment ID, not just the bot ID. Resource rankings may include non-agent
+resource types. Billed/nonbilled values are separate from capacity-pack/pay-as-you-go
+consumption; the two reports are never added together. Daily allocated capacity
+is retained as a raw column, never summed as consumption. Credits are not
+currency spend. Missing reports/dates/identities are not interpreted as zero.
+An uploaded file's tenant, completeness and request period cannot be verified;
+its displayed dates describe observed rows.
+
+The public barrel `src/shared/credit-reports/index.ts` provides versioned
+`CreditReport` snapshots, acquisition/import helpers, pure row selectors and
+aggregations, and a subscribable session cache (`getCreditReports`,
+`useCreditReports`, `replaceCreditReport`, `clearCreditReports`). Keep future
+consumers on this shared API, not imports into the Cost Controls feature.
+Snapshots retain normalized dates/environment IDs, original dimensions and
+columns, source/provenance, requested versus observed periods, and original file
+bytes. One complete snapshot per report type replaces the previous snapshot;
+overlapping imports/downloads are never appended or double-counted.
+Navigation preserves cached data, but reload closes this in-memory cache.
+There is no browser-storage persistence, tenant-group enrichment, dashboard
+wiring or Dataverse storage in this iteration. These can consume the shared
+snapshots later without coupling them to the report screen.
+
+### MAC/Graph reporting and management
+
 Open **Cost Controls** > **Credit reporting** (`#/cost-controls/reporting`) or
 **Policies & requests** (`#/cost-controls/management`). Both use the registered
 `CostControsl_CustomConnService` directly, with no passthrough flow or raw HTTP

@@ -44,20 +44,4 @@ export interface ApiRequestInputs {
   body: string;
 }
 
-export interface FlowHttpRequest {
-  method: string;
-  url: string;
-  body: string;
-}
-
-export interface ApiResponse {
-  body: unknown;
-  raw: string;
-  status?: number;
-  headers?: unknown;
-  download?: { filename: string; bytes: Uint8Array<ArrayBuffer>; contentType: string };
-}
-
-export type ApiResult =
-  | { ok: true; data: ApiResponse }
-  | { ok: false; error: string; data?: ApiResponse };
+export type { FlowHttpRequest, ApiResponse, ApiResult } from "../../shared/power-platform-api";

@@ -7,7 +7,7 @@ export const useCostStyles = makeStyles({
   spread: { display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: tokens.spacingHorizontalM },
   muted: { color: tokens.colorNeutralForeground2 },
   coverage: { color: tokens.colorNeutralForeground2, maxWidth: "85ch" },
-  tabs: { flexWrap: "wrap", rowGap: tokens.spacingVerticalXS },
+  tabs: { flexWrap: "wrap", rowGap: tokens.spacingVerticalXS, minWidth: 0, maxWidth: "100%" },
   summary: { display: "grid", gridTemplateColumns: "max-content minmax(0, 1fr)", gap: tokens.spacingHorizontalM, margin: 0, "& dd": { margin: 0, overflowWrap: "anywhere" } },
   panel: {
     display: "flex", flexDirection: "column", gap: tokens.spacingVerticalM,
@@ -41,4 +41,13 @@ export const useCostStyles = makeStyles({
   form: { display: "flex", flexDirection: "column", gap: tokens.spacingVerticalM },
   actions: { paddingTop: tokens.spacingVerticalM, borderTop: `1px solid ${tokens.colorNeutralStroke2}` },
   code: { whiteSpace: "pre-wrap", overflowWrap: "anywhere", fontFamily: tokens.fontFamilyMonospace, fontSize: tokens.fontSizeBase200, maxHeight: "360px", overflow: "auto" },
+  fileInput: { display: "none" },
+  resumeButton: { alignSelf: "flex-start" },
+  reportTotals: {
+    display: "flex", flexWrap: "wrap", gap: tokens.spacingHorizontalXL,
+    paddingBlock: tokens.spacingVerticalM, borderTop: `1px solid ${tokens.colorNeutralStroke2}`, borderBottom: `1px solid ${tokens.colorNeutralStroke2}`,
+    fontVariantNumeric: "tabular-nums",
+  },
+  emptyReport: { display: "flex", flexDirection: "column", gap: tokens.spacingVerticalM, paddingBlock: tokens.spacingVerticalXXL, maxWidth: "75ch" },
+  reportTable: { minWidth: "680px", "& td:first-child": { minWidth: "200px" } },
 });

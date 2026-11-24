@@ -222,6 +222,7 @@ const POST_ZONES_SECTIONS: NavSection[] = [
     defaultOpen: true,
     items: [
       { key: "cost-reporting", label: "Credit reporting", icon: <ChartMultipleRegular />, path: "/cost-controls/reporting" },
+      { key: "cost-power-platform", label: "Power Platform credit usage", icon: <ChartMultipleRegular />, path: "/cost-controls/power-platform" },
       { key: "cost-management", label: "Policies & requests", icon: <SettingsRegular />, path: "/cost-controls/management" },
     ],
   },
