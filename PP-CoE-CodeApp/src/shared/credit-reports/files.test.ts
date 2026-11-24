@@ -29,10 +29,22 @@ describe("Daily credit report ingestion", () => {
     expect(parseReportCsv(featureHeader)).toMatchObject({ rows: [], observedRange: null });
   });
   it.each([
+    ["ConsumptionDate,BilledCredits,NonBilledCredits", "FeatureDetailsPerResource"],
+    ["BilledDate,CapacityPackCreditsConsumed,PayGoConsumedQuantity", "BillingDetailsPerEnvironment"],
+  ] as const)("normalizes midnight report timestamps from %s without changing the original cells", (header, name) => {
+    const result = parseReportCsv(`${header}\r\n2026-11-01 00:00:00.0000000,7.5,2.5`, name);
+    expect(result.rows[0]).toMatchObject({ date: "2026-11-01", first: 7.5, second: 2.5 });
+    expect(result.rows[0].cells[header.split(",")[0]]).toBe("2026-11-01 00:00:00.0000000");
+    expect(result.observedRange).toEqual({ startDate: "2026-11-01", endDate: "2026-11-01" });
+  });
+  it.each([
     ["empty file", "", /CSV header/],
     ["Summary report", "BilledCredits,NonBilledCredits\n5,2", /Daily/],
     ["wrong casing", "consumptionDate,BilledCredits,NonBilledCredits\n2026-11-01,5,2", /schema/],
     ["invalid calendar date", "ConsumptionDate,BilledCredits,NonBilledCredits\n2026-02-30,5,2", /Invalid UTC date/],
+    ["invalid calendar timestamp", "ConsumptionDate,BilledCredits,NonBilledCredits\n2026-02-30 00:00:00.0000000,5,2", /Invalid UTC date/],
+    ["non-midnight timestamp", "ConsumptionDate,BilledCredits,NonBilledCredits\n2026-11-01 12:00:00.0000000,5,2", /Invalid UTC date/],
+    ["nonzero fractional timestamp", "ConsumptionDate,BilledCredits,NonBilledCredits\n2026-11-01 00:00:00.0000001,5,2", /Invalid UTC date/],
     ["missing amount", "ConsumptionDate,BilledCredits,NonBilledCredits\n2026-11-01,,2", /finite number/],
     ["invalid amount", "ConsumptionDate,BilledCredits,NonBilledCredits\n2026-11-01,NaN,2", /finite number/],
     ["infinite amount", "ConsumptionDate,BilledCredits,NonBilledCredits\n2026-11-01,1e999,2", /finite number/],
@@ -103,7 +115,7 @@ describe("shared snapshots and selectors", () => {
     expect(filtered).toHaveLength(1);
     expect(aggregateReportRows(filtered, "date")[0]).toMatchObject({ key: "2026-11-02", first: 5, second: 0 });
   });
-  it("replaces overlapping imports instead of adding them and clears one source without affecting the other", async () => {
+  it("keeps the legacy latest-per-type snapshot API and clears one report type without affecting the other", async () => {
     clearCreditReports();
     const first = await readCreditReport(new Blob([csv]), "x.csv", { source: "upload" });
     const second = await readCreditReport(new Blob([billing]), "y.csv", { source: "upload" });

@@ -216,31 +216,81 @@ documents consent, runtime-role gaps and API contract caveats.
 
 Open **Cost Controls** > **Power Platform credit usage**
 (`#/cost-controls/power-platform`). This is independent of the MAC/Graph reports
-below. It uses the Power Platform API through the existing
-`PP-API-Wrapper-Flow`, sharing the transport in `src/shared/power-platform-api.ts`
-with the Power Platform API playground. It calls the report-generation POST,
-operation-status GET and file-download GET under `/copilotstudio/licensing/reports/`
-with API version `2024-10-01`. No Admins V2 fallback, Graph call, new HTTP client,
-Dataverse write, or connection-registration change is involved.
+below. It submits through the registered `PP-Request-Credit-Licensing-Report`
+Power Automate flow, calls the Power Platform for Admins V2 connector's
+`GetLicensingReportOperation` with API version `2024-10-01`, then downloads through
+`PP-Download-Credit-Licensing-Report`. The download flow calls the connector and
+returns CSV as a JSON text output; the installed Code App SDK otherwise tries to
+parse the direct action's `text/csv` response as JSON and discards it.
+It does not use `PP-API-Wrapper-Flow`, Graph, a new HTTP client,
+or Dataverse storage. There is no automatic transport fallback.
 
 The default request is both `FeatureDetailsPerResource` and
 `BillingDetailsPerEnvironment`, with **Daily** granularity for the previous 30
 complete UTC days (inclusive). Review the immutable request and type
 `GenerateLicensingReport` before submitting. Reports run sequentially; failure
 stops later submissions. Requests are never automatically resubmitted.
-The workflow requires the actual initial `Location` and positive `Retry-After`
-headers preserved in the flow's HTTP response envelope, checks the operation body's `Running`,
-`Succeeded`, or `Failed` status, respects each new polling interval, and
+The workflow requires the initial operation URL from the generation flow,
+checks the operation body's `Running`, `Succeeded`, or `Failed` status, and
 downloads only after success with a file name. It stops after two hours or
-on missing/invalid metadata instead of inventing headers or changing transports.
-The API's delegated admin permissions and preview limitations apply.
-The existing flow must return its HTTP `statusCode`, `headers` and `body` in
-the `response` text output, retaining binary files as base64 `$content` objects.
-Missing metadata or damaged binary payloads fail visibly; the app does not change
-the flow or manufacture missing headers. For PIM-managed access, activate the
+on invalid operation metadata instead of changing transports.
+Polling waits **30 seconds** before the first check and between `Running`
+responses. If the connector exposes `Retry-After`, the app also respects that
+interval and never polls sooner than 30 seconds. Missing retry headers are
+allowed on this connector path; no synthetic service header is fabricated.
+Delegated admin permissions and preview limitations apply.
+Missing operation URLs or damaged binary payloads fail visibly.
+For PIM-managed access, activate the
 required administrator role for the invoker connection's identity before use.
 Revisit this transport and permission setup as reporting APIs gain capabilities;
 see the [developer README follow-up](../README.md#credit-reporting-api-access-and-follow-up).
+
+#### Generation flow contract
+
+`acquireCreditReport` defaults to the generation-flow / Admins V2 transport.
+Acquisition and resume share the same connector status and download-flow methods.
+`createConnectorReportTransport(generate)` remains available for typed adapters
+and mocked lifecycle tests; the generic API transport is not an automatic fallback.
+
+The registered trigger takes `text` = report name (`FeatureDetailsPerResource`
+or `BillingDetailsPerEnvironment`), `text_1` = end date, `text_2` = start date
+(inclusive UTC dates), and `text_3` = **Daily** granularity.
+Its sole text output is `reportlocation`: the absolute initial operation URL,
+or a failure message. SDK failures, blank outputs, non-URL messages and URLs for
+another host/report fail explicitly; no replacement report is submitted.
+Accepted operation URLs are the direct `api.powerplatform.com` route or the
+Admins V2 gateway route
+`https://<gateway>.azure-apihub.net/apim/powerplatformadminv2/<connection>/copilotstudio/licensing/reports/<report>/operations/<operation>`.
+Only the operation ID is extracted: the returned host and connection path are
+never requested or used to override the app's registered connector connection.
+Configure and verify the generate action so it returns the initial asynchronous
+response rather than waiting for the final file result; this contract is
+specifically for initial submission, not automatic waiting inside the flow.
+
+Verify both report types against real flow/connector responses. Local mocked
+tests are not evidence of successful cloud generation or cross-tenant consent.
+Both flows must also be included in the solution and their exported dependency/invoker mappings verified
+before distribution. If the flow returns only the final
+`status`/`fileName`, its response contract must be revisited rather than pretending
+those fields are an initial `Location`.
+
+#### Download flow contract
+
+`PP-Download-Credit-Licensing-Report` takes `text` = report name and `text_1` =
+the generated file name, including its original suffix. Its `result` text output
+contains the CSV body, not the complete HTTP response envelope. The SDK decodes
+JSON string escapes; the app passes the resulting CSV directly to the shared
+parser without blindly replacing escaped characters in field values.
+SDK failures and missing, blank or non-string outputs fail explicitly; the known
+file name remains available for retry without regeneration.
+
+The original CSV text is retained for download. If the requested server filename
+ends in `.gz` but the returned content is uncompressed CSV, the saved filename
+drops `.gz`; filenames do not determine decompression. Daily report dates accept
+`YYYY-MM-DD` and midnight timestamps such as `2026-11-01 00:00:00.0000000`.
+Normalized rows use the UTC date while original cell values remain unchanged.
+Invalid calendar dates and non-midnight timestamps are rejected; request date
+inputs remain strict `YYYY-MM-DD`.
 
 Stopping locally or navigating away stops local waiting, not server generation.
 Known operation IDs, next-poll times and file names remain available during this
@@ -270,18 +320,29 @@ An uploaded file's tenant, completeness and request period cannot be verified;
 its displayed dates describe observed rows.
 
 The public barrel `src/shared/credit-reports/index.ts` provides versioned
-`CreditReport` snapshots, acquisition/import helpers, pure row selectors and
-aggregations, and a subscribable session cache (`getCreditReports`,
-`useCreditReports`, `replaceCreditReport`, `clearCreditReports`). Keep future
-consumers on this shared API, not imports into the Cost Controls feature.
-Snapshots retain normalized dates/environment IDs, original dimensions and
-columns, source/provenance, requested versus observed periods, and original file
-bytes. One complete snapshot per report type replaces the previous snapshot;
-overlapping imports/downloads are never appended or double-counted.
-Navigation preserves cached data, but reload closes this in-memory cache.
-There is no browser-storage persistence, tenant-group enrichment, dashboard
-wiring or Dataverse storage in this iteration. These can consume the shared
-snapshots later without coupling them to the report screen.
+`CreditReport` captures, acquisition/import helpers, pure selectors and a
+subscribable retained collection. Billing is the first/default dataset. Request
+presets offer 30/7/1 complete UTC days with editable dates. A retained download
+requested for the same period triggers a notice, not an automatic claim of
+freshness or a block on requesting again.
+
+Individual-capture mode analyzes one original. Holistic mode reconciles captures
+within one report type and reported tenant: the newest loaded capture replaces
+each complete reported day's older rows; absent days keep older data. Unknown,
+partially reported or mixed tenant captures remain separate. Matching uploaded
+tenant IDs are claims, not verified identity/completeness. The compatibility
+`getCreditReports`/`useCreditReports` APIs still expose only the latest individual
+capture per type; holistic consumers must use the collection/reconciler.
+
+Local filters do not change retained originals. Export all captures creates a
+ZIP with every original, separate per-type/per-scope reconciled CSVs, and a
+winning-day provenance manifest. Navigation preserves the collection; reload
+loses it. ZIP restoration, scheduled collection, browser/Dataverse persistence,
+tenant-group enrichment and dashboard wiring are not implemented.
+
+See the [credit-report framework guide](credit-report-framework.md) for module
+ownership, exact flow contracts, date/provenance semantics, reconciliation
+examples, public consumer code, archive format and future persistence seams.
 
 ### MAC/Graph reporting and management
 

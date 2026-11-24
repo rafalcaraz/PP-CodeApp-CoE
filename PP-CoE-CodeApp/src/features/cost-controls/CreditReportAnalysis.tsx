@@ -3,7 +3,7 @@ import { Button, Field, Input, Select, Text, mergeClasses, tokens } from "@fluen
 import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import {
   aggregateReportRows, REPORT_SCHEMAS, selectReportRows,
-  type CreditReport, type ReportDimension, type ReportFilter,
+  type CreditReport, type ReconciledCreditReport, type ReportDimension, type ReportFilter,
 } from "../../shared/credit-reports";
 import { formatApiError } from "../../shared/api-explorer/schema";
 import { ErrorPane } from "../../components/Status";
@@ -12,7 +12,7 @@ import { useCostStyles } from "./styles";
 const PAGE_SIZE = 25;
 const amount = (value: number) => value.toLocaleString("en-US", { maximumFractionDigits: 20 });
 
-export function CreditReportAnalysis({ report }: { report: CreditReport }) {
+export function CreditReportAnalysis({ report }: { report: CreditReport | ReconciledCreditReport }) {
   const styles = useCostStyles();
   const [filter, setFilter] = useState<ReportFilter>({});
   const [dimension, setDimension] = useState<ReportDimension>(report.name === "FeatureDetailsPerResource" ? "resource" : "environment");
@@ -44,7 +44,8 @@ export function CreditReportAnalysis({ report }: { report: CreditReport }) {
   return <div className={styles.root}>
     <Text weight="semibold">{schema.label} / {period ? `${period.startDate} through ${period.endDate} UTC` : "No dated rows returned"}</Text>
     <Text size={200} className={styles.muted}>
-      {report.source === "power-platform-api" ? "Downloaded through Power Platform API"
+      {report.source === "reconciled" ? `Reconciled from ${report.captureIds.length} retained captures; newest loaded capture wins per reported UTC day`
+        : report.source === "power-platform-api" ? "Downloaded through Power Platform API"
         : report.source === "connector" ? "Downloaded through V2" : "Uploaded file; tenant and completeness are not verified"} / Loaded {report.loadedAt} / {amount(report.rows.length)} rows.
       {report.source === "upload" && " Dates describe observed rows, not a verified request period."}
     </Text>
@@ -56,10 +57,16 @@ export function CreditReportAnalysis({ report }: { report: CreditReport }) {
         <option value="">All reported environments</option>
         {environments.map(([id, name]) => <option key={id} value={id}>{name} ({id})</option>)}
       </Select></Field>
-      <Field label="Filter from UTC"><Input type="date" value={filter.startDate || ""} onChange={(_, next) => changeFilter({ startDate: next.value })} /></Field>
-      <Field label="Filter through UTC"><Input type="date" value={filter.endDate || ""} onChange={(_, next) => changeFilter({ endDate: next.value })} /></Field>
+      <Field label="Filter from UTC"><Input type="date" min={report.observedRange?.startDate} max={report.observedRange?.endDate}
+        value={filter.startDate || ""} onChange={(_, next) => changeFilter({ startDate: next.value })} /></Field>
+      <Field label="Filter through UTC"><Input type="date" min={report.observedRange?.startDate} max={report.observedRange?.endDate}
+        value={filter.endDate || ""} onChange={(_, next) => changeFilter({ endDate: next.value })} /></Field>
       <Field label="Search report values" hint="Searches all returned columns, including resource type, feature and model."><Input value={filter.search || ""}
         onChange={(_, next) => changeFilter({ search: next.value })} /></Field>
+    </div>
+    <div className={styles.row}>
+      <Button onClick={() => { setFilter({}); setPage(0); setRawPage(0); }}>Clear analysis filters</Button>
+      <Text size={200} className={styles.muted}>These filters only scope loaded data. They never request another report or change the ZIP export.</Text>
     </div>
     {analysis.error && <ErrorPane title="Analysis unavailable" message={analysis.error} />}
     {data && totals && <>
@@ -116,7 +123,9 @@ export function CreditReportAnalysis({ report }: { report: CreditReport }) {
       </>}
       <details>
         <summary>Inspect all report columns ({data.rows.length} filtered rows)</summary>
-        <Text size={200} className={styles.muted}>Original cell values, including additional columns not used by the charts. Download original file retains every row and byte, regardless of filters.</Text>
+        <Text size={200} className={styles.muted}>Original cell values, including additional columns not used by the charts. {report.source === "reconciled"
+          ? "Only winning daily rows are shown. The ZIP preserves all originals and maps each winning day to its capture in manifest.json."
+          : "Download original file retains every row and byte, regardless of filters."}</Text>
         <div className={styles.tableWrap} tabIndex={0} role="region" aria-label="Original report columns scroll area">
           <table className={styles.table}>
             <caption>Original Daily report rows</caption>

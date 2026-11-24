@@ -29,10 +29,15 @@ npm run dev        # dev server on :5173, opened through the Power Apps player
 
 ## Credit reporting: API access and follow-up
 
-**Cost Controls > Power Platform credit usage** uses the Power Platform API
-through the existing `PP-API-Wrapper-Flow`, not the Admins V2 reporting actions.
-The flow preserves the HTTP status, `Location` / `Retry-After` headers and
-CSV/gzip body needed for generation, polling and download. Local bindings are
+**Cost Controls > Power Platform credit usage** submits reports through
+`PP-Request-Credit-Licensing-Report`, then uses the **Power Platform for Admins V2**
+connector to poll status. `PP-Download-Credit-Licensing-Report` downloads through
+the connector and returns the CSV as its `result` text output, avoiding the Code
+App SDK's CSV response-parsing limitation. The generation flow returns the initial
+operation URL in `reportlocation`, or an error message. Status checks wait
+30 seconds, or longer when the service exposes a longer `Retry-After` interval.
+The existing generic `PP-API-Wrapper-Flow` is not used by this reporting path.
+Local bindings are
 documented in [`solution/README.md`](../solution/README.md#local-development-connection-admission).
 
 For PIM-managed administrator access, **activate the required eligible admin
@@ -45,9 +50,13 @@ Do not automatically resubmit a report after an uncertain submission.
 **Follow-up:** revisit this reporting setup as additional Power Platform
 reporting API capabilities become available. Reassess the transport, permissions,
 header/file response contracts and available report types rather than assuming
-the current wrapper-flow approach is permanent. See
+the current generation-flow approach is permanent. See
 [`docs/connector-playground.md`](docs/connector-playground.md#power-platform-credit-usage)
 for the current lifecycle and limitations.
+
+For reusable collection APIs, retained captures, reconciliation rules, ZIP
+provenance and examples for other features, read the
+[credit-report framework guide](docs/credit-report-framework.md).
 
 ## Common commands
 

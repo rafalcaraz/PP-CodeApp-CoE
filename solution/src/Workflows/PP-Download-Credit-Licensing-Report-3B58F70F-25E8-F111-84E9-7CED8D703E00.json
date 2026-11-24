@@ -1,0 +1,161 @@
+{
+  "properties": {
+    "connectionReferences": {
+      "shared_powerplatformadminv2_1": {
+        "runtimeSource": "invoker",
+        "connection": {
+          "connectionReferenceLogicalName": "msftcsa_PPForAdminsV2"
+        },
+        "api": {
+          "name": "shared_powerplatformadminv2"
+        }
+      }
+    },
+    "definition": {
+      "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+      "contentVersion": "1.0.0.0",
+      "parameters": {
+        "$connections": {
+          "defaultValue": {},
+          "type": "Object"
+        },
+        "$authentication": {
+          "defaultValue": {},
+          "type": "SecureObject"
+        }
+      },
+      "triggers": {
+        "manual": {
+          "metadata": {
+            "operationMetadataId": "99e9eebe-6162-481c-aef5-d10d3f1c30ed"
+          },
+          "type": "Request",
+          "kind": "PowerAppV2",
+          "inputs": {
+            "schema": {
+              "type": "object",
+              "properties": {
+                "text": {
+                  "title": "reportName",
+                  "type": "string",
+                  "x-ms-dynamically-added": true,
+                  "description": "Please enter your input",
+                  "x-ms-content-hint": "TEXT"
+                },
+                "text_1": {
+                  "title": "fileName",
+                  "type": "string",
+                  "x-ms-dynamically-added": true,
+                  "description": "Please enter your input",
+                  "x-ms-content-hint": "TEXT"
+                }
+              },
+              "required": [
+                "text",
+                "text_1"
+              ]
+            }
+          }
+        }
+      },
+      "actions": {
+        "Init_var_-_result": {
+          "runAfter": {},
+          "metadata": {
+            "operationMetadataId": "49ed7206-ee80-457f-bd1e-50909890957d"
+          },
+          "type": "InitializeVariable",
+          "inputs": {
+            "variables": [
+              {
+                "name": "result",
+                "type": "string",
+                "value": "ERROR-DEFAULT"
+              }
+            ]
+          }
+        },
+        "Main": {
+          "actions": {
+            "DownloadReport": {
+              "runAfter": {},
+              "metadata": {
+                "operationMetadataId": "f7577a1d-7279-4aa7-a4ab-eb1c31537009"
+              },
+              "type": "OpenApiConnection",
+              "inputs": {
+                "host": {
+                  "connectionName": "shared_powerplatformadminv2_1",
+                  "operationId": "DownloadLicensingReportFile",
+                  "apiId": "/providers/Microsoft.PowerApps/apis/shared_powerplatformadminv2"
+                },
+                "parameters": {
+                  "ReportName": "@triggerBody()['text']",
+                  "FileName": "@triggerBody()['text_1']",
+                  "api-version": "2024-10-01"
+                },
+                "authentication": "@parameters('$authentication')"
+              }
+            },
+            "Set_variable": {
+              "runAfter": {
+                "DownloadReport": [
+                  "Succeeded"
+                ]
+              },
+              "metadata": {
+                "operationMetadataId": "c8fb7597-c566-4f9b-a9ab-59a7e82ddb7f"
+              },
+              "type": "SetVariable",
+              "inputs": {
+                "name": "result",
+                "value": "@{string(body('DownloadReport'))}"
+              }
+            }
+          },
+          "runAfter": {
+            "Init_var_-_result": [
+              "Succeeded"
+            ]
+          },
+          "metadata": {
+            "operationMetadataId": "7d994853-30c9-4da0-aa03-c0279db0682a"
+          },
+          "type": "Scope"
+        },
+        "Respond_to_a_Power_App_or_flow": {
+          "runAfter": {
+            "Main": [
+              "Succeeded",
+              "Failed"
+            ]
+          },
+          "metadata": {
+            "operationMetadataId": "33645aa4-cc2b-41da-9b12-c2f26d9af1a9"
+          },
+          "type": "Response",
+          "kind": "PowerApp",
+          "inputs": {
+            "statusCode": 200,
+            "body": {
+              "result": "@variables('result')"
+            },
+            "schema": {
+              "type": "object",
+              "properties": {
+                "result": {
+                  "title": "result",
+                  "x-ms-dynamically-added": true,
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      },
+      "outputs": {}
+    },
+    "templateName": null
+  },
+  "schemaVersion": "1.0.0.0"
+}

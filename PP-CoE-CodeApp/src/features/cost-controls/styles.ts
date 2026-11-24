@@ -32,6 +32,7 @@ export const useCostStyles = makeStyles({
     display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 220px), 1fr))",
     gap: tokens.spacingHorizontalL, alignItems: "start",
   },
+  reportPicker: { minWidth: 0, maxWidth: "100%", "& select": { minWidth: 0, maxWidth: "100%" } },
   management: {
     display: "grid", gridTemplateColumns: "minmax(230px, 1fr) minmax(0, 3fr)", gap: tokens.spacingHorizontalL,
     "@media (max-width: 1050px)": { gridTemplateColumns: "minmax(0, 1fr)" },

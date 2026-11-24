@@ -84,6 +84,7 @@ and the diff is obvious in code review.
 | Portal-action buttons on detail pages | `PP-CoE-CodeApp/docs/portal-actions.md` |
 | Environment-group rule renderers | `PP-CoE-CodeApp/docs/governance-rules-catalog.md` + `PP-CoE-CodeApp/docs/admin-payload-samples.md` |
 | Admin-connector enrichment (per-record `Get_*` calls) | `PP-CoE-CodeApp/docs/admin-connector-inventory.md` + `admin-payload-samples.md` |
+| **Power Platform credit reports, retained captures, consumption reuse or reporting flows** | `PP-CoE-CodeApp/docs/credit-report-framework.md` (flow contracts, public APIs, tenant scopes, daily reconciliation, exports and persistence seams) |
 | **Tenant scans** (deep-inventory fanout across envs — `embeddedApp.type`, `usesPremiumApi`, etc.) | `PP-CoE-CodeApp/src/shared/deep-inventory/index.ts` is the public barrel; curated properties live in `catalog/curated.<source>.ts`. The runner streams events; the UI is `features/deep-inventory/DeepScanView.tsx`. Adding a queryable property = appending one entry to the curated registry (one-line change). |
 | The Copilot Studio assistant chat | `PP-CoE-CodeApp/docs/copilot-studio-integration.md` |
 | Anything under `src/generated/` | `PP-CoE-CodeApp/docs/connector-generator-fixup.md` (the generator is auto-healed by `postinstall` — don't hand-edit) |

@@ -91,9 +91,8 @@ function fullFixture() {
   };
 }
 
-test("reports the recurring 11-connection export's seven missing names and three HTTP dependencies together", () => {
+test("reports the full configured export's seven missing names and three HTTP dependencies together", () => {
   const f = fullFixture();
-  assert.equal(Object.keys(f.refs).length, 11);
   verifyCodeAppExport(xml(f), f.config);
   for (const ref of Object.values(f.refs)) delete ref.xrmConnectionReferenceLogicalName;
   const httpNames = Object.values(f.config.connectionReferences)

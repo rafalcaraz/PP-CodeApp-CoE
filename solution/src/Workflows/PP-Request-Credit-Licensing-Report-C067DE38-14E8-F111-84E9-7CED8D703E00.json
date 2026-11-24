@@ -1,0 +1,180 @@
+{
+  "properties": {
+    "connectionReferences": {
+      "shared_powerplatformadminv2_1": {
+        "runtimeSource": "invoker",
+        "connection": {
+          "connectionReferenceLogicalName": "msftcsa_PPForAdminsV2"
+        },
+        "api": {
+          "name": "shared_powerplatformadminv2"
+        }
+      }
+    },
+    "definition": {
+      "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+      "contentVersion": "1.0.0.0",
+      "parameters": {
+        "$connections": {
+          "defaultValue": {},
+          "type": "Object"
+        },
+        "$authentication": {
+          "defaultValue": {},
+          "type": "SecureObject"
+        }
+      },
+      "triggers": {
+        "manual": {
+          "metadata": {
+            "operationMetadataId": "d2b7ef04-ad0e-4fcb-8643-daeefbddc272"
+          },
+          "type": "Request",
+          "kind": "PowerAppV2",
+          "inputs": {
+            "schema": {
+              "type": "object",
+              "properties": {
+                "text": {
+                  "title": "reportName",
+                  "type": "string",
+                  "x-ms-dynamically-added": true,
+                  "description": "Please enter your input",
+                  "x-ms-content-hint": "TEXT"
+                },
+                "text_1": {
+                  "title": "endDate",
+                  "type": "string",
+                  "x-ms-dynamically-added": true,
+                  "description": "Please enter your input",
+                  "x-ms-content-hint": "TEXT"
+                },
+                "text_2": {
+                  "title": "startDate",
+                  "type": "string",
+                  "x-ms-dynamically-added": true,
+                  "description": "Please enter your input",
+                  "x-ms-content-hint": "TEXT"
+                },
+                "text_3": {
+                  "title": "granularity",
+                  "type": "string",
+                  "x-ms-dynamically-added": true,
+                  "description": "Please enter your input",
+                  "x-ms-content-hint": "TEXT"
+                }
+              },
+              "required": [
+                "text",
+                "text_1",
+                "text_2",
+                "text_3"
+              ]
+            }
+          }
+        }
+      },
+      "actions": {
+        "Init_var_-_ReportHeader": {
+          "runAfter": {},
+          "metadata": {
+            "operationMetadataId": "dd41d9c0-7193-4b1c-ac06-c1ce1e1ba6f1"
+          },
+          "type": "InitializeVariable",
+          "inputs": {
+            "variables": [
+              {
+                "name": "reportLocation",
+                "type": "string",
+                "value": "ERROR-SOMETHING-WENT-WRONG"
+              }
+            ]
+          }
+        },
+        "Main-Op": {
+          "actions": {
+            "Generate_Licensing_Report": {
+              "runAfter": {},
+              "metadata": {
+                "operationMetadataId": "0b96a499-0cdb-4a2f-89a6-f427f1868eac"
+              },
+              "type": "OpenApiConnection",
+              "inputs": {
+                "host": {
+                  "connectionName": "shared_powerplatformadminv2_1",
+                  "operationId": "GenerateLicensingReport",
+                  "apiId": "/providers/Microsoft.PowerApps/apis/shared_powerplatformadminv2"
+                },
+                "parameters": {
+                  "ReportName": "@triggerBody()['text']",
+                  "api-version": "2024-10-01",
+                  "body/endDate": "@triggerBody()['text_1']",
+                  "body/startDate": "@triggerBody()['text_2']",
+                  "body/granularity": "@triggerBody()['text_3']"
+                },
+                "authentication": "@parameters('$authentication')"
+              },
+              "operationOptions": "DisableAsyncPattern"
+            },
+            "Set-Location": {
+              "runAfter": {
+                "Generate_Licensing_Report": [
+                  "Succeeded"
+                ]
+              },
+              "metadata": {
+                "operationMetadataId": "6b2355be-9c23-46a6-b12f-4b39b235e515"
+              },
+              "type": "SetVariable",
+              "inputs": {
+                "name": "reportLocation",
+                "value": "@{coalesce(outputs('Generate_Licensing_Report')?['headers']?['Location'],outputs('Generate_Licensing_Report')?['headers']?['location'])}"
+              }
+            }
+          },
+          "runAfter": {
+            "Init_var_-_ReportHeader": [
+              "Succeeded"
+            ]
+          },
+          "metadata": {
+            "operationMetadataId": "afbbe928-3440-4b37-89ae-2459a1faa1c1"
+          },
+          "type": "Scope"
+        },
+        "Respond_to_a_Power_App_or_flow": {
+          "runAfter": {
+            "Main-Op": [
+              "Succeeded",
+              "Failed"
+            ]
+          },
+          "metadata": {
+            "operationMetadataId": "5cf562e3-079d-472a-9c7a-23dfc9cc01cd"
+          },
+          "type": "Response",
+          "kind": "PowerApp",
+          "inputs": {
+            "statusCode": 200,
+            "body": {
+              "reportlocation": "@variables('reportLocation')"
+            },
+            "schema": {
+              "type": "object",
+              "properties": {
+                "reportlocation": {
+                  "title": "reportLocation",
+                  "x-ms-dynamically-added": true,
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      },
+      "outputs": {}
+    },
+    "templateName": null
+  },
+  "schemaVersion": "1.0.0.0"
+}

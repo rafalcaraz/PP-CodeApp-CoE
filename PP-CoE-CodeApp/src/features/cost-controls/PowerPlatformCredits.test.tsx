@@ -4,7 +4,7 @@ import { FluentProvider, webLightTheme } from "@fluentui/react-components";
 import { MemoryRouter, Routes } from "react-router-dom";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import {
-  clearCreditReports, getCreditReports, readCreditReport, replaceCreditReport,
+  clearCreditReports, getCreditReportCaptures, getCreditReports, readCreditReport, replaceCreditReport, reportRangePreset,
   type CreditReport, type ReportResult,
 } from "../../shared/credit-reports";
 import { PowerPlatformCredits } from "./PowerPlatformCredits";
@@ -57,21 +57,21 @@ describe("Power Platform credit usage", () => {
     expect(acquire).not.toHaveBeenCalled(); expect(graphRead).not.toHaveBeenCalled();
   });
   it("requires exact confirmation before sequentially requesting both Daily report types", async () => {
-    const first = await report();
-    const second = await report(billing);
+    const first = await report(billing);
+    const second = await report();
     acquire.mockResolvedValueOnce({ ok: true, data: first }).mockResolvedValueOnce({ ok: true, data: second });
     renderPage();
     fireEvent.click(screen.getByRole("button", { name: "Review report request" }));
     const dialog = screen.getByRole("dialog");
-    expect(within(dialog).getByText(/through the existing PP-API-Wrapper-Flow/)).toBeInTheDocument();
+    expect(within(dialog).getByText(/through PP-Request-Credit-Licensing-Report/)).toBeInTheDocument();
     expect(within(dialog).getByText(/FeatureDetailsPerResource/)).toHaveTextContent("BillingDetailsPerEnvironment");
     expect(within(dialog).getByRole("button", { name: "Generate reports" })).toBeDisabled();
     expect(acquire).not.toHaveBeenCalled();
     fireEvent.change(within(dialog).getByRole("textbox"), { target: { value: "GenerateLicensingReport" } });
     fireEvent.click(within(dialog).getByRole("button", { name: "Generate reports" }));
     await waitFor(() => expect(acquire).toHaveBeenCalledTimes(2));
-    expect(acquire.mock.calls.map(([options]) => options.name)).toEqual(["FeatureDetailsPerResource", "BillingDetailsPerEnvironment"]);
-    fireEvent.click(await screen.findByRole("tab", { name: "Environment billing (loaded)" }));
+    expect(acquire.mock.calls.map(([options]) => options.name)).toEqual(["BillingDetailsPerEnvironment", "FeatureDetailsPerResource"]);
+    expect(await screen.findByRole("tab", { name: "Environment billing (loaded)" })).toHaveAttribute("aria-selected", "true");
     await screen.findByText(/Capacity-pack and pay-as-you-go values describe/);
     expect(getCreditReports()).toHaveLength(2);
     expect(graphRead).not.toHaveBeenCalled();
@@ -115,7 +115,7 @@ describe("Power Platform credit usage", () => {
     expect(click).toHaveBeenCalledOnce();
     view.unmount(); renderPage();
     expect(screen.getByRole("table", { name: /Filtered resources & features consumption/ })).toHaveTextContent("Other environment agent");
-    fireEvent.click(screen.getByRole("button", { name: "Clear this report" }));
+    fireEvent.click(screen.getByRole("button", { name: "Remove selected capture" }));
     expect(screen.getByText(/Start with a report/)).toBeInTheDocument();
     click.mockRestore();
   });
@@ -147,5 +147,71 @@ describe("Power Platform credit usage", () => {
     await waitFor(() => expect(acquire).toHaveBeenCalledOnce());
     expect(acquire.mock.calls[0][0].resume).toMatchObject({ operationId: "known-operation" });
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+  it("changes request presets while preserving manually editable dates", () => {
+    renderPage();
+    fireEvent.change(screen.getByRole("combobox", { name: "Request date preset" }), { target: { value: "7" } });
+    expect(screen.getByLabelText("UTC start date")).toHaveValue(reportRangePreset(7).startDate);
+    expect(screen.getByLabelText("UTC end date")).toHaveValue(reportRangePreset(7).endDate);
+    fireEvent.change(screen.getByRole("combobox", { name: "Request date preset" }), { target: { value: "1" } });
+    expect(screen.getByLabelText("UTC start date")).toHaveValue(reportRangePreset(1).endDate);
+    fireEvent.change(screen.getByLabelText("UTC start date"), { target: { value: reportRangePreset(7).startDate } });
+    expect(screen.getByRole("combobox", { name: "Request date preset" })).toHaveValue("custom");
+    expect(screen.getByLabelText("UTC start date")).toHaveValue(reportRangePreset(7).startDate);
+  });
+  it("switches between individual captures and reconciled days, with local-only filters and restored older days on removal", async () => {
+    const header = "BilledDate,TenantID,EnvironmentID,CapacityPackCreditsConsumed,PayGoConsumedQuantity";
+    const first = { ...await report(`${header}\n2026-11-01,tenant-a,env-a,10,0\n2026-11-02,tenant-a,env-a,20,0`), loadedAt: "2026-11-03T00:00:00Z" };
+    const second = { ...await report(`${header}\n2026-11-02,tenant-a,env-a,7,0\n2026-11-03,tenant-a,env-a,5,0`), loadedAt: "2026-11-04T00:00:00Z" };
+    replaceCreditReport(first); replaceCreditReport(second);
+    renderPage();
+    const total = () => screen.getByLabelText("Filtered report consumption");
+    expect(total()).toHaveTextContent("Capacity-pack credits consumed: 12");
+    fireEvent.change(screen.getByRole("combobox", { name: "Report capture" }), { target: { value: first.id } });
+    expect(total()).toHaveTextContent("Capacity-pack credits consumed: 30");
+    fireEvent.change(screen.getByRole("combobox", { name: "Analysis mode" }), { target: { value: "holistic" } });
+    expect(total()).toHaveTextContent("Capacity-pack credits consumed: 22");
+    expect(screen.getByText(/3 reported days; gaps are unknown/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Download original file" })).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Filter from UTC"), { target: { value: "2026-11-02" } });
+    expect(total()).toHaveTextContent("Capacity-pack credits consumed: 12");
+    fireEvent.click(screen.getByRole("button", { name: "Clear analysis filters" }));
+    expect(total()).toHaveTextContent("Capacity-pack credits consumed: 22");
+    fireEvent.change(screen.getByRole("combobox", { name: "Analysis mode" }), { target: { value: "capture" } });
+    fireEvent.change(screen.getByRole("combobox", { name: "Report capture" }), { target: { value: second.id } });
+    fireEvent.click(screen.getByRole("button", { name: "Remove selected capture" }));
+    expect(total()).toHaveTextContent("Capacity-pack credits consumed: 30");
+    expect(getCreditReportCaptures()).toEqual([first]);
+    expect(acquire).not.toHaveBeenCalled();
+  });
+  it("warns about a retained requested period but permits an explicitly confirmed fresh request", async () => {
+    const loaded: CreditReport = {
+      ...await report(billing), source: "connector", requestedRange: reportRangePreset(30),
+    };
+    replaceCreditReport(loaded);
+    renderPage();
+    fireEvent.click(screen.getByText("Request or upload Daily reports", { selector: "summary" }));
+    expect(screen.getByText(/A retained download was requested for these dates/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "View loaded environment billing" }));
+    expect(acquire).not.toHaveBeenCalled();
+    confirmGeneration();
+    await waitFor(() => expect(acquire).toHaveBeenCalledOnce());
+    expect(getCreditReportCaptures()).toEqual([loaded]);
+  });
+  it("downloads a ZIP containing all captures even when analysis filters hide the rows", async () => {
+    replaceCreditReport(await report(billing));
+    replaceCreditReport(await report());
+    const createUrl = vi.fn().mockReturnValue("blob:archive");
+    vi.stubGlobal("URL", Object.assign(URL, { createObjectURL: createUrl, revokeObjectURL: vi.fn() }));
+    const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+    renderPage();
+    fireEvent.change(screen.getByRole("textbox", { name: "Search report values" }), { target: { value: "missing" } });
+    fireEvent.click(screen.getByRole("button", { name: "Export all captures (ZIP)" }));
+    await waitFor(() => expect(createUrl).toHaveBeenCalledOnce());
+    expect(createUrl.mock.calls[0][0].type).toBe("application/zip");
+    expect(getCreditReportCaptures()).toHaveLength(2);
+    expect(click).toHaveBeenCalledOnce();
+    expect(acquire).not.toHaveBeenCalled();
+    click.mockRestore();
   });
 });

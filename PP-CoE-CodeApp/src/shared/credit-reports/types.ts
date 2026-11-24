@@ -1,4 +1,4 @@
-export const REPORT_NAMES = ["FeatureDetailsPerResource", "BillingDetailsPerEnvironment"] as const;
+export const REPORT_NAMES = ["BillingDetailsPerEnvironment", "FeatureDetailsPerResource"] as const;
 export type ReportName = typeof REPORT_NAMES[number];
 export interface ReportRange { startDate: string; endDate: string }
 
@@ -37,6 +37,13 @@ export interface CreditReport {
   readonly rows: readonly CreditReportRow[];
   readonly fileName: string;
   readonly original: Blob;
+}
+
+export interface ReconciledCreditReport extends Omit<CreditReport, "source" | "original" | "fileName"> {
+  readonly source: "reconciled";
+  readonly captureIds: readonly string[];
+  readonly daySources: Readonly<Record<string, string>>;
+  readonly scopeKey: string;
 }
 
 export interface ReportJob {

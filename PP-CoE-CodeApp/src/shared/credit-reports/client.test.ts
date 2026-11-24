@@ -1,25 +1,223 @@
 import { gzipSync, strToU8 } from "fflate";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { acquireCreditReport } from "./client";
+import { createConnectorReportTransport, powerPlatformApiReportTransport } from "./transport";
 import type { ReportJob } from "./types";
 
-const { runFlow, generateV2 } = vi.hoisted(() => ({ runFlow: vi.fn(), generateV2: vi.fn() }));
+const { runFlow, generateV2, pollV2, downloadV2, requestReport, downloadReport } = vi.hoisted(() => ({
+  runFlow: vi.fn(), generateV2: vi.fn(), pollV2: vi.fn(), downloadV2: vi.fn(), requestReport: vi.fn(), downloadReport: vi.fn(),
+}));
 const { Blob: NodeBlob } = await vi.importActual<{ Blob: typeof Blob }>("node:buffer");
 vi.mock("../../generated/services/PP_API_Wrapper_FlowService", () => ({
   PP_API_Wrapper_FlowService: { Run: runFlow },
 }));
+vi.mock("../../generated/services/PP_Request_Credit_Licensing_ReportService", () => ({
+  PP_Request_Credit_Licensing_ReportService: { Run: requestReport },
+}));
+vi.mock("../../generated/services/PP_Download_Credit_Licensing_ReportService", () => ({
+  PP_Download_Credit_Licensing_ReportService: { Run: downloadReport },
+}));
 vi.mock("../../generated/services/PowerPlatformforAdminsV2Service", () => ({
-  PowerPlatformforAdminsV2Service: { GenerateLicensingReport: generateV2 },
+  PowerPlatformforAdminsV2Service: {
+    GenerateLicensingReport: generateV2,
+    GetLicensingReportOperation: pollV2,
+    DownloadLicensingReportFile: downloadV2,
+  },
 }));
 const name = "FeatureDetailsPerResource";
 const range = { startDate: "2026-11-01", endDate: "2026-11-02" };
 const base = `https://api.powerplatform.com/copilotstudio/licensing/reports/${name}`;
 const location = `${base}/operations/op-1`;
+const gatewayBase = "https://synthetic-env.02.common.usa002.azure-apihub.net/apim/powerplatformadminv2/synthetic-connection";
+const gatewayLocation = `${gatewayBase}/copilotstudio/licensing/reports/${name}/operations/op-1?api-version=2024-10-01`;
 const csv = "ConsumptionDate,BilledCredits,NonBilledCredits\n2026-11-01,10,2";
 const bytes = gzipSync(strToU8(csv), { mtime: 0 });
 const onJob = vi.fn<(job: ReportJob) => void>();
 const response = (body: unknown, headers = {}, statusCode = 200) => ({
   success: true, data: { response: JSON.stringify({ statusCode, headers, body }) },
+});
+
+describe("generation-flow / Admins V2 transport", () => {
+  it.each([location, gatewayLocation])("uses the registered generation flow and polls the operation from %s", async (reportlocation) => {
+    requestReport.mockResolvedValue({ success: true, data: { reportlocation } });
+    pollV2.mockResolvedValue({ success: true, data: { status: "Succeeded", fileName: "report.csv" } });
+    downloadReport.mockResolvedValue({ success: true, data: { result: csv } });
+    const pending = acquireCreditReport({ name, range, signal: new AbortController().signal, onJob });
+    await vi.advanceTimersByTimeAsync(29_999);
+    expect(requestReport).toHaveBeenCalledExactlyOnceWith({
+      text: name, text_1: range.endDate, text_2: range.startDate, text_3: "Daily",
+    });
+    expect(pollV2).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1);
+    expect(await pending).toMatchObject({ ok: true, data: { source: "connector" } });
+    expect(pollV2).toHaveBeenCalledExactlyOnceWith(name, "op-1", "2024-10-01");
+    expect(downloadReport).toHaveBeenCalledExactlyOnceWith({ text: name, text_1: "report.csv" });
+    expect(runFlow).not.toHaveBeenCalled();
+  });
+  it.each([
+    [{ success: true, data: { reportlocation: "Report generation denied" } }, "Report generation denied"],
+    [{ success: true, data: {} }, "no reportlocation"],
+    [{ success: false, error: { message: "Flow request failed" } }, "Flow request failed"],
+  ])("surfaces the generation flow failure %j without polling or resubmitting", async (response, error) => {
+    requestReport.mockResolvedValue(response);
+    expect(await acquireCreditReport({
+      name, range, signal: new AbortController().signal, onJob,
+    })).toMatchObject({ ok: false, error: expect.stringContaining(error) });
+    expect(requestReport).toHaveBeenCalledOnce();
+    expect(pollV2).not.toHaveBeenCalled();
+    expect(runFlow).not.toHaveBeenCalled();
+  });
+  it.each(["FeatureDetailsPerResource", "BillingDetailsPerEnvironment"] as const)(
+    "submits %s through the supplied flow, polls V2 and downloads through the registered CSV flow",
+    async (reportName) => {
+      const generate = vi.fn().mockResolvedValue({
+        location: `${gatewayBase}/copilotstudio/licensing/reports/${reportName}/operations/flow-op?api-version=2024-10-01`,
+      });
+      pollV2.mockResolvedValueOnce({
+        success: true, data: { status: "Running" }, headers: { "retry-after": "45" },
+      }).mockResolvedValue({
+        success: true, data: { status: "Succeeded", fileName: "report.csv" },
+      });
+      downloadReport.mockResolvedValue({
+        success: true, data: { result: reportName === name ? csv
+          : "BilledDate,CapacityPackCreditsConsumed,PayGoConsumedQuantity\r\n2026-11-01 00:00:00.0000000,10,2" },
+      });
+      const pending = acquireCreditReport({
+        ...options(), name: reportName, transport: createConnectorReportTransport(generate),
+      });
+      await vi.advanceTimersByTimeAsync(29_999);
+      expect(generate).toHaveBeenCalledExactlyOnceWith(reportName, range);
+      expect(pollV2).not.toHaveBeenCalled();
+      await vi.advanceTimersByTimeAsync(1);
+      expect(pollV2).toHaveBeenCalledExactlyOnceWith(reportName, "flow-op", "2024-10-01");
+      await vi.advanceTimersByTimeAsync(44_999);
+      expect(pollV2).toHaveBeenCalledOnce();
+      await vi.advanceTimersByTimeAsync(1);
+      const result = await pending;
+      expect(result).toMatchObject({
+        ok: true, data: { name: reportName, source: "connector", rows: [{ first: 10, second: 2 }] },
+      });
+      expect(downloadReport).toHaveBeenCalledExactlyOnceWith({ text: reportName, text_1: "report.csv" });
+      expect(runFlow).not.toHaveBeenCalled();
+    },
+  );
+  it("preserves base64 gzip bytes returned as flow text when resuming a file", async () => {
+    const generate = vi.fn();
+    downloadReport.mockResolvedValue({
+      success: true, data: { result: btoa(String.fromCharCode(...bytes)) },
+    });
+    const result = await acquireCreditReport({
+      ...options(), transport: createConnectorReportTransport(generate),
+      resume: { name, range, phase: "downloading", fileName: "report.csv.gz" },
+    });
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(new Uint8Array(await result.data.original.arrayBuffer())).toEqual(bytes);
+    expect(generate).not.toHaveBeenCalled();
+    expect(pollV2).not.toHaveBeenCalled();
+    expect(runFlow).not.toHaveBeenCalled();
+  });
+  it("waits 30 seconds between Running responses even when V2 omits headers", async () => {
+    const generate = vi.fn().mockResolvedValue({ location });
+    pollV2.mockResolvedValueOnce({ success: true, data: { status: "Running" } })
+      .mockResolvedValue({ success: true, data: { status: "Succeeded", fileName: "report.csv" } });
+    downloadReport.mockResolvedValue({ success: true, data: { result: csv } });
+    const pending = acquireCreditReport({ ...options(), transport: createConnectorReportTransport(generate) });
+    await vi.advanceTimersByTimeAsync(59_999);
+    expect(pollV2).toHaveBeenCalledOnce();
+    expect(downloadReport).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1);
+    expect(await pending).toMatchObject({ ok: true });
+    expect(generate).toHaveBeenCalledOnce();
+    expect(pollV2).toHaveBeenCalledTimes(2);
+    expect(runFlow).not.toHaveBeenCalled();
+  });
+  it("surfaces connector failure without retrying or falling back to the API", async () => {
+    pollV2.mockResolvedValue({ success: false, error: { message: "Access denied" } });
+    const result = await acquireCreditReport({
+      ...options(), transport: createConnectorReportTransport(vi.fn()),
+      resume: { name, range, phase: "polling", operationId: "op-1" },
+    });
+    expect(result).toMatchObject({ ok: false, error: expect.stringContaining("Access denied") });
+    expect(pollV2).toHaveBeenCalledOnce();
+    expect(downloadReport).not.toHaveBeenCalled();
+    expect(runFlow).not.toHaveBeenCalled();
+  });
+  it("identifies download-flow failures and logs the stage without file contents", async () => {
+    requestReport.mockResolvedValue({ success: true, data: { reportlocation: gatewayLocation } });
+    pollV2.mockResolvedValue({ success: true, data: { status: "Succeeded", fileName: "report.csv.gz" } });
+    downloadReport.mockResolvedValue({ success: false, error: new Error("Flow download failed") });
+    const pending = acquireCreditReport({ name, range, signal: new AbortController().signal, onJob });
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(await pending).toMatchObject({
+      ok: false, error: "PP-Download-Credit-Licensing-Report: Flow download failed",
+      job: { phase: "downloading", fileName: "report.csv.gz" },
+    });
+    expect(console.info).toHaveBeenCalledWith("[credit-reports] connector response", expect.objectContaining({
+      action: "PP-Download-Credit-Licensing-Report", success: false, kind: "undefined",
+    }));
+    expect(console.error).toHaveBeenCalledWith("[credit-reports] acquisition stopped", {
+      report: name, phase: "downloading", error: "PP-Download-Credit-Licensing-Report: Flow download failed",
+      hasOperationId: true, hasFileName: true,
+    });
+    expect(console.info).not.toHaveBeenCalledWith("[credit-reports] parsing downloaded report", expect.anything());
+  });
+  it("processes a large CSV flow result, retains its exact text, and removes a misleading gzip suffix", async () => {
+    const text = `ConsumptionDate,BilledCredits,NonBilledCredits,ResourceName\r\n${
+      '2026-11-01 00:00:00.0000000,1.25,0,"Agent, ""Example"""\r\n'.repeat(2500)}`;
+    downloadReport.mockResolvedValue({ success: true, data: { result: text } });
+    const result = await acquireCreditReport({
+      name, range, signal: new AbortController().signal, onJob,
+      resume: { name, range, phase: "downloading", fileName: "report.csv.gz" },
+    });
+    expect(result).toMatchObject({ ok: true, data: { fileName: "report.csv" } });
+    if (result.ok) {
+      expect(result.data.rows).toHaveLength(2500);
+      expect(result.data.rows[0]).toMatchObject({ date: "2026-11-01", first: 1.25 });
+      expect(await result.data.original.text()).toBe(text);
+    }
+    expect(downloadReport).toHaveBeenCalledExactlyOnceWith({ text: name, text_1: "report.csv.gz" });
+    expect(requestReport).not.toHaveBeenCalled();
+    expect(pollV2).not.toHaveBeenCalled();
+    expect(JSON.stringify(vi.mocked(console.info).mock.calls)).not.toContain('Agent,');
+  });
+  it.each([undefined, null, "", "   ", 42])("rejects a missing/invalid CSV result %j without generating or switching transports", async (result) => {
+    downloadReport.mockResolvedValue({ success: true, data: { result } });
+    expect(await acquireCreditReport({
+      name, range, signal: new AbortController().signal, onJob,
+      resume: { name, range, phase: "downloading", fileName: "report.csv.gz" },
+    })).toMatchObject({
+      ok: false, error: expect.stringContaining("result output"), job: { fileName: "report.csv.gz" },
+    });
+    expect(downloadReport).toHaveBeenCalledOnce();
+    expect(requestReport).not.toHaveBeenCalled();
+    expect(runFlow).not.toHaveBeenCalled();
+  });
+  it("does not retry an uncertain generation-flow failure", async () => {
+    const generate = vi.fn().mockRejectedValue(new Error("Flow timed out; submission uncertain"));
+    expect(await acquireCreditReport({
+      ...options(), transport: createConnectorReportTransport(generate),
+    })).toMatchObject({ ok: false, error: expect.stringContaining("submission uncertain") });
+    expect(generate).toHaveBeenCalledOnce();
+    expect(pollV2).not.toHaveBeenCalled();
+    expect(runFlow).not.toHaveBeenCalled();
+  });
+  it.each([
+    `https://example.invalid/copilotstudio/licensing/reports/${name}/operations/op-1`,
+    gatewayLocation.replace(".azure-apihub.net", ".azure-apihub.net.example.invalid"),
+    gatewayLocation.replace("/powerplatformadminv2/", "/anotherconnector/"),
+    gatewayLocation.replace("https:", "http:"),
+    gatewayLocation.replace("https://", "https://user:password@"),
+    gatewayLocation.replace(name, "BillingDetailsPerEnvironment"),
+    gatewayLocation.replace("/operations/op-1", "/operations/op%2Fbad"),
+  ])("rejects an unrelated or malformed Location %s before polling", async (location) => {
+    const generate = vi.fn().mockResolvedValue({ location });
+    expect(await acquireCreditReport({
+      ...options(), transport: createConnectorReportTransport(generate),
+    })).toMatchObject({ ok: false });
+    expect(generate).toHaveBeenCalledOnce();
+    expect(pollV2).not.toHaveBeenCalled();
+    expect(runFlow).not.toHaveBeenCalled();
+  });
 });
 const submitted = () => response(null, { Location: location, "Retry-After": "5" }, 202);
 const succeeded = () => response({ status: "Succeeded", fileName: "report.csv.gz" });
@@ -30,13 +228,19 @@ beforeEach(() => {
   vi.useFakeTimers(); vi.setSystemTime(new Date("2026-11-23T12:00:00Z"));
   vi.stubGlobal("Blob", NodeBlob);
   vi.resetAllMocks();
+  vi.spyOn(console, "info").mockImplementation(() => {});
+  vi.spyOn(console, "error").mockImplementation(() => {});
   runFlow.mockResolvedValueOnce(submitted()).mockResolvedValueOnce(succeeded()).mockResolvedValue(file());
 });
 afterEach(() => {
   expect(generateV2).not.toHaveBeenCalled();
+  expect(downloadV2).not.toHaveBeenCalled();
   vi.useRealTimers(); vi.unstubAllGlobals();
+  vi.restoreAllMocks();
 });
-const options = () => ({ name, range, signal: new AbortController().signal, onJob } as const);
+const options = () => ({
+  name, range, signal: new AbortController().signal, onJob, transport: powerPlatformApiReportTransport,
+} as const);
 const request = (suffix = "") => ({
   text: "GET", text_1: `${base}${suffix}?api-version=2024-10-01`, text_2: "",
 });

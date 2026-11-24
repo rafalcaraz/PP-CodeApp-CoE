@@ -13,12 +13,16 @@ export function utcDay(value: string): string {
   return date;
 }
 
-export function defaultReportRange(now = new Date()): ReportRange {
+export function reportRangePreset(days: 1 | 7 | 30, now = new Date()): ReportRange {
   const midnight = Date.parse(now.toISOString().slice(0, 10));
   return {
-    startDate: new Date(midnight - 30 * 86_400_000).toISOString().slice(0, 10),
+    startDate: new Date(midnight - days * 86_400_000).toISOString().slice(0, 10),
     endDate: new Date(midnight - 86_400_000).toISOString().slice(0, 10),
   };
+}
+
+export function defaultReportRange(now = new Date()): ReportRange {
+  return reportRangePreset(30, now);
 }
 
 export function validateReportRange(range: ReportRange, now = new Date()) {
@@ -75,6 +79,11 @@ function creditNumber(value: string, column: string, row: number): number {
   return Number(trimmed);
 }
 
+function reportDay(value: string): string {
+  const midnight = /^(\d{4}-\d{2}-\d{2})[ T]00:00:00(?:\.0{1,7})?Z?$/.exec(value.trim());
+  return utcDay(midnight?.[1] ?? value);
+}
+
 export function parseReportCsv(text: string, expected?: ReportName) {
   const records = csvRecords(text.replace(/^\uFEFF/, ""));
   const columns = records.shift();
@@ -94,7 +103,7 @@ export function parseReportCsv(text: string, expected?: ReportName) {
     if (values.length !== columns.length) throw new Error(`Row ${index + 2}: expected ${columns.length} columns, received ${values.length}.`);
     const cells: Record<string, string> = Object.fromEntries(columns.map((column, i) => [column, values[i]]));
     return {
-      date: utcDay(cells[schema.date]),
+      date: reportDay(cells[schema.date]),
       environmentId: cells.EnvironmentID?.trim().toLowerCase() || null,
       environmentName: cells.EnvironmentName?.trim() || null,
       first: creditNumber(cells[schema.first], schema.first, index + 2),

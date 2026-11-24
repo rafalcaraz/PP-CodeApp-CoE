@@ -63,6 +63,37 @@ test("three HTTP audiences have distinct solution references with their document
   }
 });
 
+test("credit report generation flow returns the initial operation location with the registered input order", () => {
+  const file = workflowFiles.find((name) => name.startsWith("PP-Request-Credit-Licensing-Report-"));
+  assert.ok(file);
+  const { actions } = JSON.parse(readFileSync(new URL(file, workflowDir), "utf8")).properties.definition;
+  const generate = actions["Main-Op"].actions.Generate_Licensing_Report;
+  assert.equal(generate.operationOptions, "DisableAsyncPattern");
+  assert.deepEqual(generate.inputs.parameters, {
+    ReportName: "@triggerBody()['text']",
+    "api-version": "2024-10-01",
+    "body/endDate": "@triggerBody()['text_1']",
+    "body/startDate": "@triggerBody()['text_2']",
+    "body/granularity": "@triggerBody()['text_3']",
+  });
+  assert.equal(actions["Main-Op"].actions["Set-Location"].inputs.value,
+    "@{coalesce(outputs('Generate_Licensing_Report')?['headers']?['Location'],outputs('Generate_Licensing_Report')?['headers']?['location'])}");
+  assert.equal(actions.Respond_to_a_Power_App_or_flow.inputs.body.reportlocation, "@variables('reportLocation')");
+});
+
+test("credit report download flow returns the CSV body as the registered result text", () => {
+  const file = workflowFiles.find((name) => name.startsWith("PP-Download-Credit-Licensing-Report-"));
+  assert.ok(file);
+  const { actions } = JSON.parse(readFileSync(new URL(file, workflowDir), "utf8")).properties.definition;
+  assert.deepEqual(actions.Main.actions.DownloadReport.inputs.parameters, {
+    ReportName: "@triggerBody()['text']",
+    FileName: "@triggerBody()['text_1']",
+    "api-version": "2024-10-01",
+  });
+  assert.equal(actions.Main.actions.Set_variable.inputs.value, "@{string(body('DownloadReport'))}");
+  assert.equal(actions.Respond_to_a_Power_App_or_flow.inputs.body.result, "@variables('result')");
+});
+
 test("tracked app metadata preserves configured logical references and flow mappings without source connection IDs", () => {
   const directory = new URL("../solution/src/CanvasApps/", import.meta.url);
   const files = readdirSync(directory).filter((name) => name.endsWith(".meta.xml"));

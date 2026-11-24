@@ -4,7 +4,7 @@ export interface ReportFilter { startDate?: string; endDate?: string; environmen
 export type ReportDimension = "date" | "environment" | "resource" | "Feature" | "Product";
 export interface CreditTotal { key: string; label: string; detail: string; first: number; second: number; total: number; rows: number }
 
-export function selectReportRows(report: CreditReport, filter: ReportFilter = {}) {
+export function selectReportRows(report: Pick<CreditReport, "rows">, filter: ReportFilter = {}) {
   const search = filter.search?.trim().toLocaleLowerCase();
   return report.rows.filter((row) =>
     (!filter.startDate || row.date >= filter.startDate) &&

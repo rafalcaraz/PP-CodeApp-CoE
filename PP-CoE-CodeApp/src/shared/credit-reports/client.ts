@@ -1,10 +1,9 @@
-import { executePowerPlatformRequest, type ApiResult, type FlowHttpRequest } from "../power-platform-api";
 import { exposedResponseHeaders } from "../api-explorer/responseHeaders";
 import { formatApiError, isJsonObject } from "../api-explorer/schema";
 import { connectorReportBlob, readCreditReport, utcDay, validateReportRange } from "./files";
+import { connectorReportTransport, type CreditReportTransport, type ReportTransportResult } from "./transport";
 import type { CreditReport, ReportJob, ReportName, ReportRange, ReportResult } from "./types";
 
-const API_VERSION = "2024-10-01";
 const TIMEOUT_MS = 2 * 60 * 60 * 1000;
 
 function header(raw: unknown, name: string): string | undefined {
@@ -18,30 +17,31 @@ function header(raw: unknown, name: string): string | undefined {
 export function reportRetryAt(raw: unknown, now = Date.now()): number {
   const value = header(raw, "Retry-After")?.trim();
   if (!value || !/^\d+$/.test(value) || Number(value) <= 0 || !Number.isSafeInteger(Number(value))) {
-    throw new Error("The Power Platform API response did not expose a valid positive Retry-After interval. Automatic polling stopped; inspect the response before resuming. No replacement report was submitted.");
+    throw new Error("The report response did not expose a valid positive Retry-After interval. Automatic polling stopped; inspect the response before resuming. No replacement report was submitted.");
   }
   const at = now + Number(value) * 1000;
   if (!Number.isSafeInteger(at) || !Number.isFinite(new Date(at).getTime())) throw new Error("The report polling interval exceeds the supported date range.");
   return at;
 }
 
-function operationId(raw: unknown, name: ReportName): string {
+function operationId(raw: unknown, name: ReportName, source: CreditReportTransport["source"]): string {
   const location = header(raw, "Location");
-  if (!location) throw new Error("The Power Platform API response did not expose the initial Location header. The report may already be generating. Do not resubmit it; resume with its known operation ID or import a downloaded report. Check that PP-API-Wrapper-Flow returns the HTTP status, headers and body.");
-  const path = new URL(location, "https://api.powerplatform.com").pathname;
+  if (!location) throw new Error("The report response did not expose the initial Location header. The report may already be generating. Do not resubmit it; resume with its known operation ID or import a downloaded report. Check the generating flow's response outputs.");
+  const url = new URL(location, "https://api.powerplatform.com");
+  const gatewayPrefix = /^\/apim\/powerplatformadminv2\/[a-zA-Z0-9-]+(?=\/)/;
+  const connectorGateway = source === "connector"
+    && url.protocol === "https:" && !url.port
+    && url.hostname.endsWith(".azure-apihub.net") && gatewayPrefix.test(url.pathname);
+  if ((!connectorGateway && url.origin !== "https://api.powerplatform.com") || url.username || url.password || url.hash) {
+    throw new Error("The returned Location must identify a Power Platform API or Admins V2 connector report operation.");
+  }
+  // Extract only the operation ID; polling uses the SDK's own connection.
+  const path = connectorGateway ? url.pathname.replace(gatewayPrefix, "") : url.pathname;
   const match = /^\/copilotstudio\/licensing\/reports\/([^/]+)\/operations\/([^/]+)\/?$/.exec(path);
   if (!match || decodeURIComponent(match[1]) !== name) throw new Error("The returned Location is not an operation for the requested report.");
   const id = decodeURIComponent(match[2]);
   if (!/^[\w.~-]+$/.test(id)) throw new Error("The returned report operation ID is invalid.");
   return id;
-}
-
-function reportRequest(name: ReportName, suffix = "", range?: ReportRange): FlowHttpRequest {
-  return {
-    method: range ? "POST" : "GET",
-    url: `https://api.powerplatform.com/copilotstudio/licensing/reports/${name}${suffix}?api-version=${API_VERSION}`,
-    body: range ? JSON.stringify({ ...range, granularity: "Daily" }) : "",
-  };
 }
 
 function until<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
@@ -68,7 +68,9 @@ export async function acquireCreditReport(options: {
   signal: AbortSignal;
   onJob: (job: ReportJob) => void;
   resume?: ReportJob;
+  transport?: CreditReportTransport;
 }): Promise<ReportResult<CreditReport>> {
+  const transport = options.transport ?? connectorReportTransport;
   let job: ReportJob = options.resume
     ? { ...options.resume }
     : { name: options.name, range: { ...options.range }, phase: "submitting" };
@@ -79,9 +81,19 @@ export async function acquireCreditReport(options: {
   const signal = AbortSignal.any([options.signal, timeout.signal]);
   function update(patch: Partial<ReportJob>) {
     job = { ...job, ...patch };
+    console.info("[credit-reports] acquisition stage", {
+      report: job.name, phase: job.phase,
+      hasOperationId: Boolean(job.operationId), hasFileName: Boolean(job.fileName),
+    });
     options.onJob(job);
   }
-  async function call(invoke: () => Promise<ApiResult>) {
+  function nextPollAt(): number {
+    if (transport.pollIntervalMs === undefined) return reportRetryAt(diagnostic);
+    const earliest = Date.now() + transport.pollIntervalMs;
+    return header(diagnostic, "Retry-After") === undefined
+      ? earliest : Math.max(earliest, reportRetryAt(diagnostic));
+  }
+  async function call(invoke: () => Promise<ReportTransportResult>) {
     signal.throwIfAborted();
     if (Date.now() >= deadline) throw new Error("Report acquisition timed out after two hours. Resume the existing operation; do not generate a replacement.");
     const result = await until(invoke(), signal);
@@ -98,9 +110,9 @@ export async function acquireCreditReport(options: {
     if (!options.resume) {
       validateReportRange(options.range);
       update({ phase: "submitting" });
-      await call(() => executePowerPlatformRequest(reportRequest(job.name, "", job.range), true));
-      update({ operationId: operationId(diagnostic, job.name) });
-      update({ nextPollAt: reportRetryAt(diagnostic), phase: "waiting" });
+      await call(() => transport.submit(job.name, job.range));
+      update({ operationId: operationId(diagnostic, job.name, transport.source) });
+      update({ nextPollAt: nextPollAt(), phase: "waiting" });
     } else {
       if (job.name !== options.name || (!job.operationId && !job.fileName)) throw new Error("Resuming requires an operation ID or generated file name for the selected report.");
       if (job.phase === "failed") throw new Error("A failed report generation cannot be resumed.");
@@ -116,8 +128,8 @@ export async function acquireCreditReport(options: {
         await delay(Math.min(TIMEOUT_MS, Math.max(0, job.nextPollAt - Date.now())), signal);
       }
       update({ phase: "polling" });
-      const status = await call(() => executePowerPlatformRequest(reportRequest(job.name, `/operations/${encodeURIComponent(job.operationId!)}`)));
-      if (!isJsonObject(status)) throw new Error("The Power Platform API did not return a report status body.");
+      const status = await call(() => transport.poll(job.name, job.operationId!));
+      if (!isJsonObject(status)) throw new Error("The report operation did not return a status body.");
       if (status.status === "Failed") {
         update({ phase: "failed" });
         throw new Error(`Report generation failed: ${formatApiError(status.error)}. This operation cannot be resumed.`);
@@ -126,18 +138,23 @@ export async function acquireCreditReport(options: {
         if (typeof status.fileName !== "string" || !status.fileName.trim()) throw new Error("Report generation succeeded without a file name; downloading is unavailable.");
         update({ fileName: status.fileName, nextPollAt: undefined });
       } else if (status.status === "Running") {
-        update({ nextPollAt: reportRetryAt(diagnostic), phase: "waiting" });
+        update({ nextPollAt: nextPollAt(), phase: "waiting" });
       } else throw new Error(`Unexpected report status: ${formatApiError(status.status)}. Polling stopped.`);
     }
     update({ phase: "downloading" });
-    const body = await call(() => executePowerPlatformRequest(reportRequest(job.name, `/files/${encodeURIComponent(job.fileName!)}`)));
+    const body = await call(() => transport.download(job.name, job.fileName!));
+    console.info("[credit-reports] parsing downloaded report", { report: job.name });
     const data = await until(readCreditReport(connectorReportBlob(body), job.fileName, {
-      source: "power-platform-api", expected: job.name, requestedRange: job.range,
+      source: transport.source, expected: job.name, requestedRange: job.range,
     }), signal);
     signal.throwIfAborted();
     update({ phase: "ready" });
     return { ok: true, data };
   } catch (error) {
+    console.error("[credit-reports] acquisition stopped", {
+      report: job.name, phase: job.phase, error: formatApiError(error),
+      hasOperationId: Boolean(job.operationId), hasFileName: Boolean(job.fileName),
+    });
     return {
       ok: false, error: formatApiError(error), job,
       cancelled: options.signal.aborted,

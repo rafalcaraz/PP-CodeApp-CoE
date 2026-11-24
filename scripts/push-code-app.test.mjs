@@ -72,7 +72,7 @@ function fixture() {
     } else if (operation === "pac code push") {
       assert.equal(staged.appId, config.appId);
       assert.equal(staged.environmentId, config.environmentId);
-      assert.equal(Object.keys(staged.connectionReferences).length, 11);
+      assert.deepEqual(Object.keys(staged.connectionReferences).sort(), Object.keys(config.connectionReferences).sort());
       assert.equal(Object.values(staged.connectionReferences).filter((ref) => ref.xrmConnectionReferenceLogicalName).length, 7);
       assert.equal(readFileSync(path.join(cwd, "dist", "index.html"), "utf8"), "fresh build");
       assert.ok(!existsSync(path.join(cwd, "dist", "stale.js")));
