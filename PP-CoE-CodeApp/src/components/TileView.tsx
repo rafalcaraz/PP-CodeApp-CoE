@@ -4,20 +4,12 @@ import {
   mergeClasses,
   tokens,
   Text,
-  Card,
-  CardHeader,
   Spinner,
-  Menu,
-  MenuTrigger,
-  MenuButton,
-  MenuPopover,
-  MenuList,
-  MenuItem,
-  MenuDivider,
   Link,
   Button,
 } from "@fluentui/react-components";
-import { MoreHorizontalRegular } from "@fluentui/react-icons";
+import { DashboardTileFrame } from "./DashboardTileFrame";
+import { useDashboardTileStyles } from "./dashboardTileStyles";
 import {
   PieChart,
   Pie,
@@ -66,42 +58,10 @@ import {
 // a stored dashboard on cold load without visiting the templates flow).
 import "../data/dashboardAppAggregators";
 import "../data/dashboardManagedAppAggregators";
+import { CreditReportTile } from "./credit-reports/CreditReportTile";
+import type { CreditDashboardSource } from "./credit-reports/useCreditDashboard";
 
 const useStyles = makeStyles({
-  root: {
-    display: "flex",
-    flexDirection: "column",
-    height: "100%",
-    minHeight: "240px",
-  },
-  body: {
-    flex: 1,
-    padding: tokens.spacingHorizontalM,
-    display: "flex",
-    flexDirection: "column",
-    minHeight: 0,
-    borderTop: `1px solid ${tokens.colorNeutralStroke2}`,
-  },
-  kpi: {
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-    justifyContent: "center",
-    textAlign: "center",
-    flex: 1,
-    gap: tokens.spacingVerticalXS,
-  },
-  kpiValue: {
-    fontSize: "56px",
-    fontWeight: tokens.fontWeightSemibold,
-    lineHeight: 1,
-    textAlign: "center",
-  },
-  kpiLabel: {
-    color: tokens.colorNeutralForeground3,
-    fontSize: tokens.fontSizeBase300,
-    textAlign: "center",
-  },
   kpiTrendRow: {
     display: "flex",
     flexDirection: "column",
@@ -148,55 +108,6 @@ const useStyles = makeStyles({
   identityCell: {
     minWidth: "240px",
   },
-  disclosure: {
-    fontSize: tokens.fontSizeBase200,
-    marginTop: tokens.spacingVerticalM,
-    color: tokens.colorNeutralForeground2,
-    "& summary": { cursor: "pointer", paddingBlock: tokens.spacingVerticalXS },
-  },
-  tableWrap: {
-    flex: 1,
-    overflow: "auto",
-  },
-  table: {
-    width: "100%",
-    borderCollapse: "collapse",
-    fontSize: tokens.fontSizeBase200,
-  },
-  th: {
-    textAlign: "left",
-    fontWeight: tokens.fontWeightSemibold,
-    padding: `${tokens.spacingVerticalXS} ${tokens.spacingHorizontalS}`,
-    backgroundColor: tokens.colorNeutralBackground2,
-    borderBottom: `1px solid ${tokens.colorNeutralStroke2}`,
-    position: "sticky",
-    top: 0,
-  },
-  td: {
-    padding: `${tokens.spacingVerticalXS} ${tokens.spacingHorizontalS}`,
-    borderBottom: `1px solid ${tokens.colorNeutralStroke3}`,
-    whiteSpace: "nowrap",
-    overflow: "hidden",
-    textOverflow: "ellipsis",
-    maxWidth: "260px",
-  },
-  empty: {
-    color: tokens.colorNeutralForeground3,
-    fontStyle: "italic",
-    fontSize: tokens.fontSizeBase200,
-    padding: tokens.spacingHorizontalM,
-  },
-  err: {
-    color: tokens.colorPaletteRedForeground1,
-    fontSize: tokens.fontSizeBase200,
-    padding: tokens.spacingHorizontalM,
-  },
-  centerSpinner: {
-    flex: 1,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-  },
 });
 
 // Pleasant default palette — recharts cycles through these.
@@ -226,6 +137,7 @@ interface TileViewProps {
    *  The dashboard's "Refresh" button increments this. */
   refreshKey?: number;
   managedAppsSource?: ManagedAppsEstateSource;
+  creditReportSource?: CreditDashboardSource;
   /** Available tabs for the "Move to tab" submenu. Only rendered when
    *  there are ≥2 tabs AND `onMoveToTab` is provided. */
   tabs?: DashboardTab[];
@@ -348,8 +260,14 @@ function collapseOther(rows: ChartDatum[], maxCategories?: number): ChartDatum[]
   return [...head, { name: "Other", value: other }];
 }
 
-export function TileView({ tile, editable, onEdit, onDelete, onDuplicate, className, refreshKey, tabs, onMoveToTab, managedAppsSource }: TileViewProps) {
-  const styles = useStyles();
+export function TileView(props: TileViewProps) {
+  return props.tile.source === "credit-report"
+    ? <CreditReportTile {...props} source={props.creditReportSource} />
+    : <InventoryTileView {...props} />;
+}
+
+function InventoryTileView({ tile, editable, onEdit, onDelete, onDuplicate, className, refreshKey, tabs, onMoveToTab, managedAppsSource }: TileViewProps) {
+  const styles = { ...useDashboardTileStyles(), ...useStyles() };
   const [localManagedAppsSource] = useState(createManagedAppsEstateSource);
   const estateSource = managedAppsSource ?? localManagedAppsSource;
   const [state, setState] = useState<QueryState>({
@@ -713,61 +631,11 @@ export function TileView({ tile, editable, onEdit, onDelete, onDuplicate, classN
   ]);
 
   return (
-    <Card className={mergeClasses(styles.root, className)}>
-      <CardHeader
-        header={<Text weight="semibold">{tile.title}</Text>}
-        description={
-          <Text size={200}>
-            {getAggregatorRegistration(tile.computed?.aggregatorId ?? "")?.dataSource === "managed-apps"
+    <DashboardTileFrame tile={tile} editable={editable} className={className} onEdit={onEdit} onDelete={onDelete}
+      onDuplicate={onDuplicate} tabs={tabs} onMoveToTab={onMoveToTab}
+      description={getAggregatorRegistration(tile.computed?.aggregatorId ?? "")?.dataSource === "managed-apps"
               ? `Managed apps${!managedAppsSource && state.snapshotAt ? ` · Snapshot ${new Date(state.snapshotAt).toLocaleString()}` : ""}`
-              : tile.spec.resourceTypes.map((t) => shortResourceType(t)).join(", ") || "All reportable resources"}
-          </Text>
-        }
-        action={
-          editable ? (
-            <Menu>
-              <MenuTrigger disableButtonEnhancement>
-                <MenuButton
-                  appearance="subtle"
-                  icon={<MoreHorizontalRegular />}
-                  size="small"
-                  aria-label="Tile actions"
-                />
-              </MenuTrigger>
-              <MenuPopover>
-                <MenuList>
-                  <MenuItem onClick={onEdit}>Edit</MenuItem>
-                  <MenuItem onClick={onDuplicate}>Duplicate</MenuItem>
-                  {onMoveToTab && tabs && tabs.length > 1 && (
-                    <Menu>
-                      <MenuTrigger disableButtonEnhancement>
-                        <MenuItem>Move to tab</MenuItem>
-                      </MenuTrigger>
-                      <MenuPopover>
-                        <MenuList>
-                          {tabs
-                            .filter((t) => t.id !== tile.tabId)
-                            .map((t) => (
-                              <MenuItem
-                                key={t.id}
-                                onClick={() => onMoveToTab(t.id)}
-                              >
-                                {t.name}
-                              </MenuItem>
-                            ))}
-                        </MenuList>
-                      </MenuPopover>
-                    </Menu>
-                  )}
-                  <MenuDivider />
-                  <MenuItem onClick={onDelete}>Delete</MenuItem>
-                </MenuList>
-              </MenuPopover>
-            </Menu>
-          ) : undefined
-        }
-      />
-      <div className={styles.body}>
+              : tile.spec.resourceTypes.map((t) => shortResourceType(t)).join(", ") || "All reportable resources"}>
         {state.phase === "loading" && (
           <div className={styles.centerSpinner}>
             <Spinner size="small" label="Loading…" />
@@ -792,13 +660,12 @@ export function TileView({ tile, editable, onEdit, onDelete, onDuplicate, classN
         {state.phase === "ready" && state.note && <details className={styles.disclosure}>
           <summary>About this measure</summary><Text size={200}>{state.note}</Text>
         </details>}
-      </div>
-    </Card>
+    </DashboardTileFrame>
   );
 }
 
 function TileBody({ tile, state }: { tile: DashboardTile; state: QueryState }) {
-  const styles = useStyles();
+  const styles = { ...useDashboardTileStyles(), ...useStyles() };
   const viz = tile.viz;
   const [rowLimit, setRowLimit] = useState(viz.tableRows ?? 10);
   const isManagedEstate = tile.source === "computed" && tile.computed?.aggregatorId === "managedApps.estate";

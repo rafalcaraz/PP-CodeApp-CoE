@@ -11,6 +11,7 @@
 import { ResourceType, type QuerySpec, type ResourceTypeValue } from "./inventory";
 import type { Clause } from "../generated/models/PowerPlatformforAdminsV2Model";
 import { isRetiredManagedAppsDefaultTile, reviseManagedAppsEstateTile } from "./dashboardManagedAppPresentation";
+import type { CreditReportTileConfig } from "./dashboardCreditReports";
 
 export type TileVizType = "kpi" | "table" | "bar" | "pie" | "line" | "combo" | "stackedBar";
 
@@ -99,7 +100,9 @@ export interface DashboardTile {
    *    series), the viz config picks how to render it. Used for metrics
    *    that need to walk nested arrays (`powerPlatformConnectors[]`,
    *    `operations[]`) which the connector's KQL whitelist can't `mv-expand`. */
-  source?: "builder" | "raw" | "computed";
+  source?: "builder" | "raw" | "computed" | "credit-report";
+  /** Local reconciled credit capture projection; never an inventory query. */
+  creditReport?: CreditReportTileConfig;
   /** Present iff `source === "raw"`. The connector contract this tile runs. */
   clauses?: Clause[];
   /** Present iff `source === "computed"`. Identifies which aggregator from

@@ -9,6 +9,7 @@ import {
   BreadcrumbDivider,
   Button,
   Switch,
+  SplitButton,
   TabList,
   Tab,
   Menu,
@@ -46,6 +47,7 @@ import {
   renameTab,
   reorderTabs,
   upsertTile,
+  updateDashboard,
   type Dashboard,
   type DashboardTab,
   type DashboardTile,
@@ -56,6 +58,11 @@ import { ManagedAppsEstateFreshness } from "../../components/ManagedAppsEstateFr
 import { ErrorPane, LoadingPane } from "../../components/Status";
 import { TileView } from "../../components/TileView";
 import { TileEditorDialog } from "../../components/TileEditorDialog";
+import { CreditReportTileEditor } from "../../components/credit-reports/CreditReportTileEditor";
+import { CreditDashboardControls } from "../../components/credit-reports/CreditDashboardControls";
+import { useCreditDashboard } from "../../components/credit-reports/useCreditDashboard";
+import { CreditInventoryMatching } from "../../components/credit-reports/CreditInventoryMatching";
+import { managedAppConsumptionLayout, newCreditReportTile } from "../../data/dashboardCreditReports";
 
 const useStyles = makeStyles({
   root: {
@@ -97,26 +104,36 @@ const useStyles = makeStyles({
     alignItems: "center",
     gap: tokens.spacingHorizontalXXS,
   },
+  tabList: {
+    minWidth: 0,
+    maxWidth: "100%",
+    overflowX: "auto",
+  },
   newTabBtn: {
     marginLeft: tokens.spacingHorizontalS,
   },
   grid: {
     display: "grid",
-    gridTemplateColumns: "repeat(12, 1fr)",
+    gridTemplateColumns: "repeat(12, minmax(0, 1fr))",
     gap: tokens.spacingHorizontalL,
     rowGap: tokens.spacingVerticalL,
+    "@media (max-width: 800px)": { gridTemplateColumns: "minmax(0, 1fr)" },
   },
   xs: {
     gridColumn: "span 3",
+    "@media (max-width: 800px)": { gridColumn: "span 1" },
   },
   small: {
     gridColumn: "span 4",
+    "@media (max-width: 800px)": { gridColumn: "span 1" },
   },
   medium: {
     gridColumn: "span 6",
+    "@media (max-width: 800px)": { gridColumn: "span 1" },
   },
   large: {
     gridColumn: "span 12",
+    "@media (max-width: 800px)": { gridColumn: "span 1" },
   },
   empty: {
     color: tokens.colorNeutralForeground3,
@@ -171,6 +188,8 @@ export function DashboardDetail() {
    *  retrigger every tile's data fetch. */
   const [refreshKey, setRefreshKey] = useState(0);
   const managedAppsSource = useMemo(() => dashboardId ? createManagedAppsEstateSource() : undefined, [dashboardId]);
+  const hasReportTiles = !!dashboard?.tiles.some((tile) => tile.source === "credit-report");
+  const creditDashboard = useCreditDashboard(hasReportTiles);
 
   const handleRefreshAll = () => {
     invalidateInventoryCache();
@@ -215,10 +234,27 @@ export function DashboardDetail() {
         : [],
     [dashboard, currentTabId],
   );
+  const showAgentMatching = visibleTiles.some((tile) => tile.source === "credit-report" && (
+    tile.creditReport?.scope !== "managed-apps" && (tile.creditReport?.view === "family" || tile.creditReport?.dimension === "family" || tile.creditReport?.dimension === "group")
+  ));
+  const showAppMatching = visibleTiles.some((tile) => tile.source === "credit-report" && tile.creditReport?.scope === "managed-apps");
+  const hasAppTiles = !!dashboard?.tiles.some((tile) => tile.source === "credit-report" && tile.creditReport?.scope === "managed-apps");
+  const handleAddAppTab = () => {
+    if (!dashboardId || !dashboard) return;
+    const layout = managedAppConsumptionLayout(newId("tab"));
+    const updated = updateDashboard(dashboardId, { tabs: [...dashboard.tabs ?? [], ...layout.tabs], tiles: [...dashboard.tiles, ...layout.tiles] });
+    setDashboard(updated);
+    if (updated) setActiveTabId(layout.tabs[0].id);
+  };
 
   const openNewTile = () => {
     if (!currentTabId) return;
     setEditingTile(newTileTemplate(currentTabId));
+    setEditorOpen(true);
+  };
+  const openNewReportTile = () => {
+    if (!currentTabId) return;
+    setEditingTile(newCreditReportTile(currentTabId));
     setEditorOpen(true);
   };
 
@@ -375,6 +411,7 @@ export function DashboardDetail() {
           )}
         </div>
         <div className={styles.controls}>
+          {hasReportTiles && !hasAppTiles && <Button onClick={handleAddAppTab}>Add managed app tab</Button>}
           <Button icon={<ArrowClockwiseRegular />} onClick={handleRefreshAll}>
             Refresh
           </Button>
@@ -384,16 +421,26 @@ export function DashboardDetail() {
             label="Edit mode"
           />
           {editMode && (
-            <Button appearance="primary" icon={<AddRegular />} onClick={openNewTile}>
-              Add tile
-            </Button>
+            <Menu>
+              <MenuTrigger disableButtonEnhancement>{(triggerProps) =>
+                <SplitButton appearance="primary" icon={<AddRegular />} menuButton={triggerProps}
+                  primaryActionButton={{ onClick: hasReportTiles ? openNewReportTile : openNewTile }}>Add tile</SplitButton>
+              }</MenuTrigger>
+              <MenuPopover><MenuList>
+                <MenuItem onClick={openNewReportTile}>Report tile</MenuItem>
+                <MenuItem onClick={openNewTile}>Inventory or query tile</MenuItem>
+              </MenuList></MenuPopover>
+            </Menu>
           )}
         </div>
       </div>
 
+      {hasReportTiles && <CreditDashboardControls dashboard={creditDashboard} matchingInline={showAgentMatching || showAppMatching} managedApps={showAppMatching} onManage={() => navigate("/cost-controls/power-platform?workspace=captures")} />}
+
       {showTabBar && (
         <div className={styles.tabBar}>
           <TabList
+            className={styles.tabList}
             selectedValue={currentTabId ?? undefined}
             onTabSelect={onTabSelect}
           >
@@ -468,6 +515,8 @@ export function DashboardDetail() {
         </div>
       )}
 
+      {showAgentMatching && <CreditInventoryMatching dashboard={creditDashboard} />}
+      {showAppMatching && <CreditInventoryMatching dashboard={creditDashboard} managedApps />}
       {visibleTiles.length === 0 ? (
         <div className={styles.empty}>
           {tabs.length > 1 ? "No tiles in this tab yet." : "No tiles yet."}{" "}
@@ -493,13 +542,16 @@ export function DashboardDetail() {
                 onDuplicate={() => handleDuplicateTile(tile)}
                 refreshKey={refreshKey}
                 managedAppsSource={managedAppsSource}
+                creditReportSource={creditDashboard.source}
               />
             </div>
           ))}
         </div>
       )}
 
-      {editingTile && (
+      {editingTile?.source === "credit-report" && editorOpen && <CreditReportTileEditor key={editingTile.id} tile={editingTile} source={creditDashboard.source}
+        onClose={() => { setEditorOpen(false); setEditingTile(null); }} onSave={handleSaveTile} />}
+      {editingTile && editingTile.source !== "credit-report" && (
         <TileEditorDialog
           managedAppsSource={managedAppsSource}
           refreshKey={refreshKey}

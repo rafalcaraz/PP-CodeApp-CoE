@@ -31,6 +31,19 @@ beforeEach(() => {
 });
 
 describe("Managed Apps Estate complete source", () => {
+  it("can read managed app names and group membership for credit reporting without fetching ACP assignments", async () => {
+    query.mockImplementation((clauses: unknown[]) => page(typeOf(clauses) === ResourceType.AppBuilderApp
+      ? [app("a", "env"), app("ordinary", "env", { subType: "appBuilderApp" })]
+      : typeOf(clauses) === ResourceType.Environment ? [raw(ResourceType.Environment, "env", { environmentGroupId: "group" }),
+        raw(ResourceType.Environment, "env-with-no-app", { environmentGroupId: "group" })]
+        : [raw(ResourceType.EnvironmentGroup, "group", { displayName: "Business" })]));
+    const result = await readManagedAppsEstate(new AbortController().signal, false, { includeAssignments: false });
+    if (!result.ok) throw new Error(result.error);
+    expect(result.data.apps).toHaveLength(1);
+    expect(result.data.apps[0]).toMatchObject({ id: "a", groupId: "group", groupName: "Business", membershipKnown: true });
+    expect(result.data.environments?.find((env) => env.id === "env-with-no-app")).toMatchObject({ groupId: "group", groupName: "Business", membershipKnown: true });
+    expect(assignments).not.toHaveBeenCalled();
+  });
   it("uses the same origin fallback and known alias grouping as governance without guessing unknown origins", async () => {
     const apps = [
       app("created-in", "env", { createdIn: "Copilot Studio" }),

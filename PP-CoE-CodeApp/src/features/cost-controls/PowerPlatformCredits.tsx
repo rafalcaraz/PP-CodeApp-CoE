@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import {
-  Badge, Button, Dialog, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle,
+  Badge, Button, Checkbox, Dialog, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle,
   Field, Input, Select, Tab, TabList, Text,
 } from "@fluentui/react-components";
 import { ArrowDownloadRegular, ArrowUploadRegular } from "@fluentui/react-icons";
 import { ErrorPane, LoadingPane } from "../../components/Status";
 import {
-  acquireCreditReport, clearCreditReports, creditReportScopes, defaultReportRange, exportCreditReportArchive,
+  acquireCreditReport, assignCreditReportTenant, clearCreditReports, creditReportScopes, defaultReportRange, exportCreditReportArchive,
   findCoveringCreditReport, orderCreditReportCaptures, readCreditReport, reconcileCreditReports,
   removeCreditReportCapture, reportRangePreset, retainCreditReport,
   REPORT_NAMES, REPORT_SCHEMAS, saveReportJob, useCreditReportCaptures, useCreditReports, useReportJobs, validateReportRange,
@@ -14,8 +15,12 @@ import {
 } from "../../shared/credit-reports";
 import { formatApiError } from "../../shared/api-explorer/schema";
 import { CreditReportAnalysis } from "./CreditReportAnalysis";
+import { ConsumptionDashboard } from "./ConsumptionDashboard";
+import { CreditReportRetention } from "./CreditReportRetention";
 import { Diagnostics } from "./Diagnostics";
 import { useCostStyles } from "./styles";
+import { createDashboardFromTemplate } from "../../data/dashboards";
+import { consumptionDashboardLayout } from "../../data/dashboardCreditReports";
 
 const REQUEST_PRESETS = [
   { value: "30", label: "Last 30 complete UTC days", days: 30 },
@@ -37,6 +42,11 @@ export function PowerPlatformCredits() {
   const reports = useCreditReports();
   const captures = useCreditReportCaptures();
   const jobs = useReportJobs();
+  const navigate = useNavigate();
+  const [params] = useSearchParams();
+  const [workspace, setWorkspace] = useState<"dashboard" | "captures">(() => params.get("workspace") === "captures" ? "captures" : "dashboard");
+  const [assignedTenant, setAssignedTenant] = useState("");
+  const [assignmentConfirmed, setAssignmentConfirmed] = useState(false);
   const [acquisitionOpen, setAcquisitionOpen] = useState(!reports.length);
   const [range, setRange] = useState(defaultReportRange);
   const [preset, setPreset] = useState("30");
@@ -208,7 +218,7 @@ export function PowerPlatformCredits() {
           }}>Stop waiting</Button>}
         </div>
       </form>
-      <Text size={200} className={styles.muted}>Upload CSV or gzip-compressed CSV, including historical files. Limit: 25 MiB compressed and expanded, 200,000 rows. Files and parsed data stay in this app session's memory, survive navigation, and are lost on reload. Nothing is stored in Dataverse or browser storage.</Text>
+      <Text size={200} className={styles.muted}>Upload CSV or gzip-compressed CSV, including historical files. Limit: 25 MiB compressed and expanded, 200,000 rows. Captures survive navigation in session memory; opt into browser retention below to preserve history across reloads. Nothing is stored in Dataverse.</Text>
       </div>
       </details>
       {busy && <LoadingPane label="Acquiring Daily credit reports. You can stop waiting without cancelling the server job." />}
@@ -217,6 +227,18 @@ export function PowerPlatformCredits() {
       {error && <ErrorPane title="Credit report action failed" message={`${error} Any previously loaded report remains available below.`} />}
       {notice && <Text role="status">{notice}</Text>}
     </section>
+
+    <CreditReportRetention />
+    <Button className={styles.resumeButton} onClick={() => {
+      const dashboard = createDashboardFromTemplate("Consumption & Value", "Billed/nonbilled consumption, resource drivers and separate capacity/PAYG funding from retained Daily reports.", consumptionDashboardLayout());
+      navigate(`/dashboards/${dashboard.id}`);
+    }}>Create editable Consumption &amp; Value dashboard</Button>
+    <TabList aria-label="Report experience" selectedValue={workspace} onTabSelect={(_, data) => {
+      if (data.value === "dashboard" || data.value === "captures") setWorkspace(data.value);
+    }}>
+      <Tab value="dashboard">Consumption &amp; Value</Tab><Tab value="captures">Capture analysis</Tab>
+    </TabList>
+    {workspace === "dashboard" && <ConsumptionDashboard onAcquire={() => { setWorkspace("captures"); setAcquisitionOpen(true); }} />}
 
     {jobs.length > 0 && <section className={styles.panel} aria-label="Report acquisition status">
       <Text as="h2" size={400} weight="semibold">Report requests</Text>
@@ -252,7 +274,7 @@ export function PowerPlatformCredits() {
         })}>Resume without generating</Button>
     </details>
 
-    <section className={styles.panel} aria-label="Loaded Power Platform reports">
+    {workspace === "captures" && <section className={styles.panel} aria-label="Loaded Power Platform reports">
       <div className={styles.spread}>
         <TabList aria-label="Power Platform report datasets" className={styles.tabs} selectedValue={active}
           onTabSelect={(_, data) => { if (REPORT_NAMES.some((name) => name === data.value)) setActive(data.value as ReportName); }}>
@@ -263,7 +285,7 @@ export function PowerPlatformCredits() {
       </div>
       {captures.length > 0 && <Text size={200} className={styles.muted}>
         {captures.length} retained captures / {(captures.reduce((sum, capture) => sum + capture.original.size, 0) / 1024 / 1024).toFixed(2)} MiB of originals.
-        ZIP includes every retained original, separate reconciled CSVs, and a provenance manifest, regardless of analysis filters. Reloading loses this session-only collection.
+        ZIP includes every retained original, separate reconciled CSVs, and a provenance manifest, regardless of analysis filters. Reloading loses captures unless browser retention is enabled.
       </Text>}
       {captureChoices.length > 0 && <>
         <div className={styles.fields}>
@@ -297,6 +319,26 @@ export function PowerPlatformCredits() {
             onClick={() => removeCreditReportCapture(selectedCapture.id)}>Remove selected capture</Button>}
           <Button disabled={busy || exporting} onClick={() => clearCreditReports(active)}>Clear all captures for this report type</Button>
         </div>
+        {analysisMode === "capture" && <details>
+          <summary>Assign a tenant to this capture</summary>
+          <div className={styles.form}>
+            <Text className={styles.coverage}>Some resource exports omit TenantID. Explicitly assign the tenant you know produced this file to combine its reported days with other captures in that tenant. This is operator-provided provenance, not identity verification. Existing conflicting TenantID cells cannot be overridden. Original bytes and retrieval priority remain unchanged.</Text>
+            {selectedCapture.tenantAssignment && <Text>Assigned tenant: {selectedCapture.tenantAssignment.tenantId} / {selectedCapture.tenantAssignment.assignedAt}</Text>}
+            <Field label="Capture tenant GUID"><Input value={assignedTenant} onChange={(_, data) => setAssignedTenant(data.value)} /></Field>
+            <Checkbox label="I confirm the selected capture came from this tenant" checked={assignmentConfirmed} onChange={(_, data) => setAssignmentConfirmed(data.checked === true)} />
+            <div className={styles.row}>
+              <Button disabled={!assignmentConfirmed || !assignedTenant.trim()} onClick={() => {
+                try {
+                  retainCreditReport(assignCreditReportTenant(selectedCapture, assignedTenant));
+                  setAssignmentConfirmed(false); setError(""); setNotice("Tenant assigned to this capture. Its original file and loaded timestamp are unchanged.");
+                } catch (reason) { setError(formatApiError(reason)); }
+              }}>Assign tenant to selected capture</Button>
+              {selectedCapture.tenantAssignment && <Button onClick={() => {
+                retainCreditReport({ ...selectedCapture, tenantAssignment: undefined }); setAssignmentConfirmed(false);
+              }}>Remove operator tenant assignment</Button>}
+            </div>
+          </div>
+        </details>}
       </>}
       {current ? <CreditReportAnalysis key={current.id} report={current} /> : <div className={styles.emptyReport}>
         <Text as="h3" size={500} weight="semibold">Start with a report, not an estimate</Text>
@@ -305,7 +347,7 @@ export function PowerPlatformCredits() {
           : "Environment billing separates capacity-pack and pay-as-you-go consumption."}</Text>
         <Text className={styles.muted}>This report is not loaded. Missing data is not zero usage.</Text>
       </div>}
-    </section>
+    </section>}
     <Dialog open={Boolean(review)} onOpenChange={(_, data) => { if (!data.open) setReview(undefined); }}>
       <DialogSurface><DialogBody>
         <DialogTitle>Generate Daily credit reports</DialogTitle>

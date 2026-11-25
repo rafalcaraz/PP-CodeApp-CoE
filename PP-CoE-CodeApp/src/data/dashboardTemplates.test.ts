@@ -8,6 +8,27 @@ import { DASHBOARD_TEMPLATES, getDashboardTemplate } from "./dashboardTemplates"
 import { getAggregator } from "./dashboardAggregators";
 import { toAppRow, ResourceType } from "./inventory";
 import type { EstateManagedApp } from "./dashboardManagedAppSource";
+import { createDashboardFromTemplate, getDashboard } from "./dashboards";
+
+describe("Consumption & Value template", () => {
+  it("creates a persistent reporting canvas with app-scoped tiles, fresh IDs and distinct funding semantics", () => {
+    const template = getDashboardTemplate("consumption-value")!;
+    const layout = template.buildLayout!();
+    expect(layout.tabs.map((tab) => tab.name)).toEqual(["Overview", "Nonbilled consumption", "Billed consumption", "Agent families", "Managed app consumption", "Funding"]);
+    expect(layout.tiles.filter((tile) => tile.tabId === "consumption-managed-apps").every((tile) => tile.creditReport?.scope === "managed-apps")).toBe(true);
+    const fresh = new Set(template.build().map((tile) => tile.id));
+    for (const tile of layout.tiles) {
+      expect(tile.source).toBe("credit-report"); expect(tile.computed).toBeUndefined(); expect(tile.clauses).toBeUndefined();
+      expect(tile.spec.resourceTypes).toEqual([]);
+      expect(fresh.has(tile.id)).toBe(false);
+      expect(layout.tabs.some((tab) => tab.id === tile.tabId)).toBe(true);
+      expect(tile.creditReport?.reportName).toBe(tile.tabId === "consumption-funding" ? "BillingDetailsPerEnvironment" : "FeatureDetailsPerResource");
+    }
+    const dashboard = createDashboardFromTemplate(template.name, template.description, layout);
+    expect(getDashboard(dashboard.id)?.tiles).toEqual(layout.tiles);
+    expect(template.build().every((tile) => !tile.tabId)).toBe(true);
+  });
+});
 
 describe("Managed Apps Estate template", () => {
   it("registers four populated tabs, fresh IDs and four headline KPIs against the shared managed population", () => {

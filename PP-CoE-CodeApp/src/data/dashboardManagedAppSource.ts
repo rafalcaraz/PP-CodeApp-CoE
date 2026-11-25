@@ -25,6 +25,7 @@ export interface EstateManagedApp extends AppRow {
 export interface ManagedAppsEstateSnapshot {
   apps: EstateManagedApp[];
   capturedAt: string;
+  environments?: readonly { id: string; name: string; type: string; groupId: string; groupName: string; membershipKnown: boolean }[];
 }
 export interface ManagedAppsEstateStatus {
   phase: "idle" | "loading" | "ready" | "error";
@@ -35,6 +36,12 @@ const text = (value: unknown) => typeof value === "string" ? value.trim() : "";
 const object = (value: unknown): Record<string, unknown> =>
   value !== null && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 const cancelled = (): DataResult<never> => ({ ok: false, error: "Managed Apps Estate read cancelled." });
+function groupMembership(environment: ResourceItem | undefined, groups: Map<string, string>) {
+  const env = object(environment?.properties), value = env.environmentGroupId;
+  const groupId = typeof value === "string" && id(value) !== "00000000-0000-0000-0000-000000000000" ? id(value) : "";
+  return { groupId, groupName: groups.get(groupId) || "", membershipKnown: !!environment
+    && (value === undefined || value === null || typeof value === "string") && (!!groupId || !env.environmentGroup) };
+}
 
 /** Missing connector metadata means no usage for managed apps; malformed data is unknown. */
 export function managedAppConnectorIds(properties: Record<string, unknown>): string[] | null {
@@ -105,7 +112,7 @@ export function assessManagedAppAssignment(value: unknown, groupId: string): { a
     reason: response.value.length ? "Assigned policy identity returned; effective permissions not assessed." : "Complete group assignment collection is empty." };
 }
 
-export async function readManagedAppsEstate(signal: AbortSignal, forceFresh = false): Promise<DataResult<ManagedAppsEstateSnapshot>> {
+export async function readManagedAppsEstate(signal: AbortSignal, forceFresh = false, options: { includeAssignments?: boolean } = {}): Promise<DataResult<ManagedAppsEstateSnapshot>> {
   const [appRead, envRead, groupRead] = await Promise.all([
     drain(ResourceType.AppBuilderApp, signal, forceFresh),
     drain(ResourceType.Environment, signal, forceFresh),
@@ -128,11 +135,7 @@ export async function readManagedAppsEstate(signal: AbortSignal, forceFresh = fa
     const envId = id(app.environmentId);
     const environment = envs.get(envId);
     const env = object(environment?.properties);
-    const groupValue = env.environmentGroupId;
-    const groupId = typeof groupValue === "string" && id(groupValue) !== "00000000-0000-0000-0000-000000000000" ? id(groupValue) : "";
-    const membershipKnown = !!environment
-      && (groupValue === undefined || groupValue === null || typeof groupValue === "string")
-      && (!!groupId || !env.environmentGroup);
+    const { groupId, groupName, membershipKnown } = groupMembership(environment, groups);
     const creator = object(props.createdBy);
     const creatorId = typeof props.createdBy === "string" ? text(props.createdBy) : text(creator.id);
     const cachedCreator = peekUser(creatorId);
@@ -142,14 +145,14 @@ export async function readManagedAppsEstate(signal: AbortSignal, forceFresh = fa
         || (cachedCreator.status === "resolved" ? cachedCreator.user.displayName : ""),
       origin: readAppOrigin(raw), connectorIds: managedAppConnectorIds(props),
       environmentType: text(env.environmentType), environmentManaged: typeof env.isManaged === "boolean" ? env.isManaged : null,
-      environmentMapped: !!environment, groupId, groupName: groups.get(groupId) || "",
+      environmentMapped: !!environment, groupId, groupName,
       membershipKnown,
       acp: membershipKnown && !groupId ? "Ungrouped" : "Unable to assess",
       acpReason: membershipKnown && !groupId ? "No environment group is reported." : "Environment or group mapping is unavailable.",
       snapshotAt: "",
     });
   }
-  const relevant = [...new Set(apps.filter((app) => app.membershipKnown && app.groupId && groups.has(app.groupId)).map((app) => app.groupId))];
+  const relevant = options.includeAssignments === false ? [] : [...new Set(apps.filter((app) => app.membershipKnown && app.groupId && groups.has(app.groupId)).map((app) => app.groupId))];
   const assignments = new Map<string, { acp: ManagedAppAcpState; reason: string }>();
   let cursor = 0;
   await Promise.all(Array.from({ length: Math.min(3, relevant.length) }, async () => {
@@ -167,6 +170,8 @@ export async function readManagedAppsEstate(signal: AbortSignal, forceFresh = fa
   const creatorNames = new Map(apps.filter((app) => app.createdBy && app.creatorName).map((app) => [app.createdBy, app.creatorName]));
   return { ok: true, data: {
     capturedAt,
+    environments: envRead.data.map((raw) => ({ id: id(raw.name!), name: text(object(raw.properties).displayName),
+      type: text(object(raw.properties).environmentType), ...groupMembership(raw, groups) })),
     apps: apps.map((app) => {
       const assessed = app.membershipKnown ? assignments.get(app.groupId) : undefined;
       return { ...app, creatorName: app.creatorName || creatorNames.get(app.createdBy) || "", snapshotAt: capturedAt,
